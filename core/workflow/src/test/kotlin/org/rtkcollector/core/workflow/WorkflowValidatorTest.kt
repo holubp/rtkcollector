@@ -1,0 +1,200 @@
+package org.rtkcollector.core.workflow
+
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+class WorkflowValidatorTest {
+    private val validator = WorkflowValidator()
+
+    @Test
+    fun `plain rover recording with UM980 is valid`() {
+        assertValid(WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()))
+    }
+
+    @Test
+    fun `rover NTRIP to receiver with UM980 is valid`() {
+        assertValid(WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4()))
+    }
+
+    @Test
+    fun `rover NTRIP to receiver with M8P-0 is valid`() {
+        assertValid(WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.ubloxM8p0()))
+    }
+
+    @Test
+    fun `fixed base with M8P-2 and base position is valid`() {
+        assertValid(WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8p2()))
+    }
+
+    @Test
+    fun `base calibration raw-only with M8T is valid`() {
+        assertValid(WorkflowExamples.baseCalibrationRawOnly(ReceiverCapabilityFixtures.ubloxM8t()))
+    }
+
+    @Test
+    fun `rover RTKLIB real-time with compatible raw and base context is valid`() {
+        assertValid(WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4()))
+    }
+
+    @Test
+    fun `base calibration with NTRIP and raw observations is valid`() {
+        assertValid(WorkflowExamples.baseCalibrationWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4()))
+    }
+
+    @Test
+    fun `RTKLIB real-time without base context is invalid`() {
+        val spec = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4())
+            .copy(baseContext = BaseContextSpec.None)
+
+        assertError(spec, "RTKLIB_REQUIRES_BASE_CONTEXT")
+    }
+
+    @Test
+    fun `NTRIP correction target without correction source is invalid`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+            .copy(correctionSource = CorrectionSourceSpec.None)
+
+        assertError(spec, "CORRECTION_TARGET_REQUIRES_SOURCE")
+    }
+
+    @Test
+    fun `fixed base without base position is invalid`() {
+        val spec = WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8p2())
+            .copy(baseContext = BaseContextSpec.None)
+
+        assertError(spec, "FIXED_BASE_REQUIRES_BASE_POSITION")
+    }
+
+    @Test
+    fun `fixed base with M8P-0 is invalid`() {
+        val spec = WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8p0())
+
+        assertError(spec, "FIXED_BASE_REQUIRES_CAPABILITY")
+    }
+
+    @Test
+    fun `receiver-internal RTK workflow with M8T is invalid`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.ubloxM8t())
+
+        assertError(spec, "DEVICE_INTERNAL_RTK_REQUIRES_CAPABILITY")
+    }
+
+    @Test
+    fun `RTKLIB workflow with no compatible raw observations or converter is invalid`() {
+        val spec = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.ubloxM8p0())
+
+        assertError(spec, "RTKLIB_REQUIRES_COMPATIBLE_RAW")
+    }
+
+    @Test
+    fun `plain rover workflow with correction target is invalid`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+            .copy(correctionTargets = setOf(CorrectionTarget.RECEIVER))
+
+        assertError(spec, "PLAIN_ROVER_HAS_CORRECTION_TARGET")
+    }
+
+    @Test
+    fun `NTRIP source without mountpoint is invalid`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+            .copy(correctionSource = WorkflowExamples.defaultNtrip().copy(mountpoint = ""))
+
+        assertError(spec, "NTRIP_REQUIRES_HOST_PORT_MOUNTPOINT")
+    }
+
+    @Test
+    fun `raw required on receiver without raw support is invalid`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.genericNmeaRtcm())
+            .copy(observationRequirement = ObservationRequirement.RAW_REQUIRED)
+
+        assertError(spec, "RAW_REQUIRED_REQUIRES_CAPABILITY")
+    }
+
+    @Test
+    fun `secrets in session JSON export are invalid`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+            .copy(safety = WorkflowSafetySpec(allowSecretsInSessionJson = true))
+
+        assertError(spec, "SECRETS_IN_SESSION_JSON_FORBIDDEN")
+    }
+
+    @Test
+    fun `plaintext NTRIP credentials are invalid`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+            .copy(correctionSource = WorkflowExamples.defaultNtrip().copy(plaintextPassword = "secret"))
+
+        assertError(spec, "NTRIP_CREDENTIALS_MUST_BE_SECRET_REFERENCES")
+    }
+
+    @Test
+    fun `fixed base cannot start from unaccepted recorded base session`() {
+        val spec = WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8p2())
+            .copy(baseContext = BaseContextSpec.RecordedBaseSession(sessionId = "base-calibration-session"))
+
+        assertError(spec, "FIXED_BASE_REQUIRES_ACCEPTED_BASE_POSITION_CANDIDATE")
+    }
+
+    @Test
+    fun `base position without frame emits warning`() {
+        val spec = WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8p2())
+            .copy(baseContext = BaseContextSpec.ManualCoordinate(WorkflowExamples.defaultBasePosition().copy(frame = "")))
+
+        assertWarning(spec, "BASE_POSITION_MISSING_FRAME")
+    }
+
+    @Test
+    fun `base position without antenna metadata emits warning`() {
+        val spec = WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8p2())
+            .copy(
+                baseContext = BaseContextSpec.ManualCoordinate(
+                    WorkflowExamples.defaultBasePosition().copy(
+                        antennaHeightM = null,
+                        antennaReferencePoint = null,
+                    ),
+                ),
+            )
+
+        assertWarning(spec, "BASE_POSITION_MISSING_ANTENNA")
+    }
+
+    @Test
+    fun `rover NTRIP without raw observations emits warning`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.genericNmeaRtcm())
+            .copy(observationRequirement = ObservationRequirement.NONE)
+
+        assertWarning(spec, "NTRIP_ROVER_WITHOUT_RAW_LIMITS_POSTPROCESSING")
+    }
+
+    @Test
+    fun `long average base position emits fallback warning`() {
+        val spec = WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8p2())
+            .copy(
+                baseContext = BaseContextSpec.ManualCoordinate(
+                    WorkflowExamples.defaultBasePosition().copy(
+                        method = BasePositionMethod.LONG_AVERAGE,
+                        durationSeconds = null,
+                        horizontalUncertaintyM = null,
+                    ),
+                ),
+            )
+
+        assertWarning(spec, "LONG_AVERAGE_BASE_POSITION_IS_FALLBACK")
+    }
+
+    private fun assertValid(spec: WorkflowSpec) {
+        val result = validator.validate(spec)
+        assertTrue(result.valid, "Expected valid, got errors: ${result.errors}")
+    }
+
+    private fun assertError(spec: WorkflowSpec, code: String) {
+        val result = validator.validate(spec)
+        assertFalse(result.valid, "Expected invalid workflow")
+        assertTrue(result.errors.any { it.code == code }, "Missing error $code in ${result.errors}")
+    }
+
+    private fun assertWarning(spec: WorkflowSpec, code: String) {
+        val result = validator.validate(spec)
+        assertTrue(result.warnings.any { it.code == code }, "Missing warning $code in ${result.warnings}")
+    }
+}

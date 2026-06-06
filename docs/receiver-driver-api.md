@@ -4,6 +4,9 @@ Receiver drivers describe capabilities, optional command builders and advisory
 parsers for receiver-specific byte streams. A driver must never be required for
 safe recording. Unknown bytes remain recordable bytes.
 
+Workflow validation uses receiver capability data before driver command builders
+are called. See [Workflows](workflows.md) for the higher-level workflow model.
+
 ## Conceptual Kotlin Contract
 
 ```kotlin

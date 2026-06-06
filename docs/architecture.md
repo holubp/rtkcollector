@@ -35,6 +35,8 @@ USB/Bluetooth/TCP/File transport
 - `core:capture` owns raw recording and capture event sinks.
 - `core:correction` owns correction stream concepts and NTRIP state boundaries.
 - `core:session` owns session metadata and base-position data models.
+- `core:workflow` owns validated workflow specifications, workflow examples and
+  workflow validation.
 - `core:quality` owns quality event aggregation boundaries.
 - `receiver:api` defines receiver-driver contracts.
 - Receiver implementation modules provide advisory parsing and command builders.
@@ -46,3 +48,15 @@ Transport and raw recording errors are capture-path errors. Parser errors,
 driver identification failures, quality-monitor failures, UI failures and NTRIP
 reconnect loops must be isolated from raw recording wherever the transport and
 storage path still operate.
+
+## Workflow Execution
+
+Workflow rules are specified in [Workflows](workflows.md). The UI starts
+validated `WorkflowSpec` instances; the foreground capture service executes
+validated `WorkflowSpec` instances. Validation happens before receiver commands,
+NTRIP connection or recording start.
+
+Raw capture remains independent of parser, quality-monitor and solution-engine
+failures. An RTKLIB, NTRIP or receiver-native parser failure may affect advisory
+state, warnings or sidecar events, but it must not modify or stop byte-exact
+receiver recording while transport and storage are still functioning.

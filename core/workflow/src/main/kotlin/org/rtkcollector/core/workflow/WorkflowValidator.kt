@@ -1,0 +1,328 @@
+package org.rtkcollector.core.workflow
+
+class WorkflowValidator {
+    fun validate(spec: WorkflowSpec): WorkflowValidationResult {
+        val errors = mutableListOf<WorkflowValidationMessage>()
+        val warnings = mutableListOf<WorkflowValidationMessage>()
+
+        validateCorrectionTopology(spec, errors)
+        validateRtklib(spec, errors, warnings)
+        validateFixedBase(spec, errors)
+        validateRawObservationRequirements(spec, errors, warnings)
+        validateInternalRtk(spec, errors)
+        validateNtrip(spec, errors, warnings)
+        validateBasePositionWarnings(spec, warnings)
+        validateSafety(spec, errors, warnings)
+
+        return WorkflowValidationResult(
+            valid = errors.isEmpty(),
+            errors = errors,
+            warnings = warnings,
+        )
+    }
+
+    private fun validateCorrectionTopology(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+    ) {
+        if (isPlainRover(spec) && spec.correctionTargets.isNotEmpty()) {
+            errors += error(
+                "PLAIN_ROVER_HAS_CORRECTION_TARGET",
+                "Plain rover recording must not have correction targets.",
+            )
+        }
+
+        if (spec.receiverRole == ReceiverRole.ROVER &&
+            spec.correctionSource is CorrectionSourceSpec.Ntrip &&
+            spec.correctionTargets.isEmpty() &&
+            SolutionEngine.RTKLIB_REALTIME !in spec.solutionEngines
+        ) {
+            errors += error(
+                "PLAIN_ROVER_HAS_NTRIP_SOURCE",
+                "Plain rover recording must not have NTRIP correction source.",
+            )
+        }
+
+        if (spec.correctionTargets.isNotEmpty() && spec.correctionSource is CorrectionSourceSpec.None) {
+            errors += error(
+                "CORRECTION_TARGET_REQUIRES_SOURCE",
+                "Correction targets require a non-empty correction source.",
+            )
+        }
+
+        if (CorrectionTarget.RECEIVER in spec.correctionTargets &&
+            spec.correctionSource.isRtcmCorrectionSource() &&
+            !spec.receiverCapabilities.supportsRtcmInput
+        ) {
+            errors += error(
+                "RECEIVER_TARGET_REQUIRES_RTCM_INPUT",
+                "Receiver correction target requires receiver RTCM input support.",
+            )
+        }
+    }
+
+    private fun validateRtklib(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        if (SolutionEngine.RTKLIB_REALTIME !in spec.solutionEngines) {
+            return
+        }
+
+        if (spec.baseContext is BaseContextSpec.None) {
+            errors += error(
+                "RTKLIB_REQUIRES_BASE_CONTEXT",
+                "RTKLIB real-time solution requires base context.",
+            )
+        }
+
+        if (spec.correctionSource is CorrectionSourceSpec.None && !spec.baseContext.hasLocalOrRecordedBaseObservation()) {
+            errors += error(
+                "RTKLIB_REQUIRES_CORRECTION_OR_BASE_OBSERVATION_SOURCE",
+                "RTKLIB real-time solution requires correction source or local/recorded base observation source.",
+            )
+        }
+
+        if (!spec.hasRtklibCompatibleRawOrConverter()) {
+            errors += error(
+                "RTKLIB_REQUIRES_COMPATIBLE_RAW",
+                "RTKLIB real-time requires RTKLIB-compatible raw observations or an explicit converter.",
+            )
+        }
+
+        if (ObservationRequirement.RTKLIB_COMPATIBLE_REQUIRED == spec.observationRequirement &&
+            !spec.hasRtklibCompatibleRawOrConverter()
+        ) {
+            errors += error(
+                "RTKLIB_COMPATIBLE_REQUIRED_REQUIRES_CAPABILITY",
+                "RTKLIB-compatible observation requirement requires compatible raw output or converter configuration.",
+            )
+        }
+
+        if (SolutionEngine.DEVICE_INTERNAL in spec.solutionEngines) {
+            warnings += warning(
+                "RTKLIB_AND_DEVICE_SOLUTIONS_ARE_SEPARATE",
+                "RTKLIB real-time and receiver-internal solutions are separate engines and must be displayed and logged independently.",
+            )
+        }
+    }
+
+    private fun validateFixedBase(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+    ) {
+        if (spec.receiverRole != ReceiverRole.FIXED_BASE) {
+            return
+        }
+
+        if (!spec.baseContext.hasAcceptedBasePosition()) {
+            errors += error(
+                "FIXED_BASE_REQUIRES_BASE_POSITION",
+                "Fixed-base operation requires an accepted base position, base-position file or manual coordinate.",
+            )
+        }
+
+        if (!spec.receiverCapabilities.supportsFixedBaseMode) {
+            errors += error(
+                "FIXED_BASE_REQUIRES_CAPABILITY",
+                "Fixed-base operation requires receiver fixed-base capability.",
+            )
+        }
+
+        if (spec.baseContext is BaseContextSpec.RecordedBaseSession && spec.baseContext.acceptedBasePosition == null) {
+            errors += error(
+                "FIXED_BASE_REQUIRES_ACCEPTED_BASE_POSITION_CANDIDATE",
+                "Fixed-base streaming must not start from a base-calibration session without an accepted base-position candidate.",
+            )
+        }
+    }
+
+    private fun validateRawObservationRequirements(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        if (spec.observationRequirement == ObservationRequirement.RAW_REQUIRED &&
+            !spec.receiverCapabilities.supportsRawObservations
+        ) {
+            errors += error(
+                "RAW_REQUIRED_REQUIRES_CAPABILITY",
+                "Raw observation requirement requires receiver raw-observation support.",
+            )
+        }
+
+        if (spec.receiverRole == ReceiverRole.BASE_CALIBRATION &&
+            spec.receiverCapabilities.supportsRawObservations &&
+            (!spec.recording.recordRawObservationsRequested || spec.observationRequirement == ObservationRequirement.NONE)
+        ) {
+            warnings += warning(
+                "BASE_CALIBRATION_SHOULD_REQUEST_RAW",
+                "Base calibration should request raw observations when the receiver supports them.",
+            )
+        }
+
+        if (spec.receiverRole == ReceiverRole.ROVER &&
+            spec.correctionSource is CorrectionSourceSpec.Ntrip &&
+            CorrectionTarget.RECEIVER in spec.correctionTargets &&
+            (!spec.recording.recordRawObservationsRequested || spec.observationRequirement == ObservationRequirement.NONE)
+        ) {
+            warnings += warning(
+                "NTRIP_ROVER_WITHOUT_RAW_LIMITS_POSTPROCESSING",
+                "Rover + NTRIP without raw observations limits later post-processing validation.",
+            )
+        }
+    }
+
+    private fun validateInternalRtk(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+    ) {
+        val expectsReceiverRtk = spec.receiverRole == ReceiverRole.ROVER &&
+            SolutionEngine.DEVICE_INTERNAL in spec.solutionEngines &&
+            CorrectionTarget.RECEIVER in spec.correctionTargets &&
+            spec.correctionSource.isRtcmCorrectionSource()
+
+        if (expectsReceiverRtk && !spec.receiverCapabilities.supportsInternalRtk) {
+            errors += error(
+                "DEVICE_INTERNAL_RTK_REQUIRES_CAPABILITY",
+                "Receiver-internal RTK workflow requires receiver internal RTK capability.",
+            )
+        }
+    }
+
+    private fun validateNtrip(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        val ntrip = spec.correctionSource as? CorrectionSourceSpec.Ntrip ?: return
+
+        if (ntrip.casterHost.isBlank() || ntrip.port <= 0 || ntrip.mountpoint.isBlank()) {
+            errors += error(
+                "NTRIP_REQUIRES_HOST_PORT_MOUNTPOINT",
+                "NTRIP source requires host, positive port and mountpoint.",
+            )
+        }
+
+        if (ntrip.plaintextUsername != null || ntrip.plaintextPassword != null) {
+            errors += error(
+                "NTRIP_CREDENTIALS_MUST_BE_SECRET_REFERENCES",
+                "NTRIP credentials must be secret references, not plaintext export values.",
+            )
+        }
+
+        if (ntrip.stationId.isNullOrBlank() &&
+            ntrip.stationName.isNullOrBlank() &&
+            ntrip.approximateBasePosition == null
+        ) {
+            warnings += warning(
+                "NTRIP_MOUNTPOINT_METADATA_WEAK",
+                "NTRIP mountpoint without approximate station/base metadata weakens reproducibility.",
+            )
+        }
+    }
+
+    private fun validateBasePositionWarnings(
+        spec: WorkflowSpec,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        val basePosition = spec.baseContext.basePosition() ?: return
+
+        if (basePosition.frame.isNullOrBlank()) {
+            warnings += warning(
+                "BASE_POSITION_MISSING_FRAME",
+                "Base position should include reference frame or datum.",
+            )
+        }
+
+        if (basePosition.antennaHeightM == null || basePosition.antennaReferencePoint.isNullOrBlank()) {
+            warnings += warning(
+                "BASE_POSITION_MISSING_ANTENNA",
+                "Base position should include antenna height and antenna reference point.",
+            )
+        }
+
+        if (basePosition.method == BasePositionMethod.LONG_AVERAGE &&
+            (basePosition.durationSeconds == null ||
+                basePosition.horizontalUncertaintyM == null ||
+                basePosition.verticalUncertaintyM == null)
+        ) {
+            warnings += warning(
+                "LONG_AVERAGE_BASE_POSITION_IS_FALLBACK",
+                "Long-average base positions are fallback/lower-grade unless uncertainty and duration metadata are present.",
+            )
+        }
+    }
+
+    private fun validateSafety(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        if (spec.safety.allowSecretsInSessionJson) {
+            errors += error(
+                "SECRETS_IN_SESSION_JSON_FORBIDDEN",
+                "Workflow safety must forbid secrets in session.json.",
+            )
+        }
+
+        if (spec.customInitCommandsRequested && !spec.receiverCapabilities.supportsCustomInitCommands) {
+            warnings += warning(
+                "CUSTOM_INIT_UNSUPPORTED_BY_PROFILE",
+                "Custom init commands were requested for a profile that does not support custom init commands.",
+            )
+        }
+    }
+
+    private fun isPlainRover(spec: WorkflowSpec): Boolean =
+        spec.receiverRole == ReceiverRole.ROVER &&
+            spec.correctionSource is CorrectionSourceSpec.None &&
+            SolutionEngine.RTKLIB_REALTIME !in spec.solutionEngines
+
+    private fun WorkflowSpec.hasRtklibCompatibleRawOrConverter(): Boolean =
+        receiverCapabilities.supportsRtklibCompatibleRaw ||
+            receiverCapabilities.supportsRtklibRawConverter ||
+            rtklibRawConverterId != null
+
+    private fun CorrectionSourceSpec.isRtcmCorrectionSource(): Boolean =
+        when (this) {
+            is CorrectionSourceSpec.Ntrip -> true
+            is CorrectionSourceSpec.LocalBaseStream -> true
+            is CorrectionSourceSpec.ExternalSerialOrTcp -> true
+            is CorrectionSourceSpec.FileReplay -> expectedCorrectionFormat == CorrectionFormat.RTCM3 ||
+                expectedCorrectionFormat == CorrectionFormat.RTCM_OBSERVATIONS
+            CorrectionSourceSpec.None -> false
+        }
+
+    private fun BaseContextSpec.hasLocalOrRecordedBaseObservation(): Boolean =
+        this is BaseContextSpec.LocalBaseStream || this is BaseContextSpec.RecordedBaseSession
+
+    private fun BaseContextSpec.hasAcceptedBasePosition(): Boolean =
+        when (this) {
+            is BaseContextSpec.BasePositionFile -> true
+            is BaseContextSpec.KnownStation -> basePosition != null
+            is BaseContextSpec.ManualCoordinate -> true
+            is BaseContextSpec.RecordedBaseSession -> acceptedBasePosition != null
+            is BaseContextSpec.LocalBaseStream -> approximateBasePosition != null
+            is BaseContextSpec.NtripMountpoint -> approximateBasePosition != null
+            BaseContextSpec.None -> false
+        }
+
+    private fun BaseContextSpec.basePosition(): BasePosition? =
+        when (this) {
+            is BaseContextSpec.BasePositionFile -> basePosition
+            is BaseContextSpec.KnownStation -> basePosition
+            is BaseContextSpec.ManualCoordinate -> basePosition
+            is BaseContextSpec.RecordedBaseSession -> acceptedBasePosition
+            is BaseContextSpec.LocalBaseStream -> approximateBasePosition
+            is BaseContextSpec.NtripMountpoint -> approximateBasePosition
+            BaseContextSpec.None -> null
+        }
+
+    private fun error(code: String, message: String): WorkflowValidationMessage =
+        WorkflowValidationMessage(code = code, message = message)
+
+    private fun warning(code: String, message: String): WorkflowValidationMessage =
+        WorkflowValidationMessage(code = code, message = message)
+}

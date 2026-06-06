@@ -22,6 +22,8 @@ It is receiver-agnostic and byte-exact first.
 - Session export compatible with downstream Python processing.
 - Live quality monitoring from NMEA, RTCM and receiver-native messages where
   available.
+- Validated workflow specifications for rover, base-calibration, fixed-base and
+  replay-test sessions.
 
 ## Should-Have Requirements
 
@@ -46,3 +48,7 @@ This first repository pass creates specifications, module boundaries, driver API
 skeletons, session data models and minimal tests. It does not implement a full
 Android foreground service, receiver command library, NTRIP caster, RTKLIB
 integration or Android-side PPP/static solver.
+
+Workflow requirements are defined in [Workflows](workflows.md). New UI or
+service work must start validated workflow specifications rather than ad-hoc
+mode flags.

@@ -1,0 +1,248 @@
+package org.rtkcollector.core.workflow
+
+enum class ReceiverRole {
+    ROVER,
+    BASE_CALIBRATION,
+    FIXED_BASE,
+    REPLAY_TEST,
+}
+
+enum class CorrectionTarget {
+    RECEIVER,
+    RTKLIB,
+}
+
+enum class SolutionEngine {
+    DEVICE_INTERNAL,
+    RTKLIB_REALTIME,
+    POSTPROCESSING_PIPELINE,
+}
+
+enum class ObservationRequirement {
+    NONE,
+    RAW_IF_SUPPORTED,
+    RAW_REQUIRED,
+    RTKLIB_COMPATIBLE_REQUIRED,
+}
+
+enum class BasePositionMethod {
+    MANUAL_KNOWN_POINT,
+    STATIC_RTK,
+    PPP_STATIC,
+    LONG_AVERAGE,
+    RECEIVER_SURVEY_IN,
+    EXTERNAL_BASE_POSITION_JSON,
+    UNKNOWN,
+}
+
+enum class GgaSource {
+    NONE,
+    RECEIVER,
+    MANUAL,
+    LAST_DEVICE_POSITION,
+}
+
+enum class CorrectionFormat {
+    RTCM3,
+    RTCM_OBSERVATIONS,
+    RECEIVER_NATIVE_RAW,
+    FILE_REPLAY,
+    UNKNOWN,
+}
+
+data class BasePosition(
+    val latDeg: Double? = null,
+    val lonDeg: Double? = null,
+    val heightM: Double? = null,
+    val ecefXM: Double? = null,
+    val ecefYM: Double? = null,
+    val ecefZM: Double? = null,
+    val frame: String? = null,
+    val epoch: String? = null,
+    val method: BasePositionMethod = BasePositionMethod.UNKNOWN,
+    val durationSeconds: Long? = null,
+    val horizontalUncertaintyM: Double? = null,
+    val verticalUncertaintyM: Double? = null,
+    val antennaHeightM: Double? = null,
+    val antennaReferencePoint: String? = null,
+    val sourceSessionId: String? = null,
+)
+
+data class AntennaMetadata(
+    val antennaType: String? = null,
+    val antennaSerialNumber: String? = null,
+    val antennaHeightM: Double? = null,
+    val antennaReferencePoint: String? = null,
+)
+
+sealed class CorrectionSourceSpec {
+    data object None : CorrectionSourceSpec()
+
+    data class Ntrip(
+        val casterHost: String,
+        val port: Int,
+        val mountpoint: String,
+        val usernameSecretRef: String? = null,
+        val passwordSecretRef: String? = null,
+        val plaintextUsername: String? = null,
+        val plaintextPassword: String? = null,
+        val sendGga: Boolean = false,
+        val ggaSource: GgaSource = GgaSource.NONE,
+        val expectedCorrectionFormat: CorrectionFormat = CorrectionFormat.RTCM3,
+        val stationId: String? = null,
+        val stationName: String? = null,
+        val approximateBasePosition: BasePosition? = null,
+    ) : CorrectionSourceSpec()
+
+    data class LocalBaseStream(
+        val id: String,
+        val expectedCorrectionFormat: CorrectionFormat = CorrectionFormat.RTCM3,
+        val approximateBasePosition: BasePosition? = null,
+    ) : CorrectionSourceSpec()
+
+    data class FileReplay(
+        val path: String,
+        val expectedCorrectionFormat: CorrectionFormat = CorrectionFormat.FILE_REPLAY,
+    ) : CorrectionSourceSpec()
+
+    data class ExternalSerialOrTcp(
+        val endpoint: String,
+        val expectedCorrectionFormat: CorrectionFormat = CorrectionFormat.RTCM3,
+    ) : CorrectionSourceSpec()
+}
+
+sealed class BaseContextSpec {
+    data object None : BaseContextSpec()
+
+    data class KnownStation(
+        val stationId: String? = null,
+        val stationName: String? = null,
+        val coordinateSource: String? = null,
+        val basePosition: BasePosition? = null,
+        val referenceFrame: String? = null,
+        val epoch: String? = null,
+        val antennaMetadata: AntennaMetadata? = null,
+        val sourceReference: String? = null,
+    ) : BaseContextSpec()
+
+    data class BasePositionFile(
+        val path: String,
+        val basePosition: BasePosition? = null,
+        val sourceReference: String? = path,
+    ) : BaseContextSpec()
+
+    data class ManualCoordinate(
+        val basePosition: BasePosition,
+    ) : BaseContextSpec()
+
+    data class RecordedBaseSession(
+        val sessionId: String,
+        val acceptedBasePosition: BasePosition? = null,
+    ) : BaseContextSpec()
+
+    data class NtripMountpoint(
+        val casterHost: String,
+        val mountpoint: String,
+        val stationId: String? = null,
+        val stationName: String? = null,
+        val approximateBasePosition: BasePosition? = null,
+        val referenceFrame: String? = null,
+        val epoch: String? = null,
+        val antennaMetadata: AntennaMetadata? = null,
+    ) : BaseContextSpec()
+
+    data class LocalBaseStream(
+        val streamId: String,
+        val stationId: String? = null,
+        val stationName: String? = null,
+        val approximateBasePosition: BasePosition? = null,
+        val referenceFrame: String? = null,
+        val epoch: String? = null,
+        val antennaMetadata: AntennaMetadata? = null,
+    ) : BaseContextSpec()
+}
+
+data class ReceiverWorkflowCapabilities(
+    val supportsRoverMode: Boolean = false,
+    val supportsBaseCalibrationMode: Boolean = false,
+    val supportsFixedBaseMode: Boolean = false,
+    val supportsRtcmInput: Boolean = false,
+    val supportsRtcmOutput: Boolean = false,
+    val supportsInternalRtk: Boolean = false,
+    val supportsRawObservations: Boolean = false,
+    val supportsRtklibCompatibleRaw: Boolean = false,
+    val supportsReceiverSurveyIn: Boolean = false,
+    val supportsCustomInitCommands: Boolean = false,
+    val supportsRtklibRawConverter: Boolean = false,
+)
+
+enum class SessionArtifact {
+    RECEIVER_RX_RAW,
+    TX_TO_RECEIVER_RAW,
+    CORRECTION_INPUT_RAW,
+    DEVICE_SOLUTION_JSONL,
+    RTKLIB_SOLUTION_JSONL,
+    QUALITY_LIVE_JSONL,
+    BASE_POSITION_JSON,
+    RTCM_EXTRACTED_RTCM3,
+}
+
+data class RecordingSpec(
+    val recordRawReceiverStream: Boolean = true,
+    val recordTxToReceiver: Boolean = false,
+    val recordCorrectionInput: Boolean = false,
+    val recordDeviceSolution: Boolean = false,
+    val recordRtklibSolution: Boolean = false,
+    val recordQualityEvents: Boolean = true,
+    val recordRawObservationsRequested: Boolean = false,
+    val expectedSessionArtifacts: Set<SessionArtifact> = setOf(SessionArtifact.RECEIVER_RX_RAW),
+)
+
+data class QualityMonitoringSpec(
+    val monitorDeviceSolution: Boolean = false,
+    val monitorRtklibSolution: Boolean = false,
+    val monitorNtripState: Boolean = false,
+    val monitorCorrectionAge: Boolean = false,
+    val monitorRawObservationPresence: Boolean = false,
+    val monitorSerialThroughput: Boolean = true,
+    val monitorRtcmFrameValidity: Boolean = false,
+)
+
+data class WorkflowSafetySpec(
+    val requireForegroundService: Boolean = true,
+    val requireWakeLockDuringRecording: Boolean = true,
+    val allowStartWithoutRawObservations: Boolean = true,
+    val allowStartWithoutBasePosition: Boolean = false,
+    val allowUnvalidatedReceiverCommands: Boolean = false,
+    val allowSecretsInSessionJson: Boolean = false,
+)
+
+data class WorkflowSpec(
+    val id: String,
+    val name: String,
+    val receiverRole: ReceiverRole,
+    val receiverProfileId: String,
+    val receiverCapabilities: ReceiverWorkflowCapabilities,
+    val correctionSource: CorrectionSourceSpec,
+    val correctionTargets: Set<CorrectionTarget>,
+    val solutionEngines: Set<SolutionEngine>,
+    val observationRequirement: ObservationRequirement,
+    val baseContext: BaseContextSpec,
+    val recording: RecordingSpec,
+    val qualityMonitoring: QualityMonitoringSpec,
+    val safety: WorkflowSafetySpec,
+    val workflowSpecVersion: Int = 1,
+    val rtklibRawConverterId: String? = null,
+    val customInitCommandsRequested: Boolean = false,
+)
+
+data class WorkflowValidationResult(
+    val valid: Boolean,
+    val errors: List<WorkflowValidationMessage>,
+    val warnings: List<WorkflowValidationMessage>,
+)
+
+data class WorkflowValidationMessage(
+    val code: String,
+    val message: String,
+)

@@ -24,6 +24,17 @@ Required fields:
 - `androidVersion`
 - `receiverDriverId`
 - `receiverIdentification`
+- `workflowSpecVersion`
+- `workflowId`
+- `workflowName`
+- `receiverRole`
+- `correctionSource`
+- `correctionTargets`
+- `solutionEngines`
+- `baseContext`
+- `recordingExpectations`
+- `qualityMonitoringExpectations`
+- `workflowValidationAtStart`
 - `usbVid`
 - `usbPid`
 - `baudRate`
@@ -36,8 +47,12 @@ Required fields:
 - `sessionUuid`
 - `linkedBaseSessionUuid`
 
-NTRIP metadata must exclude secrets. The raw stream must be stored only in
-`receiver-rx.raw`; app timestamps and markers belong in sidecar files.
+Workflow fields mirror the validated `WorkflowSpec` described in
+[Workflows](workflows.md). `correctionSource` metadata must exclude secrets.
+NTRIP passwords, tokens and raw credentials must never appear in `session.json`;
+only secret references or redacted metadata are allowed. The raw stream must be
+stored only in `receiver-rx.raw`; app timestamps and markers belong in sidecar
+files.
 
 ## `base-position.json`
 
@@ -51,10 +66,12 @@ Required fields:
 - `ecefZMeters`
 - `frame`
 - `epoch`
-- `method`: `manual`, `long-average`, `static-RTK`, `PPP-static`,
-  `receiver-survey-in` or `external`
+- `method`: `manual-known-point`, `static-RTK`, `PPP-static`,
+  `long-average`, `receiver-survey-in`, `external-base-position-json` or
+  `unknown`
 - `durationSeconds`
-- `uncertaintyMeters`
+- `horizontalUncertaintyMeters`
+- `verticalUncertaintyMeters`
 - `antennaHeightMeters`
 - `antennaReferencePoint`
 - `sourceSessionReference`

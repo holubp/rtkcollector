@@ -44,6 +44,10 @@ The app is designed as a service-first receiver data pipeline:
 The capture path must not depend on the Android Activity lifecycle, Compose,
 NTRIP availability or parser success.
 
+Workflow selection is modelled as validated `WorkflowSpec` instances that
+compose receiver role, correction source/target, solution engines, base context,
+recorded artifacts and safety rules. See [Workflows](docs/workflows.md).
+
 ## Licence
 
 RtkCollector is licensed under GPL-3.0-or-later. See [LICENSE](LICENSE) and

@@ -465,6 +465,7 @@ object WorkflowExamples {
                 monitorSerialThroughput = true,
             ),
             safety = WorkflowSafetySpec(
+                requireForegroundService = false,
                 requireWakeLockDuringRecording = false,
             ),
         )

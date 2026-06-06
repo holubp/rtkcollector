@@ -83,6 +83,15 @@ class WorkflowValidatorTest {
     }
 
     @Test
+    fun `replay test workflow does not require Android recording service safety`() {
+        val spec = WorkflowExamples.replayTest(ReceiverCapabilityFixtures.um980N4())
+
+        assertFalse(spec.safety.requireForegroundService)
+        assertFalse(spec.safety.requireWakeLockDuringRecording)
+        assertValid(spec)
+    }
+
+    @Test
     fun `rover RTKLIB real-time with compatible raw and base context is valid`() {
         assertValid(WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4()))
     }

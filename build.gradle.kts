@@ -1,5 +1,7 @@
 plugins {
-    kotlin("jvm") version "2.0.21" apply false
+    id("com.android.application") version "9.2.0" apply false
+    kotlin("android") version "2.3.21" apply false
+    kotlin("jvm") version "2.3.21" apply false
 }
 
 allprojects {
@@ -28,14 +30,10 @@ subprojects {
     }
 }
 
-tasks.register("assembleDebug") {
-    description = "Bootstrap alias for Android-style debug assembly until the Android app module is enabled."
-    group = "build"
-    dependsOn(
-        provider {
-            subprojects
-                .filter { it.plugins.hasPlugin("org.jetbrains.kotlin.jvm") }
-                .map { it.tasks.named("assemble") }
-        },
-    )
+if (tasks.findByName("assembleDebug") == null) {
+    tasks.register("assembleDebug") {
+        description = "Runs debug assembly for the Android app when present."
+        group = "build"
+        dependsOn(":app:assembleDebug")
+    }
 }

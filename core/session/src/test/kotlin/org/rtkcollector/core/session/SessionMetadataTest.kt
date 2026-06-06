@@ -33,6 +33,17 @@ class SessionMetadataTest {
     }
 
     @Test
+    fun `session modes match version one workflow names`() {
+        assertEquals(SessionMode.ROVER, SessionMode.valueOf("ROVER"))
+        assertEquals(SessionMode.FIXED_BASE, SessionMode.valueOf("FIXED_BASE"))
+        assertEquals(
+            SessionMode.TEMPORARY_BASE_PREPARATION,
+            SessionMode.valueOf("TEMPORARY_BASE_PREPARATION"),
+        )
+        assertEquals(SessionMode.REPLAY_TEST, SessionMode.valueOf("REPLAY_TEST"))
+    }
+
+    @Test
     fun `base position carries calibration provenance`() {
         val position = BasePositionMetadata(
             latitudeDegrees = 50.0,
@@ -53,5 +64,10 @@ class SessionMetadataTest {
 
         assertEquals(BasePositionMethod.PPP_STATIC, position.method)
         assertEquals("session-uuid", position.sourceSessionReference)
+    }
+
+    @Test
+    fun `base position method includes receiver PPP candidate`() {
+        assertEquals(BasePositionMethod.RECEIVER_PPP, BasePositionMethod.valueOf("RECEIVER_PPP"))
     }
 }

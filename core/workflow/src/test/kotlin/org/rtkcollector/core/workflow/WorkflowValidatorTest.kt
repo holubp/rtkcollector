@@ -33,6 +33,56 @@ class WorkflowValidatorTest {
     }
 
     @Test
+    fun `temporary base preparation with UM980 records raw observations device solution and receiver PPP`() {
+        val spec = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4())
+
+        assertValid(spec)
+        assertTrue(spec.recording.recordRawReceiverStream)
+        assertTrue(spec.recording.recordRawObservationsRequested)
+        assertTrue((spec.recording.rawObservationMinimumRateHz ?: 0.0) >= 1.0)
+        assertTrue(spec.recording.recordDeviceSolution)
+        assertTrue(SolutionEngine.DEVICE_INTERNAL in spec.solutionEngines)
+        assertTrue(spec.recording.recordPppSolution)
+        assertTrue(SolutionEngine.RECEIVER_PPP in spec.solutionEngines)
+        assertTrue(SessionArtifact.RECEIVER_PPP_SOLUTION_JSONL in spec.recording.expectedSessionArtifacts)
+        assertTrue(
+            spec.basePositionCandidateGeneration.candidateMethods.take(4) == listOf(
+                BasePositionMethod.STATIC_RTK,
+                BasePositionMethod.PPP_STATIC,
+                BasePositionMethod.RECEIVER_PPP,
+                BasePositionMethod.LONG_AVERAGE,
+            ),
+        )
+    }
+
+    @Test
+    fun `temporary base preparation with M8T records raw and device solution without requiring receiver PPP`() {
+        val spec = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.ubloxM8t())
+
+        assertValid(spec)
+        assertTrue(spec.recording.recordRawObservationsRequested)
+        assertTrue((spec.recording.rawObservationMinimumRateHz ?: 0.0) >= 1.0)
+        assertTrue(spec.recording.recordDeviceSolution)
+        assertFalse(spec.recording.recordPppSolution)
+        assertFalse(SolutionEngine.RECEIVER_PPP in spec.solutionEngines)
+    }
+
+    @Test
+    fun `version one user workflows do not expose RTKLIB real-time`() {
+        val workflows = WorkflowExamples.version1UserWorkflows(ReceiverCapabilityFixtures.um980N4())
+
+        assertTrue(workflows.isNotEmpty())
+        assertTrue(workflows.none { SolutionEngine.RTKLIB_REALTIME in it.solutionEngines })
+        assertTrue(workflows.none { CorrectionTarget.RTKLIB in it.correctionTargets })
+    }
+
+    @Test
+    fun `version one user workflows with UM980 are valid`() {
+        WorkflowExamples.version1UserWorkflows(ReceiverCapabilityFixtures.um980N4())
+            .forEach(::assertValid)
+    }
+
+    @Test
     fun `rover RTKLIB real-time with compatible raw and base context is valid`() {
         assertValid(WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4()))
     }
@@ -40,6 +90,15 @@ class WorkflowValidatorTest {
     @Test
     fun `base calibration with NTRIP and raw observations is valid`() {
         assertValid(WorkflowExamples.baseCalibrationWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4()))
+    }
+
+    @Test
+    fun `temporary base preparation with NTRIP uses primary temporary base naming`() {
+        val spec = WorkflowExamples.temporaryBasePreparationWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+
+        assertValid(spec)
+        assertTrue(spec.id.startsWith("temporary-base-preparation"))
+        assertTrue(spec.name.startsWith("Temporary base preparation"))
     }
 
     @Test
@@ -167,6 +226,79 @@ class WorkflowValidatorTest {
         val spec = WorkflowExamples.baseCalibrationRawOnly(ReceiverCapabilityFixtures.ubloxM8t())
 
         assertFalse(SessionArtifact.BASE_POSITION_JSON in spec.recording.expectedSessionArtifacts)
+    }
+
+    @Test
+    fun `temporary base preparation requires device solution recording`() {
+        val spec = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4())
+            .copy(
+                solutionEngines = setOf(SolutionEngine.POSTPROCESSING_PIPELINE, SolutionEngine.RECEIVER_PPP),
+                recording = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4()).recording.copy(
+                    recordDeviceSolution = false,
+                ),
+            )
+
+        assertError(spec, "BASE_PREPARATION_REQUIRES_DEVICE_SOLUTION")
+    }
+
+    @Test
+    fun `temporary base preparation requires at least one hertz raw observations when raw is supported`() {
+        val spec = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4())
+            .copy(
+                recording = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4()).recording.copy(
+                    rawObservationMinimumRateHz = 0.2,
+                ),
+            )
+
+        assertError(spec, "BASE_PREPARATION_REQUIRES_RAW_OBSERVATION_RATE")
+    }
+
+    @Test
+    fun `temporary base preparation requires receiver PPP recording when receiver PPP is supported`() {
+        val spec = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4())
+            .copy(
+                solutionEngines = setOf(SolutionEngine.DEVICE_INTERNAL, SolutionEngine.POSTPROCESSING_PIPELINE),
+                recording = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4()).recording.copy(
+                    recordPppSolution = false,
+                    expectedSessionArtifacts = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4())
+                        .recording
+                        .expectedSessionArtifacts - SessionArtifact.RECEIVER_PPP_SOLUTION_JSONL,
+                ),
+            )
+
+        assertError(spec, "BASE_PREPARATION_REQUIRES_PPP_RECORDING_WHEN_SUPPORTED")
+    }
+
+    @Test
+    fun `long averaging before static or PPP candidate methods emits fallback warning`() {
+        val spec = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4())
+            .copy(
+                basePositionCandidateGeneration = BasePositionCandidateGenerationSpec(
+                    candidateMethods = listOf(
+                        BasePositionMethod.LONG_AVERAGE,
+                        BasePositionMethod.STATIC_RTK,
+                        BasePositionMethod.PPP_STATIC,
+                    ),
+                ),
+            )
+
+        assertWarning(spec, "LONG_AVERAGE_CANDIDATE_IS_FALLBACK")
+    }
+
+    @Test
+    fun `long averaging between preferred candidate methods emits fallback warning`() {
+        val spec = WorkflowExamples.temporaryBasePreparation(ReceiverCapabilityFixtures.um980N4())
+            .copy(
+                basePositionCandidateGeneration = BasePositionCandidateGenerationSpec(
+                    candidateMethods = listOf(
+                        BasePositionMethod.STATIC_RTK,
+                        BasePositionMethod.LONG_AVERAGE,
+                        BasePositionMethod.PPP_STATIC,
+                    ),
+                ),
+            )
+
+        assertWarning(spec, "LONG_AVERAGE_CANDIDATE_IS_FALLBACK")
     }
 
     @Test

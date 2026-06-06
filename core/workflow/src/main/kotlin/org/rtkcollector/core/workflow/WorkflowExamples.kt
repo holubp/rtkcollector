@@ -17,6 +17,7 @@ object ReceiverCapabilityFixtures {
             supportsInternalRtk = true,
             supportsRawObservations = true,
             supportsRtklibCompatibleRaw = true,
+            supportsReceiverPppSolution = true,
             supportsReceiverSurveyIn = true,
             supportsCustomInitCommands = true,
         )
@@ -50,6 +51,16 @@ object ReceiverCapabilityFixtures {
 }
 
 object WorkflowExamples {
+    private val baseCandidateMethodPriority = listOf(
+        BasePositionMethod.STATIC_RTK,
+        BasePositionMethod.PPP_STATIC,
+        BasePositionMethod.RECEIVER_PPP,
+        BasePositionMethod.LONG_AVERAGE,
+        BasePositionMethod.RECEIVER_SURVEY_IN,
+        BasePositionMethod.MANUAL_KNOWN_POINT,
+        BasePositionMethod.EXTERNAL_BASE_POSITION_JSON,
+    )
+
     fun defaultBasePosition(): BasePosition =
         BasePosition(
             latDeg = 50.0,
@@ -167,6 +178,19 @@ object WorkflowExamples {
             safety = WorkflowSafetySpec(),
         )
 
+    fun version1UserWorkflows(
+        capabilities: ReceiverWorkflowCapabilities,
+        receiverProfileId: String = "um980-n4",
+    ): List<WorkflowSpec> =
+        listOf(
+            plainRoverRecording(capabilities, receiverProfileId),
+            roverWithNtripToReceiver(capabilities, receiverProfileId),
+            temporaryBasePreparation(capabilities, receiverProfileId),
+            temporaryBasePreparationWithNtripToReceiver(capabilities, receiverProfileId),
+            fixedBaseFromBasePosition(capabilities, receiverProfileId),
+            replayTest(capabilities, receiverProfileId),
+        )
+
     fun roverWithRtklibRealtime(
         capabilities: ReceiverWorkflowCapabilities,
         receiverProfileId: String = "um980-n4",
@@ -244,52 +268,92 @@ object WorkflowExamples {
         capabilities: ReceiverWorkflowCapabilities,
         receiverProfileId: String = "ublox-m8t",
     ): WorkflowSpec =
+        temporaryBasePreparation(
+            capabilities = capabilities,
+            receiverProfileId = receiverProfileId,
+            correctionSource = CorrectionSourceSpec.None,
+            correctionTargets = emptySet(),
+            baseContext = BaseContextSpec.None,
+            id = "temporary-base-preparation-raw-only",
+            name = "Temporary base preparation, raw only",
+        )
+
+    fun temporaryBasePreparation(
+        capabilities: ReceiverWorkflowCapabilities,
+        receiverProfileId: String = "um980-n4",
+        correctionSource: CorrectionSourceSpec = CorrectionSourceSpec.None,
+        correctionTargets: Set<CorrectionTarget> = emptySet(),
+        baseContext: BaseContextSpec = BaseContextSpec.None,
+        id: String = "temporary-base-preparation",
+        name: String = "Temporary base preparation recording",
+    ): WorkflowSpec =
         WorkflowSpec(
-            id = "base-calibration-raw-only",
-            name = "Base calibration, raw only",
+            id = id,
+            name = name,
             receiverRole = ReceiverRole.BASE_CALIBRATION,
             receiverProfileId = receiverProfileId,
             receiverCapabilities = capabilities,
-            correctionSource = CorrectionSourceSpec.None,
-            correctionTargets = emptySet(),
-            solutionEngines = setOf(SolutionEngine.POSTPROCESSING_PIPELINE),
+            correctionSource = correctionSource,
+            correctionTargets = correctionTargets,
+            solutionEngines = setOfNotNull(
+                SolutionEngine.DEVICE_INTERNAL,
+                SolutionEngine.POSTPROCESSING_PIPELINE,
+                SolutionEngine.RECEIVER_PPP.takeIf { capabilities.supportsReceiverPppSolution },
+            ),
             observationRequirement = if (capabilities.supportsRawObservations) {
                 ObservationRequirement.RAW_IF_SUPPORTED
             } else {
                 ObservationRequirement.NONE
             },
-            baseContext = BaseContextSpec.None,
+            baseContext = baseContext,
             recording = RecordingSpec(
                 recordDeviceSolution = true,
+                recordPppSolution = capabilities.supportsReceiverPppSolution,
                 recordRawObservationsRequested = capabilities.supportsRawObservations,
-                expectedSessionArtifacts = setOf(
+                rawObservationMinimumRateHz = 1.0.takeIf { capabilities.supportsRawObservations },
+                expectedSessionArtifacts = setOfNotNull(
                     SessionArtifact.RECEIVER_RX_RAW,
                     SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
+                    SessionArtifact.RECEIVER_PPP_SOLUTION_JSONL.takeIf { capabilities.supportsReceiverPppSolution },
                 ),
             ),
             qualityMonitoring = QualityMonitoringSpec(
                 monitorDeviceSolution = true,
+                monitorPppSolution = capabilities.supportsReceiverPppSolution,
                 monitorRawObservationPresence = capabilities.supportsRawObservations,
                 monitorSerialThroughput = true,
             ),
             safety = WorkflowSafetySpec(allowStartWithoutBasePosition = true),
+            basePositionCandidateGeneration = BasePositionCandidateGenerationSpec(
+                candidateMethods = baseCandidateMethodPriority,
+            ),
         )
 
     fun baseCalibrationWithNtripToReceiver(
         capabilities: ReceiverWorkflowCapabilities,
         receiverProfileId: String = "um980-n4",
     ): WorkflowSpec =
+        temporaryBasePreparationWithNtripToReceiver(capabilities, receiverProfileId)
+
+    fun temporaryBasePreparationWithNtripToReceiver(
+        capabilities: ReceiverWorkflowCapabilities,
+        receiverProfileId: String = "um980-n4",
+    ): WorkflowSpec =
         WorkflowSpec(
-            id = "base-calibration-ntrip",
-            name = "Base calibration with CORS/NTRIP",
+            id = "temporary-base-preparation-ntrip",
+            name = "Temporary base preparation with CORS/NTRIP",
             receiverRole = ReceiverRole.BASE_CALIBRATION,
             receiverProfileId = receiverProfileId,
             receiverCapabilities = capabilities,
             correctionSource = defaultNtrip(),
             correctionTargets = setOf(CorrectionTarget.RECEIVER),
-            solutionEngines = setOf(SolutionEngine.DEVICE_INTERNAL, SolutionEngine.POSTPROCESSING_PIPELINE),
+            solutionEngines = setOfNotNull(
+                SolutionEngine.DEVICE_INTERNAL,
+                SolutionEngine.POSTPROCESSING_PIPELINE,
+                SolutionEngine.RECEIVER_PPP.takeIf { capabilities.supportsReceiverPppSolution },
+            ),
             observationRequirement = if (capabilities.supportsRawObservations) {
                 ObservationRequirement.RAW_IF_SUPPORTED
             } else {
@@ -306,18 +370,22 @@ object WorkflowExamples {
                 recordTxToReceiver = true,
                 recordCorrectionInput = true,
                 recordDeviceSolution = true,
+                recordPppSolution = capabilities.supportsReceiverPppSolution,
                 recordRawObservationsRequested = capabilities.supportsRawObservations,
-                expectedSessionArtifacts = setOf(
+                rawObservationMinimumRateHz = 1.0.takeIf { capabilities.supportsRawObservations },
+                expectedSessionArtifacts = setOfNotNull(
                     SessionArtifact.RECEIVER_RX_RAW,
                     SessionArtifact.TX_TO_RECEIVER_RAW,
                     SessionArtifact.CORRECTION_INPUT_RAW,
                     SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
+                    SessionArtifact.RECEIVER_PPP_SOLUTION_JSONL.takeIf { capabilities.supportsReceiverPppSolution },
                 ),
             ),
             qualityMonitoring = QualityMonitoringSpec(
                 monitorDeviceSolution = true,
+                monitorPppSolution = capabilities.supportsReceiverPppSolution,
                 monitorNtripState = true,
                 monitorCorrectionAge = true,
                 monitorRawObservationPresence = capabilities.supportsRawObservations,
@@ -325,6 +393,9 @@ object WorkflowExamples {
                 monitorRtcmFrameValidity = true,
             ),
             safety = WorkflowSafetySpec(allowStartWithoutBasePosition = true),
+            basePositionCandidateGeneration = BasePositionCandidateGenerationSpec(
+                candidateMethods = baseCandidateMethodPriority,
+            ),
         )
 
     fun fixedBaseFromBasePosition(
@@ -361,5 +432,40 @@ object WorkflowExamples {
                 monitorRtcmFrameValidity = capabilities.supportsRtcmOutput,
             ),
             safety = WorkflowSafetySpec(),
+        )
+
+    fun replayTest(
+        capabilities: ReceiverWorkflowCapabilities,
+        receiverProfileId: String = "file-replay",
+    ): WorkflowSpec =
+        WorkflowSpec(
+            id = "replay-test",
+            name = "Replay test",
+            receiverRole = ReceiverRole.REPLAY_TEST,
+            receiverProfileId = receiverProfileId,
+            receiverCapabilities = capabilities,
+            correctionSource = CorrectionSourceSpec.FileReplay(
+                path = "testdata/sample-receiver-rx.raw",
+                expectedCorrectionFormat = CorrectionFormat.FILE_REPLAY,
+            ),
+            correctionTargets = emptySet(),
+            solutionEngines = emptySet(),
+            observationRequirement = ObservationRequirement.NONE,
+            baseContext = BaseContextSpec.None,
+            recording = RecordingSpec(
+                recordDeviceSolution = false,
+                recordQualityEvents = true,
+                expectedSessionArtifacts = setOf(
+                    SessionArtifact.RECEIVER_RX_RAW,
+                    SessionArtifact.EVENTS_JSONL,
+                    SessionArtifact.QUALITY_LIVE_JSONL,
+                ),
+            ),
+            qualityMonitoring = QualityMonitoringSpec(
+                monitorSerialThroughput = true,
+            ),
+            safety = WorkflowSafetySpec(
+                requireWakeLockDuringRecording = false,
+            ),
         )
 }

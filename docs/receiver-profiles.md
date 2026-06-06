@@ -14,6 +14,8 @@
 - Supports rover configuration.
 - Supports NTRIP RTCM injection.
 - Should support base and fixed-base configuration later.
+- May expose receiver PPP solution/status on supported firmware or correction
+  services; this must be modelled separately from the normal device solution.
 - Should monitor NMEA and UM980-native solution messages where available.
 - Should record mixed UM980/NMEA/RTCM streams byte-exactly.
 
@@ -29,6 +31,8 @@ hard-code operational UM980 commands.
 - Supports RTCM3 input for rover use.
 - Supports RTCM3 output for base use on M8P-2.
 - Supports UBX RAWX/SFRBX recording for post-processing and diagnostics.
+- Should not be modelled as a receiver PPP solution source unless a specific
+  profile proves that capability.
 
 ## u-blox M8T
 
@@ -36,4 +40,5 @@ hard-code operational UM980 commands.
 - Supports UBX RAWX/SFRBX recording.
 - Supports survey-in and fixed-position timing concepts.
 - Should not be treated as an internal RTK float/fix rover like M8P.
+- Should not be treated as a receiver PPP solution source.
 - Useful for static/base recording and post-processing workflows.

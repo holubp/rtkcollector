@@ -2,7 +2,7 @@
 
 RtkCollector is a GPL-3.0-or-later Android GNSS receiver companion for robust
 byte-exact receiver recording, NTRIP correction intake, correction routing,
-receiver control and base-calibration workflows.
+receiver control and temporary-base preparation workflows.
 
 The first receiver target is the Unicore UM980 / Unicore N4 family. Other early
 targets are u-blox M8P, u-blox M8T and a generic NMEA + RTCM receiver profile.
@@ -46,7 +46,11 @@ NTRIP availability or parser success.
 
 Workflow selection is modelled as validated `WorkflowSpec` instances that
 compose receiver role, correction source/target, solution engines, base context,
-recorded artifacts and safety rules. See [Workflows](docs/workflows.md).
+base-position candidate generation, recorded artifacts and safety rules. See
+[Workflows](docs/workflows.md) and [User Workflows](docs/user-workflows.md).
+Version 1 covers receiver-side rover, NTRIP-to-receiver, temporary-base,
+fixed-base and replay workflows. In-phone RTKLIB real-time solution is deferred
+to version 2.
 
 ## Licence
 

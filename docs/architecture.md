@@ -60,3 +60,8 @@ Raw capture remains independent of parser, quality-monitor and solution-engine
 failures. An RTKLIB, NTRIP or receiver-native parser failure may affect advisory
 state, warnings or sidecar events, but it must not modify or stop byte-exact
 receiver recording while transport and storage are still functioning.
+
+Version 1 user workflows cover receiver-side solutions only: plain rover,
+NTRIP-to-receiver rover, temporary-base preparation, fixed-base operation and
+replay/test. In-phone RTKLIB real-time solution is a version 2 advisory engine
+and must not be required by V1 capture or session execution.

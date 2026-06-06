@@ -34,8 +34,8 @@ data class SerialParameters(
 
 enum class SessionMode {
     ROVER,
-    BASE,
-    BASE_CALIBRATION,
+    FIXED_BASE,
+    TEMPORARY_BASE_PREPARATION,
     REPLAY_TEST,
 }
 
@@ -72,10 +72,11 @@ data class BasePositionMetadata(
 )
 
 enum class BasePositionMethod {
-    MANUAL,
+    MANUAL_KNOWN_POINT,
     LONG_AVERAGE,
     STATIC_RTK,
     PPP_STATIC,
+    RECEIVER_PPP,
     RECEIVER_SURVEY_IN,
-    EXTERNAL,
+    EXTERNAL_BASE_POSITION_JSON,
 }

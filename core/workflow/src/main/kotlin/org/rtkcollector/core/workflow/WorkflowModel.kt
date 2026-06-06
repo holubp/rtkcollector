@@ -14,6 +14,7 @@ enum class CorrectionTarget {
 
 enum class SolutionEngine {
     DEVICE_INTERNAL,
+    RECEIVER_PPP,
     RTKLIB_REALTIME,
     POSTPROCESSING_PIPELINE,
 }
@@ -29,6 +30,7 @@ enum class BasePositionMethod {
     MANUAL_KNOWN_POINT,
     STATIC_RTK,
     PPP_STATIC,
+    RECEIVER_PPP,
     LONG_AVERAGE,
     RECEIVER_SURVEY_IN,
     EXTERNAL_BASE_POSITION_JSON,
@@ -171,6 +173,7 @@ data class ReceiverWorkflowCapabilities(
     val supportsInternalRtk: Boolean = false,
     val supportsRawObservations: Boolean = false,
     val supportsRtklibCompatibleRaw: Boolean = false,
+    val supportsReceiverPppSolution: Boolean = false,
     val supportsReceiverSurveyIn: Boolean = false,
     val supportsCustomInitCommands: Boolean = false,
     val supportsRtklibRawConverter: Boolean = false,
@@ -182,6 +185,7 @@ enum class SessionArtifact {
     CORRECTION_INPUT_RAW,
     EVENTS_JSONL,
     DEVICE_SOLUTION_JSONL,
+    RECEIVER_PPP_SOLUTION_JSONL,
     RTKLIB_SOLUTION_JSONL,
     QUALITY_LIVE_JSONL,
     BASE_POSITION_JSON,
@@ -193,17 +197,21 @@ data class RecordingSpec(
     val recordTxToReceiver: Boolean = false,
     val recordCorrectionInput: Boolean = false,
     val recordDeviceSolution: Boolean = false,
+    val recordPppSolution: Boolean = false,
     val recordRtklibSolution: Boolean = false,
     val recordQualityEvents: Boolean = true,
     val recordRawObservationsRequested: Boolean = false,
+    val rawObservationMinimumRateHz: Double? = null,
     val expectedSessionArtifacts: Set<SessionArtifact> = setOf(
         SessionArtifact.RECEIVER_RX_RAW,
         SessionArtifact.EVENTS_JSONL,
+        SessionArtifact.QUALITY_LIVE_JSONL,
     ),
 )
 
 data class QualityMonitoringSpec(
     val monitorDeviceSolution: Boolean = false,
+    val monitorPppSolution: Boolean = false,
     val monitorRtklibSolution: Boolean = false,
     val monitorNtripState: Boolean = false,
     val monitorCorrectionAge: Boolean = false,
@@ -221,6 +229,10 @@ data class WorkflowSafetySpec(
     val allowSecretsInSessionJson: Boolean = false,
 )
 
+data class BasePositionCandidateGenerationSpec(
+    val candidateMethods: List<BasePositionMethod> = emptyList(),
+)
+
 data class WorkflowSpec(
     val id: String,
     val name: String,
@@ -235,6 +247,7 @@ data class WorkflowSpec(
     val recording: RecordingSpec,
     val qualityMonitoring: QualityMonitoringSpec,
     val safety: WorkflowSafetySpec,
+    val basePositionCandidateGeneration: BasePositionCandidateGenerationSpec = BasePositionCandidateGenerationSpec(),
     val workflowSpecVersion: Int = 1,
     val rtklibRawConverterId: String? = null,
     val customInitCommandsRequested: Boolean = false,

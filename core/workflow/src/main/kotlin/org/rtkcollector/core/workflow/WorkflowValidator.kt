@@ -10,9 +10,12 @@ class WorkflowValidator {
         validateRtklib(spec, errors, warnings)
         validateFixedBase(spec, errors)
         validateRecordingSpec(spec, errors)
+        validateTemporaryBasePreparation(spec, errors, warnings)
         validateRawObservationRequirements(spec, errors, warnings)
         validateInternalRtk(spec, errors)
+        validateReceiverPpp(spec, errors, warnings)
         validateNtrip(spec, errors, warnings)
+        validateBasePositionCandidatePolicy(spec, errors, warnings)
         validateBasePositionWarnings(spec, warnings)
         validateSafety(spec, errors, warnings)
 
@@ -266,6 +269,65 @@ class WorkflowValidator {
                 "Quality event recording requires quality-live.jsonl as an expected artifact.",
             )
         }
+
+        if (spec.recording.recordPppSolution &&
+            SessionArtifact.RECEIVER_PPP_SOLUTION_JSONL !in spec.recording.expectedSessionArtifacts
+        ) {
+            errors += error(
+                "PPP_ARTIFACT_REQUIRED",
+                "Receiver PPP solution recording requires receiver-ppp-solution.jsonl as an expected artifact.",
+            )
+        }
+    }
+
+    private fun validateTemporaryBasePreparation(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        if (spec.receiverRole != ReceiverRole.BASE_CALIBRATION) {
+            return
+        }
+
+        if (SolutionEngine.DEVICE_INTERNAL !in spec.solutionEngines || !spec.recording.recordDeviceSolution) {
+            errors += error(
+                "BASE_PREPARATION_REQUIRES_DEVICE_SOLUTION",
+                "Temporary-base preparation must record the receiver's normal in-device solution.",
+            )
+        }
+
+        if (spec.receiverCapabilities.supportsRawObservations) {
+            if (!spec.recording.recordRawObservationsRequested ||
+                spec.observationRequirement == ObservationRequirement.NONE ||
+                (spec.recording.rawObservationMinimumRateHz ?: 0.0) < 1.0
+            ) {
+                errors += error(
+                    "BASE_PREPARATION_REQUIRES_RAW_OBSERVATION_RATE",
+                    "Temporary-base preparation with a raw-capable receiver must request raw observations at 1 Hz or higher.",
+                )
+            }
+        } else {
+            warnings += warning(
+                "BASE_PREPARATION_RAW_OBSERVATIONS_UNAVAILABLE",
+                "Temporary-base preparation without raw observations cannot support static RTK or RTCM3 observation conversion.",
+            )
+        }
+
+        if (spec.receiverCapabilities.supportsReceiverPppSolution &&
+            (!spec.recording.recordPppSolution || SolutionEngine.RECEIVER_PPP !in spec.solutionEngines)
+        ) {
+            errors += error(
+                "BASE_PREPARATION_REQUIRES_PPP_RECORDING_WHEN_SUPPORTED",
+                "Temporary-base preparation must request receiver PPP solution recording when the receiver profile supports it.",
+            )
+        }
+
+        if (spec.basePositionCandidateGeneration.candidateMethods.isEmpty()) {
+            errors += error(
+                "BASE_PREPARATION_REQUIRES_CANDIDATE_METHODS",
+                "Temporary-base preparation must declare base-position candidate generation methods.",
+            )
+        }
     }
 
     private fun validateInternalRtk(
@@ -281,6 +343,30 @@ class WorkflowValidator {
             errors += error(
                 "DEVICE_INTERNAL_RTK_REQUIRES_CAPABILITY",
                 "Receiver-internal RTK workflow requires receiver internal RTK capability.",
+            )
+        }
+    }
+
+    private fun validateReceiverPpp(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        val pppEngineEnabled = SolutionEngine.RECEIVER_PPP in spec.solutionEngines
+
+        if ((pppEngineEnabled || spec.recording.recordPppSolution) &&
+            !spec.receiverCapabilities.supportsReceiverPppSolution
+        ) {
+            warnings += warning(
+                "RECEIVER_PPP_UNSUPPORTED_BY_PROFILE",
+                "Receiver PPP solution recording was requested for a profile that does not declare receiver PPP support.",
+            )
+        }
+
+        if (pppEngineEnabled && !spec.recording.recordPppSolution) {
+            errors += error(
+                "RECEIVER_PPP_ENGINE_REQUIRES_RECORDING",
+                "Receiver PPP solution engine requires receiver PPP solution recording.",
             )
         }
     }
@@ -378,6 +464,41 @@ class WorkflowValidator {
         }
     }
 
+    private fun validateBasePositionCandidatePolicy(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+        warnings: MutableList<WorkflowValidationMessage>,
+    ) {
+        val methods = spec.basePositionCandidateGeneration.candidateMethods
+
+        if (methods.distinct().size != methods.size) {
+            errors += error(
+                "BASE_POSITION_CANDIDATE_METHODS_MUST_BE_UNIQUE",
+                "Base-position candidate generation methods must not contain duplicates.",
+            )
+        }
+
+        val longAverageIndex = methods.indexOf(BasePositionMethod.LONG_AVERAGE)
+        if (longAverageIndex >= 0) {
+            val preferredMethodIndexes = methods.mapIndexedNotNull { index, method ->
+                if (method == BasePositionMethod.STATIC_RTK ||
+                    method == BasePositionMethod.PPP_STATIC ||
+                    method == BasePositionMethod.RECEIVER_PPP
+                ) {
+                    index
+                } else {
+                    null
+                }
+            }
+            if (preferredMethodIndexes.isEmpty() || preferredMethodIndexes.any { it > longAverageIndex }) {
+                warnings += warning(
+                    "LONG_AVERAGE_CANDIDATE_IS_FALLBACK",
+                    "Long-average base-position candidates are fallback/lower-grade and should rank after static RTK, PPP/static or receiver PPP candidates.",
+                )
+            }
+        }
+    }
+
     private fun validateSafety(
         spec: WorkflowSpec,
         errors: MutableList<WorkflowValidationMessage>,
@@ -390,14 +511,14 @@ class WorkflowValidator {
             )
         }
 
-        if (!spec.safety.requireForegroundService) {
+        if (spec.receiverRole != ReceiverRole.REPLAY_TEST && !spec.safety.requireForegroundService) {
             errors += error(
                 "FOREGROUND_SERVICE_REQUIRED",
                 "Android recording workflows must require foreground-service execution.",
             )
         }
 
-        if (!spec.safety.requireWakeLockDuringRecording) {
+        if (spec.receiverRole != ReceiverRole.REPLAY_TEST && !spec.safety.requireWakeLockDuringRecording) {
             errors += error(
                 "WAKE_LOCK_REQUIRED",
                 "Android recording workflows must require a wake lock while recording.",

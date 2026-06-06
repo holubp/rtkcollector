@@ -6,6 +6,8 @@ safe recording. Unknown bytes remain recordable bytes.
 
 Workflow validation uses receiver capability data before driver command builders
 are called. See [Workflows](workflows.md) for the higher-level workflow model.
+Capability data should distinguish normal in-device solution output from
+receiver PPP solution output where a receiver supports PPP.
 
 ## Conceptual Kotlin Contract
 
@@ -35,5 +37,7 @@ interface GnssReceiverDriver {
 - Commands sent to a receiver must be recorded in `tx-to-receiver.raw` or a
   dedicated corrections sidecar.
 - Parser output is advisory and may be dropped if it fails.
+- Receiver PPP solution parsing/logging, where supported, is separate from the
+  normal device solution stream.
 - Drivers must not inject timestamps or markers into `receiver-rx.raw`.
 - Risky receiver commands must be documented and tested before use.

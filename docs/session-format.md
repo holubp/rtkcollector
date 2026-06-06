@@ -7,8 +7,12 @@ session/
   session.json
   receiver-rx.raw
   tx-to-receiver.raw
+  correction-input.raw
   events.jsonl
   quality-live.jsonl
+  device-solution.jsonl optional
+  receiver-ppp-solution.jsonl optional
+  rtklib-solution.jsonl optional, V2
   init-script.txt
   receiver-profile.json
   base-position.json optional
@@ -32,6 +36,7 @@ Required fields:
 - `correctionTargets`
 - `solutionEngines`
 - `baseContext`
+- `basePositionCandidateGeneration`
 - `recordingExpectations`
 - `qualityMonitoringExpectations`
 - `workflowValidationAtStart`
@@ -39,7 +44,8 @@ Required fields:
 - `usbPid`
 - `baudRate`
 - `serialParameters`
-- `mode`: `rover`, `base`, `base-calibration` or `replay-test`
+- `mode`: `rover`, `fixed-base`, `temporary-base-preparation` or
+  `replay-test`
 - `startedAt`
 - `stoppedAt`
 - `ntrip`
@@ -54,6 +60,12 @@ only secret references or redacted metadata are allowed. The raw stream must be
 stored only in `receiver-rx.raw`; app timestamps and markers belong in sidecar
 files.
 
+`solutionEngines` must distinguish the normal receiver in-device solution from
+receiver PPP solution and from future RTKLIB real-time solution. Temporary-base
+preparation sessions should record raw observations at `>= 1 Hz` where
+supported, record normal device solution and record receiver PPP solution where
+supported.
+
 ## `base-position.json`
 
 Required fields:
@@ -67,8 +79,8 @@ Required fields:
 - `frame`
 - `epoch`
 - `method`: `manual-known-point`, `static-RTK`, `PPP-static`,
-  `long-average`, `receiver-survey-in`, `external-base-position-json` or
-  `unknown`
+  `receiver-PPP`, `long-average`, `receiver-survey-in`,
+  `external-base-position-json` or `unknown`
 - `durationSeconds`
 - `horizontalUncertaintyMeters`
 - `verticalUncertaintyMeters`

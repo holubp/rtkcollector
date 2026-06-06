@@ -1070,8 +1070,8 @@ Add this section near the V1 workflow overview in `docs/user-workflows.md`:
 ## Bootstrap UI Dry Run
 
 The first Android UI is a dry-run workflow launcher. It lets the user choose a
-workflow, receiver profile, command plan and expected recording artifacts, then
-runs validation before entering a simulated recording monitor.
+workflow and receiver profile, then inspect the derived command plan and
+expected recording artifacts before entering a simulated recording monitor.
 
 The dry-run UI intentionally does not open USB, send serial commands, connect to
 NTRIP, start a foreground service or write session files. Its purpose is to keep
@@ -1155,7 +1155,7 @@ Run:
 sh ./gradlew clean
 ```
 
-Expected: PASS, unless local Android native build tools fail due to x86-64/aarch64 mismatch. If that happens, capture the exact failure and continue with pure Kotlin module tests.
+Expected: PASS, unless local Android APK packaging fails when AGP invokes SDK native tools such as `aapt2` that are not usable on this Termux/Android host. If that happens, capture the exact failure and continue with pure Kotlin module tests.
 
 - [ ] **Step 3: Run unit tests**
 

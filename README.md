@@ -14,10 +14,11 @@ Kotlin-compatible skeleton and specification set, not a production Android field
 application.
 
 The bootstrap Android UI is a dry-run workflow launcher and recording monitor.
-It validates workflow and command-plan choices, but it does not yet implement
-USB capture, receiver serial TX, NTRIP networking, foreground services or real
-session file writing. On local Termux, APK assembly may be blocked by the
-Android SDK native `aapt2` binary on x86-64/noexec storage; use
+It validates workflow and receiver-profile choices with a derived command plan,
+but it does not yet implement USB capture, receiver serial TX, NTRIP networking,
+foreground services or real session file writing. On local Termux, APK assembly
+may be blocked by the Android Gradle Plugin invoking SDK native binaries such as
+`aapt2` that are not usable on this Termux/Android host; use
 `:app:compileDebugKotlin` to validate the Kotlin/UI code locally.
 
 ## Core Goals

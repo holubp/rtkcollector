@@ -7,8 +7,9 @@ tools.
 ## Bootstrap UI Dry Run
 
 The first Android UI is a dry-run workflow launcher and monitor. It lets the
-user choose a workflow, receiver profile, command plan and expected recording
-artifacts, then runs validation before entering a simulated recording monitor.
+user choose a workflow and receiver profile. The derived command plan and
+expected recording artifacts are shown before validation and a simulated
+recording monitor.
 
 The dry-run UI intentionally does not open USB, send serial commands, connect to
 NTRIP, start a foreground service, write session files, implement RTKLIB, show

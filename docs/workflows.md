@@ -183,12 +183,13 @@ RTKLIB must not be assumed to consume every receiver-native binary stream.
    artifacts in sidecar/session metadata.
 
 The first Android UI is a dry-run launcher and monitor for this lifecycle. It
-validates the selected workflow, receiver profile, command plan and expected
-artifacts before showing a simulated recording monitor. It does not open USB,
-send serial commands, connect to NTRIP, start a foreground service, write session
-files, implement RTKLIB, show maps, load shapefiles, provide GIS editing or
-collect field features. Workflow and receiver selection are disabled while a
-dry-run session is active so stop and finalise remain explicit actions.
+lets the user choose a workflow and receiver profile. The derived command plan
+and expected artifacts are shown before validation and a simulated recording
+monitor. It does not open USB, send serial commands, connect to NTRIP, start a
+foreground service, write session files, implement RTKLIB, show maps, load
+shapefiles, provide GIS editing or collect field features. Workflow and receiver
+selection are disabled while a dry-run session is active so stop and finalise
+remain explicit actions.
 
 ### Receiver Command Plans
 

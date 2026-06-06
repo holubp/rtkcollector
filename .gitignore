@@ -28,6 +28,9 @@ render.experimental.xml
 .kotlin/
 out/
 
+# Local agent worktrees
+.worktrees/
+
 # Keystore files
 *.jks
 *.keystore

@@ -13,6 +13,13 @@ This repository is in bootstrap status. The current code is a minimal
 Kotlin-compatible skeleton and specification set, not a production Android field
 application.
 
+The bootstrap Android UI is a dry-run workflow launcher and recording monitor.
+It validates workflow and command-plan choices, but it does not yet implement
+USB capture, receiver serial TX, NTRIP networking, foreground services or real
+session file writing. On local Termux, APK assembly may be blocked by the
+Android SDK native `aapt2` binary on x86-64/noexec storage; use
+`:app:compileDebugKotlin` to validate the Kotlin/UI code locally.
+
 ## Core Goals
 
 - Keep the raw receiver capture path authoritative and byte-exact.

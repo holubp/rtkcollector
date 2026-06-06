@@ -4,6 +4,34 @@ RtkCollector V1 is a receiver recorder and correction router. It is not a GIS
 app: there are no maps, shapefiles, feature forms or survey-cartography project
 tools.
 
+## Bootstrap UI Dry Run
+
+The first Android UI is a dry-run workflow launcher and monitor. It lets the
+user choose a workflow, receiver profile, command plan and expected recording
+artifacts, then runs validation before entering a simulated recording monitor.
+
+The dry-run UI intentionally does not open USB, send serial commands, connect to
+NTRIP, start a foreground service, write session files, implement RTKLIB, show
+maps, load shapefiles, provide GIS editing or collect field features. Its
+purpose is to keep the future recording implementation aligned with validated
+workflow plans.
+
+Receiver startup commands are represented as:
+
+1. init sequence;
+2. exactly one mode-specific sequence: rover, base-calibration or fixed-base.
+
+Replay/test sessions use an empty receiver command plan. Shutdown commands are
+optional and usually empty. They are modelled as a separate post-stop phase so
+later receiver TX bytes can be logged without modifying the authoritative
+receiver RX stream.
+
+Runtime correction bytes are not command scripts. When implemented, they must
+share the receiver TX path and be recorded separately from receiver RX.
+
+While a dry-run session is active, the UI disables workflow and receiver
+selection so stopping and finalising the selected session remains explicit.
+
 ## Plain Rover Recording
 
 Use this when you want a byte-exact receiver log without external corrections.

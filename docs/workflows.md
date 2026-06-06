@@ -182,6 +182,27 @@ RTKLIB must not be assumed to consume every receiver-native binary stream.
 7. Session writers record workflow metadata, validation result and expected
    artifacts in sidecar/session metadata.
 
+The first Android UI is a dry-run launcher and monitor for this lifecycle. It
+validates the selected workflow, receiver profile, command plan and expected
+artifacts before showing a simulated recording monitor. It does not open USB,
+send serial commands, connect to NTRIP, start a foreground service, write session
+files, implement RTKLIB, show maps, load shapefiles, provide GIS editing or
+collect field features. Workflow and receiver selection are disabled while a
+dry-run session is active so stop and finalise remain explicit actions.
+
+### Receiver Command Plans
+
+Each startable workflow is paired with a receiver command plan. Startup commands
+are ordered as the profile init sequence followed by exactly one workflow
+mode-specific sequence: rover, base-calibration or fixed-base. The model must
+reject conflicting mode sequences. Replay/test sessions use an empty receiver
+command plan.
+
+Runtime correction bytes are not command scripts, but they share the receiver TX
+path and must be recorded separately from receiver RX when implemented. Optional
+shutdown commands are usually empty, are modelled as a post-stop phase and must
+never rewrite or annotate `receiver-rx.raw`.
+
 ## Validation Rules
 
 Required validation errors:

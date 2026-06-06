@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a scoped RtkCollector feature.
+title: "Feature: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow should this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope checks
+      options:
+        - label: This does not introduce maps, shapefiles or GIS editing.
+        - label: This does not require parser success for raw recording.
+        - label: This does not write secrets into session metadata.

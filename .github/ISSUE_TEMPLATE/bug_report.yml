@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible RtkCollector problem.
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: input
+    id: receiver
+    attributes:
+      label: Receiver
+      description: Receiver model, firmware and transport.
+  - type: input
+    id: android
+    attributes:
+      label: Android device
+      description: Phone/tablet model and Android version.
+  - type: textarea
+    id: capture
+    attributes:
+      label: Capture impact
+      description: Did this affect byte-exact raw capture or session recovery?
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true

@@ -1,0 +1,32 @@
+name: Receiver support
+description: Request or refine receiver support.
+title: "Receiver: "
+labels: ["receiver"]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Receiver model
+      description: Manufacturer, model and firmware.
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - USB serial
+        - Bluetooth serial
+        - TCP
+        - File replay
+        - Other
+  - type: textarea
+    id: streams
+    attributes:
+      label: Output streams
+      description: NMEA, RTCM, UBX, UM980-native or other messages available.
+  - type: textarea
+    id: commands
+    attributes:
+      label: Receiver commands
+      description: Known safe command references or vendor documentation.

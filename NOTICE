@@ -1,0 +1,11 @@
+RtkCollector
+Copyright (C) 2026 Petr Holub and contributors
+
+RtkCollector is licensed under the GNU General Public License v3.0 or later.
+
+This bootstrap repository contains architecture documentation and Kotlin
+skeleton code for a GNSS receiver recorder, NTRIP client, correction router,
+receiver controller and base-calibration workflow companion.
+
+Third-party dependencies must be documented in docs/third-party-licenses.md
+before release builds are distributed.

@@ -51,6 +51,14 @@ class WorkflowValidatorTest {
     }
 
     @Test
+    fun `RTKLIB real-time without RTKLIB correction target is invalid`() {
+        val spec = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4())
+            .copy(correctionTargets = emptySet())
+
+        assertError(spec, "RTKLIB_REQUIRES_CORRECTION_TARGET")
+    }
+
+    @Test
     fun `NTRIP correction target without correction source is invalid`() {
         val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
             .copy(correctionSource = CorrectionSourceSpec.None)
@@ -123,6 +131,42 @@ class WorkflowValidatorTest {
             .copy(baseContext = BaseContextSpec.None)
 
         assertError(spec, "NTRIP_REQUIRES_BASE_CONTEXT")
+    }
+
+    @Test
+    fun `NTRIP correction workflow with unrelated manual base context is invalid`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+            .copy(baseContext = BaseContextSpec.ManualCoordinate(WorkflowExamples.defaultBasePosition()))
+
+        assertError(spec, "NTRIP_REQUIRES_MOUNTPOINT_BASE_CONTEXT")
+    }
+
+    @Test
+    fun `NTRIP correction workflow with mismatched mountpoint context is invalid`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+            .copy(
+                baseContext = BaseContextSpec.NtripMountpoint(
+                    casterHost = "caster.example.org",
+                    mountpoint = "OTHER",
+                ),
+            )
+
+        assertError(spec, "NTRIP_BASE_CONTEXT_MISMATCH")
+    }
+
+    @Test
+    fun `RTKLIB workflow rejects unsupported correction format without converter`() {
+        val spec = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4())
+            .copy(correctionSource = WorkflowExamples.defaultNtrip().copy(expectedCorrectionFormat = CorrectionFormat.UNKNOWN))
+
+        assertError(spec, "RTKLIB_REQUIRES_SUPPORTED_CORRECTION_FORMAT")
+    }
+
+    @Test
+    fun `base calibration recording does not expect accepted base position artifact at start`() {
+        val spec = WorkflowExamples.baseCalibrationRawOnly(ReceiverCapabilityFixtures.ubloxM8t())
+
+        assertFalse(SessionArtifact.BASE_POSITION_JSON in spec.recording.expectedSessionArtifacts)
     }
 
     @Test

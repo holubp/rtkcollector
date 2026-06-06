@@ -171,9 +171,14 @@ Required validation errors:
   fixed-base downstream output when modelled separately.
 - `CorrectionTarget.RECEIVER` requires receiver RTCM input support when source
   is NTRIP or local base corrections.
+- NTRIP correction workflows require base context that represents the same
+  NTRIP/CORS caster and mountpoint.
+- `SolutionEngine.RTKLIB_REALTIME` requires `CorrectionTarget.RTKLIB`.
 - `SolutionEngine.RTKLIB_REALTIME` requires base context.
 - `SolutionEngine.RTKLIB_REALTIME` requires correction source or local/recorded
   base observation source.
+- `SolutionEngine.RTKLIB_REALTIME` requires RTCM observation corrections, or an
+  explicit converter for receiver-native correction/base observation formats.
 - `SolutionEngine.RTKLIB_REALTIME` requires RTKLIB-compatible raw observations
   or an explicit converter.
 - `FIXED_BASE` requires base position, base-position file or manual coordinate.

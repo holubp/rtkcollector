@@ -96,6 +96,13 @@ class WorkflowValidator {
             return
         }
 
+        if (CorrectionTarget.RTKLIB !in spec.correctionTargets) {
+            errors += error(
+                "RTKLIB_REQUIRES_CORRECTION_TARGET",
+                "RTKLIB real-time solution requires RTKLIB as an explicit correction target.",
+            )
+        }
+
         if (spec.baseContext is BaseContextSpec.None) {
             errors += error(
                 "RTKLIB_REQUIRES_BASE_CONTEXT",
@@ -107,6 +114,13 @@ class WorkflowValidator {
             errors += error(
                 "RTKLIB_REQUIRES_CORRECTION_OR_BASE_OBSERVATION_SOURCE",
                 "RTKLIB real-time solution requires correction source or local/recorded base observation source.",
+            )
+        }
+
+        if (!spec.correctionSource.supportsRtklibCorrectionInput(spec.rtklibRawConverterId)) {
+            errors += error(
+                "RTKLIB_REQUIRES_SUPPORTED_CORRECTION_FORMAT",
+                "RTKLIB real-time requires RTCM observation corrections or an explicit converter for the correction source format.",
             )
         }
 
@@ -247,6 +261,26 @@ class WorkflowValidator {
             )
         }
 
+        val ntripContext = spec.baseContext as? BaseContextSpec.NtripMountpoint
+        if (spec.baseContext !is BaseContextSpec.None && ntripContext == null &&
+            (spec.correctionTargets.isNotEmpty() || SolutionEngine.RTKLIB_REALTIME in spec.solutionEngines)
+        ) {
+            errors += error(
+                "NTRIP_REQUIRES_MOUNTPOINT_BASE_CONTEXT",
+                "NTRIP correction workflows require base context that represents the NTRIP/CORS mountpoint.",
+            )
+        }
+
+        if (ntripContext != null &&
+            (!ntripContext.casterHost.equals(ntrip.casterHost, ignoreCase = true) ||
+                ntripContext.mountpoint != ntrip.mountpoint)
+        ) {
+            errors += error(
+                "NTRIP_BASE_CONTEXT_MISMATCH",
+                "NTRIP base context must match the correction source caster host and mountpoint.",
+            )
+        }
+
         if (ntrip.stationId.isNullOrBlank() &&
             ntrip.stationName.isNullOrBlank() &&
             ntrip.approximateBasePosition == null
@@ -329,6 +363,20 @@ class WorkflowValidator {
                 expectedCorrectionFormat == CorrectionFormat.RTCM_OBSERVATIONS
             CorrectionSourceSpec.None -> false
         }
+
+    private fun CorrectionSourceSpec.supportsRtklibCorrectionInput(rtklibRawConverterId: String?): Boolean =
+        when (this) {
+            is CorrectionSourceSpec.Ntrip -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
+            is CorrectionSourceSpec.LocalBaseStream -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
+            is CorrectionSourceSpec.ExternalSerialOrTcp -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
+            is CorrectionSourceSpec.FileReplay -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
+            CorrectionSourceSpec.None -> false
+        }
+
+    private fun CorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId: String?): Boolean =
+        this == CorrectionFormat.RTCM3 ||
+            this == CorrectionFormat.RTCM_OBSERVATIONS ||
+            (this == CorrectionFormat.RECEIVER_NATIVE_RAW && rtklibRawConverterId != null)
 
     private fun BaseContextSpec.hasLocalOrRecordedBaseObservation(): Boolean =
         this is BaseContextSpec.LocalBaseStream || this is BaseContextSpec.RecordedBaseSession

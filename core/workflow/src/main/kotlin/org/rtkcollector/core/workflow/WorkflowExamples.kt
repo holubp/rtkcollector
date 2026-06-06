@@ -262,7 +262,6 @@ object WorkflowExamples {
                     SessionArtifact.RECEIVER_RX_RAW,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
-                    SessionArtifact.BASE_POSITION_JSON,
                 ),
             ),
             qualityMonitoring = QualityMonitoringSpec(
@@ -309,7 +308,6 @@ object WorkflowExamples {
                     SessionArtifact.CORRECTION_INPUT_RAW,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
-                    SessionArtifact.BASE_POSITION_JSON,
                 ),
             ),
             qualityMonitoring = QualityMonitoringSpec(

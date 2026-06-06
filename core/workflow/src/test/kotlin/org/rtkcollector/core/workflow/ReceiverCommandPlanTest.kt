@@ -64,6 +64,20 @@ class ReceiverCommandPlanTest {
     }
 
     @Test
+    fun `profile mismatch produces warning`() {
+        val workflow = WorkflowExamples.plainRoverRecording(
+            capabilities = ReceiverCapabilityFixtures.um980N4(),
+            receiverProfileId = "other-profile",
+        )
+        val plan = ReceiverCommandPlanExamples.um980RoverPlan()
+
+        val result = validator.validate(workflow, plan)
+
+        assertTrue(result.valid, result.errors.toString())
+        assertTrue(result.warnings.any { it.code == "COMMAND_PROFILE_DIFFERS_FROM_WORKFLOW_PROFILE" })
+    }
+
+    @Test
     fun `plan rejects non-init init sequence phase`() {
         val workflow = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
         val plan = ReceiverCommandPlanExamples.um980RoverPlan().copy(
@@ -79,6 +93,24 @@ class ReceiverCommandPlanTest {
 
         assertFalse(result.valid)
         assertTrue(result.errors.any { it.code == "INIT_SEQUENCE_REQUIRES_INIT_PHASE" })
+    }
+
+    @Test
+    fun `invalid shutdown sequence phase is rejected`() {
+        val workflow = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+        val plan = ReceiverCommandPlanExamples.um980RoverPlan(
+            shutdownSequence = ReceiverCommandSequence(
+                id = "bad-shutdown",
+                name = "Bad shutdown",
+                phase = ReceiverCommandPhase.ROVER,
+                commands = listOf("# wrong shutdown phase"),
+            ),
+        )
+
+        val result = validator.validate(workflow, plan)
+
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.code == "SHUTDOWN_SEQUENCE_REQUIRES_SHUTDOWN_PHASE" })
     }
 
     @Test

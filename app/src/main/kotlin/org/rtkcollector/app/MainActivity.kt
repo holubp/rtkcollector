@@ -193,6 +193,8 @@ class MainActivity : Activity() {
             appendLine("Shutdown status: ${current.shutdownStatus}")
         }
 
+        workflowSpinner.isEnabled = !current.canStop
+        receiverSpinner.isEnabled = !current.canStop
         startButton.isEnabled = current.canStart
         stopButton.isEnabled = current.canStop
     }

@@ -44,7 +44,6 @@ object ReceiverCapabilityFixtures {
     fun ubloxM8t(): ReceiverWorkflowCapabilities =
         ReceiverWorkflowCapabilities(
             supportsBaseCalibrationMode = true,
-            supportsFixedBaseMode = true,
             supportsRawObservations = true,
             supportsReceiverSurveyIn = true,
         )

@@ -74,6 +74,20 @@ class WorkflowValidatorTest {
     }
 
     @Test
+    fun `fixed base with M8T is invalid because timing fixed position is not fixed-base streaming`() {
+        val spec = WorkflowExamples.fixedBaseFromBasePosition(ReceiverCapabilityFixtures.ubloxM8t())
+
+        assertError(spec, "FIXED_BASE_REQUIRES_CAPABILITY")
+    }
+
+    @Test
+    fun `rover workflow with M8T is invalid`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.ubloxM8t())
+
+        assertError(spec, "ROVER_REQUIRES_CAPABILITY")
+    }
+
+    @Test
     fun `receiver-internal RTK workflow with M8T is invalid`() {
         val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.ubloxM8t())
 
@@ -101,6 +115,14 @@ class WorkflowValidatorTest {
             .copy(correctionSource = WorkflowExamples.defaultNtrip().copy(mountpoint = ""))
 
         assertError(spec, "NTRIP_REQUIRES_HOST_PORT_MOUNTPOINT")
+    }
+
+    @Test
+    fun `NTRIP correction workflow without base context is invalid`() {
+        val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+            .copy(baseContext = BaseContextSpec.None)
+
+        assertError(spec, "NTRIP_REQUIRES_BASE_CONTEXT")
     }
 
     @Test

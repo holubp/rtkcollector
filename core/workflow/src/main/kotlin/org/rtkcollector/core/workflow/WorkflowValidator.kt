@@ -6,6 +6,7 @@ class WorkflowValidator {
         val warnings = mutableListOf<WorkflowValidationMessage>()
 
         validateCorrectionTopology(spec, errors)
+        validateReceiverRoleCapability(spec, errors)
         validateRtklib(spec, errors, warnings)
         validateFixedBase(spec, errors)
         validateRawObservationRequirements(spec, errors, warnings)
@@ -19,6 +20,31 @@ class WorkflowValidator {
             errors = errors,
             warnings = warnings,
         )
+    }
+
+    private fun validateReceiverRoleCapability(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+    ) {
+        when (spec.receiverRole) {
+            ReceiverRole.ROVER -> if (!spec.receiverCapabilities.supportsRoverMode) {
+                errors += error(
+                    "ROVER_REQUIRES_CAPABILITY",
+                    "Rover workflow requires receiver rover capability.",
+                )
+            }
+
+            ReceiverRole.BASE_CALIBRATION -> if (!spec.receiverCapabilities.supportsBaseCalibrationMode) {
+                errors += error(
+                    "BASE_CALIBRATION_REQUIRES_CAPABILITY",
+                    "Base-calibration workflow requires receiver base-calibration capability.",
+                )
+            }
+
+            ReceiverRole.FIXED_BASE,
+            ReceiverRole.REPLAY_TEST,
+            -> Unit
+        }
     }
 
     private fun validateCorrectionTopology(
@@ -209,6 +235,15 @@ class WorkflowValidator {
             errors += error(
                 "NTRIP_CREDENTIALS_MUST_BE_SECRET_REFERENCES",
                 "NTRIP credentials must be secret references, not plaintext export values.",
+            )
+        }
+
+        if (spec.baseContext is BaseContextSpec.None &&
+            (spec.correctionTargets.isNotEmpty() || SolutionEngine.RTKLIB_REALTIME in spec.solutionEngines)
+        ) {
+            errors += error(
+                "NTRIP_REQUIRES_BASE_CONTEXT",
+                "NTRIP correction workflows require explicit base or mountpoint context.",
             )
         }
 

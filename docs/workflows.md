@@ -171,6 +171,15 @@ Required validation errors:
   fixed-base downstream output when modelled separately.
 - `CorrectionTarget.RECEIVER` requires receiver RTCM input support when source
   is NTRIP or local base corrections.
+- Recording workflows must keep the raw receiver RX stream enabled and list
+  `receiver-rx.raw` as an expected artifact.
+- Recording workflows must list `events.jsonl` as an expected artifact so
+  lifecycle, validation and advisory failures are recoverable from sidecar
+  metadata.
+- Receiver TX, correction input and quality-event recording flags require their
+  corresponding sidecar artifacts.
+- Android recording workflows must require foreground-service execution and a
+  wake lock while recording.
 - NTRIP correction workflows require base context that represents the same
   NTRIP/CORS caster and mountpoint.
 - `SolutionEngine.RTKLIB_REALTIME` requires `CorrectionTarget.RTKLIB`.

@@ -104,6 +104,7 @@ object WorkflowExamples {
                 recordRawObservationsRequested = capabilities.supportsRawObservations,
                 expectedSessionArtifacts = setOf(
                     SessionArtifact.RECEIVER_RX_RAW,
+                    SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                 ),
@@ -150,6 +151,7 @@ object WorkflowExamples {
                     SessionArtifact.RECEIVER_RX_RAW,
                     SessionArtifact.TX_TO_RECEIVER_RAW,
                     SessionArtifact.CORRECTION_INPUT_RAW,
+                    SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                 ),
@@ -193,6 +195,7 @@ object WorkflowExamples {
                 expectedSessionArtifacts = setOf(
                     SessionArtifact.RECEIVER_RX_RAW,
                     SessionArtifact.CORRECTION_INPUT_RAW,
+                    SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.RTKLIB_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                 ),
@@ -225,6 +228,7 @@ object WorkflowExamples {
                     SessionArtifact.RECEIVER_RX_RAW,
                     SessionArtifact.TX_TO_RECEIVER_RAW,
                     SessionArtifact.CORRECTION_INPUT_RAW,
+                    SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.RTKLIB_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
@@ -260,6 +264,7 @@ object WorkflowExamples {
                 recordRawObservationsRequested = capabilities.supportsRawObservations,
                 expectedSessionArtifacts = setOf(
                     SessionArtifact.RECEIVER_RX_RAW,
+                    SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                 ),
@@ -306,6 +311,7 @@ object WorkflowExamples {
                     SessionArtifact.RECEIVER_RX_RAW,
                     SessionArtifact.TX_TO_RECEIVER_RAW,
                     SessionArtifact.CORRECTION_INPUT_RAW,
+                    SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                 ),
@@ -341,6 +347,7 @@ object WorkflowExamples {
                 recordRawObservationsRequested = capabilities.supportsRawObservations,
                 expectedSessionArtifacts = setOf(
                     SessionArtifact.RECEIVER_RX_RAW,
+                    SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                     SessionArtifact.BASE_POSITION_JSON,

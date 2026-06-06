@@ -180,6 +180,7 @@ enum class SessionArtifact {
     RECEIVER_RX_RAW,
     TX_TO_RECEIVER_RAW,
     CORRECTION_INPUT_RAW,
+    EVENTS_JSONL,
     DEVICE_SOLUTION_JSONL,
     RTKLIB_SOLUTION_JSONL,
     QUALITY_LIVE_JSONL,
@@ -195,7 +196,10 @@ data class RecordingSpec(
     val recordRtklibSolution: Boolean = false,
     val recordQualityEvents: Boolean = true,
     val recordRawObservationsRequested: Boolean = false,
-    val expectedSessionArtifacts: Set<SessionArtifact> = setOf(SessionArtifact.RECEIVER_RX_RAW),
+    val expectedSessionArtifacts: Set<SessionArtifact> = setOf(
+        SessionArtifact.RECEIVER_RX_RAW,
+        SessionArtifact.EVENTS_JSONL,
+    ),
 )
 
 data class QualityMonitoringSpec(

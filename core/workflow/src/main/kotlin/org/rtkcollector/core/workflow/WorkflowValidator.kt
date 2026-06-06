@@ -9,6 +9,7 @@ class WorkflowValidator {
         validateReceiverRoleCapability(spec, errors)
         validateRtklib(spec, errors, warnings)
         validateFixedBase(spec, errors)
+        validateRecordingSpec(spec, errors)
         validateRawObservationRequirements(spec, errors, warnings)
         validateInternalRtk(spec, errors)
         validateNtrip(spec, errors, warnings)
@@ -214,6 +215,59 @@ class WorkflowValidator {
         }
     }
 
+    private fun validateRecordingSpec(
+        spec: WorkflowSpec,
+        errors: MutableList<WorkflowValidationMessage>,
+    ) {
+        if (!spec.recording.recordRawReceiverStream) {
+            errors += error(
+                "RAW_RECEIVER_STREAM_REQUIRED",
+                "Workflow recording must keep the raw receiver RX stream authoritative.",
+            )
+        }
+
+        if (SessionArtifact.RECEIVER_RX_RAW !in spec.recording.expectedSessionArtifacts) {
+            errors += error(
+                "RECEIVER_RX_ARTIFACT_REQUIRED",
+                "Workflow session artifacts must include receiver-rx.raw.",
+            )
+        }
+
+        if (SessionArtifact.EVENTS_JSONL !in spec.recording.expectedSessionArtifacts) {
+            errors += error(
+                "EVENTS_LOG_ARTIFACT_REQUIRED",
+                "Workflow session artifacts must include events.jsonl.",
+            )
+        }
+
+        if (spec.recording.recordTxToReceiver &&
+            SessionArtifact.TX_TO_RECEIVER_RAW !in spec.recording.expectedSessionArtifacts
+        ) {
+            errors += error(
+                "TX_ARTIFACT_REQUIRED",
+                "Receiver TX recording requires tx-to-receiver.raw as an expected artifact.",
+            )
+        }
+
+        if (spec.recording.recordCorrectionInput &&
+            SessionArtifact.CORRECTION_INPUT_RAW !in spec.recording.expectedSessionArtifacts
+        ) {
+            errors += error(
+                "CORRECTION_INPUT_ARTIFACT_REQUIRED",
+                "Correction input recording requires a correction input sidecar as an expected artifact.",
+            )
+        }
+
+        if (spec.recording.recordQualityEvents &&
+            SessionArtifact.QUALITY_LIVE_JSONL !in spec.recording.expectedSessionArtifacts
+        ) {
+            errors += error(
+                "QUALITY_ARTIFACT_REQUIRED",
+                "Quality event recording requires quality-live.jsonl as an expected artifact.",
+            )
+        }
+    }
+
     private fun validateInternalRtk(
         spec: WorkflowSpec,
         errors: MutableList<WorkflowValidationMessage>,
@@ -333,6 +387,20 @@ class WorkflowValidator {
             errors += error(
                 "SECRETS_IN_SESSION_JSON_FORBIDDEN",
                 "Workflow safety must forbid secrets in session.json.",
+            )
+        }
+
+        if (!spec.safety.requireForegroundService) {
+            errors += error(
+                "FOREGROUND_SERVICE_REQUIRED",
+                "Android recording workflows must require foreground-service execution.",
+            )
+        }
+
+        if (!spec.safety.requireWakeLockDuringRecording) {
+            errors += error(
+                "WAKE_LOCK_REQUIRED",
+                "Android recording workflows must require a wake lock while recording.",
             )
         }
 

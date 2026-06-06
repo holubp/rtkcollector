@@ -186,6 +186,46 @@ class WorkflowValidatorTest {
     }
 
     @Test
+    fun `raw receiver stream recording is required`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+            .copy(recording = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()).recording.copy(recordRawReceiverStream = false))
+
+        assertError(spec, "RAW_RECEIVER_STREAM_REQUIRED")
+    }
+
+    @Test
+    fun `receiver RX raw artifact is required`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+            .copy(recording = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()).recording.copy(expectedSessionArtifacts = setOf(SessionArtifact.EVENTS_JSONL)))
+
+        assertError(spec, "RECEIVER_RX_ARTIFACT_REQUIRED")
+    }
+
+    @Test
+    fun `event log artifact is required`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+            .copy(recording = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()).recording.copy(expectedSessionArtifacts = setOf(SessionArtifact.RECEIVER_RX_RAW)))
+
+        assertError(spec, "EVENTS_LOG_ARTIFACT_REQUIRED")
+    }
+
+    @Test
+    fun `foreground service is required for recording workflows`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+            .copy(safety = WorkflowSafetySpec(requireForegroundService = false))
+
+        assertError(spec, "FOREGROUND_SERVICE_REQUIRED")
+    }
+
+    @Test
+    fun `wake lock is required during recording`() {
+        val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
+            .copy(safety = WorkflowSafetySpec(requireWakeLockDuringRecording = false))
+
+        assertError(spec, "WAKE_LOCK_REQUIRED")
+    }
+
+    @Test
     fun `plaintext NTRIP credentials are invalid`() {
         val spec = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
             .copy(correctionSource = WorkflowExamples.defaultNtrip().copy(plaintextPassword = "secret"))

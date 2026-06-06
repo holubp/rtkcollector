@@ -43,9 +43,7 @@ data class WorkflowDryRunSession(
     val canStop: Boolean get() = state == DryRunRecordingState.RECORDING
 
     fun start(): WorkflowDryRunSession =
-        if (!validation.valid) {
-            copy(state = DryRunRecordingState.BLOCKED)
-        } else {
+        if (canStart) {
             copy(
                 state = DryRunRecordingState.RECORDING,
                 startupCommands = commandPlan.startupCommands(),
@@ -55,9 +53,17 @@ data class WorkflowDryRunSession(
                     ntripState = ntripState(),
                 ),
             )
+        } else if (!validation.valid && state == DryRunRecordingState.BLOCKED) {
+            copy(state = DryRunRecordingState.BLOCKED)
+        } else {
+            this
         }
 
     fun stop(transportAvailable: Boolean): WorkflowDryRunSession {
+        if (!canStop) {
+            return this
+        }
+
         val shutdown = commandPlan.shutdownCommands()
         val status = when {
             shutdown.isEmpty() -> ShutdownCommandStatus.NOT_CONFIGURED

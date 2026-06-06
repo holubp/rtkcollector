@@ -18,9 +18,39 @@ class WorkflowDryRunSessionTest {
         assertEquals(DryRunRecordingState.RECORDING, recording.state)
         assertTrue(recording.canStop)
         assertFalse(recording.canStart)
-        assertEquals(2, recording.startupCommands.size)
+        assertEquals(
+            listOf(
+                "# UM980 init commands intentionally omitted",
+                "# UM980 rover commands intentionally omitted",
+            ),
+            recording.startupCommands,
+        )
         assertTrue(recording.observables.rawObservationStatus.contains("1.0 Hz"))
         assertTrue(recording.observables.ntripState.contains("dry-run configured"))
+    }
+
+    @Test
+    fun `start from recording does not change session`() {
+        val recording = WorkflowDryRunSession.create(
+            workflow = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()),
+            commandPlan = ReceiverCommandPlanExamples.um980RoverPlan(),
+        ).start()
+
+        val result = recording.start()
+
+        assertEquals(recording, result)
+    }
+
+    @Test
+    fun `start from stopped does not change session`() {
+        val stopped = WorkflowDryRunSession.create(
+            workflow = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()),
+            commandPlan = ReceiverCommandPlanExamples.um980RoverPlan(),
+        ).start().stop(transportAvailable = true)
+
+        val result = stopped.start()
+
+        assertEquals(stopped, result)
     }
 
     @Test
@@ -88,6 +118,43 @@ class WorkflowDryRunSessionTest {
         assertEquals(ShutdownCommandStatus.NOT_CONFIGURED, stopped.shutdownStatus)
         assertEquals(emptyList<String>(), stopped.shutdownCommands)
         assertFalse(stopped.canStop)
+    }
+
+    @Test
+    fun `stop from ready does not change session or shutdown status`() {
+        val session = WorkflowDryRunSession.create(
+            workflow = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()),
+            commandPlan = ReceiverCommandPlanExamples.um980RoverPlan(
+                shutdownSequence = ReceiverCommandSequence(
+                    id = "shutdown",
+                    name = "Shutdown",
+                    phase = ReceiverCommandPhase.SHUTDOWN,
+                    commands = listOf("# shutdown commands intentionally omitted"),
+                ),
+            ),
+        )
+
+        val result = session.stop(transportAvailable = true)
+
+        assertEquals(session, result)
+        assertEquals(DryRunRecordingState.READY, result.state)
+        assertEquals(ShutdownCommandStatus.NOT_ATTEMPTED, result.shutdownStatus)
+        assertEquals(emptyList<String>(), result.shutdownCommands)
+    }
+
+    @Test
+    fun `stop from blocked does not change session or shutdown status`() {
+        val session = WorkflowDryRunSession.create(
+            workflow = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4()),
+            commandPlan = ReceiverCommandPlanExamples.um980FixedBasePlan(),
+        )
+
+        val result = session.stop(transportAvailable = true)
+
+        assertEquals(session, result)
+        assertEquals(DryRunRecordingState.BLOCKED, result.state)
+        assertEquals(ShutdownCommandStatus.NOT_ATTEMPTED, result.shutdownStatus)
+        assertEquals(emptyList<String>(), result.shutdownCommands)
     }
 
     @Test

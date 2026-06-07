@@ -25,6 +25,12 @@ import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripReconnectPolicy
 import org.rtkcollector.core.correction.NtripRequest
 import org.rtkcollector.core.session.SessionWriters
+import org.rtkcollector.core.session.AntennaMetadata
+import org.rtkcollector.core.session.NtripSessionMetadata
+import org.rtkcollector.core.session.SerialParameters
+import org.rtkcollector.core.session.SessionMetadata
+import org.rtkcollector.core.session.SessionMode
+import org.rtkcollector.core.session.exportSessionMetadata
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import java.nio.file.Path
 import java.time.Instant
@@ -83,6 +89,30 @@ class RecordingForegroundService : Service() {
             val profileBaud = validateBaud(intent.getIntExtra(EXTRA_PROFILE_BAUD, serialBaud), "profile baud")
             val sessionDirectory = createSessionDirectory()
             val sessionWriters = SessionWriters.open(sessionDirectory)
+            val startedAt = Instant.now().toString()
+            val sessionUuid = UUID.randomUUID().toString()
+            sessionWriters.writeSessionJson(
+                exportSessionMetadata(
+                    SessionMetadata(
+                        appVersion = "0.1.0",
+                        androidDeviceModel = Build.MODEL ?: "unknown",
+                        androidVersion = Build.VERSION.RELEASE ?: "unknown",
+                        receiverDriverId = "um980-n4",
+                        receiverIdentification = null,
+                        usbVid = usbDevice.vendorId,
+                        usbPid = usbDevice.productId,
+                        baudRate = serialBaud,
+                        serialParameters = SerialParameters(),
+                        mode = SessionMode.ROVER,
+                        startedAt = startedAt,
+                        stoppedAt = null,
+                        ntrip = ntripSessionMetadata(intent),
+                        antenna = AntennaMetadata(),
+                        sessionUuid = sessionUuid,
+                        linkedBaseSessionUuid = null,
+                    ),
+                ),
+            )
             val recorder = SessionRawRecorder(sessionWriters)
             val eventSink = SessionEventSink(sessionWriters)
             val usbTransport = AndroidUsbSerialTransport(
@@ -264,6 +294,21 @@ class RecordingForegroundService : Service() {
         val root = getExternalFilesDir("sessions") ?: filesDir.resolve("sessions")
         val directory = root.resolve("session-${Instant.now().toString().replace(':', '-')}-${UUID.randomUUID()}")
         return directory.toPath()
+    }
+
+    private fun ntripSessionMetadata(intent: Intent): NtripSessionMetadata? {
+        val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
+        val mountpoint = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).orEmpty()
+        if (host.isBlank() || mountpoint.isBlank()) {
+            return null
+        }
+        return NtripSessionMetadata(
+            casterHost = host,
+            casterPort = validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
+            mountpoint = mountpoint,
+            usernamePresent = !intent.getStringExtra(EXTRA_NTRIP_USERNAME).isNullOrBlank(),
+            ggaUploadEnabled = !intent.getStringExtra(EXTRA_NTRIP_GGA).isNullOrBlank(),
+        )
     }
 
     private fun acquireWakeLock() {

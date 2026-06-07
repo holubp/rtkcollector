@@ -16,6 +16,7 @@ class SessionWritersTest {
     fun `session writers append to distinct artifact files`() {
         val writers = SessionWriters.open(tempDir)
 
+        writers.writeSessionJson("""{"sessionUuid":"test-session"}""")
         writers.appendReceiverRx(byteArrayOf(0x01, 0x02))
         writers.appendReceiverRx(byteArrayOf(0x03))
         writers.appendTxToReceiver(byteArrayOf(0x10))
@@ -29,6 +30,7 @@ class SessionWritersTest {
         writers.flush()
         writers.close()
 
+        assertEquals("""{"sessionUuid":"test-session"}""", Files.readString(tempDir.resolve("session.json")).trim())
         assertArrayEquals(byteArrayOf(0x01, 0x02, 0x03), Files.readAllBytes(tempDir.resolve("receiver-rx.raw")))
         assertArrayEquals(byteArrayOf(0x10, 0x11, 0x12), Files.readAllBytes(tempDir.resolve("tx-to-receiver.raw")))
         assertArrayEquals(byteArrayOf(0x20, 0x21, 0x22), Files.readAllBytes(tempDir.resolve("correction-input.raw")))

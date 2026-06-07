@@ -9,12 +9,23 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 
 class SessionWriters private constructor(
+    private val sessionDirectory: Path,
     private val receiverRx: OutputStream,
     private val txToReceiver: OutputStream,
     private val correctionInput: OutputStream,
     private val events: OutputStream,
     private val qualityLive: OutputStream,
 ) : Closeable {
+    fun writeSessionJson(json: String) {
+        Files.writeString(
+            sessionDirectory.resolve("session.json"),
+            json.trimEnd() + "\n",
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+        )
+    }
+
     fun appendReceiverRx(bytes: ByteArray) {
         receiverRx.write(bytes)
     }
@@ -55,6 +66,7 @@ class SessionWriters private constructor(
         fun open(sessionDirectory: Path): SessionWriters {
             Files.createDirectories(sessionDirectory)
             return SessionWriters(
+                sessionDirectory = sessionDirectory,
                 receiverRx = sessionDirectory.appendStream("receiver-rx.raw"),
                 txToReceiver = sessionDirectory.appendStream("tx-to-receiver.raw"),
                 correctionInput = sessionDirectory.appendStream("correction-input.raw"),

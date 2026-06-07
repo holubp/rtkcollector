@@ -2,6 +2,10 @@
 
 RtkCollector uses a specification-first workflow.
 
+Agentic coding contributors should also read [AGENTS.md](AGENTS.md). It
+summarises repository-specific guardrails, Superpowers workflow usage and
+validation expectations for coding agents.
+
 Before implementing non-trivial behaviour:
 
 1. Update the relevant document under `docs/`.

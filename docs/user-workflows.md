@@ -4,18 +4,21 @@ RtkCollector V1 is a receiver recorder and correction router. It is not a GIS
 app: there are no maps, shapefiles, feature forms or survey-cartography project
 tools.
 
-## Bootstrap UI Dry Run
+## Experimental V1 Android UI
 
-The first Android UI is a dry-run workflow launcher and monitor. It lets the
-user choose a workflow and receiver profile. The derived command plan and
-expected recording artifacts are shown before validation and a simulated
-recording monitor.
+The Android UI lets the user choose a workflow and receiver profile. The derived
+workflow details and expected recording artifacts are shown before validation.
+It also provides the experimental real-recording controls:
 
-The dry-run UI intentionally does not open USB, send serial commands, connect to
-NTRIP, start a foreground service, write session files, implement RTKLIB, show
-maps, load shapefiles, provide GIS editing or collect field features. Its
-purpose is to keep the future recording implementation aligned with validated
-workflow plans.
+- USB device refresh and Android USB permission request;
+- profile baud and post-profile serial baud;
+- editable init, workflow-mode and shutdown command sequences;
+- optional NTRIP host, port, mountpoint, username, password and GGA upload line;
+- foreground-service start/stop;
+- live receiver RX, receiver TX, correction input and NTRIP state counters.
+
+This UI intentionally does not implement RTKLIB, show maps, load shapefiles,
+provide GIS editing or collect field features.
 
 Receiver startup commands are represented as:
 
@@ -30,8 +33,33 @@ receiver RX stream.
 Runtime correction bytes are not command scripts. When implemented, they must
 share the receiver TX path and be recorded separately from receiver RX.
 
-While a dry-run session is active, the UI disables workflow and receiver
-selection so stopping and finalising the selected session remains explicit.
+While a real session is active, the foreground service owns capture. The
+Activity only sends start/stop requests and observes service state.
+
+## Experimental UM980 Recording
+
+Use this only as an early field test path.
+
+Recommended first test flow:
+
+1. Connect the UM980/N4 through the known USB serial bridge.
+2. Refresh USB devices and request Android USB permission.
+3. Leave profile baud and serial baud at `230400` for the first capture.
+4. Review the init and mode commands. The default profile is runtime-only and
+   does not include `SAVECONFIG`.
+5. Start recording without NTRIP and confirm `receiver-rx.raw` grows.
+6. Stop recording and check the session folder path shown by the UI.
+7. Repeat with NTRIP only after passive capture is stable.
+
+The default UM980 mode sequence requests `BESTNAVB` receiver solution and
+`OBSVMCMPB` raw observations at at least `1 Hz`, plus binary ephemeris and
+diagnostic side messages. User changes to command scripts are validated against
+a conservative deny-list before start.
+
+If a profile changes receiver baud, RtkCollector opens the USB serial bridge at
+the profile baud, sends the profile, reconfigures the host serial bridge to the
+post-profile baud, drains transitional receiver output, and only then writes the
+authoritative capture stream.
 
 ## Plain Rover Recording
 

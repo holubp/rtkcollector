@@ -15,10 +15,13 @@ class SessionWriters private constructor(
     private val correctionInput: OutputStream,
     private val events: OutputStream,
     private val qualityLive: OutputStream,
+    private val receiverSolution: OutputStream,
+    private val receiverPppSolution: OutputStream,
+    private val extractedRtcm: OutputStream,
 ) : Closeable {
     fun writeSessionJson(json: String) {
         Files.writeString(
-            sessionDirectory.resolve("session.json"),
+            sessionDirectory.resolve(SessionArtifactFile.SESSION_JSON.fileName),
             json.trimEnd() + "\n",
             StandardCharsets.UTF_8,
             StandardOpenOption.CREATE,
@@ -46,12 +49,37 @@ class SessionWriters private constructor(
         qualityLive.writeJsonLine(json)
     }
 
+    fun appendReceiverSolutionJson(json: String) {
+        receiverSolution.writeJsonLine(json)
+    }
+
+    fun appendReceiverPppSolutionJson(json: String) {
+        receiverPppSolution.writeJsonLine(json)
+    }
+
+    fun appendExtractedRtcm(bytes: ByteArray) {
+        extractedRtcm.write(bytes)
+    }
+
+    fun writeBasePositionJson(json: String) {
+        Files.writeString(
+            sessionDirectory.resolve(SessionArtifactFile.BASE_POSITION_JSON.fileName),
+            json.trimEnd() + "\n",
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+        )
+    }
+
     fun flush() {
         receiverRx.flush()
         txToReceiver.flush()
         correctionInput.flush()
         events.flush()
         qualityLive.flush()
+        receiverSolution.flush()
+        receiverPppSolution.flush()
+        extractedRtcm.flush()
     }
 
     override fun close() {
@@ -60,6 +88,9 @@ class SessionWriters private constructor(
         correctionInput.close()
         events.close()
         qualityLive.close()
+        receiverSolution.close()
+        receiverPppSolution.close()
+        extractedRtcm.close()
     }
 
     companion object {
@@ -67,11 +98,14 @@ class SessionWriters private constructor(
             Files.createDirectories(sessionDirectory)
             return SessionWriters(
                 sessionDirectory = sessionDirectory,
-                receiverRx = sessionDirectory.appendStream("receiver-rx.raw"),
-                txToReceiver = sessionDirectory.appendStream("tx-to-receiver.raw"),
-                correctionInput = sessionDirectory.appendStream("correction-input.raw"),
-                events = sessionDirectory.appendStream("events.jsonl"),
-                qualityLive = sessionDirectory.appendStream("quality-live.jsonl"),
+                receiverRx = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_RX_RAW.fileName),
+                txToReceiver = sessionDirectory.appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName),
+                correctionInput = sessionDirectory.appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
+                events = sessionDirectory.appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
+                qualityLive = sessionDirectory.appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
+                receiverSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_JSONL.fileName),
+                receiverPppSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL.fileName),
+                extractedRtcm = sessionDirectory.appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
             )
         }
     }
@@ -92,6 +126,13 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
         appendJsonField("stoppedAt", metadata.stoppedAt)
         appendJsonField("sessionUuid", metadata.sessionUuid)
         appendJsonField("linkedBaseSessionUuid", metadata.linkedBaseSessionUuid)
+        appendJsonField("workflowId", metadata.workflowId)
+        appendJsonField("workflowName", metadata.workflowName)
+        appendJsonField("receiverRole", metadata.receiverRole)
+        appendJsonField("um980ProfileId", metadata.um980ProfileId)
+        appendJsonField("coordinateSource", metadata.coordinateSource)
+        appendJsonField("validationSummary", metadata.validationSummary)
+        appendJsonArrayField("expectedArtifacts", metadata.expectedArtifacts)
         metadata.ntrip?.let { appendNtripMetadata(it) }
         append("}")
     }
@@ -150,7 +191,21 @@ private fun StringBuilder.appendNtripMetadata(ntrip: NtripSessionMetadata) {
     appendJsonField("mountpoint", ntrip.mountpoint)
     appendJsonField("usernamePresent", ntrip.usernamePresent)
     appendJsonField("ggaUploadEnabled", ntrip.ggaUploadEnabled)
+    appendJsonField("secretRef", ntrip.secretRef)
     append("}")
+}
+
+private fun StringBuilder.appendJsonArrayField(name: String, values: List<String>) {
+    appendSeparatorIfNeeded()
+    appendQuoted(name)
+    append(":[")
+    values.forEachIndexed { index, value ->
+        if (index > 0) {
+            append(",")
+        }
+        appendQuoted(value)
+    }
+    append("]")
 }
 
 private fun StringBuilder.appendSeparatorIfNeeded() {

@@ -70,4 +70,48 @@ class SessionMetadataTest {
     fun `base position method includes receiver PPP candidate`() {
         assertEquals(BasePositionMethod.RECEIVER_PPP, BasePositionMethod.valueOf("RECEIVER_PPP"))
     }
+
+    @Test
+    fun `session metadata exports workflow coordinate source and redacted NTRIP secret reference`() {
+        val metadata = SessionMetadata(
+            appVersion = "0.2.0",
+            androidDeviceModel = "test-device",
+            androidVersion = "15",
+            receiverDriverId = "um980-n4",
+            receiverIdentification = null,
+            usbVid = 0x0403,
+            usbPid = 0x6015,
+            baudRate = 230400,
+            serialParameters = SerialParameters(),
+            mode = SessionMode.FIXED_BASE,
+            startedAt = "2026-06-07T10:00:00Z",
+            stoppedAt = null,
+            ntrip = NtripSessionMetadata(
+                casterHost = "caster.example.org",
+                casterPort = 2101,
+                mountpoint = "CORS01",
+                usernamePresent = true,
+                ggaUploadEnabled = true,
+                secretRef = "ntrip/CORS01",
+            ),
+            antenna = AntennaMetadata(antennaHeightMeters = 1.5, antennaReferencePoint = "ARP"),
+            sessionUuid = "session-001",
+            linkedBaseSessionUuid = null,
+            workflowId = "fixed-base-rtcm-output",
+            workflowName = "Fixed base RTCM output",
+            receiverRole = "FIXED_BASE",
+            um980ProfileId = "um980-fixed-base-rtcm",
+            coordinateSource = "IMPORTED_BASE_POSITION_JSON",
+            validationSummary = "valid",
+            expectedArtifacts = listOf("receiver-rx.raw", "rtcm-extracted.rtcm3"),
+        )
+
+        val json = exportSessionMetadata(metadata)
+
+        assertEquals(true, json.contains("fixed-base-rtcm-output"))
+        assertEquals(true, json.contains("IMPORTED_BASE_POSITION_JSON"))
+        assertEquals(true, json.contains("ntrip/CORS01"))
+        assertEquals(false, json.contains("password", ignoreCase = true))
+        assertEquals(false, json.contains("secret-token"))
+    }
 }

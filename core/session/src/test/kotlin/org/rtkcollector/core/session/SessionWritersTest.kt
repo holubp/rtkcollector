@@ -3,6 +3,7 @@ package org.rtkcollector.core.session
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -27,6 +28,10 @@ class SessionWritersTest {
         writers.appendEventJson("""{"event":"stopped"}""")
         writers.appendQualityLiveJson("""{"fix":"float"}""")
         writers.appendQualityLiveJson("""{"fix":"rtk"}""")
+        writers.appendReceiverSolutionJson("""{"source":"GGA"}""")
+        writers.appendReceiverPppSolutionJson("""{"source":"PPP"}""")
+        writers.appendExtractedRtcm(byteArrayOf(0xd3.toByte(), 0x00, 0x00, 0x47, 0x00, 0x00))
+        writers.writeBasePositionJson("""{"frame":"ETRF2000"}""")
         writers.flush()
         writers.close()
 
@@ -42,6 +47,13 @@ class SessionWritersTest {
             listOf("""{"fix":"float"}""", """{"fix":"rtk"}"""),
             Files.readAllLines(tempDir.resolve("quality-live.jsonl")),
         )
+        assertEquals(listOf("""{"source":"GGA"}"""), Files.readAllLines(tempDir.resolve("receiver-solution.jsonl")))
+        assertEquals(listOf("""{"source":"PPP"}"""), Files.readAllLines(tempDir.resolve("receiver-ppp-solution.jsonl")))
+        assertArrayEquals(
+            byteArrayOf(0xd3.toByte(), 0x00, 0x00, 0x47, 0x00, 0x00),
+            Files.readAllBytes(tempDir.resolve("rtcm-extracted.rtcm3")),
+        )
+        assertEquals("""{"frame":"ETRF2000"}""", Files.readString(tempDir.resolve("base-position.json")).trim())
     }
 
     @Test
@@ -63,17 +75,27 @@ class SessionWritersTest {
                 casterHost = "caster.example",
                 mountpoint = "MOUNT",
                 usernamePresent = true,
+                secretRef = "ntrip/MOUNT",
             ),
             antenna = AntennaMetadata(),
             sessionUuid = "00000000-0000-0000-0000-000000000001",
             linkedBaseSessionUuid = null,
+            workflowId = "rover-ntrip-to-receiver",
+            workflowName = "Rover + NTRIP to receiver",
+            receiverRole = "ROVER",
+            um980ProfileId = "um980-rover-ntrip",
+            coordinateSource = null,
+            validationSummary = "valid",
+            expectedArtifacts = listOf("receiver-rx.raw", "tx-to-receiver.raw"),
         )
 
         val exported = exportSessionMetadata(metadata)
 
         assertFalse(exported.contains("password", ignoreCase = true))
         assertFalse(exported.contains("token", ignoreCase = true))
-        assertFalse(exported.contains("secret", ignoreCase = true))
         assertEquals(true, exported.contains("usernamePresent"))
+        assertTrue(exported.contains("ntrip/MOUNT"))
+        assertTrue(exported.contains("rover-ntrip-to-receiver"))
+        assertTrue(exported.contains("tx-to-receiver.raw"))
     }
 }

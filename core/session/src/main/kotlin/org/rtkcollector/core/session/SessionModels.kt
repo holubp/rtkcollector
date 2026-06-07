@@ -17,6 +17,13 @@ data class SessionMetadata(
     val antenna: AntennaMetadata,
     val sessionUuid: String,
     val linkedBaseSessionUuid: String?,
+    val workflowId: String? = null,
+    val workflowName: String? = null,
+    val receiverRole: String? = null,
+    val um980ProfileId: String? = null,
+    val coordinateSource: String? = null,
+    val validationSummary: String? = null,
+    val expectedArtifacts: List<String> = emptyList(),
 )
 
 data class ReceiverIdentificationMetadata(
@@ -45,6 +52,7 @@ data class NtripSessionMetadata(
     val mountpoint: String,
     val usernamePresent: Boolean = false,
     val ggaUploadEnabled: Boolean = false,
+    val secretRef: String? = null,
 )
 
 data class AntennaMetadata(

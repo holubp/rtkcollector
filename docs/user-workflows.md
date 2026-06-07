@@ -18,8 +18,8 @@ It also provides the experimental real-recording controls:
   stored Keystore-backed password references;
 - recording policies for derived NMEA/JSONL exports, NTRIP correction input and
   optional remote-base raw observations where a source supports them;
-- storage profiles, currently with app-private storage as the implemented
-  recording target and SAF visible-folder support planned in the profile model;
+- storage profiles, with app-private storage as the default and Android SAF
+  folder selection for user-visible session folders;
 - manual fixed-base coordinates or pasted/imported `base-position.json`;
 - foreground-service start/stop;
 - live receiver RX, receiver TX, correction input and NTRIP state counters.
@@ -101,8 +101,7 @@ User flow:
 
 1. Select the rover receiver profile.
 2. Select or edit an NTRIP caster profile and mountpoint profile. The mountpoint
-   can be typed directly or selected from a cached/fetched sourcetable when that
-   support is available.
+   can be typed directly or selected from a cached/fetched caster sourcetable.
 3. Store credentials as secret references; passwords are never written to
    `session.json`.
 4. Start recording.
@@ -111,6 +110,24 @@ User flow:
 
 The receiver's internal RTK float/fix solution is separate from any future
 Android-side solution engine.
+
+## Storage Profiles
+
+The default storage profile writes sessions under the app-private external
+files directory. This is the safest first test path because `session.json` uses
+the platform file API and can be replaced atomically.
+
+To write into a visible user folder, choose a storage profile and tap
+`Choose SAF recording folder`. Android shows the system folder picker and the
+app persists write permission for that tree. Recording start is blocked if the
+selected SAF profile has no tree URI or if Android no longer reports a persisted
+write permission. The app does not silently fall back to app-private storage
+after the user selected SAF.
+
+SAF sessions are created as new uniquely named folders. Receiver RX, receiver
+TX, NTRIP correction input, events, quality logs and derived solution sidecars
+are separate files in that folder. Raw receiver bytes remain in
+`receiver-rx.raw`; metadata and parser-derived exports are sidecars.
 
 ## Temporary-Base Preparation
 

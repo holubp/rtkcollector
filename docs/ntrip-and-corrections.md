@@ -14,6 +14,20 @@ errors, not reconnect loops. In code and artifacts the Android-to-receiver path
 is called receiver TX. The app is a client only; it is not an NTRIP caster or
 server.
 
+## Caster And Mountpoint Profiles
+
+V1 separates reusable caster settings from reusable mountpoint settings. A
+caster profile stores host, port, username, protocol policy, cached sourcetable
+mountpoint names and a secret reference for the password. A mountpoint profile
+references a caster profile and stores the selected mountpoint plus expected
+correction characteristics.
+
+The UI can fetch a caster sourcetable with an NTRIP v2 root request and cache
+the `STR` mountpoint names on the caster profile. The user may select one of
+those cached names or type a mountpoint directly. Typed mountpoints remain valid
+when sourcetable fetching is unavailable, blocked by credentials or unsupported
+by the caster.
+
 ## Reconnect State Machine
 
 The client should move through explicit states:

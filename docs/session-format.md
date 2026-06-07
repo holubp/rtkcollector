@@ -84,6 +84,12 @@ and solution JSONL files are advisory exports derived from the RX stream and may
 be disabled by recording policy; parser/export failure must not stop raw
 recording.
 
+`storageKind` records whether the session used app-private storage or a SAF
+tree. For SAF sessions, the UI-displayed session location may be a document URI
+rather than a filesystem path. SAF tree URIs are profile/runtime routing data;
+they are not credentials, but exports should avoid treating them as portable
+paths because they are Android-provider specific.
+
 ## `base-position.json`
 
 Required fields:

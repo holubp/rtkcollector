@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -28,7 +29,6 @@ import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripReconnectPolicy
 import org.rtkcollector.core.correction.NtripRequest
 import org.rtkcollector.core.correction.Rtcm3Extractor
-import org.rtkcollector.core.session.SessionWriters
 import org.rtkcollector.core.session.AntennaMetadata
 import org.rtkcollector.core.session.NtripSessionMetadata
 import org.rtkcollector.core.session.SerialParameters
@@ -51,7 +51,7 @@ class RecordingForegroundService : Service() {
     private var ntripThread: Thread? = null
     private var runtime: CaptureRuntime? = null
     private var transport: AndroidUsbSerialTransport? = null
-    private var writers: SessionWriters? = null
+    private var writers: RecordingSessionWriters? = null
     private var advisoryFanout: AsyncAdvisoryFanout? = null
     private var activeSessionMetadata: SessionMetadata? = null
     private var ntripClient: NtripClient? = null
@@ -98,8 +98,8 @@ class RecordingForegroundService : Service() {
 
             val serialBaud = validateBaud(intent.getIntExtra(EXTRA_SERIAL_BAUD, 230400), "serial baud")
             val profileBaud = validateBaud(intent.getIntExtra(EXTRA_PROFILE_BAUD, serialBaud), "profile baud")
-            val sessionDirectory = createSessionDirectory()
-            val sessionWriters = SessionWriters.open(sessionDirectory)
+            val openedSession = openSessionWriters(intent)
+            val sessionWriters = openedSession.writers
             val startedAt = Instant.now().toString()
             val sessionUuid = UUID.randomUUID().toString()
             val metadata = SessionMetadata(
@@ -187,7 +187,7 @@ class RecordingForegroundService : Service() {
             drainAfterProfile(captureRuntime)
             sendCommandLines(captureRuntime, modeCommands)
 
-            state = state.copy(running = true, sessionPath = sessionDirectory.toString(), ntripState = "Not configured")
+            state = state.copy(running = true, sessionPath = openedSession.displayPath, ntripState = "Not configured")
             broadcastState()
 
             captureThread = Thread({ captureLoop(captureRuntime, recorder) }, "rtkcollector-capture").also { it.start() }
@@ -352,11 +352,46 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun createSessionDirectory(): Path {
+    private fun openSessionWriters(intent: Intent): OpenedRecordingSession {
+        val sessionName = createSessionName()
+        return if (intent.getStringExtra(EXTRA_STORAGE_KIND) == "SAF_TREE") {
+            val treeUriText = intent.getStringExtra(EXTRA_STORAGE_TREE_URI)
+                ?.takeIf { it.isNotBlank() }
+                ?: error("SAF storage profile selected but no tree URI was supplied.")
+            require(hasPersistedSafWritePermission(treeUriText)) {
+                "SAF storage profile selected but Android has no persisted write permission for the tree."
+            }
+            val safWriters = SafRecordingSessionWriters.open(
+                resolver = contentResolver,
+                treeUri = Uri.parse(treeUriText),
+                sessionName = sessionName,
+            )
+            OpenedRecordingSession(
+                displayPath = safWriters.sessionUri.toString(),
+                writers = safWriters,
+            )
+        } else {
+            val directory = createSessionDirectory(sessionName)
+            OpenedRecordingSession(
+                displayPath = directory.toString(),
+                writers = PathRecordingSessionWriters.open(directory),
+            )
+        }
+    }
+
+    private fun createSessionName(): String =
+        "session-${Instant.now().toString().replace(':', '-')}-${UUID.randomUUID()}"
+
+    private fun createSessionDirectory(sessionName: String): Path {
         val root = getExternalFilesDir("sessions") ?: filesDir.resolve("sessions")
-        val directory = root.resolve("session-${Instant.now().toString().replace(':', '-')}-${UUID.randomUUID()}")
+        val directory = root.resolve(sessionName)
         return directory.toPath()
     }
+
+    private fun hasPersistedSafWritePermission(treeUri: String): Boolean =
+        contentResolver.persistedUriPermissions.any { permission ->
+            permission.uri.toString() == treeUri && permission.isWritePermission
+        }
 
     private fun ntripSessionMetadata(intent: Intent): NtripSessionMetadata? {
         if (!intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) {
@@ -436,7 +471,7 @@ class RecordingForegroundService : Service() {
     }
 
     private fun buildAdvisoryFanout(
-        sessionWriters: SessionWriters,
+        sessionWriters: RecordingSessionWriters,
         eventSink: CaptureEventSink,
         exportNmea: Boolean,
         exportJsonSolution: Boolean,
@@ -529,7 +564,7 @@ class RecordingForegroundService : Service() {
         }
 
     private class SessionRawRecorder(
-        private val writers: SessionWriters,
+        private val writers: RecordingSessionWriters,
         private val recordCorrectionInput: Boolean,
     ) : RawRecorder {
         var receiverRxBytes: Long = 0
@@ -561,7 +596,7 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private class SessionEventSink(private val writers: SessionWriters) : CaptureEventSink {
+    private class SessionEventSink(private val writers: RecordingSessionWriters) : CaptureEventSink {
         override fun recordEvent(event: CaptureEvent) {
             val json = """{"timestamp":"${event.timestamp}","type":"${event.type}","message":"${event.message.replace("\"", "\\\"")}"}"""
             writers.appendEventJson(json)
@@ -623,6 +658,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_RECORDING_POLICY_ID = "recordingPolicyId"
         const val EXTRA_STORAGE_PROFILE_ID = "storageProfileId"
         const val EXTRA_STORAGE_KIND = "storageKind"
+        const val EXTRA_STORAGE_TREE_URI = "storageTreeUri"
         const val EXTRA_RECORD_NTRIP_CORRECTION_INPUT = "recordNtripCorrectionInput"
         const val EXTRA_EXPORT_NMEA = "exportNmea"
         const val EXTRA_EXPORT_JSON_SOLUTION = "exportJsonSolution"
@@ -652,4 +688,9 @@ class RecordingForegroundService : Service() {
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)
     }
+
+    private data class OpenedRecordingSession(
+        val displayPath: String,
+        val writers: RecordingSessionWriters,
+    )
 }

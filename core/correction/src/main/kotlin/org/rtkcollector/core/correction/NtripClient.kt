@@ -55,7 +55,7 @@ data class NtripRequest(
                 },
             )
             add("Connection: close")
-            credentials?.let { add("Authorization: Basic ${it.basicAuthToken()}") }
+            credentials?.let { add("Authorization: Basic ${basicAuthToken(it)}") }
         }
 
         return lines.joinToString(separator = "\r\n", postfix = "\r\n\r\n")
@@ -69,17 +69,9 @@ data class NtripRequest(
         authentication = if (credentials == null) "none" else "basic:redacted",
     )
 
-    private fun NtripCredentials.basicAuthToken(): String {
-        val rawCredentials = "$username:$password".toByteArray(Charsets.UTF_8)
-        return Base64.getEncoder().encodeToString(rawCredentials)
-    }
-
     fun withProtocolVersion(version: NtripProtocolVersion): NtripRequest =
         copy(protocolVersion = version)
 
-    private fun requireNoCrLf(label: String, value: String) {
-        require('\r' !in value && '\n' !in value) { "NTRIP $label must not contain CR/LF characters" }
-    }
 }
 
 data class NtripRedactedMetadata(
@@ -90,9 +82,109 @@ data class NtripRedactedMetadata(
     val authentication: String,
 )
 
+data class NtripSourcetableRequest(
+    val host: String,
+    val port: Int,
+    val credentials: NtripCredentials? = null,
+    val userAgent: String = "RtkCollector/0.1",
+    val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
+) {
+    init {
+        require(host.isNotBlank()) { "NTRIP host must not be blank" }
+        require(port in 1..65535) { "NTRIP port must be between 1 and 65535" }
+        require(userAgent.isNotBlank()) { "NTRIP user agent must not be blank" }
+        requireNoCrLf("host", host)
+        requireNoCrLf("userAgent", userAgent)
+    }
+
+    fun render(): String {
+        val lines = buildList {
+            add(
+                when (protocolVersion) {
+                    NtripProtocolVersion.NTRIP_V2 -> "GET / HTTP/1.1"
+                    NtripProtocolVersion.NTRIP_V1 -> "GET / HTTP/1.0"
+                },
+            )
+            add("Host: $host:$port")
+            add("User-Agent: $userAgent")
+            add(
+                when (protocolVersion) {
+                    NtripProtocolVersion.NTRIP_V2 -> "Ntrip-Version: Ntrip/2.0"
+                    NtripProtocolVersion.NTRIP_V1 -> "Ntrip-Version: Ntrip/1.0"
+                },
+            )
+            add("Connection: close")
+            credentials?.let { add("Authorization: Basic ${basicAuthToken(it)}") }
+        }
+
+        return lines.joinToString(separator = "\r\n", postfix = "\r\n\r\n")
+    }
+}
+
+data class NtripSourcetableResult(
+    val mountpoints: List<String>,
+    val rawText: String,
+)
+
+object NtripSourcetableParser {
+    fun mountpoints(sourcetableText: String): List<String> {
+        val seen = linkedSetOf<String>()
+        sourcetableText.lineSequence()
+            .map(String::trim)
+            .filter { it.startsWith("STR;", ignoreCase = true) }
+            .mapNotNull { line -> line.split(';').getOrNull(1)?.trim()?.takeIf(String::isNotBlank) }
+            .forEach(seen::add)
+        return seen.toList()
+    }
+}
+
+class NtripSourcetableClient(
+    private val request: NtripSourcetableRequest,
+    private val connector: NtripSocketConnector = JavaNtripSocketConnector(),
+) {
+    fun fetch(): NtripSourcetableResult {
+        val socket = connector.connect(request.host, request.port)
+        return socket.use {
+            socket.output.write(request.render().toByteArray(Charsets.US_ASCII))
+            socket.output.flush()
+            val rawText = socket.input.readSourcetableBytes(MAX_SOURCETABLE_BYTES).toString(Charsets.ISO_8859_1)
+            NtripSourcetableResult(
+                mountpoints = NtripSourcetableParser.mountpoints(rawText),
+                rawText = rawText,
+            )
+        }
+    }
+
+    private fun InputStream.readSourcetableBytes(maxBytes: Int): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (output.size() < maxBytes) {
+            val count = read(buffer, 0, minOf(buffer.size, maxBytes - output.size()))
+            if (count == -1) break
+            output.write(buffer, 0, count)
+            if (output.toString(Charsets.ISO_8859_1.name()).contains("ENDSOURCETABLE", ignoreCase = true)) break
+        }
+        return output.toByteArray()
+    }
+
+    private companion object {
+        const val MAX_SOURCETABLE_BYTES = 1024 * 1024
+        const val DEFAULT_BUFFER_SIZE = 4096
+    }
+}
+
 interface NtripSocket : Closeable {
     val input: InputStream
     val output: OutputStream
+}
+
+private fun basicAuthToken(credentials: NtripCredentials): String {
+    val rawCredentials = "${credentials.username}:${credentials.password}".toByteArray(Charsets.UTF_8)
+    return Base64.getEncoder().encodeToString(rawCredentials)
+}
+
+private fun requireNoCrLf(label: String, value: String) {
+    require('\r' !in value && '\n' !in value) { "NTRIP $label must not contain CR/LF characters" }
 }
 
 interface NtripSocketConnector {

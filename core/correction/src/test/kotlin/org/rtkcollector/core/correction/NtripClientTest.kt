@@ -60,6 +60,67 @@ class NtripClientTest {
     }
 
     @Test
+    fun `sourcetable request renders caster root without mountpoint`() {
+        val request = NtripSourcetableRequest(
+            host = "caster.example",
+            port = 2101,
+            credentials = NtripCredentials(username = "rover", password = "secret"),
+            userAgent = "RtkCollectorTest/1",
+        )
+
+        val rendered = request.render()
+
+        assertTrue(rendered.startsWith("GET / HTTP/1.1\r\n"))
+        assertTrue(rendered.contains("Host: caster.example:2101\r\n"))
+        assertTrue(rendered.contains("User-Agent: RtkCollectorTest/1\r\n"))
+        assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
+        assertTrue(rendered.contains("Authorization: Basic cm92ZXI6c2VjcmV0\r\n"))
+        assertTrue(rendered.endsWith("\r\n\r\n"))
+    }
+
+    @Test
+    fun `sourcetable parser extracts unique str mountpoints in order`() {
+        val raw = """
+            SOURCETABLE 200 OK
+            CAS;caster.example;2101;Example caster
+            STR;MOUNT_A;Example A;RTCM 3.2;1004(1),1005(10);2;GPS;EUREF;CZE;50.0;14.0;0;1;none;B;N;0;
+            STR;MOUNT_B;Example B;RTCM 3.3;1077(1);2;GPS+GAL;EUREF;CZE;49.0;15.0;0;1;none;B;N;0;
+            STR;MOUNT_A;Duplicate;RTCM 3.2;;;;;;;;
+            ENDSOURCETABLE
+        """.trimIndent().replace("\n", "\r\n")
+
+        val mountpoints = NtripSourcetableParser.mountpoints(raw)
+
+        assertEquals(listOf("MOUNT_A", "MOUNT_B"), mountpoints)
+    }
+
+    @Test
+    fun `sourcetable client fetches and parses mountpoints`() {
+        val socket = FakeNtripSocket(
+            inputBytes = (
+                "SOURCETABLE 200 OK\r\n" +
+                    "\r\n" +
+                    "STR;MOUNT_A;Example A;RTCM 3.2\r\n" +
+                    "STR;MOUNT_B;Example B;RTCM 3.3\r\n" +
+                    "ENDSOURCETABLE\r\n"
+                ).toByteArray(),
+        )
+        val client = NtripSourcetableClient(
+            request = NtripSourcetableRequest(
+                host = "caster.example",
+                port = 2101,
+                userAgent = "RtkCollectorTest/1",
+            ),
+            connector = FakeNtripSocketConnector(socket),
+        )
+
+        val result = client.fetch()
+
+        assertEquals(listOf("MOUNT_A", "MOUNT_B"), result.mountpoints)
+        assertTrue(socket.outputText().startsWith("GET / HTTP/1.1\r\n"))
+    }
+
+    @Test
     fun `request rejects crlf in rendered host mountpoint and user agent fields`() {
         assertThrows(IllegalArgumentException::class.java) {
             defaultRequest().copy(host = "caster.example\r\nX-Bad: yes")

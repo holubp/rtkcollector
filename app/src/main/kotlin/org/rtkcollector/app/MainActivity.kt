@@ -33,6 +33,9 @@ import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.usb.UsbDeviceSummary
+import org.rtkcollector.core.correction.NtripCredentials
+import org.rtkcollector.core.correction.NtripSourcetableClient
+import org.rtkcollector.core.correction.NtripSourcetableRequest
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
 import org.rtkcollector.core.workflow.ReceiverCommandPlan
 import org.rtkcollector.core.workflow.ReceiverCommandPlanExamples
@@ -56,6 +59,7 @@ class MainActivity : Activity() {
     private lateinit var usbBaudProfileSpinner: Spinner
     private lateinit var ntripCasterProfileSpinner: Spinner
     private lateinit var ntripMountpointProfileSpinner: Spinner
+    private lateinit var ntripSourcetableSpinner: Spinner
     private lateinit var recordingPolicySpinner: Spinner
     private lateinit var storageProfileSpinner: Spinner
     private lateinit var detailsText: TextView
@@ -93,12 +97,14 @@ class MainActivity : Activity() {
     private lateinit var saveNtripCasterProfileButton: Button
     private lateinit var copyNtripCasterProfileButton: Button
     private lateinit var showNtripPasswordButton: Button
+    private lateinit var fetchNtripMountpointsButton: Button
     private lateinit var saveNtripMountpointProfileButton: Button
     private lateinit var copyNtripMountpointProfileButton: Button
     private lateinit var saveRecordingPolicyButton: Button
     private lateinit var copyRecordingPolicyButton: Button
     private lateinit var saveStorageProfileButton: Button
     private lateinit var copyStorageProfileButton: Button
+    private lateinit var chooseStorageFolderButton: Button
     private lateinit var refreshUsbButton: Button
     private lateinit var requestUsbPermissionButton: Button
     private lateinit var startButton: Button
@@ -114,6 +120,7 @@ class MainActivity : Activity() {
     private var usbBaudProfiles: List<UsbBaudProfile> = emptyList()
     private var ntripCasterProfiles: List<NtripCasterProfile> = emptyList()
     private var ntripMountpointProfiles: List<NtripMountpointProfile> = emptyList()
+    private var sourcetableMountpoints: List<String> = emptyList()
     private var recordingPolicyProfiles: List<RecordingPolicyProfile> = emptyList()
     private var storageProfiles: List<StorageProfile> = emptyList()
 
@@ -196,6 +203,7 @@ class MainActivity : Activity() {
         usbBaudProfileSpinner = Spinner(this)
         ntripCasterProfileSpinner = Spinner(this)
         ntripMountpointProfileSpinner = Spinner(this)
+        ntripSourcetableSpinner = Spinner(this)
         recordingPolicySpinner = Spinner(this)
         storageProfileSpinner = Spinner(this)
         detailsText = TextView(this).apply { textSize = 14f }
@@ -255,12 +263,14 @@ class MainActivity : Activity() {
         saveNtripCasterProfileButton = Button(this).apply { text = "Save NTRIP caster profile" }
         copyNtripCasterProfileButton = Button(this).apply { text = "Copy NTRIP caster profile" }
         showNtripPasswordButton = Button(this).apply { text = "Show stored NTRIP password" }
+        fetchNtripMountpointsButton = Button(this).apply { text = "Fetch mountpoints from caster" }
         saveNtripMountpointProfileButton = Button(this).apply { text = "Save NTRIP mountpoint profile" }
         copyNtripMountpointProfileButton = Button(this).apply { text = "Copy NTRIP mountpoint profile" }
         saveRecordingPolicyButton = Button(this).apply { text = "Save recording policy" }
         copyRecordingPolicyButton = Button(this).apply { text = "Copy recording policy" }
         saveStorageProfileButton = Button(this).apply { text = "Save storage profile" }
         copyStorageProfileButton = Button(this).apply { text = "Copy storage profile" }
+        chooseStorageFolderButton = Button(this).apply { text = "Choose SAF recording folder" }
         startButton = Button(this).apply { text = "Start real recording" }
         stopButton = Button(this).apply {
             text = "Stop recording"
@@ -286,12 +296,14 @@ class MainActivity : Activity() {
         saveNtripCasterProfileButton.setOnClickListener { saveSelectedNtripCasterProfile(copy = false) }
         copyNtripCasterProfileButton.setOnClickListener { saveSelectedNtripCasterProfile(copy = true) }
         showNtripPasswordButton.setOnClickListener { showStoredNtripPassword() }
+        fetchNtripMountpointsButton.setOnClickListener { fetchNtripMountpoints() }
         saveNtripMountpointProfileButton.setOnClickListener { saveSelectedNtripMountpointProfile(copy = false) }
         copyNtripMountpointProfileButton.setOnClickListener { saveSelectedNtripMountpointProfile(copy = true) }
         saveRecordingPolicyButton.setOnClickListener { saveSelectedRecordingPolicy(copy = false) }
         copyRecordingPolicyButton.setOnClickListener { saveSelectedRecordingPolicy(copy = true) }
         saveStorageProfileButton.setOnClickListener { saveSelectedStorageProfile(copy = false) }
         copyStorageProfileButton.setOnClickListener { saveSelectedStorageProfile(copy = true) }
+        chooseStorageFolderButton.setOnClickListener { chooseStorageFolder() }
         startButton.setOnClickListener {
             startRealRecording()
         }
@@ -356,6 +368,9 @@ class MainActivity : Activity() {
         root.addView(ntripMountpointProfileSpinner)
         root.addView(saveNtripMountpointProfileButton)
         root.addView(copyNtripMountpointProfileButton)
+        root.addView(fetchNtripMountpointsButton)
+        root.addView(label("Cached caster mountpoints"))
+        root.addView(ntripSourcetableSpinner)
         root.addView(ntripMountpointEdit)
         root.addView(label("NTRIP username"))
         root.addView(ntripUsernameEdit)
@@ -374,6 +389,7 @@ class MainActivity : Activity() {
         root.addView(copyRecordingPolicyButton)
         root.addView(label("Storage profile"))
         root.addView(storageProfileSpinner)
+        root.addView(chooseStorageFolderButton)
         root.addView(saveStorageProfileButton)
         root.addView(copyStorageProfileButton)
         root.addView(detailsText)
@@ -391,6 +407,33 @@ class MainActivity : Activity() {
         runCatching { unregisterReceiver(usbPermissionReceiver) }
         runCatching { unregisterReceiver(serviceStateReceiver) }
         super.onDestroy()
+    }
+
+    @Deprecated("Uses platform Activity API to avoid adding AndroidX only for SAF selection.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_STORAGE_TREE || resultCode != RESULT_OK) {
+            return
+        }
+        val treeUri = data?.data ?: return
+        val grantFlags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        runCatching {
+            contentResolver.takePersistableUriPermission(treeUri, grantFlags)
+        }.onFailure { error ->
+            monitorText.text = "Could not persist SAF permission: ${error.message}"
+            return
+        }
+
+        val selected = selectedStorageProfile() ?: return
+        val updated = selected.copy(
+            kind = "SAF_TREE",
+            treeUri = treeUri.toString(),
+            name = if (selected.kind == "APP_PRIVATE") "SAF recording folder" else selected.name,
+        )
+        storageProfiles = saveOrCopy(storageProfiles, selected, updated, copy = false) { it }
+        profileStores.saveStorageProfiles(storageProfiles)
+        refreshProfileAdapters()
+        monitorText.text = "SAF recording folder saved for storage profile: ${updated.name}"
     }
 
     private fun registerReceivers() {
@@ -436,6 +479,7 @@ class MainActivity : Activity() {
         usbBaudProfileSpinner.onItemSelectedListener = profileListener { applyUsbBaudProfile() }
         ntripCasterProfileSpinner.onItemSelectedListener = profileListener { applyNtripCasterProfile() }
         ntripMountpointProfileSpinner.onItemSelectedListener = profileListener { applyNtripMountpointProfile() }
+        ntripSourcetableSpinner.onItemSelectedListener = profileListener { applyCachedSourcetableMountpoint() }
         recordingPolicySpinner.onItemSelectedListener = profileListener { applyRecordingPolicy() }
         storageProfileSpinner.onItemSelectedListener = profileListener { renderStorageProfile() }
 
@@ -443,6 +487,7 @@ class MainActivity : Activity() {
         applyUsbBaudProfile()
         applyNtripCasterProfile()
         applyNtripMountpointProfile()
+        refreshSourcetableMountpointAdapter()
         applyRecordingPolicy()
         renderStorageProfile()
     }
@@ -496,6 +541,23 @@ class MainActivity : Activity() {
             } else {
                 "Not saved in session metadata"
             }
+            sourcetableMountpoints = profile.sourcetableMountpoints
+            refreshSourcetableMountpointAdapter()
+        }
+    }
+
+    private fun refreshSourcetableMountpointAdapter() {
+        ntripSourcetableSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            if (sourcetableMountpoints.isEmpty()) listOf("No cached mountpoints") else sourcetableMountpoints,
+        )
+    }
+
+    private fun applyCachedSourcetableMountpoint() {
+        val mountpoint = sourcetableMountpoints.getOrNull(ntripSourcetableSpinner.selectedItemPosition.coerceAtLeast(0))
+        if (!mountpoint.isNullOrBlank()) {
+            ntripMountpointEdit.setText(mountpoint)
         }
     }
 
@@ -555,9 +617,8 @@ class MainActivity : Activity() {
     private fun saveSelectedNtripCasterProfile(copy: Boolean) {
         val selected = selectedNtripCasterProfile() ?: return
         val secretId = selected.secretId.ifBlank {
-            ntripSecretRef(
+            ntripCasterSecretRef(
                 ntripHostEdit.text.toString().trim(),
-                selectedNtripMountpointProfile()?.mountpoint.orEmpty().ifBlank { ntripMountpointEdit.text.toString().trim() },
                 ntripUsernameEdit.text.toString().trim(),
             )
         }
@@ -582,6 +643,57 @@ class MainActivity : Activity() {
             else -> secretStore.getPassword(secretId)?.let { "Stored password: $it" }
                 ?: "No stored password found for this caster profile."
         }
+    }
+
+    private fun fetchNtripMountpoints() {
+        val selected = selectedNtripCasterProfile() ?: return
+        val host = ntripHostEdit.text.toString().trim()
+        val port = parseIntField(ntripPortEdit, "NTRIP port", 1..65535) ?: return
+        if (host.isBlank()) {
+            monitorText.text = "Cannot fetch mountpoints: NTRIP host is blank."
+            return
+        }
+        val username = ntripUsernameEdit.text.toString().trim()
+        val secretRef = selected.secretId.ifBlank {
+            ntripCasterSecretRef(host, username)
+        }
+        val password = resolveNtripPassword(secretRef)
+        val credentials = username.takeIf(String::isNotBlank)?.let { NtripCredentials(it, password) }
+        monitorText.text = "Fetching NTRIP sourcetable from $host:$port..."
+
+        Thread(
+            {
+                runCatching {
+                    NtripSourcetableClient(
+                        NtripSourcetableRequest(
+                            host = host,
+                            port = port,
+                            credentials = credentials,
+                        ),
+                    ).fetch()
+                }.onSuccess { result ->
+                    runOnUiThread {
+                        val updated = selected.copy(
+                            host = host,
+                            port = port,
+                            username = username,
+                            secretId = secretRef,
+                            sourcetableMountpoints = result.mountpoints,
+                        )
+                        ntripCasterProfiles = ntripCasterProfiles.map { if (it.id == selected.id) updated else it }
+                        profileStores.saveNtripCasterProfiles(ntripCasterProfiles)
+                        sourcetableMountpoints = result.mountpoints
+                        refreshProfileAdapters()
+                        monitorText.text = "Fetched ${result.mountpoints.size} mountpoints from $host. Select one or type a mountpoint directly."
+                    }
+                }.onFailure { error ->
+                    runOnUiThread {
+                        monitorText.text = "Mountpoint fetch failed: ${error.message ?: error.javaClass.simpleName}"
+                    }
+                }
+            },
+            "rtkcollector-ntrip-sourcetable",
+        ).start()
     }
 
     private fun saveSelectedNtripMountpointProfile(copy: Boolean) {
@@ -616,6 +728,16 @@ class MainActivity : Activity() {
         storageProfiles = saveOrCopy(storageProfiles, selected, selected, copy) { it.copyProfile(profileStores.duplicateId("storage"), "${it.name} copy") }
         profileStores.saveStorageProfiles(storageProfiles)
         refreshProfileAdapters()
+    }
+
+    private fun chooseStorageFolder() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+        }
+        startActivityForResult(intent, REQUEST_STORAGE_TREE)
     }
 
     private fun <T> saveOrCopy(
@@ -740,6 +862,14 @@ class MainActivity : Activity() {
             monitorText.text = "Cannot start: USB permission is not granted."
             return
         }
+        val storageProfile = selectedStorageProfile()
+        if (storageProfile?.kind == "SAF_TREE") {
+            val treeUri = storageProfile.treeUri
+            if (treeUri.isNullOrBlank() || !hasPersistedSafWritePermission(treeUri)) {
+                monitorText.text = "Cannot start: choose the SAF recording folder again so Android grants write permission."
+                return
+            }
+        }
         val profileBaud = parseIntField(profileBaudEdit, "profile baud", 9600..921600) ?: return
         val serialBaud = parseIntField(serialBaudEdit, "serial baud", 9600..921600) ?: return
         val ntripPort = parseIntField(ntripPortEdit, "NTRIP port", 1..65535) ?: return
@@ -766,7 +896,7 @@ class MainActivity : Activity() {
         }
         val username = ntripUsernameEdit.text.toString().trim()
         val secretRef = selectedNtripCasterProfile()?.secretId?.takeIf { it.isNotBlank() }
-            ?: ntripSecretRef(host, mountpoint, username)
+            ?: ntripCasterSecretRef(host, username)
         val runtimePassword = resolveNtripPassword(secretRef)
         saveRecordingDefaults(host, ntripPort, mountpoint, username, secretRef)
 
@@ -797,8 +927,9 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, selectedNtripCasterProfile()?.id)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, selectedNtripMountpointProfile()?.id)
             putExtra(RecordingForegroundService.EXTRA_RECORDING_POLICY_ID, selectedRecordingPolicy()?.id)
-            putExtra(RecordingForegroundService.EXTRA_STORAGE_PROFILE_ID, selectedStorageProfile()?.id)
-            putExtra(RecordingForegroundService.EXTRA_STORAGE_KIND, selectedStorageProfile()?.kind ?: "APP_PRIVATE")
+            putExtra(RecordingForegroundService.EXTRA_STORAGE_PROFILE_ID, storageProfile?.id)
+            putExtra(RecordingForegroundService.EXTRA_STORAGE_KIND, storageProfile?.kind ?: "APP_PRIVATE")
+            putExtra(RecordingForegroundService.EXTRA_STORAGE_TREE_URI, storageProfile?.treeUri)
             putExtra(RecordingForegroundService.EXTRA_RECORD_NTRIP_CORRECTION_INPUT, recordNtripCorrectionInputCheck.isChecked)
             putExtra(RecordingForegroundService.EXTRA_EXPORT_NMEA, exportNmeaCheck.isChecked)
             putExtra(RecordingForegroundService.EXTRA_EXPORT_JSON_SOLUTION, exportJsonSolutionCheck.isChecked)
@@ -944,11 +1075,16 @@ class MainActivity : Activity() {
     private fun WorkflowOption.requiresNtrip(): Boolean =
         um980Mode == Um980WorkflowMode.ROVER_NTRIP || um980Mode == Um980WorkflowMode.TEMPORARY_BASE_NTRIP
 
-    private fun ntripSecretRef(host: String, mountpoint: String, username: String): String =
-        if (host.isBlank() || mountpoint.isBlank() || username.isBlank()) {
+    private fun ntripCasterSecretRef(host: String, username: String): String =
+        if (host.isBlank() || username.isBlank()) {
             ""
         } else {
-            "ntrip:${host.lowercase(Locale.US)}:${mountpoint}:${username}"
+            "ntrip:${host.lowercase(Locale.US)}:caster:${username}"
+        }
+
+    private fun hasPersistedSafWritePermission(treeUri: String): Boolean =
+        contentResolver.persistedUriPermissions.any { permission ->
+            permission.uri.toString() == treeUri && permission.isWritePermission
         }
 
     private fun resolveNtripPassword(secretRef: String): String {
@@ -1088,5 +1224,6 @@ class MainActivity : Activity() {
 
     private companion object {
         const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"
+        const val REQUEST_STORAGE_TREE = 42
     }
 }

@@ -378,6 +378,11 @@ class MainActivity : Activity() {
         val workflow = current.workflow
         val workflowOption = selectedWorkflowOption()
         val receiverOption = selectedReceiverOption()
+        val um980Mode = workflowOption.um980Mode
+        if (um980Mode == null) {
+            monitorText.text = "Cannot start: replay/test workflows are not live USB recording workflows."
+            return
+        }
         if (receiverOption.profileId != "um980-n4") {
             monitorText.text = "Cannot start: experimental real recording V1 currently supports UM980/N4 only."
             return
@@ -395,9 +400,7 @@ class MainActivity : Activity() {
         val serialBaud = parseIntField(serialBaudEdit, "serial baud", 9600..921600) ?: return
         val ntripPort = parseIntField(ntripPortEdit, "NTRIP port", 1..65535) ?: return
         val baseCoordinate = if (workflowOption.requiresBaseCoordinate()) parseBaseCoordinate(showError = true) ?: return else null
-        if (workflowOption.um980Mode != null) {
-            modeCommandsEdit.setText(buildUm980Commands(workflowOption.um980Mode, baseCoordinate).joinToString("\n"))
-        }
+        modeCommandsEdit.setText(buildUm980Commands(um980Mode, baseCoordinate).joinToString("\n"))
         val startupCommands = commandLines(initCommandsEdit.text.toString()) + commandLines(modeCommandsEdit.text.toString())
         val shutdownCommands = commandLines(shutdownCommandsEdit.text.toString())
         val invalidCommand = (startupCommands + shutdownCommands).firstOrNull { command ->
@@ -432,7 +435,7 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_WORKFLOW_NAME, workflow.name)
             putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, workflow.receiverRole.name)
             putExtra(RecordingForegroundService.EXTRA_RECEIVER_PROFILE_ID, workflow.receiverProfileId)
-            putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, workflowOption.um980Mode?.name ?: "")
+            putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, um980Mode.name)
             putExtra(RecordingForegroundService.EXTRA_COORDINATE_SOURCE, baseCoordinate?.source?.name ?: "NONE")
             putExtra(RecordingForegroundService.EXTRA_BASE_POSITION_JSON, baseCoordinate?.toBasePositionJson().orEmpty())
             putExtra(RecordingForegroundService.EXTRA_VALIDATION_SUMMARY, validationSummary(current))

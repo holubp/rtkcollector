@@ -66,6 +66,13 @@ preparation sessions should record raw observations at `>= 1 Hz` where
 supported, record normal device solution and record receiver PPP solution where
 supported.
 
+Experimental V1 writes `receiver-rx.raw`, `tx-to-receiver.raw`,
+`correction-input.raw`, `events.jsonl` and `quality-live.jsonl` as separate
+append-only artifacts. Receiver RX is the authoritative raw capture. Receiver
+TX includes init commands, shutdown commands and RTCM correction bytes that were
+sent to the receiver. Correction input records the NTRIP byte stream before
+receiver injection.
+
 ## `base-position.json`
 
 Required fields:

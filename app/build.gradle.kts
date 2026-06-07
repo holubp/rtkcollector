@@ -16,5 +16,10 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:capture"))
+    implementation(project(":core:correction"))
+    implementation(project(":core:session"))
+    implementation(project(":core:transport"))
     implementation(project(":core:workflow"))
+    implementation(project(":receiver:unicore-n4"))
 }

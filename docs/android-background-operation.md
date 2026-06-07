@@ -3,6 +3,10 @@
 Recording is owned by a foreground service. Activity and UI code only control
 and observe recording state.
 
+Experimental V1 follows this rule with `RecordingForegroundService`: the service
+opens USB, owns the capture loop, writes session artifacts, runs optional NTRIP,
+holds the wake lock while recording and performs stop/shutdown cleanup.
+
 ## Requirements
 
 - A persistent notification must be visible while recording.

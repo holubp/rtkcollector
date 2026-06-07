@@ -1,15 +1,26 @@
 package org.rtkcollector.app
 
 import android.app.Activity
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
+import org.rtkcollector.app.recording.RecordingForegroundService
+import org.rtkcollector.app.usb.UsbDeviceSummary
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
 import org.rtkcollector.core.workflow.ReceiverCommandPlan
 import org.rtkcollector.core.workflow.ReceiverCommandPlanExamples
@@ -17,15 +28,36 @@ import org.rtkcollector.core.workflow.SessionArtifact
 import org.rtkcollector.core.workflow.WorkflowDryRunSession
 import org.rtkcollector.core.workflow.WorkflowExamples
 import org.rtkcollector.core.workflow.WorkflowSpec
+import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
+import org.rtkcollector.receiver.unicore.Um980RuntimeProfiles
 
 class MainActivity : Activity() {
     private lateinit var workflowSpinner: Spinner
     private lateinit var receiverSpinner: Spinner
+    private lateinit var usbSpinner: Spinner
     private lateinit var detailsText: TextView
     private lateinit var validationText: TextView
     private lateinit var monitorText: TextView
+    private lateinit var usbStatusText: TextView
+    private lateinit var serialBaudEdit: EditText
+    private lateinit var profileBaudEdit: EditText
+    private lateinit var initCommandsEdit: EditText
+    private lateinit var modeCommandsEdit: EditText
+    private lateinit var shutdownCommandsEdit: EditText
+    private lateinit var ntripHostEdit: EditText
+    private lateinit var ntripPortEdit: EditText
+    private lateinit var ntripMountpointEdit: EditText
+    private lateinit var ntripUsernameEdit: EditText
+    private lateinit var ntripPasswordEdit: EditText
+    private lateinit var ntripGgaEdit: EditText
+    private lateinit var refreshUsbButton: Button
+    private lateinit var requestUsbPermissionButton: Button
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+
+    private val usbManager: UsbManager by lazy { getSystemService(USB_SERVICE) as UsbManager }
+    private var usbDevices: List<UsbDevice> = emptyList()
+    private var session: WorkflowDryRunSession? = null
 
     private val receiverOptions = listOf(
         ReceiverOption("UM980/N4", "um980-n4"),
@@ -45,6 +77,9 @@ class MainActivity : Activity() {
         WorkflowOption("Temporary base preparation") { receiver ->
             WorkflowExamples.temporaryBasePreparation(receiver.capabilities(), receiver.profileId)
         },
+        WorkflowOption("Temporary base + NTRIP") { receiver ->
+            WorkflowExamples.temporaryBasePreparationWithNtripToReceiver(receiver.capabilities(), receiver.profileId)
+        },
         WorkflowOption("Fixed base from accepted position") { receiver ->
             WorkflowExamples.fixedBaseFromBasePosition(receiver.capabilities(), receiver.profileId)
         },
@@ -53,82 +88,117 @@ class MainActivity : Activity() {
         },
     )
 
-    private var session: WorkflowDryRunSession? = null
+    private val usbPermissionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == ACTION_USB_PERMISSION) {
+                renderUsbStatus()
+            }
+        }
+    }
+
+    private val serviceStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == RecordingForegroundService.ACTION_STATE) {
+                monitorText.text = buildServiceStateText(intent)
+                stopButton.isEnabled = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
+                startButton.isEnabled = !stopButton.isEnabled
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        registerReceivers()
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
         }
 
-        val title = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "RtkCollector"
             textSize = 26f
-        }
-        val subtitle = TextView(this).apply {
-            text = "Workflow dry-run shell"
+        })
+        root.addView(TextView(this).apply {
+            text = "Experimental UM980 E2E recorder. No maps, shapefiles, GIS editing or field-feature collection."
             textSize = 14f
-        }
-        val status = TextView(this).apply {
-            text = "No USB, NTRIP networking, receiver TX, real file writing, RTKLIB, maps, shapefiles or GIS editing."
-            textSize = 14f
-        }
+        })
 
         workflowSpinner = Spinner(this)
         receiverSpinner = Spinner(this)
+        usbSpinner = Spinner(this)
         detailsText = TextView(this).apply { textSize = 14f }
         validationText = TextView(this).apply { textSize = 14f }
         monitorText = TextView(this).apply { textSize = 14f }
-        startButton = Button(this).apply { text = "Start dry-run recording" }
+        usbStatusText = TextView(this).apply { textSize = 14f }
+        serialBaudEdit = edit("230400")
+        profileBaudEdit = edit("230400")
+        initCommandsEdit = multilineEdit("# Optional user init commands")
+        modeCommandsEdit = multilineEdit(defaultUm980Commands())
+        shutdownCommandsEdit = multilineEdit("")
+        ntripHostEdit = edit("")
+        ntripPortEdit = edit("2101")
+        ntripMountpointEdit = edit("")
+        ntripUsernameEdit = edit("")
+        ntripPasswordEdit = edit("")
+        ntripGgaEdit = edit("")
+        refreshUsbButton = Button(this).apply { text = "Refresh USB" }
+        requestUsbPermissionButton = Button(this).apply { text = "Request USB permission" }
+        startButton = Button(this).apply { text = "Start real recording" }
         stopButton = Button(this).apply {
-            text = "Stop dry-run recording"
+            text = "Stop recording"
             isEnabled = false
         }
 
-        workflowSpinner.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            workflowOptions.map { it.label },
-        )
-        receiverSpinner.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            receiverOptions.map { it.label },
-        )
+        workflowSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, workflowOptions.map { it.label })
+        receiverSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, receiverOptions.map { it.label })
+        workflowSpinner.onItemSelectedListener = rebuildListener()
+        receiverSpinner.onItemSelectedListener = rebuildListener()
 
-        workflowSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                rebuildSession()
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        refreshUsbButton.setOnClickListener {
+            refreshUsbDevices()
         }
-        receiverSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                rebuildSession()
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        requestUsbPermissionButton.setOnClickListener {
+            requestUsbPermission()
         }
-
         startButton.setOnClickListener {
-            session = session?.start()
-            render()
+            startRealRecording()
         }
         stopButton.setOnClickListener {
-            session = session?.stop(transportAvailable = true)
-            render()
+            startService(RecordingForegroundService.stopIntent(this))
         }
 
-        root.addView(title)
-        root.addView(subtitle)
-        root.addView(status)
         root.addView(label("Workflow"))
         root.addView(workflowSpinner)
         root.addView(label("Receiver profile"))
         root.addView(receiverSpinner)
+        root.addView(label("USB device"))
+        root.addView(usbSpinner)
+        root.addView(refreshUsbButton)
+        root.addView(requestUsbPermissionButton)
+        root.addView(usbStatusText)
+        root.addView(label("Profile baud"))
+        root.addView(profileBaudEdit)
+        root.addView(label("Serial baud after profile"))
+        root.addView(serialBaudEdit)
+        root.addView(label("User init sequence"))
+        root.addView(initCommandsEdit)
+        root.addView(label("Workflow mode sequence"))
+        root.addView(modeCommandsEdit)
+        root.addView(label("Shutdown sequence"))
+        root.addView(shutdownCommandsEdit)
+        root.addView(label("NTRIP host"))
+        root.addView(ntripHostEdit)
+        root.addView(label("NTRIP port"))
+        root.addView(ntripPortEdit)
+        root.addView(label("NTRIP mountpoint"))
+        root.addView(ntripMountpointEdit)
+        root.addView(label("NTRIP username"))
+        root.addView(ntripUsernameEdit)
+        root.addView(label("NTRIP password"))
+        root.addView(ntripPasswordEdit)
+        root.addView(label("Optional GGA upload line"))
+        root.addView(ntripGgaEdit)
         root.addView(detailsText)
         root.addView(validationText)
         root.addView(startButton)
@@ -136,8 +206,36 @@ class MainActivity : Activity() {
         root.addView(monitorText)
 
         setContentView(ScrollView(this).apply { addView(root) })
+        refreshUsbDevices()
         rebuildSession()
     }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(usbPermissionReceiver) }
+        runCatching { unregisterReceiver(serviceStateReceiver) }
+        super.onDestroy()
+    }
+
+    private fun registerReceivers() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbPermissionReceiver, IntentFilter(ACTION_USB_PERMISSION), RECEIVER_NOT_EXPORTED)
+            registerReceiver(serviceStateReceiver, IntentFilter(RecordingForegroundService.ACTION_STATE), RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(usbPermissionReceiver, IntentFilter(ACTION_USB_PERMISSION))
+            @Suppress("DEPRECATION")
+            registerReceiver(serviceStateReceiver, IntentFilter(RecordingForegroundService.ACTION_STATE))
+        }
+    }
+
+    private fun rebuildListener(): AdapterView.OnItemSelectedListener =
+        object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                rebuildSession()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
 
     private fun rebuildSession() {
         val workflowOption = workflowOptions[workflowSpinner.selectedItemPosition.coerceAtLeast(0)]
@@ -145,10 +243,10 @@ class MainActivity : Activity() {
         val workflow = workflowOption.build(receiverOption)
         val commandPlan = commandPlanFor(workflow)
         session = WorkflowDryRunSession.create(workflow, commandPlan)
-        render()
+        renderWorkflowDetails()
     }
 
-    private fun render() {
+    private fun renderWorkflowDetails() {
         val current = session ?: return
         val workflow = current.workflow
         val commandPlan = current.commandPlan
@@ -161,8 +259,6 @@ class MainActivity : Activity() {
             appendLine("Init sequence: ${commandPlan.initSequence.name}")
             appendLine("Mode sequence: ${commandPlan.modeSequence.name}")
             appendLine("Shutdown sequence: ${commandPlan.shutdownSequence.name}")
-            appendLine("Startup commands:")
-            commandPlan.startupCommands().forEach { appendLine("  $it") }
             appendLine("Expected artifacts:")
             workflow.recording.expectedSessionArtifacts.sortedBy(SessionArtifact::name).forEach {
                 appendLine("  ${it.name}")
@@ -171,33 +267,102 @@ class MainActivity : Activity() {
 
         validationText.text = buildString {
             appendLine()
-            appendLine(if (current.validation.valid) "Validation: valid" else "Validation: blocked")
+            appendLine(if (current.validation.valid) "Workflow validation: valid" else "Workflow validation: blocked")
             current.validation.errors.forEach { appendLine("ERROR ${it.code}: ${it.message}") }
             current.validation.warnings.forEach { appendLine("WARN ${it.code}: ${it.message}") }
         }
+    }
 
-        monitorText.text = buildString {
-            appendLine()
-            appendLine("Dry-run state: ${current.state}")
-            appendLine("Elapsed seconds: ${current.observables.elapsedSeconds}")
-            appendLine("Receiver RX bytes: ${current.observables.receiverRxBytes}")
-            appendLine("TX to receiver bytes: ${current.observables.txToReceiverBytes}")
-            appendLine("Correction input bytes: ${current.observables.correctionInputBytes}")
-            appendLine("Serial throughput B/s: ${current.observables.serialThroughputBytesPerSecond}")
-            appendLine("Device solution: ${current.observables.latestDeviceSolution}")
-            appendLine("Recording health: ${current.observables.recordingHealth}")
-            appendLine("Raw observations: ${current.observables.rawObservationStatus}")
-            appendLine("NTRIP: ${current.observables.ntripState}")
-            appendLine("Correction age seconds: ${current.observables.correctionAgeSeconds ?: "n/a"}")
-            appendLine("Parser: ${current.observables.parserStatus}")
-            appendLine("Shutdown status: ${current.shutdownStatus}")
+    private fun refreshUsbDevices() {
+        usbDevices = usbManager.deviceList.values.toList().sortedBy { it.deviceName }
+        usbSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            if (usbDevices.isEmpty()) listOf("No USB devices") else usbDevices.map { UsbDeviceSummary.from(it).label },
+        )
+        renderUsbStatus()
+    }
+
+    private fun renderUsbStatus() {
+        val device = selectedUsbDevice()
+        usbStatusText.text = when {
+            device == null -> "USB: no selected device"
+            usbManager.hasPermission(device) -> "USB: permission granted for ${device.deviceName}"
+            else -> "USB: permission needed for ${device.deviceName}"
+        }
+    }
+
+    private fun requestUsbPermission() {
+        val device = selectedUsbDevice() ?: return
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+        val permissionIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION).setPackage(packageName), flags)
+        usbManager.requestPermission(device, permissionIntent)
+    }
+
+    private fun startRealRecording() {
+        val current = session ?: return
+        if (!current.validation.valid) {
+            monitorText.text = "Cannot start: workflow validation is blocked."
+            return
+        }
+        val device = selectedUsbDevice()
+        if (device == null) {
+            monitorText.text = "Cannot start: no USB device selected."
+            return
+        }
+        if (!usbManager.hasPermission(device)) {
+            monitorText.text = "Cannot start: USB permission is not granted."
+            return
+        }
+        val profileBaud = parseIntField(profileBaudEdit, "profile baud", 9600..921600) ?: return
+        val serialBaud = parseIntField(serialBaudEdit, "serial baud", 9600..921600) ?: return
+        val ntripPort = parseIntField(ntripPortEdit, "NTRIP port", 1..65535) ?: return
+        val startupCommands = commandLines(initCommandsEdit.text.toString()) + commandLines(modeCommandsEdit.text.toString())
+        val shutdownCommands = commandLines(shutdownCommandsEdit.text.toString())
+        val invalidCommand = (startupCommands + shutdownCommands).firstOrNull { command ->
+            runCatching { Um980RuntimeCommandValidator.validateRuntimeCommand(command) }.isFailure
+        }
+        if (invalidCommand != null) {
+            monitorText.text = "Cannot start: invalid or unsafe receiver command: $invalidCommand"
+            return
         }
 
-        workflowSpinner.isEnabled = !current.canStop
-        receiverSpinner.isEnabled = !current.canStop
-        startButton.isEnabled = current.canStart
-        stopButton.isEnabled = current.canStop
+        val intent = Intent(this, RecordingForegroundService::class.java).apply {
+            action = RecordingForegroundService.ACTION_START
+            putExtra(RecordingForegroundService.EXTRA_USB_DEVICE, device)
+            putExtra(RecordingForegroundService.EXTRA_PROFILE_BAUD, profileBaud)
+            putExtra(RecordingForegroundService.EXTRA_SERIAL_BAUD, serialBaud)
+            putStringArrayListExtra(RecordingForegroundService.EXTRA_STARTUP_COMMANDS, ArrayList(startupCommands))
+            putStringArrayListExtra(RecordingForegroundService.EXTRA_SHUTDOWN_COMMANDS, ArrayList(shutdownCommands))
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, ntripHostEdit.text.toString())
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, ntripPort)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, ntripMountpointEdit.text.toString())
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, ntripUsernameEdit.text.toString())
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, ntripPasswordEdit.text.toString())
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_GGA, ntripGgaEdit.text.toString())
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+        monitorText.text = "Starting recording service..."
     }
+
+    private fun buildServiceStateText(intent: Intent): String =
+        buildString {
+            appendLine()
+            appendLine("Service running: ${intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)}")
+            appendLine("Session: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SESSION_PATH) ?: "n/a"}")
+            appendLine("Receiver RX bytes: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RX_BYTES, 0)}")
+            appendLine("TX to receiver bytes: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_TX_BYTES, 0)}")
+            appendLine("Correction input bytes: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_CORRECTION_BYTES, 0)}")
+            appendLine("NTRIP: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP) ?: "n/a"}")
+            appendLine("Last error: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR) ?: "none"}")
+        }
+
+    private fun selectedUsbDevice(): UsbDevice? =
+        usbDevices.getOrNull(usbSpinner.selectedItemPosition.coerceAtLeast(0))
 
     private fun commandPlanFor(workflow: WorkflowSpec): ReceiverCommandPlan =
         ReceiverCommandPlanExamples.safeReferencePlan(
@@ -205,10 +370,45 @@ class MainActivity : Activity() {
             receiverRole = workflow.receiverRole,
         )
 
+    private fun defaultUm980Commands(): String =
+        Um980RuntimeProfiles.experimentalRoverBasePreparation()
+            .commands
+            .joinToString(separator = "\n")
+
+    private fun commandLines(text: String): List<String> =
+        text.lineSequence()
+            .map(String::trim)
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .toList()
+
+    private fun parseIntField(field: EditText, label: String, range: IntRange): Int? {
+        val value = field.text.toString().trim().toIntOrNull()
+        if (value == null || value !in range) {
+            monitorText.text = "Cannot start: $label must be ${range.first}..${range.last}."
+            return null
+        }
+        return value
+    }
+
     private fun label(text: String): TextView =
         TextView(this).apply {
             this.text = text
             textSize = 12f
+        }
+
+    private fun edit(text: String): EditText =
+        EditText(this).apply {
+            setText(text)
+            textSize = 14f
+            setSingleLine(true)
+        }
+
+    private fun multilineEdit(text: String): EditText =
+        EditText(this).apply {
+            setText(text)
+            textSize = 13f
+            minLines = 3
+            setSingleLine(false)
         }
 
     private data class ReceiverOption(
@@ -229,4 +429,8 @@ class MainActivity : Activity() {
         val label: String,
         val build: (ReceiverOption) -> WorkflowSpec,
     )
+
+    private companion object {
+        const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"
+    }
 }

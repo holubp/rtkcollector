@@ -9,17 +9,18 @@ targets are u-blox M8P, u-blox M8T and a generic NMEA + RTCM receiver profile.
 
 ## Development Status
 
-This repository is in bootstrap status. The current code is a minimal
-Kotlin-compatible skeleton and specification set, not a production Android field
-application.
+This repository is in experimental bootstrap status. The current code includes
+specifications, pure Kotlin workflow/session/correction primitives, a simple
+Android UI and an experimental UM980 USB/NTRIP recording vertical slice. It is
+not a production Android field application.
 
-The bootstrap Android UI is a dry-run workflow launcher and recording monitor.
-It validates workflow and receiver-profile choices with a derived command plan,
-but it does not yet implement USB capture, receiver serial TX, NTRIP networking,
-foreground services or real session file writing. On local Termux, APK assembly
-may be blocked by the Android Gradle Plugin invoking SDK native binaries such as
-`aapt2` that are not usable on this Termux/Android host; use
-`:app:compileDebugKotlin` to validate the Kotlin/UI code locally.
+The Android UI can still show workflow validation details, and now also exposes
+an experimental real-recording path: USB device permission, UM980 runtime
+commands, optional NTRIP client settings, foreground-service recording, live byte
+counters and stop/shutdown control. On local Termux, APK assembly may be blocked
+by the Android Gradle Plugin invoking SDK native binaries such as `aapt2` that
+are not usable on this Termux/Android host; use `:app:compileDebugKotlin` to
+validate the Kotlin/UI code locally.
 
 ## Core Goals
 

@@ -3,6 +3,7 @@ package org.rtkcollector.core.capture
 interface RawRecorder {
     fun appendReceiverBytes(bytes: ByteArray)
     fun appendTransmittedBytes(bytes: ByteArray)
+    fun appendCorrectionInputBytes(bytes: ByteArray)
     fun close()
 }
 

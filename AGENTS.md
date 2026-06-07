@@ -140,6 +140,10 @@ Prefer the strongest feasible verification for the touched code:
   host where Android SDK native tools can execute.
 - Hardware-facing UM980 changes: document manual hardware smoke tests and the
   exact receiver/USB/baud assumptions.
+- UM980 profile-to-runtime baud changes must keep receiver baud-switch commands
+  separate from post-switch mode/log commands: send init, send the baud switch,
+  reconfigure the host serial bridge without purging RX/TX, drain through the
+  recorded RX path, then send mode/log commands.
 
 Known local caveat: Android SDK Java tools work in Termux, but Google native
 tools such as `aapt2` may be x86-64 Linux binaries and may not run on this

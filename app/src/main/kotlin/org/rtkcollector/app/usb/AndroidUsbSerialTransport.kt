@@ -88,7 +88,7 @@ class AndroidUsbSerialTransport(
         val opened = connection ?: error("USB serial transport is not open.")
         val iface = claimedInterface ?: error("USB serial interface is not open.")
         if (ftdiMode) {
-            configureFtdi(opened, iface.id, baudRate)
+            setFtdiLineCoding(opened, iface.id, baudRate)
         }
     }
 
@@ -97,6 +97,11 @@ class AndroidUsbSerialTransport(
         control(connection, request = 0, value = 0, index = index, label = "FTDI reset")
         control(connection, request = 0, value = 1, index = index, label = "FTDI RX purge")
         control(connection, request = 0, value = 2, index = index, label = "FTDI TX purge")
+        setFtdiLineCoding(connection, interfaceId, baudRate)
+    }
+
+    private fun setFtdiLineCoding(connection: UsbDeviceConnection, interfaceId: Int, baudRate: Int) {
+        val index = interfaceId + 1
         control(connection, request = 4, value = 8, index = index, label = "FTDI 8N1")
         val divisor = ftdiBaudDivisor(baudRate)
         val value = divisor and 0xffff

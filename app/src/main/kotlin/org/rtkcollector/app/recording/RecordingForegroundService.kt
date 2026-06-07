@@ -16,6 +16,7 @@ import org.rtkcollector.app.MainActivity
 import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.core.capture.AdvisoryConsumer
+import org.rtkcollector.core.capture.AsyncAdvisoryFanout
 import org.rtkcollector.core.capture.AdvisoryFanout
 import org.rtkcollector.core.capture.CaptureEvent
 import org.rtkcollector.core.capture.CaptureEventSink
@@ -51,6 +52,9 @@ class RecordingForegroundService : Service() {
     private var runtime: CaptureRuntime? = null
     private var transport: AndroidUsbSerialTransport? = null
     private var writers: SessionWriters? = null
+    private var advisoryFanout: AsyncAdvisoryFanout? = null
+    private var activeSessionMetadata: SessionMetadata? = null
+    private var ntripClient: NtripClient? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
@@ -98,35 +102,34 @@ class RecordingForegroundService : Service() {
             val sessionWriters = SessionWriters.open(sessionDirectory)
             val startedAt = Instant.now().toString()
             val sessionUuid = UUID.randomUUID().toString()
-            sessionWriters.writeSessionJson(
-                exportSessionMetadata(
-                    SessionMetadata(
-                        appVersion = "0.1.0",
-                        androidDeviceModel = Build.MODEL ?: "unknown",
-                        androidVersion = Build.VERSION.RELEASE ?: "unknown",
-                        receiverDriverId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID) ?: "um980-n4",
-                        receiverIdentification = null,
-                        usbVid = usbDevice.vendorId,
-                        usbPid = usbDevice.productId,
-                        baudRate = serialBaud,
-                        serialParameters = SerialParameters(),
-                        mode = sessionModeFrom(intent.getStringExtra(EXTRA_RECEIVER_ROLE)),
-                        startedAt = startedAt,
-                        stoppedAt = null,
-                        ntrip = ntripSessionMetadata(intent),
-                        antenna = AntennaMetadata(),
-                        sessionUuid = sessionUuid,
-                        linkedBaseSessionUuid = null,
-                        workflowId = intent.getStringExtra(EXTRA_WORKFLOW_ID),
-                        workflowName = intent.getStringExtra(EXTRA_WORKFLOW_NAME),
-                        receiverRole = intent.getStringExtra(EXTRA_RECEIVER_ROLE),
-                        um980ProfileId = intent.getStringExtra(EXTRA_UM980_PROFILE_ID),
-                        coordinateSource = intent.getStringExtra(EXTRA_COORDINATE_SOURCE),
-                        validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
-                        expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
-                    ),
-                ),
+            val metadata = SessionMetadata(
+                appVersion = "0.1.0",
+                androidDeviceModel = Build.MODEL ?: "unknown",
+                androidVersion = Build.VERSION.RELEASE ?: "unknown",
+                receiverDriverId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID) ?: "um980-n4",
+                receiverIdentification = null,
+                usbVid = usbDevice.vendorId,
+                usbPid = usbDevice.productId,
+                baudRate = serialBaud,
+                serialParameters = SerialParameters(),
+                mode = sessionModeFrom(intent.getStringExtra(EXTRA_RECEIVER_ROLE)),
+                startedAt = startedAt,
+                stoppedAt = null,
+                ntrip = ntripSessionMetadata(intent),
+                antenna = AntennaMetadata(),
+                sessionUuid = sessionUuid,
+                linkedBaseSessionUuid = null,
+                workflowId = intent.getStringExtra(EXTRA_WORKFLOW_ID),
+                workflowName = intent.getStringExtra(EXTRA_WORKFLOW_NAME),
+                receiverRole = intent.getStringExtra(EXTRA_RECEIVER_ROLE),
+                um980ProfileId = intent.getStringExtra(EXTRA_UM980_PROFILE_ID),
+                coordinateSource = intent.getStringExtra(EXTRA_COORDINATE_SOURCE),
+                validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
+                expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
             )
+            sessionWriters.writeSessionJson(exportSessionMetadata(metadata))
+            writers = sessionWriters
+            activeSessionMetadata = metadata
             intent.getStringExtra(EXTRA_BASE_POSITION_JSON)
                 ?.takeIf { it.isNotBlank() }
                 ?.let(sessionWriters::writeBasePositionJson)
@@ -138,26 +141,37 @@ class RecordingForegroundService : Service() {
                 options = UsbSerialOpenOptions(profileBaud),
             )
             usbTransport.open()
+            transport = usbTransport
 
+            val asyncAdvisoryFanout = AsyncAdvisoryFanout(
+                delegate = buildAdvisoryFanout(sessionWriters, eventSink),
+                eventSink = eventSink,
+            )
+            advisoryFanout = asyncAdvisoryFanout
             val captureRuntime = CaptureRuntime(
                 transport = usbTransport,
                 recorder = recorder,
                 eventSink = eventSink,
-                advisoryFanout = buildAdvisoryFanout(sessionWriters, eventSink),
+                advisoryFanout = asyncAdvisoryFanout,
             )
             captureRuntime.open()
+            runtime = captureRuntime
 
-            val startupCommands = intent.getStringArrayListExtra(EXTRA_STARTUP_COMMANDS).orEmpty().validatedCommands()
+            val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
+            val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
+            val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
             shutdownCommands = intent.getStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS).orEmpty().validatedCommands()
-            sendCommandLines(captureRuntime, startupCommands)
+            sendCommandLines(captureRuntime, initCommands)
             if (profileBaud != serialBaud) {
+                require(baudSwitchCommands.isNotEmpty()) {
+                    "Profile baud differs from recording baud but no receiver baud-switch command was supplied."
+                }
+                sendCommandLines(captureRuntime, baudSwitchCommands)
                 usbTransport.reconfigureBaud(serialBaud)
             }
-            drainAfterProfile(usbTransport)
+            drainAfterProfile(captureRuntime)
+            sendCommandLines(captureRuntime, modeCommands)
 
-            writers = sessionWriters
-            transport = usbTransport
-            runtime = captureRuntime
             state = state.copy(running = true, sessionPath = sessionDirectory.toString(), ntripState = "Not configured")
             broadcastState()
 
@@ -213,10 +227,12 @@ class RecordingForegroundService : Service() {
         val ggaLine = intent.getStringExtra(EXTRA_NTRIP_GGA)?.takeIf { it.isNotBlank() }
         ntripThread = Thread(
             {
-                NtripClient(
+                val client = NtripClient(
                     request = request,
                     reconnectPolicy = NtripReconnectPolicy(maxAttempts = Int.MAX_VALUE, delayMillis = 5_000),
-                ).runWithReconnect(
+                )
+                ntripClient = client
+                client.runWithReconnect(
                     ggaLines = listOfNotNull(ggaLine),
                     onState = { correctionStatus: CorrectionStatus ->
                         state = state.copy(ntripState = correctionStatus.state.name, lastError = correctionStatus.lastError)
@@ -224,15 +240,11 @@ class RecordingForegroundService : Service() {
                     },
                     onRtcmBytes = { bytes ->
                         if (running.get()) {
-                            synchronized(runtimeLock) {
-                                if (running.get()) {
-                                    captureRuntime.injectCorrectionBytes(bytes)
-                                    state = state.copy(
-                                        correctionInputBytes = recorder.correctionInputBytes,
-                                        txToReceiverBytes = recorder.txToReceiverBytes,
-                                    )
-                                }
-                            }
+                            captureRuntime.injectCorrectionBytes(bytes)
+                            state = state.copy(
+                                correctionInputBytes = recorder.correctionInputBytes,
+                                txToReceiverBytes = recorder.txToReceiverBytes,
+                            )
                             broadcastState()
                         }
                     },
@@ -255,10 +267,20 @@ class RecordingForegroundService : Service() {
                 }
             }
         }
+        runCatching { ntripClient?.cancel() }
         runCatching { ntripThread?.interrupt() }
         runCatching { ntripThread?.join(1500) }
         runCatching { captureThread?.join(1500) }
+        runCatching { advisoryFanout?.close() }
         synchronized(runtimeLock) {
+            runCatching {
+                activeSessionMetadata
+                    ?.copy(stoppedAt = Instant.now().toString())
+                    ?.let { metadata ->
+                        writers?.writeSessionJson(exportSessionMetadata(metadata))
+                        activeSessionMetadata = metadata
+                    }
+            }
             runCatching { runtime?.close() }
             runCatching { writers?.flush() }
             runCatching { writers?.close() }
@@ -266,6 +288,9 @@ class RecordingForegroundService : Service() {
         runtime = null
         transport = null
         writers = null
+        advisoryFanout = null
+        activeSessionMetadata = null
+        ntripClient = null
         shutdownCommands = emptyList()
         releaseWakeLock()
         state = state.copy(running = false)
@@ -301,10 +326,10 @@ class RecordingForegroundService : Service() {
         return value
     }
 
-    private fun drainAfterProfile(usbTransport: AndroidUsbSerialTransport) {
+    private fun drainAfterProfile(captureRuntime: CaptureRuntime) {
         val deadline = System.currentTimeMillis() + PROFILE_DRAIN_MILLIS
         while (System.currentTimeMillis() < deadline) {
-            usbTransport.readAvailable(READ_BUFFER_BYTES)
+            captureRuntime.readOnce(READ_BUFFER_BYTES)
         }
     }
 
@@ -415,7 +440,9 @@ class RecordingForegroundService : Service() {
                 },
                 AdvisoryConsumer("rtcm3-extractor") { bytes ->
                     rtcmExtractor.accept(bytes).forEach { frame ->
-                        sessionWriters.appendExtractedRtcm(frame.bytes)
+                        if (frame.crcValid != false) {
+                            sessionWriters.appendExtractedRtcm(frame.bytes)
+                        }
                         sessionWriters.appendQualityLiveJson(
                             """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"}}""",
                         )
@@ -509,7 +536,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_USB_DEVICE = "usbDevice"
         const val EXTRA_SERIAL_BAUD = "serialBaud"
         const val EXTRA_PROFILE_BAUD = "profileBaud"
-        const val EXTRA_STARTUP_COMMANDS = "startupCommands"
+        const val EXTRA_INIT_COMMANDS = "initCommands"
+        const val EXTRA_BAUD_SWITCH_COMMANDS = "baudSwitchCommands"
+        const val EXTRA_MODE_COMMANDS = "modeCommands"
         const val EXTRA_SHUTDOWN_COMMANDS = "shutdownCommands"
         const val EXTRA_NTRIP_HOST = "ntripHost"
         const val EXTRA_NTRIP_PORT = "ntripPort"

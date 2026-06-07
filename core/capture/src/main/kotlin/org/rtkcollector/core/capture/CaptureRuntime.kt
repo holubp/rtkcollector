@@ -7,7 +7,7 @@ class CaptureRuntime(
     private val transport: SerialTransport,
     private val recorder: RawRecorder,
     private val eventSink: CaptureEventSink,
-    private val advisoryFanout: AdvisoryFanout? = null,
+    private val advisoryFanout: ReceiverBytesConsumer? = null,
     private val advisoryReceiverBytes: (ByteArray) -> Unit = {},
 ) {
     fun open() {

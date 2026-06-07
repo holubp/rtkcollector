@@ -6,6 +6,8 @@ and observe recording state.
 Experimental V1 follows this rule with `RecordingForegroundService`: the service
 opens USB, owns the capture loop, writes session artifacts, runs optional NTRIP,
 holds the wake lock while recording and performs stop/shutdown cleanup.
+Advisory parsing and RTCM extraction run behind a bounded queue; when the queue
+is full, advisory bytes may be dropped but raw receiver recording continues.
 
 ## Requirements
 

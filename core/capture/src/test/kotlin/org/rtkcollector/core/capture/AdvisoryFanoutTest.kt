@@ -2,9 +2,12 @@ package org.rtkcollector.core.capture
 
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.rtkcollector.core.transport.SerialTransport
 import java.util.ArrayDeque
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class AdvisoryFanoutTest {
     @Test
@@ -52,6 +55,40 @@ class AdvisoryFanoutTest {
         runtime.readOnce(maxBytes = 1024)
 
         assertArrayEquals(byteArrayOf(0x41, 0x42), recorder.receiverBytes())
+    }
+
+    @Test
+    fun `async fanout drops advisory bytes instead of blocking capture path`() {
+        val events = mutableListOf<CaptureEvent>()
+        val release = CountDownLatch(1)
+        val delegateStarted = CountDownLatch(1)
+        val fanout = AsyncAdvisoryFanout(
+            delegate = ReceiverBytesConsumer {
+                delegateStarted.countDown()
+                release.await(5, TimeUnit.SECONDS)
+            },
+            eventSink = object : CaptureEventSink {
+                override fun recordEvent(event: CaptureEvent) {
+                    events += event
+                }
+            },
+            queueCapacity = 1,
+        )
+
+        try {
+            fanout.accept(byteArrayOf(1))
+            assertTrue(delegateStarted.await(2, TimeUnit.SECONDS))
+            fanout.accept(byteArrayOf(2))
+            fanout.accept(byteArrayOf(3))
+            fanout.accept(byteArrayOf(4))
+
+            assertEquals(1, events.count { it.type == "advisory-queue-dropped" })
+        } finally {
+            release.countDown()
+            fanout.close()
+        }
+        assertEquals(1, events.count { it.type == "advisory-queue-drop-summary" })
+        assertTrue(events.single { it.type == "advisory-queue-drop-summary" }.message.contains("2"))
     }
 
     private class FakeSerialTransport(

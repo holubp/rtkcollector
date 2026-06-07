@@ -20,6 +20,18 @@ class Um980CommandBuilderTest {
     }
 
     @Test
+    fun runtimeBaudCommandIsEmittedBeforeModeConfiguration() {
+        val commands = Um980CommandBuilder().build(
+            Um980CommandProfileRequest(
+                mode = Um980WorkflowMode.ROVER,
+                runtimeBaud = 921600,
+            ),
+        )
+
+        assertTrue(commands.indexOf("CONFIG COM1 921600") in 0 until commands.indexOf("MODE ROVER"))
+    }
+
+    @Test
     fun temporaryBaseProfileEnablesPppOutput() {
         val commands = Um980CommandBuilder().build(
             Um980CommandProfileRequest(mode = Um980WorkflowMode.TEMPORARY_BASE, enablePpp = true),

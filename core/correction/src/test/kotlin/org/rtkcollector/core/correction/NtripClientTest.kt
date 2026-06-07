@@ -10,6 +10,8 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class NtripClientTest {
     @Test
@@ -134,6 +136,33 @@ class NtripClientTest {
         assertArrayEquals(byteArrayOf(0x01, 0x02), streamed.toByteArray())
     }
 
+    @Test
+    fun `cancel closes active socket and stops stream thread`() {
+        val socket = BlockingNtripSocket()
+        val client = NtripClient(
+            request = defaultRequest(),
+            connector = FakeNtripSocketConnector(socket),
+        )
+        val streaming = CountDownLatch(1)
+        val thread = Thread {
+            client.runWithReconnect(
+                onState = {
+                    if (it.state == NtripConnectionState.STREAMING) {
+                        streaming.countDown()
+                    }
+                },
+            )
+        }
+
+        thread.start()
+        assertTrue(streaming.await(2, TimeUnit.SECONDS))
+        client.cancel()
+        thread.join(2_000)
+
+        assertFalse(thread.isAlive)
+        assertTrue(socket.closed)
+    }
+
     private fun defaultRequest(): NtripRequest = NtripRequest(
         host = "caster.example",
         port = 2101,
@@ -152,8 +181,44 @@ class NtripClientTest {
         fun outputText(): String = outputBuffer.toString(Charsets.US_ASCII.name())
     }
 
-    private class FakeNtripSocketConnector(private val socket: FakeNtripSocket) : NtripSocketConnector {
+    private class FakeNtripSocketConnector(private val socket: NtripSocket) : NtripSocketConnector {
         override fun connect(host: String, port: Int): NtripSocket = socket
+    }
+
+    private class BlockingNtripSocket : NtripSocket {
+        private val outputBuffer = ByteArrayOutputStream()
+        @Volatile
+        var closed: Boolean = false
+            private set
+
+        override val input: InputStream = object : InputStream() {
+            private val header = "ICY 200 OK\r\n\r\n".toByteArray()
+            private var index = 0
+
+            override fun read(): Int {
+                if (index < header.size) {
+                    return header[index++].toInt() and 0xff
+                }
+                while (!closed) {
+                    Thread.sleep(10)
+                }
+                return -1
+            }
+
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                val first = read()
+                if (first == -1) {
+                    return -1
+                }
+                buffer[offset] = first.toByte()
+                return 1
+            }
+        }
+        override val output: OutputStream = outputBuffer
+
+        override fun close() {
+            closed = true
+        }
     }
 
     private class QueueingNtripSocketConnector(vararg sockets: FakeNtripSocket) : NtripSocketConnector {

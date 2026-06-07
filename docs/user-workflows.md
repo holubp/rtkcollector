@@ -14,6 +14,7 @@ It also provides the experimental real-recording controls:
 - profile baud and post-profile serial baud;
 - editable init, workflow-mode and shutdown command sequences;
 - optional NTRIP host, port, mountpoint, username, password and GGA upload line;
+- manual fixed-base coordinates or pasted/imported `base-position.json`;
 - foreground-service start/stop;
 - live receiver RX, receiver TX, correction input and NTRIP state counters.
 
@@ -60,9 +61,11 @@ families such as `RTCM1006`, `RTCM1074`, `RTCM1084`, `RTCM1094` and
 conservative deny-list before start.
 
 If a profile changes receiver baud, RtkCollector opens the USB serial bridge at
-the profile baud, sends the profile, reconfigures the host serial bridge to the
-post-profile baud, drains transitional receiver output, and only then writes the
-authoritative capture stream.
+the profile baud, sends user init commands, sends the receiver baud-switch
+command, reconfigures the host serial bridge to the post-profile baud, records
+transitional receiver output through the normal RX path, and only then sends
+UM980 mode/log commands. Mode commands are intentionally separate from the baud
+switch so post-switch commands are not transmitted at the old baud.
 
 ## Plain Rover Recording
 
@@ -138,13 +141,15 @@ known coordinate has been imported.
 User flow:
 
 1. Select a receiver profile that supports fixed-base mode.
-2. Select or import the accepted base position.
+2. Enter the accepted coordinate manually or paste an imported
+   `base-position.json`.
 3. Verify frame/datum, epoch, antenna height and antenna reference point.
 4. Start fixed-base operation.
 5. Record base status and RTCM output/extracted RTCM where supported.
 
 A fixed base must not start directly from a temporary-base recording. The base
-coordinate must be accepted first.
+coordinate must be accepted first. The V1 UI rejects starts where manual
+coordinates and imported `base-position.json` are both supplied.
 
 ## Replay/Test
 

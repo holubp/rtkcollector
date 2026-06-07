@@ -4,6 +4,9 @@ class Um980CommandBuilder {
     fun build(request: Um980CommandProfileRequest): List<String> {
         val commands = mutableListOf<String>()
         commands += "UNLOG ${request.comPort}"
+        request.runtimeBaud?.let { baud ->
+            commands += "CONFIG ${request.comPort} $baud"
+        }
 
         when (request.mode) {
             Um980WorkflowMode.ROVER,

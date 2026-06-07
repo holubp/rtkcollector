@@ -6,6 +6,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.Socket
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class NtripCredentials(
     val username: String,
@@ -127,11 +128,24 @@ class NtripClient(
     private val reconnectPolicy: NtripReconnectPolicy = NtripReconnectPolicy(),
     private val delay: (Long) -> Unit = { Thread.sleep(it) },
 ) {
+    private val cancelled = AtomicBoolean(false)
+    @Volatile
+    private var activeSocket: NtripSocket? = null
+
+    fun cancel() {
+        cancelled.set(true)
+        runCatching { activeSocket?.close() }
+    }
+
     fun connectOnce(
         ggaLines: Iterable<String> = emptyList(),
         onState: (CorrectionStatus) -> Unit = {},
         onRtcmBytes: (ByteArray) -> Unit = {},
     ): NtripConnectionResult {
+        if (cancelled.get()) {
+            onState(CorrectionStatus(NtripConnectionState.STOPPED))
+            return stoppedBeforeConnection()
+        }
         onState(CorrectionStatus(NtripConnectionState.CONNECTING))
         val socket = try {
             connector.connect(request.host, request.port)
@@ -145,6 +159,7 @@ class NtripClient(
             )
         }
 
+        activeSocket = socket
         return socket.use {
             try {
                 writeRequestAndGga(socket.output, ggaLines)
@@ -167,6 +182,8 @@ class NtripClient(
                     cause = exception,
                     onState = onState,
                 )
+            } finally {
+                activeSocket = null
             }
         }
     }
@@ -178,6 +195,10 @@ class NtripClient(
     ): NtripConnectionResult {
         var lastFailure: NtripConnectionResult.Failure? = null
         repeat(reconnectPolicy.maxAttempts) { attemptIndex ->
+            if (cancelled.get()) {
+                onState(CorrectionStatus(NtripConnectionState.STOPPED, lastError = lastFailure?.failure?.message))
+                return lastFailure ?: stoppedBeforeConnection()
+            }
             val result = connectOnce(ggaLines = ggaLines, onState = onState, onRtcmBytes = onRtcmBytes)
             when (result) {
                 is NtripConnectionResult.Completed -> {
@@ -269,7 +290,7 @@ class NtripClient(
         }
 
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        while (true) {
+        while (!cancelled.get()) {
             val count = input.read(buffer)
             if (count == -1) break
             val chunk = buffer.copyOf(count)
@@ -278,6 +299,15 @@ class NtripClient(
         }
         return bytesRead
     }
+
+    private fun stoppedBeforeConnection(): NtripConnectionResult.Failure =
+        NtripConnectionResult.Failure(
+            NtripFailure(
+                kind = NtripFailureKind.CONNECT_FAILED,
+                state = NtripConnectionState.STOPPED,
+                message = "NTRIP client was cancelled before connection completed",
+            ),
+        )
 
     private fun failure(
         kind: NtripFailureKind,

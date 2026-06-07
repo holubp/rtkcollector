@@ -19,7 +19,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
+import org.rtkcollector.app.profile.RecordingProfileStore
+import org.rtkcollector.app.profile.SavedRecordingDefaults
 import org.rtkcollector.app.recording.RecordingForegroundService
+import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.usb.UsbDeviceSummary
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
 import org.rtkcollector.core.workflow.ReceiverCommandPlan
@@ -28,8 +31,13 @@ import org.rtkcollector.core.workflow.SessionArtifact
 import org.rtkcollector.core.workflow.WorkflowDryRunSession
 import org.rtkcollector.core.workflow.WorkflowExamples
 import org.rtkcollector.core.workflow.WorkflowSpec
+import org.rtkcollector.receiver.unicore.Um980BaseCoordinate
+import org.rtkcollector.receiver.unicore.Um980CommandBuilder
+import org.rtkcollector.receiver.unicore.Um980CommandProfileRequest
+import org.rtkcollector.receiver.unicore.Um980CoordinateSource
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
-import org.rtkcollector.receiver.unicore.Um980RuntimeProfiles
+import org.rtkcollector.receiver.unicore.Um980WorkflowMode
+import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var workflowSpinner: Spinner
@@ -44,6 +52,13 @@ class MainActivity : Activity() {
     private lateinit var initCommandsEdit: EditText
     private lateinit var modeCommandsEdit: EditText
     private lateinit var shutdownCommandsEdit: EditText
+    private lateinit var baseLatEdit: EditText
+    private lateinit var baseLonEdit: EditText
+    private lateinit var baseHeightEdit: EditText
+    private lateinit var baseFrameEdit: EditText
+    private lateinit var baseEpochEdit: EditText
+    private lateinit var antennaHeightEdit: EditText
+    private lateinit var antennaReferencePointEdit: EditText
     private lateinit var ntripHostEdit: EditText
     private lateinit var ntripPortEdit: EditText
     private lateinit var ntripMountpointEdit: EditText
@@ -56,6 +71,8 @@ class MainActivity : Activity() {
     private lateinit var stopButton: Button
 
     private val usbManager: UsbManager by lazy { getSystemService(USB_SERVICE) as UsbManager }
+    private val profileStore: RecordingProfileStore by lazy { RecordingProfileStore(this) }
+    private val secretStore: NtripSecretStore by lazy { NtripSecretStore(this) }
     private var usbDevices: List<UsbDevice> = emptyList()
     private var session: WorkflowDryRunSession? = null
 
@@ -68,22 +85,28 @@ class MainActivity : Activity() {
     )
 
     private val workflowOptions = listOf(
-        WorkflowOption("Plain rover recording") { receiver ->
+        WorkflowOption("Plain rover recording", Um980WorkflowMode.ROVER) { receiver ->
             WorkflowExamples.plainRoverRecording(receiver.capabilities(), receiver.profileId)
         },
-        WorkflowOption("Rover + NTRIP to receiver") { receiver ->
+        WorkflowOption("Rover + NTRIP to receiver", Um980WorkflowMode.ROVER_NTRIP) { receiver ->
             WorkflowExamples.roverWithNtripToReceiver(receiver.capabilities(), receiver.profileId)
         },
-        WorkflowOption("Temporary base preparation") { receiver ->
+        WorkflowOption("Temporary base preparation", Um980WorkflowMode.TEMPORARY_BASE) { receiver ->
             WorkflowExamples.temporaryBasePreparation(receiver.capabilities(), receiver.profileId)
         },
-        WorkflowOption("Temporary base + NTRIP") { receiver ->
+        WorkflowOption("Temporary base + NTRIP", Um980WorkflowMode.TEMPORARY_BASE_NTRIP) { receiver ->
             WorkflowExamples.temporaryBasePreparationWithNtripToReceiver(receiver.capabilities(), receiver.profileId)
         },
-        WorkflowOption("Fixed base from accepted position") { receiver ->
+        WorkflowOption("Fixed base from accepted position", Um980WorkflowMode.FIXED_BASE_STATUS) { receiver ->
             WorkflowExamples.fixedBaseFromBasePosition(receiver.capabilities(), receiver.profileId)
         },
-        WorkflowOption("Replay test") { receiver ->
+        WorkflowOption("Fixed base RTCM local recording", Um980WorkflowMode.FIXED_BASE_RTCM_OUTPUT) { receiver ->
+            WorkflowExamples.fixedBaseFromBasePosition(receiver.capabilities(), receiver.profileId).copy(
+                id = "fixed-base-rtcm-local-recording",
+                name = "Fixed base RTCM local recording",
+            )
+        },
+        WorkflowOption("Replay test", null) { receiver ->
             WorkflowExamples.replayTest(receiver.capabilities(), receiver.profileId)
         },
     )
@@ -109,6 +132,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         registerReceivers()
+        val defaults = profileStore.loadDefaults()
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -131,16 +155,28 @@ class MainActivity : Activity() {
         validationText = TextView(this).apply { textSize = 14f }
         monitorText = TextView(this).apply { textSize = 14f }
         usbStatusText = TextView(this).apply { textSize = 14f }
-        serialBaudEdit = edit("230400")
-        profileBaudEdit = edit("230400")
+        serialBaudEdit = edit(defaults.serialBaud.toString())
+        profileBaudEdit = edit(defaults.profileBaud.toString())
         initCommandsEdit = multilineEdit("# Optional user init commands")
-        modeCommandsEdit = multilineEdit(defaultUm980Commands())
+        modeCommandsEdit = multilineEdit("")
         shutdownCommandsEdit = multilineEdit("")
-        ntripHostEdit = edit("")
-        ntripPortEdit = edit("2101")
-        ntripMountpointEdit = edit("")
-        ntripUsernameEdit = edit("")
+        baseLatEdit = edit("")
+        baseLonEdit = edit("")
+        baseHeightEdit = edit("")
+        baseFrameEdit = edit("ETRF2000")
+        baseEpochEdit = edit("")
+        antennaHeightEdit = edit("")
+        antennaReferencePointEdit = edit("ARP")
+        ntripHostEdit = edit(defaults.ntripHost)
+        ntripPortEdit = edit(defaults.ntripPort.toString())
+        ntripMountpointEdit = edit(defaults.ntripMountpoint)
+        ntripUsernameEdit = edit(defaults.ntripUsername)
         ntripPasswordEdit = edit("")
+        ntripPasswordEdit.hint = if (defaults.ntripSecretId.isNotBlank() && secretStore.hasPassword(defaults.ntripSecretId)) {
+            "Stored password will be used if left blank"
+        } else {
+            "Not saved in session metadata"
+        }
         ntripGgaEdit = edit("")
         refreshUsbButton = Button(this).apply { text = "Refresh USB" }
         requestUsbPermissionButton = Button(this).apply { text = "Request USB permission" }
@@ -187,6 +223,20 @@ class MainActivity : Activity() {
         root.addView(modeCommandsEdit)
         root.addView(label("Shutdown sequence"))
         root.addView(shutdownCommandsEdit)
+        root.addView(label("Accepted base latitude degrees"))
+        root.addView(baseLatEdit)
+        root.addView(label("Accepted base longitude degrees"))
+        root.addView(baseLonEdit)
+        root.addView(label("Accepted base ellipsoidal height metres"))
+        root.addView(baseHeightEdit)
+        root.addView(label("Base coordinate frame/datum"))
+        root.addView(baseFrameEdit)
+        root.addView(label("Base coordinate epoch"))
+        root.addView(baseEpochEdit)
+        root.addView(label("Antenna height metres"))
+        root.addView(antennaHeightEdit)
+        root.addView(label("Antenna reference point"))
+        root.addView(antennaReferencePointEdit)
         root.addView(label("NTRIP host"))
         root.addView(ntripHostEdit)
         root.addView(label("NTRIP port"))
@@ -243,7 +293,27 @@ class MainActivity : Activity() {
         val workflow = workflowOption.build(receiverOption)
         val commandPlan = commandPlanFor(workflow)
         session = WorkflowDryRunSession.create(workflow, commandPlan)
+        updateGeneratedModeCommands(workflowOption, receiverOption)
         renderWorkflowDetails()
+    }
+
+    private fun updateGeneratedModeCommands(workflowOption: WorkflowOption, receiverOption: ReceiverOption) {
+        val mode = workflowOption.um980Mode
+        modeCommandsEdit.setText(
+            when {
+                receiverOption.profileId != "um980-n4" -> "# Real V1 recording currently generates UM980/N4 runtime commands only."
+                mode == null -> "# Replay test does not send receiver mode commands."
+                mode == Um980WorkflowMode.FIXED_BASE_STATUS || mode == Um980WorkflowMode.FIXED_BASE_RTCM_OUTPUT -> {
+                    val coordinate = parseBaseCoordinate(showError = false)
+                    if (coordinate == null) {
+                        "# Enter accepted base coordinates above to generate fixed-base UM980 commands."
+                    } else {
+                        buildUm980Commands(mode, coordinate).joinToString("\n")
+                    }
+                }
+                else -> buildUm980Commands(mode, null).joinToString("\n")
+            },
+        )
     }
 
     private fun renderWorkflowDetails() {
@@ -305,6 +375,13 @@ class MainActivity : Activity() {
             monitorText.text = "Cannot start: workflow validation is blocked."
             return
         }
+        val workflow = current.workflow
+        val workflowOption = selectedWorkflowOption()
+        val receiverOption = selectedReceiverOption()
+        if (receiverOption.profileId != "um980-n4") {
+            monitorText.text = "Cannot start: experimental real recording V1 currently supports UM980/N4 only."
+            return
+        }
         val device = selectedUsbDevice()
         if (device == null) {
             monitorText.text = "Cannot start: no USB device selected."
@@ -317,6 +394,10 @@ class MainActivity : Activity() {
         val profileBaud = parseIntField(profileBaudEdit, "profile baud", 9600..921600) ?: return
         val serialBaud = parseIntField(serialBaudEdit, "serial baud", 9600..921600) ?: return
         val ntripPort = parseIntField(ntripPortEdit, "NTRIP port", 1..65535) ?: return
+        val baseCoordinate = if (workflowOption.requiresBaseCoordinate()) parseBaseCoordinate(showError = true) ?: return else null
+        if (workflowOption.um980Mode != null) {
+            modeCommandsEdit.setText(buildUm980Commands(workflowOption.um980Mode, baseCoordinate).joinToString("\n"))
+        }
         val startupCommands = commandLines(initCommandsEdit.text.toString()) + commandLines(modeCommandsEdit.text.toString())
         val shutdownCommands = commandLines(shutdownCommandsEdit.text.toString())
         val invalidCommand = (startupCommands + shutdownCommands).firstOrNull { command ->
@@ -326,6 +407,12 @@ class MainActivity : Activity() {
             monitorText.text = "Cannot start: invalid or unsafe receiver command: $invalidCommand"
             return
         }
+        val host = ntripHostEdit.text.toString().trim()
+        val mountpoint = ntripMountpointEdit.text.toString().trim()
+        val username = ntripUsernameEdit.text.toString().trim()
+        val secretRef = ntripSecretRef(host, mountpoint, username)
+        val runtimePassword = resolveNtripPassword(secretRef)
+        saveRecordingDefaults(host, ntripPort, mountpoint, username, secretRef)
 
         val intent = Intent(this, RecordingForegroundService::class.java).apply {
             action = RecordingForegroundService.ACTION_START
@@ -334,12 +421,25 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_SERIAL_BAUD, serialBaud)
             putStringArrayListExtra(RecordingForegroundService.EXTRA_STARTUP_COMMANDS, ArrayList(startupCommands))
             putStringArrayListExtra(RecordingForegroundService.EXTRA_SHUTDOWN_COMMANDS, ArrayList(shutdownCommands))
-            putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, ntripHostEdit.text.toString())
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, host)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, ntripPort)
-            putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, ntripMountpointEdit.text.toString())
-            putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, ntripUsernameEdit.text.toString())
-            putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, ntripPasswordEdit.text.toString())
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, mountpoint)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, username)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, runtimePassword)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_SECRET_REF, secretRef)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_GGA, ntripGgaEdit.text.toString())
+            putExtra(RecordingForegroundService.EXTRA_WORKFLOW_ID, workflow.id)
+            putExtra(RecordingForegroundService.EXTRA_WORKFLOW_NAME, workflow.name)
+            putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, workflow.receiverRole.name)
+            putExtra(RecordingForegroundService.EXTRA_RECEIVER_PROFILE_ID, workflow.receiverProfileId)
+            putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, workflowOption.um980Mode?.name ?: "")
+            putExtra(RecordingForegroundService.EXTRA_COORDINATE_SOURCE, baseCoordinate?.source?.name ?: "NONE")
+            putExtra(RecordingForegroundService.EXTRA_BASE_POSITION_JSON, baseCoordinate?.toBasePositionJson().orEmpty())
+            putExtra(RecordingForegroundService.EXTRA_VALIDATION_SUMMARY, validationSummary(current))
+            putStringArrayListExtra(
+                RecordingForegroundService.EXTRA_EXPECTED_ARTIFACTS,
+                ArrayList(workflow.recording.expectedSessionArtifacts.map(SessionArtifact::name).sorted()),
+            )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
@@ -358,22 +458,157 @@ class MainActivity : Activity() {
             appendLine("TX to receiver bytes: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_TX_BYTES, 0)}")
             appendLine("Correction input bytes: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_CORRECTION_BYTES, 0)}")
             appendLine("NTRIP: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP) ?: "n/a"}")
+            val ggaFixQuality = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, -1)
+            appendLine("GGA fix quality: ${if (ggaFixQuality >= 0) ggaFixQuality else "n/a"}")
+            appendLine("BESTNAV position: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE) ?: "n/a"}")
+            appendLine("PPP status: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS) ?: "n/a"}")
+            appendLine("RTCM frames seen: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTCM_FRAMES, 0)}")
             appendLine("Last error: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR) ?: "none"}")
         }
 
     private fun selectedUsbDevice(): UsbDevice? =
         usbDevices.getOrNull(usbSpinner.selectedItemPosition.coerceAtLeast(0))
 
+    private fun selectedWorkflowOption(): WorkflowOption =
+        workflowOptions[workflowSpinner.selectedItemPosition.coerceAtLeast(0)]
+
+    private fun selectedReceiverOption(): ReceiverOption =
+        receiverOptions[receiverSpinner.selectedItemPosition.coerceAtLeast(0)]
+
+    private fun buildUm980Commands(
+        mode: Um980WorkflowMode,
+        baseCoordinate: Um980BaseCoordinate?,
+    ): List<String> =
+        Um980CommandBuilder().build(
+            Um980CommandProfileRequest(
+                mode = mode,
+                comPort = "COM1",
+                outputIntervalSeconds = 1.0,
+                enablePpp = mode == Um980WorkflowMode.TEMPORARY_BASE || mode == Um980WorkflowMode.TEMPORARY_BASE_NTRIP,
+                baseCoordinate = baseCoordinate,
+            ),
+        )
+
+    private fun parseBaseCoordinate(showError: Boolean): Um980BaseCoordinate? {
+        val hasAnyCoordinate = listOf(baseLatEdit, baseLonEdit, baseHeightEdit).any { it.text.toString().isNotBlank() }
+        if (!hasAnyCoordinate && !showError) {
+            return null
+        }
+        val lat = parseDoubleField(baseLatEdit, "base latitude", -90.0..90.0, showError) ?: return null
+        val lon = parseDoubleField(baseLonEdit, "base longitude", -180.0..180.0, showError) ?: return null
+        val height = parseDoubleField(baseHeightEdit, "base height", -1000.0..10000.0, showError) ?: return null
+        val frame = baseFrameEdit.text.toString().trim()
+        if (frame.isBlank()) {
+            if (showError) {
+                monitorText.text = "Cannot start: base coordinate frame/datum is required."
+            }
+            return null
+        }
+        return Um980BaseCoordinate(
+            latDeg = lat,
+            lonDeg = lon,
+            heightM = height,
+            frame = frame,
+            epoch = baseEpochEdit.text.toString().trim().takeIf(String::isNotBlank),
+            antennaHeightM = antennaHeightEdit.text.toString().trim().toDoubleOrNull(),
+            antennaReferencePoint = antennaReferencePointEdit.text.toString().trim().takeIf(String::isNotBlank),
+            source = Um980CoordinateSource.MANUAL,
+        )
+    }
+
+    private fun parseDoubleField(field: EditText, label: String, range: ClosedFloatingPointRange<Double>, showError: Boolean): Double? {
+        val value = field.text.toString().trim().toDoubleOrNull()
+        if (value == null || value !in range) {
+            if (showError) {
+                monitorText.text = "Cannot start: $label must be ${range.start}..${range.endInclusive}."
+            }
+            return null
+        }
+        return value
+    }
+
+    private fun WorkflowOption.requiresBaseCoordinate(): Boolean =
+        um980Mode == Um980WorkflowMode.FIXED_BASE_STATUS || um980Mode == Um980WorkflowMode.FIXED_BASE_RTCM_OUTPUT
+
+    private fun ntripSecretRef(host: String, mountpoint: String, username: String): String =
+        if (host.isBlank() || mountpoint.isBlank() || username.isBlank()) {
+            ""
+        } else {
+            "ntrip:${host.lowercase(Locale.US)}:${mountpoint}:${username}"
+        }
+
+    private fun resolveNtripPassword(secretRef: String): String {
+        val typedPassword = ntripPasswordEdit.text.toString()
+        if (secretRef.isBlank()) {
+            return typedPassword
+        }
+        if (typedPassword.isNotBlank()) {
+            secretStore.putPassword(secretRef, typedPassword)
+            return typedPassword
+        }
+        return secretStore.getPassword(secretRef).orEmpty()
+    }
+
+    private fun saveRecordingDefaults(
+        host: String,
+        port: Int,
+        mountpoint: String,
+        username: String,
+        secretRef: String,
+    ) {
+        profileStore.saveDefaults(
+            SavedRecordingDefaults(
+                ntripHost = host,
+                ntripPort = port,
+                ntripMountpoint = mountpoint,
+                ntripUsername = username,
+                ntripSecretId = secretRef,
+                profileBaud = profileBaudEdit.text.toString().trim().toIntOrNull() ?: 230400,
+                serialBaud = serialBaudEdit.text.toString().trim().toIntOrNull() ?: 230400,
+            ),
+        )
+    }
+
+    private fun validationSummary(current: WorkflowDryRunSession): String =
+        "valid=${current.validation.valid}; errors=${current.validation.errors.size}; warnings=${current.validation.warnings.size}"
+
+    private fun Um980BaseCoordinate.toBasePositionJson(): String =
+        buildString {
+            append("{")
+            append("\"latDeg\":${latDeg},")
+            append("\"lonDeg\":${lonDeg},")
+            append("\"heightM\":${heightM},")
+            append("\"frame\":\"${frame.jsonEscape()}\",")
+            append("\"epoch\":${epoch.jsonStringOrNull()},")
+            append("\"method\":\"MANUAL_KNOWN_POINT\",")
+            append("\"antennaHeightM\":${antennaHeightM ?: "null"},")
+            append("\"antennaReferencePoint\":${antennaReferencePoint.jsonStringOrNull()},")
+            append("\"source\":\"${source.name}\"")
+            append("}")
+        }
+
+    private fun String?.jsonStringOrNull(): String =
+        if (this == null) "null" else "\"${jsonEscape()}\""
+
+    private fun String.jsonEscape(): String =
+        buildString {
+            this@jsonEscape.forEach { character ->
+                when (character) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(character)
+                }
+            }
+        }
+
     private fun commandPlanFor(workflow: WorkflowSpec): ReceiverCommandPlan =
         ReceiverCommandPlanExamples.safeReferencePlan(
             receiverProfileId = workflow.receiverProfileId,
             receiverRole = workflow.receiverRole,
         )
-
-    private fun defaultUm980Commands(): String =
-        Um980RuntimeProfiles.experimentalRoverBasePreparation()
-            .commands
-            .joinToString(separator = "\n")
 
     private fun commandLines(text: String): List<String> =
         text.lineSequence()
@@ -427,6 +662,7 @@ class MainActivity : Activity() {
 
     private data class WorkflowOption(
         val label: String,
+        val um980Mode: Um980WorkflowMode?,
         val build: (ReceiverOption) -> WorkflowSpec,
     )
 

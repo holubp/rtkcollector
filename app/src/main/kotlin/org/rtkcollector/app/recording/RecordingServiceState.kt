@@ -7,5 +7,9 @@ data class RecordingServiceState(
     val txToReceiverBytes: Long = 0,
     val correctionInputBytes: Long = 0,
     val ntripState: String = "Not configured",
+    val ggaFixQuality: Int? = null,
+    val bestnavPositionType: String? = null,
+    val pppStatus: String? = null,
+    val rtcmFrames: Long = 0,
     val lastError: String? = null,
 )

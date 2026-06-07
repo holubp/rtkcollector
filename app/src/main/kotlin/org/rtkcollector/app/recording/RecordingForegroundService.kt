@@ -15,6 +15,8 @@ import android.os.PowerManager
 import org.rtkcollector.app.MainActivity
 import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
+import org.rtkcollector.core.capture.AdvisoryConsumer
+import org.rtkcollector.core.capture.AdvisoryFanout
 import org.rtkcollector.core.capture.CaptureEvent
 import org.rtkcollector.core.capture.CaptureEventSink
 import org.rtkcollector.core.capture.CaptureRuntime
@@ -24,6 +26,7 @@ import org.rtkcollector.core.correction.NtripClient
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripReconnectPolicy
 import org.rtkcollector.core.correction.NtripRequest
+import org.rtkcollector.core.correction.Rtcm3Extractor
 import org.rtkcollector.core.session.SessionWriters
 import org.rtkcollector.core.session.AntennaMetadata
 import org.rtkcollector.core.session.NtripSessionMetadata
@@ -31,6 +34,10 @@ import org.rtkcollector.core.session.SerialParameters
 import org.rtkcollector.core.session.SessionMetadata
 import org.rtkcollector.core.session.SessionMode
 import org.rtkcollector.core.session.exportSessionMetadata
+import org.rtkcollector.receiver.unicore.NmeaGgaFix
+import org.rtkcollector.receiver.unicore.NmeaGgaParser
+import org.rtkcollector.receiver.unicore.Um980AsciiSolution
+import org.rtkcollector.receiver.unicore.Um980AsciiSolutionParser
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import java.nio.file.Path
 import java.time.Instant
@@ -97,22 +104,32 @@ class RecordingForegroundService : Service() {
                         appVersion = "0.1.0",
                         androidDeviceModel = Build.MODEL ?: "unknown",
                         androidVersion = Build.VERSION.RELEASE ?: "unknown",
-                        receiverDriverId = "um980-n4",
+                        receiverDriverId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID) ?: "um980-n4",
                         receiverIdentification = null,
                         usbVid = usbDevice.vendorId,
                         usbPid = usbDevice.productId,
                         baudRate = serialBaud,
                         serialParameters = SerialParameters(),
-                        mode = SessionMode.ROVER,
+                        mode = sessionModeFrom(intent.getStringExtra(EXTRA_RECEIVER_ROLE)),
                         startedAt = startedAt,
                         stoppedAt = null,
                         ntrip = ntripSessionMetadata(intent),
                         antenna = AntennaMetadata(),
                         sessionUuid = sessionUuid,
                         linkedBaseSessionUuid = null,
+                        workflowId = intent.getStringExtra(EXTRA_WORKFLOW_ID),
+                        workflowName = intent.getStringExtra(EXTRA_WORKFLOW_NAME),
+                        receiverRole = intent.getStringExtra(EXTRA_RECEIVER_ROLE),
+                        um980ProfileId = intent.getStringExtra(EXTRA_UM980_PROFILE_ID),
+                        coordinateSource = intent.getStringExtra(EXTRA_COORDINATE_SOURCE),
+                        validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
+                        expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
                     ),
                 ),
             )
+            intent.getStringExtra(EXTRA_BASE_POSITION_JSON)
+                ?.takeIf { it.isNotBlank() }
+                ?.let(sessionWriters::writeBasePositionJson)
             val recorder = SessionRawRecorder(sessionWriters)
             val eventSink = SessionEventSink(sessionWriters)
             val usbTransport = AndroidUsbSerialTransport(
@@ -126,6 +143,7 @@ class RecordingForegroundService : Service() {
                 transport = usbTransport,
                 recorder = recorder,
                 eventSink = eventSink,
+                advisoryFanout = buildAdvisoryFanout(sessionWriters, eventSink),
             )
             captureRuntime.open()
 
@@ -308,6 +326,7 @@ class RecordingForegroundService : Service() {
             mountpoint = mountpoint,
             usernamePresent = !intent.getStringExtra(EXTRA_NTRIP_USERNAME).isNullOrBlank(),
             ggaUploadEnabled = !intent.getStringExtra(EXTRA_NTRIP_GGA).isNullOrBlank(),
+            secretRef = intent.getStringExtra(EXTRA_NTRIP_SECRET_REF)?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -358,10 +377,85 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_TX_BYTES, state.txToReceiverBytes)
                 putExtra(EXTRA_STATE_CORRECTION_BYTES, state.correctionInputBytes)
                 putExtra(EXTRA_STATE_NTRIP, state.ntripState)
+                putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
+                putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
+                putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
+                putExtra(EXTRA_STATE_RTCM_FRAMES, state.rtcmFrames)
                 putExtra(EXTRA_STATE_ERROR, state.lastError)
             },
         )
     }
+
+    private fun buildAdvisoryFanout(
+        sessionWriters: SessionWriters,
+        eventSink: CaptureEventSink,
+    ): AdvisoryFanout {
+        val ggaParser = NmeaGgaParser()
+        val solutionParser = Um980AsciiSolutionParser()
+        val rtcmExtractor = Rtcm3Extractor(validateCrc = true)
+        return AdvisoryFanout(
+            eventSink = eventSink,
+            consumers = listOf(
+                AdvisoryConsumer("nmea-gga") { bytes ->
+                    ggaParser.accept(bytes).forEach { fix ->
+                        sessionWriters.appendReceiverSolutionJson(fix.toJson())
+                        state = state.copy(ggaFixQuality = fix.fixQuality)
+                    }
+                },
+                AdvisoryConsumer("um980-ascii-solution") { bytes ->
+                    solutionParser.accept(bytes).forEach { solution ->
+                        if (solution.logName.startsWith("PPP")) {
+                            sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
+                            state = state.copy(pppStatus = solution.positionType)
+                        } else {
+                            sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                            state = state.copy(bestnavPositionType = solution.positionType)
+                        }
+                    }
+                },
+                AdvisoryConsumer("rtcm3-extractor") { bytes ->
+                    rtcmExtractor.accept(bytes).forEach { frame ->
+                        sessionWriters.appendExtractedRtcm(frame.bytes)
+                        sessionWriters.appendQualityLiveJson(
+                            """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"}}""",
+                        )
+                        state = state.copy(rtcmFrames = state.rtcmFrames + 1)
+                    }
+                },
+            ),
+        )
+    }
+
+    private fun NmeaGgaFix.toJson(): String =
+        """{"type":"nmea-gga","talker":"${talker.jsonEscape()}","utcTime":"${utcTime.jsonEscape()}","latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"fixQuality":${fixQuality ?: "null"},"satelliteCount":${satelliteCount ?: "null"},"hdop":${hdop ?: "null"},"altitudeM":${altitudeM ?: "null"}}"""
+
+    private fun Um980AsciiSolution.toJson(): String =
+        """{"type":"um980-ascii-solution","logName":"${logName.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"heightM":${heightM ?: "null"}}"""
+
+    private fun String?.jsonStringOrNull(): String =
+        if (this == null) "null" else "\"${jsonEscape()}\""
+
+    private fun String.jsonEscape(): String =
+        buildString {
+            this@jsonEscape.forEach { character ->
+                when (character) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(character)
+                }
+            }
+        }
+
+    private fun sessionModeFrom(receiverRole: String?): SessionMode =
+        when (receiverRole) {
+            "FIXED_BASE" -> SessionMode.FIXED_BASE
+            "BASE_CALIBRATION" -> SessionMode.TEMPORARY_BASE_PREPARATION
+            "REPLAY_TEST" -> SessionMode.REPLAY_TEST
+            else -> SessionMode.ROVER
+        }
 
     private fun Intent.usbDevice(): UsbDevice? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -422,7 +516,17 @@ class RecordingForegroundService : Service() {
         const val EXTRA_NTRIP_MOUNTPOINT = "ntripMountpoint"
         const val EXTRA_NTRIP_USERNAME = "ntripUsername"
         const val EXTRA_NTRIP_PASSWORD = "ntripPassword"
+        const val EXTRA_NTRIP_SECRET_REF = "ntripSecretRef"
         const val EXTRA_NTRIP_GGA = "ntripGga"
+        const val EXTRA_WORKFLOW_ID = "workflowId"
+        const val EXTRA_WORKFLOW_NAME = "workflowName"
+        const val EXTRA_RECEIVER_ROLE = "receiverRole"
+        const val EXTRA_RECEIVER_PROFILE_ID = "receiverProfileId"
+        const val EXTRA_UM980_PROFILE_ID = "um980ProfileId"
+        const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
+        const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
+        const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
+        const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"
 
         const val EXTRA_STATE_RUNNING = "running"
         const val EXTRA_STATE_SESSION_PATH = "sessionPath"
@@ -430,6 +534,10 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_TX_BYTES = "txToReceiverBytes"
         const val EXTRA_STATE_CORRECTION_BYTES = "correctionInputBytes"
         const val EXTRA_STATE_NTRIP = "ntripState"
+        const val EXTRA_STATE_GGA_FIX_QUALITY = "ggaFixQuality"
+        const val EXTRA_STATE_BESTNAV_POSITION_TYPE = "bestnavPositionType"
+        const val EXTRA_STATE_PPP_STATUS = "pppStatus"
+        const val EXTRA_STATE_RTCM_FRAMES = "rtcmFrames"
         const val EXTRA_STATE_ERROR = "lastError"
 
         private const val CHANNEL_ID = "rtkcollector-recording"

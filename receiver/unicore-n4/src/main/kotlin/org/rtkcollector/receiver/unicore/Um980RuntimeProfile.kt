@@ -18,22 +18,8 @@ data class Um980RuntimeProfile(
 }
 
 object Um980RuntimeCommandValidator {
-    private val persistentOrRiskyTerms = setOf(
-        "SAVECONFIG",
-        "SAVE",
-        "RESET",
-        "FRESET",
-        "FLASH",
-        "NVM",
-        "USBMODE",
-        "BOOT",
-        "DEFAULT",
-        "FACTORY",
-        "ERASE",
-        "FORMAT",
-        "UPDATE",
-        "UPGRADE",
-        "PERMANENT",
+    private val riskyCommandPattern = Regex(
+        pattern = """(?i)\b(SAVECONFIG|SAVE|RESET|FRESET|RESTORE|FLASH|NVM|USBMODE|DEFAULT|FACTORY|UPDATE|UPDATEAPP|UPGRADE|FORMAT|ERASE|BOOT|AUTH|PERMANENT)\b""",
     )
 
     private val shellMetacharacters = setOf(';', '&', '|', '`', '$', '<', '>')
@@ -56,7 +42,6 @@ object Um980RuntimeCommandValidator {
     }
 
     fun isPersistentOrRisky(command: String): Boolean {
-        val uppercaseCommand = command.uppercase()
-        return persistentOrRiskyTerms.any(uppercaseCommand::contains)
+        return riskyCommandPattern.containsMatchIn(command)
     }
 }

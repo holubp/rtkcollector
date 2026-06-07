@@ -7,6 +7,7 @@ class CaptureRuntime(
     private val transport: SerialTransport,
     private val recorder: RawRecorder,
     private val eventSink: CaptureEventSink,
+    private val advisoryFanout: AdvisoryFanout? = null,
     private val advisoryReceiverBytes: (ByteArray) -> Unit = {},
 ) {
     fun open() {
@@ -23,6 +24,9 @@ class CaptureRuntime(
         }
 
         recorder.appendReceiverBytes(bytes)
+        runAdvisory("advisory-fanout-error") {
+            advisoryFanout?.accept(bytes)
+        }
         runAdvisory("advisory-error") {
             advisoryReceiverBytes(bytes)
         }

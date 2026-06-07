@@ -21,6 +21,13 @@ data class SessionMetadata(
     val workflowName: String? = null,
     val receiverRole: String? = null,
     val um980ProfileId: String? = null,
+    val commandProfileId: String? = null,
+    val usbBaudProfileId: String? = null,
+    val ntripCasterProfileId: String? = null,
+    val ntripMountpointProfileId: String? = null,
+    val recordingPolicyId: String? = null,
+    val storageProfileId: String? = null,
+    val storageKind: String? = null,
     val coordinateSource: String? = null,
     val validationSummary: String? = null,
     val expectedArtifacts: List<String> = emptyList(),
@@ -53,6 +60,8 @@ data class NtripSessionMetadata(
     val usernamePresent: Boolean = false,
     val ggaUploadEnabled: Boolean = false,
     val secretRef: String? = null,
+    val protocol: String? = null,
+    val finalStatus: String? = null,
 )
 
 data class AntennaMetadata(

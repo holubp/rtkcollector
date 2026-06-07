@@ -14,14 +14,22 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import org.json.JSONObject
+import org.rtkcollector.app.profile.CommandProfile
+import org.rtkcollector.app.profile.NtripCasterProfile
+import org.rtkcollector.app.profile.NtripMountpointProfile
+import org.rtkcollector.app.profile.ProfileStores
 import org.rtkcollector.app.profile.RecordingProfileStore
+import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.SavedRecordingDefaults
+import org.rtkcollector.app.profile.StorageProfile
+import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.usb.UsbDeviceSummary
@@ -44,6 +52,12 @@ class MainActivity : Activity() {
     private lateinit var workflowSpinner: Spinner
     private lateinit var receiverSpinner: Spinner
     private lateinit var usbSpinner: Spinner
+    private lateinit var commandProfileSpinner: Spinner
+    private lateinit var usbBaudProfileSpinner: Spinner
+    private lateinit var ntripCasterProfileSpinner: Spinner
+    private lateinit var ntripMountpointProfileSpinner: Spinner
+    private lateinit var recordingPolicySpinner: Spinner
+    private lateinit var storageProfileSpinner: Spinner
     private lateinit var detailsText: TextView
     private lateinit var validationText: TextView
     private lateinit var monitorText: TextView
@@ -67,6 +81,24 @@ class MainActivity : Activity() {
     private lateinit var ntripUsernameEdit: EditText
     private lateinit var ntripPasswordEdit: EditText
     private lateinit var ntripGgaEdit: EditText
+    private lateinit var recordNtripCorrectionInputCheck: CheckBox
+    private lateinit var exportNmeaCheck: CheckBox
+    private lateinit var exportJsonSolutionCheck: CheckBox
+    private lateinit var exportGpxCheck: CheckBox
+    private lateinit var recordRemoteBaseRawCheck: CheckBox
+    private lateinit var saveCommandProfileButton: Button
+    private lateinit var copyCommandProfileButton: Button
+    private lateinit var saveUsbBaudProfileButton: Button
+    private lateinit var copyUsbBaudProfileButton: Button
+    private lateinit var saveNtripCasterProfileButton: Button
+    private lateinit var copyNtripCasterProfileButton: Button
+    private lateinit var showNtripPasswordButton: Button
+    private lateinit var saveNtripMountpointProfileButton: Button
+    private lateinit var copyNtripMountpointProfileButton: Button
+    private lateinit var saveRecordingPolicyButton: Button
+    private lateinit var copyRecordingPolicyButton: Button
+    private lateinit var saveStorageProfileButton: Button
+    private lateinit var copyStorageProfileButton: Button
     private lateinit var refreshUsbButton: Button
     private lateinit var requestUsbPermissionButton: Button
     private lateinit var startButton: Button
@@ -74,9 +106,16 @@ class MainActivity : Activity() {
 
     private val usbManager: UsbManager by lazy { getSystemService(USB_SERVICE) as UsbManager }
     private val profileStore: RecordingProfileStore by lazy { RecordingProfileStore(this) }
+    private val profileStores: ProfileStores by lazy { ProfileStores(this) }
     private val secretStore: NtripSecretStore by lazy { NtripSecretStore(this) }
     private var usbDevices: List<UsbDevice> = emptyList()
     private var session: WorkflowDryRunSession? = null
+    private var commandProfiles: List<CommandProfile> = emptyList()
+    private var usbBaudProfiles: List<UsbBaudProfile> = emptyList()
+    private var ntripCasterProfiles: List<NtripCasterProfile> = emptyList()
+    private var ntripMountpointProfiles: List<NtripMountpointProfile> = emptyList()
+    private var recordingPolicyProfiles: List<RecordingPolicyProfile> = emptyList()
+    private var storageProfiles: List<StorageProfile> = emptyList()
 
     private val receiverOptions = listOf(
         ReceiverOption("UM980/N4", "um980-n4"),
@@ -153,6 +192,12 @@ class MainActivity : Activity() {
         workflowSpinner = Spinner(this)
         receiverSpinner = Spinner(this)
         usbSpinner = Spinner(this)
+        commandProfileSpinner = Spinner(this)
+        usbBaudProfileSpinner = Spinner(this)
+        ntripCasterProfileSpinner = Spinner(this)
+        ntripMountpointProfileSpinner = Spinner(this)
+        recordingPolicySpinner = Spinner(this)
+        storageProfileSpinner = Spinner(this)
         detailsText = TextView(this).apply { textSize = 14f }
         validationText = TextView(this).apply { textSize = 14f }
         monitorText = TextView(this).apply { textSize = 14f }
@@ -181,8 +226,41 @@ class MainActivity : Activity() {
             "Not saved in session metadata"
         }
         ntripGgaEdit = edit("")
+        recordNtripCorrectionInputCheck = CheckBox(this).apply {
+            text = "Record NTRIP correction input stream"
+            isChecked = true
+        }
+        exportNmeaCheck = CheckBox(this).apply {
+            text = "Export derived NMEA solution sidecar"
+            isChecked = true
+        }
+        exportJsonSolutionCheck = CheckBox(this).apply {
+            text = "Export parsed JSONL solution sidecar"
+            isChecked = true
+        }
+        exportGpxCheck = CheckBox(this).apply {
+            text = "Export GPX sidecar when enough fields are available"
+            isChecked = false
+        }
+        recordRemoteBaseRawCheck = CheckBox(this).apply {
+            text = "Record remote-base raw observations if source supports them"
+            isChecked = false
+        }
         refreshUsbButton = Button(this).apply { text = "Refresh USB" }
         requestUsbPermissionButton = Button(this).apply { text = "Request USB permission" }
+        saveCommandProfileButton = Button(this).apply { text = "Save command profile" }
+        copyCommandProfileButton = Button(this).apply { text = "Copy command profile" }
+        saveUsbBaudProfileButton = Button(this).apply { text = "Save USB/baud profile" }
+        copyUsbBaudProfileButton = Button(this).apply { text = "Copy USB/baud profile" }
+        saveNtripCasterProfileButton = Button(this).apply { text = "Save NTRIP caster profile" }
+        copyNtripCasterProfileButton = Button(this).apply { text = "Copy NTRIP caster profile" }
+        showNtripPasswordButton = Button(this).apply { text = "Show stored NTRIP password" }
+        saveNtripMountpointProfileButton = Button(this).apply { text = "Save NTRIP mountpoint profile" }
+        copyNtripMountpointProfileButton = Button(this).apply { text = "Copy NTRIP mountpoint profile" }
+        saveRecordingPolicyButton = Button(this).apply { text = "Save recording policy" }
+        copyRecordingPolicyButton = Button(this).apply { text = "Copy recording policy" }
+        saveStorageProfileButton = Button(this).apply { text = "Save storage profile" }
+        copyStorageProfileButton = Button(this).apply { text = "Copy storage profile" }
         startButton = Button(this).apply { text = "Start real recording" }
         stopButton = Button(this).apply {
             text = "Stop recording"
@@ -193,6 +271,7 @@ class MainActivity : Activity() {
         receiverSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, receiverOptions.map { it.label })
         workflowSpinner.onItemSelectedListener = rebuildListener()
         receiverSpinner.onItemSelectedListener = rebuildListener()
+        loadProfileManager()
 
         refreshUsbButton.setOnClickListener {
             refreshUsbDevices()
@@ -200,6 +279,19 @@ class MainActivity : Activity() {
         requestUsbPermissionButton.setOnClickListener {
             requestUsbPermission()
         }
+        saveCommandProfileButton.setOnClickListener { saveSelectedCommandProfile(copy = false) }
+        copyCommandProfileButton.setOnClickListener { saveSelectedCommandProfile(copy = true) }
+        saveUsbBaudProfileButton.setOnClickListener { saveSelectedUsbBaudProfile(copy = false) }
+        copyUsbBaudProfileButton.setOnClickListener { saveSelectedUsbBaudProfile(copy = true) }
+        saveNtripCasterProfileButton.setOnClickListener { saveSelectedNtripCasterProfile(copy = false) }
+        copyNtripCasterProfileButton.setOnClickListener { saveSelectedNtripCasterProfile(copy = true) }
+        showNtripPasswordButton.setOnClickListener { showStoredNtripPassword() }
+        saveNtripMountpointProfileButton.setOnClickListener { saveSelectedNtripMountpointProfile(copy = false) }
+        copyNtripMountpointProfileButton.setOnClickListener { saveSelectedNtripMountpointProfile(copy = true) }
+        saveRecordingPolicyButton.setOnClickListener { saveSelectedRecordingPolicy(copy = false) }
+        copyRecordingPolicyButton.setOnClickListener { saveSelectedRecordingPolicy(copy = true) }
+        saveStorageProfileButton.setOnClickListener { saveSelectedStorageProfile(copy = false) }
+        copyStorageProfileButton.setOnClickListener { saveSelectedStorageProfile(copy = true) }
         startButton.setOnClickListener {
             startRealRecording()
         }
@@ -216,6 +308,14 @@ class MainActivity : Activity() {
         root.addView(refreshUsbButton)
         root.addView(requestUsbPermissionButton)
         root.addView(usbStatusText)
+        root.addView(label("Command profile"))
+        root.addView(commandProfileSpinner)
+        root.addView(saveCommandProfileButton)
+        root.addView(copyCommandProfileButton)
+        root.addView(label("USB / baud profile"))
+        root.addView(usbBaudProfileSpinner)
+        root.addView(saveUsbBaudProfileButton)
+        root.addView(copyUsbBaudProfileButton)
         root.addView(label("Profile baud"))
         root.addView(profileBaudEdit)
         root.addView(label("Serial baud after profile"))
@@ -243,10 +343,19 @@ class MainActivity : Activity() {
         root.addView(label("Imported base-position.json"))
         root.addView(basePositionJsonEdit)
         root.addView(label("NTRIP host"))
+        root.addView(label("NTRIP caster profile"))
+        root.addView(ntripCasterProfileSpinner)
+        root.addView(saveNtripCasterProfileButton)
+        root.addView(copyNtripCasterProfileButton)
+        root.addView(showNtripPasswordButton)
         root.addView(ntripHostEdit)
         root.addView(label("NTRIP port"))
         root.addView(ntripPortEdit)
         root.addView(label("NTRIP mountpoint"))
+        root.addView(label("NTRIP mountpoint profile"))
+        root.addView(ntripMountpointProfileSpinner)
+        root.addView(saveNtripMountpointProfileButton)
+        root.addView(copyNtripMountpointProfileButton)
         root.addView(ntripMountpointEdit)
         root.addView(label("NTRIP username"))
         root.addView(ntripUsernameEdit)
@@ -254,6 +363,19 @@ class MainActivity : Activity() {
         root.addView(ntripPasswordEdit)
         root.addView(label("Optional GGA upload line"))
         root.addView(ntripGgaEdit)
+        root.addView(label("Recording policy"))
+        root.addView(recordingPolicySpinner)
+        root.addView(recordNtripCorrectionInputCheck)
+        root.addView(exportNmeaCheck)
+        root.addView(exportJsonSolutionCheck)
+        root.addView(exportGpxCheck)
+        root.addView(recordRemoteBaseRawCheck)
+        root.addView(saveRecordingPolicyButton)
+        root.addView(copyRecordingPolicyButton)
+        root.addView(label("Storage profile"))
+        root.addView(storageProfileSpinner)
+        root.addView(saveStorageProfileButton)
+        root.addView(copyStorageProfileButton)
         root.addView(detailsText)
         root.addView(validationText)
         root.addView(startButton)
@@ -290,6 +412,223 @@ class MainActivity : Activity() {
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+
+    private fun loadProfileManager() {
+        commandProfiles = profileStores.commandProfiles()
+        usbBaudProfiles = profileStores.usbBaudProfiles()
+        ntripCasterProfiles = profileStores.ntripCasterProfiles()
+        ntripMountpointProfiles = profileStores.ntripMountpointProfiles()
+        recordingPolicyProfiles = profileStores.recordingPolicyProfiles()
+        storageProfiles = profileStores.storageProfiles()
+        refreshProfileAdapters()
+    }
+
+    private fun refreshProfileAdapters() {
+        commandProfileSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, commandProfiles.map { it.name })
+        usbBaudProfileSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, usbBaudProfiles.map { it.name })
+        ntripCasterProfileSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, ntripCasterProfiles.map { it.name })
+        ntripMountpointProfileSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, ntripMountpointProfiles.map { it.name })
+        recordingPolicySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, recordingPolicyProfiles.map { it.name })
+        storageProfileSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, storageProfiles.map { it.name })
+
+        commandProfileSpinner.onItemSelectedListener = profileListener { applyCommandProfile() }
+        usbBaudProfileSpinner.onItemSelectedListener = profileListener { applyUsbBaudProfile() }
+        ntripCasterProfileSpinner.onItemSelectedListener = profileListener { applyNtripCasterProfile() }
+        ntripMountpointProfileSpinner.onItemSelectedListener = profileListener { applyNtripMountpointProfile() }
+        recordingPolicySpinner.onItemSelectedListener = profileListener { applyRecordingPolicy() }
+        storageProfileSpinner.onItemSelectedListener = profileListener { renderStorageProfile() }
+
+        applyCommandProfile()
+        applyUsbBaudProfile()
+        applyNtripCasterProfile()
+        applyNtripMountpointProfile()
+        applyRecordingPolicy()
+        renderStorageProfile()
+    }
+
+    private fun profileListener(apply: () -> Unit): AdapterView.OnItemSelectedListener =
+        object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) = apply()
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+
+    private fun selectedCommandProfile(): CommandProfile? =
+        commandProfiles.getOrNull(commandProfileSpinner.selectedItemPosition.coerceAtLeast(0))
+
+    private fun selectedUsbBaudProfile(): UsbBaudProfile? =
+        usbBaudProfiles.getOrNull(usbBaudProfileSpinner.selectedItemPosition.coerceAtLeast(0))
+
+    private fun selectedNtripCasterProfile(): NtripCasterProfile? =
+        ntripCasterProfiles.getOrNull(ntripCasterProfileSpinner.selectedItemPosition.coerceAtLeast(0))
+
+    private fun selectedNtripMountpointProfile(): NtripMountpointProfile? =
+        ntripMountpointProfiles.getOrNull(ntripMountpointProfileSpinner.selectedItemPosition.coerceAtLeast(0))
+
+    private fun selectedRecordingPolicy(): RecordingPolicyProfile? =
+        recordingPolicyProfiles.getOrNull(recordingPolicySpinner.selectedItemPosition.coerceAtLeast(0))
+
+    private fun selectedStorageProfile(): StorageProfile? =
+        storageProfiles.getOrNull(storageProfileSpinner.selectedItemPosition.coerceAtLeast(0))
+
+    private fun applyCommandProfile() {
+        selectedCommandProfile()?.let { profile ->
+            initCommandsEdit.setText(profile.initScript)
+            shutdownCommandsEdit.setText(profile.shutdownScript)
+        }
+    }
+
+    private fun applyUsbBaudProfile() {
+        selectedUsbBaudProfile()?.let { profile ->
+            profileBaudEdit.setText(profile.profileBaud.toString())
+            serialBaudEdit.setText(profile.serialBaud.toString())
+        }
+    }
+
+    private fun applyNtripCasterProfile() {
+        selectedNtripCasterProfile()?.let { profile ->
+            ntripHostEdit.setText(profile.host)
+            ntripPortEdit.setText(profile.port.toString())
+            ntripUsernameEdit.setText(profile.username)
+            ntripPasswordEdit.setText("")
+            ntripPasswordEdit.hint = if (profile.secretId.isNotBlank() && secretStore.hasPassword(profile.secretId)) {
+                "Stored password will be used if left blank"
+            } else {
+                "Not saved in session metadata"
+            }
+        }
+    }
+
+    private fun applyNtripMountpointProfile() {
+        selectedNtripMountpointProfile()?.let { profile ->
+            ntripMountpointEdit.setText(profile.mountpoint)
+            recordRemoteBaseRawCheck.isEnabled = profile.remoteBaseRawAvailable
+            if (!profile.remoteBaseRawAvailable) {
+                recordRemoteBaseRawCheck.isChecked = false
+            }
+        }
+    }
+
+    private fun applyRecordingPolicy() {
+        selectedRecordingPolicy()?.let { profile ->
+            recordNtripCorrectionInputCheck.isChecked = profile.recordNtripCorrectionInput
+            exportNmeaCheck.isChecked = profile.exportNmea
+            exportJsonSolutionCheck.isChecked = profile.exportJsonSolution
+            exportGpxCheck.isChecked = profile.exportGpx
+            recordRemoteBaseRawCheck.isChecked = profile.recordRemoteBaseRaw && recordRemoteBaseRawCheck.isEnabled
+        }
+    }
+
+    private fun renderStorageProfile() {
+        val profile = selectedStorageProfile()
+        if (profile?.kind == "SAF_TREE") {
+            monitorText.text = "Storage profile selected: ${profile.name}. SAF recording will be validated at start."
+        }
+    }
+
+    private fun saveSelectedCommandProfile(copy: Boolean) {
+        val selected = selectedCommandProfile() ?: return
+        val updated = selected.copy(
+            initScript = initCommandsEdit.text.toString(),
+            shutdownScript = shutdownCommandsEdit.text.toString(),
+        )
+        commandProfiles = saveOrCopy(commandProfiles, selected, updated, copy) { it.copyProfile(profileStores.duplicateId("command"), "${it.name} copy") }
+        profileStores.saveCommandProfiles(commandProfiles)
+        refreshProfileAdapters()
+    }
+
+    private fun saveSelectedUsbBaudProfile(copy: Boolean) {
+        val selected = selectedUsbBaudProfile() ?: return
+        val updated = selected.copy(
+            profileBaud = profileBaudEdit.text.toString().trim().toIntOrNull() ?: selected.profileBaud,
+            serialBaud = serialBaudEdit.text.toString().trim().toIntOrNull() ?: selected.serialBaud,
+            usbVid = selectedUsbDevice()?.vendorId,
+            usbPid = selectedUsbDevice()?.productId,
+            usbDeviceName = selectedUsbDevice()?.deviceName,
+            usbProductName = selectedUsbDevice()?.productName,
+        )
+        usbBaudProfiles = saveOrCopy(usbBaudProfiles, selected, updated, copy) { it.copyProfile(profileStores.duplicateId("usb"), "${it.name} copy") }
+        profileStores.saveUsbBaudProfiles(usbBaudProfiles)
+        refreshProfileAdapters()
+    }
+
+    private fun saveSelectedNtripCasterProfile(copy: Boolean) {
+        val selected = selectedNtripCasterProfile() ?: return
+        val secretId = selected.secretId.ifBlank {
+            ntripSecretRef(
+                ntripHostEdit.text.toString().trim(),
+                selectedNtripMountpointProfile()?.mountpoint.orEmpty().ifBlank { ntripMountpointEdit.text.toString().trim() },
+                ntripUsernameEdit.text.toString().trim(),
+            )
+        }
+        if (secretId.isNotBlank() && ntripPasswordEdit.text.toString().isNotBlank()) {
+            secretStore.putPassword(secretId, ntripPasswordEdit.text.toString())
+        }
+        val updated = selected.copy(
+            host = ntripHostEdit.text.toString().trim(),
+            port = ntripPortEdit.text.toString().trim().toIntOrNull() ?: selected.port,
+            username = ntripUsernameEdit.text.toString().trim(),
+            secretId = secretId,
+        )
+        ntripCasterProfiles = saveOrCopy(ntripCasterProfiles, selected, updated, copy) { it.copyProfile(profileStores.duplicateId("caster"), "${it.name} copy") }
+        profileStores.saveNtripCasterProfiles(ntripCasterProfiles)
+        refreshProfileAdapters()
+    }
+
+    private fun showStoredNtripPassword() {
+        val secretId = selectedNtripCasterProfile()?.secretId.orEmpty()
+        monitorText.text = when {
+            secretId.isBlank() -> "No stored NTRIP password reference for this caster profile."
+            else -> secretStore.getPassword(secretId)?.let { "Stored password: $it" }
+                ?: "No stored password found for this caster profile."
+        }
+    }
+
+    private fun saveSelectedNtripMountpointProfile(copy: Boolean) {
+        val selected = selectedNtripMountpointProfile() ?: return
+        val casterId = selectedNtripCasterProfile()?.id ?: selected.casterProfileId
+        val updated = selected.copy(
+            casterProfileId = casterId,
+            mountpoint = ntripMountpointEdit.text.toString().trim(),
+            remoteBaseRawAvailable = recordRemoteBaseRawCheck.isEnabled,
+        )
+        ntripMountpointProfiles = saveOrCopy(ntripMountpointProfiles, selected, updated, copy) { it.copyProfile(profileStores.duplicateId("mountpoint"), "${it.name} copy") }
+        profileStores.saveNtripMountpointProfiles(ntripMountpointProfiles)
+        refreshProfileAdapters()
+    }
+
+    private fun saveSelectedRecordingPolicy(copy: Boolean) {
+        val selected = selectedRecordingPolicy() ?: return
+        val updated = selected.copy(
+            recordNtripCorrectionInput = recordNtripCorrectionInputCheck.isChecked,
+            exportNmea = exportNmeaCheck.isChecked,
+            exportJsonSolution = exportJsonSolutionCheck.isChecked,
+            exportGpx = exportGpxCheck.isChecked,
+            recordRemoteBaseRaw = recordRemoteBaseRawCheck.isChecked,
+        )
+        recordingPolicyProfiles = saveOrCopy(recordingPolicyProfiles, selected, updated, copy) { it.copyProfile(profileStores.duplicateId("recording"), "${it.name} copy") }
+        profileStores.saveRecordingPolicyProfiles(recordingPolicyProfiles)
+        refreshProfileAdapters()
+    }
+
+    private fun saveSelectedStorageProfile(copy: Boolean) {
+        val selected = selectedStorageProfile() ?: return
+        storageProfiles = saveOrCopy(storageProfiles, selected, selected, copy) { it.copyProfile(profileStores.duplicateId("storage"), "${it.name} copy") }
+        profileStores.saveStorageProfiles(storageProfiles)
+        refreshProfileAdapters()
+    }
+
+    private fun <T> saveOrCopy(
+        profiles: List<T>,
+        selected: T,
+        updated: T,
+        copy: Boolean,
+        duplicate: (T) -> T,
+    ): List<T> =
+        if (copy) {
+            profiles + duplicate(updated)
+        } else {
+            profiles.map { if (it == selected) updated else it }
         }
 
     private fun rebuildSession() {
@@ -420,12 +759,14 @@ class MainActivity : Activity() {
         }
         val host = ntripHostEdit.text.toString().trim()
         val mountpoint = ntripMountpointEdit.text.toString().trim()
-        if (workflowOption.requiresNtrip() && (host.isBlank() || mountpoint.isBlank())) {
+        val ntripEnabled = workflowOption.requiresNtrip()
+        if (ntripEnabled && (host.isBlank() || mountpoint.isBlank())) {
             monitorText.text = "Cannot start: this workflow requires NTRIP host and mountpoint."
             return
         }
         val username = ntripUsernameEdit.text.toString().trim()
-        val secretRef = ntripSecretRef(host, mountpoint, username)
+        val secretRef = selectedNtripCasterProfile()?.secretId?.takeIf { it.isNotBlank() }
+            ?: ntripSecretRef(host, mountpoint, username)
         val runtimePassword = resolveNtripPassword(secretRef)
         saveRecordingDefaults(host, ntripPort, mountpoint, username, secretRef)
 
@@ -438,6 +779,7 @@ class MainActivity : Activity() {
             putStringArrayListExtra(RecordingForegroundService.EXTRA_BAUD_SWITCH_COMMANDS, ArrayList(baudSwitchCommands))
             putStringArrayListExtra(RecordingForegroundService.EXTRA_MODE_COMMANDS, ArrayList(modeCommands))
             putStringArrayListExtra(RecordingForegroundService.EXTRA_SHUTDOWN_COMMANDS, ArrayList(shutdownCommands))
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_ENABLED, ntripEnabled)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, host)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, ntripPort)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, mountpoint)
@@ -450,6 +792,17 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, workflow.receiverRole.name)
             putExtra(RecordingForegroundService.EXTRA_RECEIVER_PROFILE_ID, workflow.receiverProfileId)
             putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, um980Mode.name)
+            putExtra(RecordingForegroundService.EXTRA_COMMAND_PROFILE_ID, selectedCommandProfile()?.id)
+            putExtra(RecordingForegroundService.EXTRA_USB_BAUD_PROFILE_ID, selectedUsbBaudProfile()?.id)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, selectedNtripCasterProfile()?.id)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, selectedNtripMountpointProfile()?.id)
+            putExtra(RecordingForegroundService.EXTRA_RECORDING_POLICY_ID, selectedRecordingPolicy()?.id)
+            putExtra(RecordingForegroundService.EXTRA_STORAGE_PROFILE_ID, selectedStorageProfile()?.id)
+            putExtra(RecordingForegroundService.EXTRA_STORAGE_KIND, selectedStorageProfile()?.kind ?: "APP_PRIVATE")
+            putExtra(RecordingForegroundService.EXTRA_RECORD_NTRIP_CORRECTION_INPUT, recordNtripCorrectionInputCheck.isChecked)
+            putExtra(RecordingForegroundService.EXTRA_EXPORT_NMEA, exportNmeaCheck.isChecked)
+            putExtra(RecordingForegroundService.EXTRA_EXPORT_JSON_SOLUTION, exportJsonSolutionCheck.isChecked)
+            putExtra(RecordingForegroundService.EXTRA_RECORD_REMOTE_BASE_RAW, recordRemoteBaseRawCheck.isChecked)
             putExtra(RecordingForegroundService.EXTRA_COORDINATE_SOURCE, baseCoordinate?.source?.name ?: "NONE")
             putExtra(RecordingForegroundService.EXTRA_BASE_POSITION_JSON, basePositionJson)
             putExtra(RecordingForegroundService.EXTRA_VALIDATION_SUMMARY, validationSummary(current))

@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
@@ -13,27 +14,46 @@ data class NtripCredentials(
     val password: String,
 )
 
+enum class NtripProtocolVersion {
+    NTRIP_V2,
+    NTRIP_V1,
+}
+
 data class NtripRequest(
     val host: String,
     val port: Int,
     val mountpoint: String,
     val credentials: NtripCredentials? = null,
     val userAgent: String = "RtkCollector/0.1",
+    val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
 ) {
     init {
         require(host.isNotBlank()) { "NTRIP host must not be blank" }
         require(port in 1..65535) { "NTRIP port must be between 1 and 65535" }
         require(mountpoint.isNotBlank()) { "NTRIP mountpoint must not be blank" }
         require(userAgent.isNotBlank()) { "NTRIP user agent must not be blank" }
+        requireNoCrLf("host", host)
+        requireNoCrLf("mountpoint", mountpoint)
+        requireNoCrLf("userAgent", userAgent)
     }
 
     fun render(): String {
         val path = mountpoint.trimStart('/')
         val lines = buildList {
-            add("GET /$path HTTP/1.0")
+            add(
+                when (protocolVersion) {
+                    NtripProtocolVersion.NTRIP_V2 -> "GET /$path HTTP/1.1"
+                    NtripProtocolVersion.NTRIP_V1 -> "GET /$path HTTP/1.0"
+                },
+            )
             add("Host: $host:$port")
             add("User-Agent: $userAgent")
-            add("Ntrip-Version: Ntrip/1.0")
+            add(
+                when (protocolVersion) {
+                    NtripProtocolVersion.NTRIP_V2 -> "Ntrip-Version: Ntrip/2.0"
+                    NtripProtocolVersion.NTRIP_V1 -> "Ntrip-Version: Ntrip/1.0"
+                },
+            )
             add("Connection: close")
             credentials?.let { add("Authorization: Basic ${it.basicAuthToken()}") }
         }
@@ -52,6 +72,13 @@ data class NtripRequest(
     private fun NtripCredentials.basicAuthToken(): String {
         val rawCredentials = "$username:$password".toByteArray(Charsets.UTF_8)
         return Base64.getEncoder().encodeToString(rawCredentials)
+    }
+
+    fun withProtocolVersion(version: NtripProtocolVersion): NtripRequest =
+        copy(protocolVersion = version)
+
+    private fun requireNoCrLf(label: String, value: String) {
+        require('\r' !in value && '\n' !in value) { "NTRIP $label must not contain CR/LF characters" }
     }
 }
 
@@ -74,7 +101,8 @@ interface NtripSocketConnector {
 
 class JavaNtripSocketConnector : NtripSocketConnector {
     override fun connect(host: String, port: Int): NtripSocket {
-        val socket = Socket(host, port).apply {
+        val socket = Socket().apply {
+            connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
             soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
         }
         return object : NtripSocket {
@@ -88,6 +116,7 @@ class JavaNtripSocketConnector : NtripSocketConnector {
     }
 
     private companion object {
+        const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 15_000
         const val DEFAULT_SOCKET_TIMEOUT_MILLIS = 15_000
     }
 }
@@ -104,8 +133,11 @@ data class NtripReconnectPolicy(
 
 enum class NtripFailureKind {
     CONNECT_FAILED,
+    CANCELLED,
     EMPTY_RESPONSE,
     SOURCETABLE_RESPONSE,
+    AUTHENTICATION_FAILED,
+    AUTHORIZATION_FAILED,
     UNSUPPORTED_RESPONSE,
     STREAM_FAILED,
 }
@@ -141,6 +173,21 @@ class NtripClient(
         ggaLines: Iterable<String> = emptyList(),
         onState: (CorrectionStatus) -> Unit = {},
         onRtcmBytes: (ByteArray) -> Unit = {},
+    ): NtripConnectionResult =
+        connectOnceWithRequest(
+            activeRequest = request,
+            ggaLines = ggaLines,
+            onState = onState,
+            onRtcmBytes = onRtcmBytes,
+            allowCompatibilityFallback = true,
+        )
+
+    private fun connectOnceWithRequest(
+        activeRequest: NtripRequest,
+        ggaLines: Iterable<String> = emptyList(),
+        onState: (CorrectionStatus) -> Unit = {},
+        onRtcmBytes: (ByteArray) -> Unit = {},
+        allowCompatibilityFallback: Boolean,
     ): NtripConnectionResult {
         if (cancelled.get()) {
             onState(CorrectionStatus(NtripConnectionState.STOPPED))
@@ -148,12 +195,12 @@ class NtripClient(
         }
         onState(CorrectionStatus(NtripConnectionState.CONNECTING))
         val socket = try {
-            connector.connect(request.host, request.port)
+            connector.connect(activeRequest.host, activeRequest.port)
         } catch (exception: Exception) {
             return failure(
                 kind = NtripFailureKind.CONNECT_FAILED,
                 state = NtripConnectionState.CONNECTING,
-                message = "Failed to connect to NTRIP caster ${request.host}:${request.port}",
+                message = "Failed to connect to NTRIP caster ${activeRequest.host}:${activeRequest.port}",
                 cause = exception,
                 onState = onState,
             )
@@ -162,11 +209,20 @@ class NtripClient(
         activeSocket = socket
         return socket.use {
             try {
-                writeRequestAndGga(socket.output, ggaLines)
+                writeRequestAndGga(socket.output, activeRequest, ggaLines)
                 onState(CorrectionStatus(NtripConnectionState.AUTHENTICATING))
                 val header = readHeader(socket.input)
                 val accepted = evaluateHeader(header.text)
                 if (accepted != null) {
+                    if (allowCompatibilityFallback && activeRequest.shouldTryCompatibilityFallback(accepted)) {
+                        return@use connectOnceWithRequest(
+                            activeRequest = activeRequest.withProtocolVersion(NtripProtocolVersion.NTRIP_V1),
+                            ggaLines = ggaLines,
+                            onState = onState,
+                            onRtcmBytes = onRtcmBytes,
+                            allowCompatibilityFallback = false,
+                        )
+                    }
                     onState(CorrectionStatus(accepted.state, lastError = accepted.message))
                     return@use NtripConnectionResult.Failure(accepted)
                 }
@@ -207,9 +263,19 @@ class NtripClient(
                 }
                 is NtripConnectionResult.Failure -> {
                     lastFailure = result
+                    if (!result.failure.isRetryable()) {
+                        onState(CorrectionStatus(NtripConnectionState.STOPPED, lastError = result.failure.message))
+                        return result
+                    }
                     if (attemptIndex < reconnectPolicy.maxAttempts - 1) {
                         onState(CorrectionStatus(NtripConnectionState.RECONNECT_WAIT, lastError = result.failure.message))
-                        delay(reconnectPolicy.delayMillis)
+                        try {
+                            delay(reconnectPolicy.delayMillis)
+                        } catch (exception: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            onState(CorrectionStatus(NtripConnectionState.STOPPED))
+                            return cancelledResult(exception)
+                        }
                     }
                 }
             }
@@ -225,8 +291,8 @@ class NtripClient(
         )
     }
 
-    private fun writeRequestAndGga(output: OutputStream, ggaLines: Iterable<String>) {
-        output.write(request.render().toByteArray(Charsets.US_ASCII))
+    private fun writeRequestAndGga(output: OutputStream, activeRequest: NtripRequest, ggaLines: Iterable<String>) {
+        output.write(activeRequest.render().toByteArray(Charsets.US_ASCII))
         ggaLines.forEach { line ->
             output.write(line.trimEnd('\r', '\n').toByteArray(Charsets.US_ASCII))
             output.write(CRLF)
@@ -270,6 +336,16 @@ class NtripClient(
             )
             firstLine.startsWith("ICY 200", ignoreCase = true) -> null
             firstLine.startsWith("HTTP/", ignoreCase = true) && firstLine.contains(" 200 ") -> null
+            firstLine.startsWith("HTTP/", ignoreCase = true) && firstLine.contains(" 401 ") -> NtripFailure(
+                kind = NtripFailureKind.AUTHENTICATION_FAILED,
+                state = NtripConnectionState.AUTHENTICATING,
+                message = "NTRIP caster rejected credentials: $firstLine",
+            )
+            firstLine.startsWith("HTTP/", ignoreCase = true) && firstLine.contains(" 403 ") -> NtripFailure(
+                kind = NtripFailureKind.AUTHORIZATION_FAILED,
+                state = NtripConnectionState.AUTHENTICATING,
+                message = "NTRIP caster denied access to mountpoint: $firstLine",
+            )
             else -> NtripFailure(
                 kind = NtripFailureKind.UNSUPPORTED_RESPONSE,
                 state = NtripConnectionState.AUTHENTICATING,
@@ -303,9 +379,31 @@ class NtripClient(
     private fun stoppedBeforeConnection(): NtripConnectionResult.Failure =
         NtripConnectionResult.Failure(
             NtripFailure(
-                kind = NtripFailureKind.CONNECT_FAILED,
+                kind = NtripFailureKind.CANCELLED,
                 state = NtripConnectionState.STOPPED,
                 message = "NTRIP client was cancelled before connection completed",
+            ),
+        )
+
+    private fun NtripRequest.shouldTryCompatibilityFallback(failure: NtripFailure): Boolean =
+        protocolVersion == NtripProtocolVersion.NTRIP_V2 &&
+            failure.kind == NtripFailureKind.UNSUPPORTED_RESPONSE &&
+            (failure.message.contains(" 505 ") || failure.message.contains("Version", ignoreCase = true))
+
+    private fun NtripFailure.isRetryable(): Boolean =
+        kind !in setOf(
+            NtripFailureKind.CANCELLED,
+            NtripFailureKind.AUTHENTICATION_FAILED,
+            NtripFailureKind.AUTHORIZATION_FAILED,
+        )
+
+    private fun cancelledResult(cause: Throwable? = null): NtripConnectionResult.Failure =
+        NtripConnectionResult.Failure(
+            NtripFailure(
+                kind = NtripFailureKind.CANCELLED,
+                state = NtripConnectionState.STOPPED,
+                message = "NTRIP client was cancelled",
+                cause = cause,
             ),
         )
 

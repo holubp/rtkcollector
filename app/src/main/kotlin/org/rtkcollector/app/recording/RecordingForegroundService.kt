@@ -123,6 +123,13 @@ class RecordingForegroundService : Service() {
                 workflowName = intent.getStringExtra(EXTRA_WORKFLOW_NAME),
                 receiverRole = intent.getStringExtra(EXTRA_RECEIVER_ROLE),
                 um980ProfileId = intent.getStringExtra(EXTRA_UM980_PROFILE_ID),
+                commandProfileId = intent.getStringExtra(EXTRA_COMMAND_PROFILE_ID),
+                usbBaudProfileId = intent.getStringExtra(EXTRA_USB_BAUD_PROFILE_ID),
+                ntripCasterProfileId = intent.getStringExtra(EXTRA_NTRIP_CASTER_PROFILE_ID),
+                ntripMountpointProfileId = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID),
+                recordingPolicyId = intent.getStringExtra(EXTRA_RECORDING_POLICY_ID),
+                storageProfileId = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID),
+                storageKind = intent.getStringExtra(EXTRA_STORAGE_KIND),
                 coordinateSource = intent.getStringExtra(EXTRA_COORDINATE_SOURCE),
                 validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
                 expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
@@ -133,7 +140,10 @@ class RecordingForegroundService : Service() {
             intent.getStringExtra(EXTRA_BASE_POSITION_JSON)
                 ?.takeIf { it.isNotBlank() }
                 ?.let(sessionWriters::writeBasePositionJson)
-            val recorder = SessionRawRecorder(sessionWriters)
+            val recorder = SessionRawRecorder(
+                writers = sessionWriters,
+                recordCorrectionInput = intent.getBooleanExtra(EXTRA_RECORD_NTRIP_CORRECTION_INPUT, true),
+            )
             val eventSink = SessionEventSink(sessionWriters)
             val usbTransport = AndroidUsbSerialTransport(
                 usbManager = usbManager,
@@ -144,7 +154,12 @@ class RecordingForegroundService : Service() {
             transport = usbTransport
 
             val asyncAdvisoryFanout = AsyncAdvisoryFanout(
-                delegate = buildAdvisoryFanout(sessionWriters, eventSink),
+                delegate = buildAdvisoryFanout(
+                    sessionWriters = sessionWriters,
+                    eventSink = eventSink,
+                    exportNmea = intent.getBooleanExtra(EXTRA_EXPORT_NMEA, true),
+                    exportJsonSolution = intent.getBooleanExtra(EXTRA_EXPORT_JSON_SOLUTION, true),
+                ),
                 eventSink = eventSink,
             )
             advisoryFanout = asyncAdvisoryFanout
@@ -210,6 +225,10 @@ class RecordingForegroundService : Service() {
         captureRuntime: CaptureRuntime,
         recorder: SessionRawRecorder,
     ) {
+        if (!intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) {
+            state = state.copy(ntripState = "Disabled")
+            return
+        }
         val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
         val mountpoint = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).orEmpty()
         if (host.isBlank() || mountpoint.isBlank()) {
@@ -340,6 +359,9 @@ class RecordingForegroundService : Service() {
     }
 
     private fun ntripSessionMetadata(intent: Intent): NtripSessionMetadata? {
+        if (!intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) {
+            return null
+        }
         val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
         val mountpoint = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).orEmpty()
         if (host.isBlank() || mountpoint.isBlank()) {
@@ -352,6 +374,8 @@ class RecordingForegroundService : Service() {
             usernamePresent = !intent.getStringExtra(EXTRA_NTRIP_USERNAME).isNullOrBlank(),
             ggaUploadEnabled = !intent.getStringExtra(EXTRA_NTRIP_GGA).isNullOrBlank(),
             secretRef = intent.getStringExtra(EXTRA_NTRIP_SECRET_REF)?.takeIf { it.isNotBlank() },
+            protocol = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+            finalStatus = null,
         )
     }
 
@@ -414,26 +438,38 @@ class RecordingForegroundService : Service() {
     private fun buildAdvisoryFanout(
         sessionWriters: SessionWriters,
         eventSink: CaptureEventSink,
+        exportNmea: Boolean,
+        exportJsonSolution: Boolean,
     ): AdvisoryFanout {
         val ggaParser = NmeaGgaParser()
+        val nmeaExporter = NmeaSentenceExporter()
         val solutionParser = Um980AsciiSolutionParser()
         val rtcmExtractor = Rtcm3Extractor(validateCrc = true)
         return AdvisoryFanout(
             eventSink = eventSink,
             consumers = listOf(
                 AdvisoryConsumer("nmea-gga") { bytes ->
+                    if (exportNmea) {
+                        nmeaExporter.accept(bytes).forEach(sessionWriters::appendReceiverSolutionNmea)
+                    }
                     ggaParser.accept(bytes).forEach { fix ->
-                        sessionWriters.appendReceiverSolutionJson(fix.toJson())
+                        if (exportJsonSolution) {
+                            sessionWriters.appendReceiverSolutionJson(fix.toJson())
+                        }
                         state = state.copy(ggaFixQuality = fix.fixQuality)
                     }
                 },
                 AdvisoryConsumer("um980-ascii-solution") { bytes ->
                     solutionParser.accept(bytes).forEach { solution ->
                         if (solution.logName.startsWith("PPP")) {
-                            sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
+                            if (exportJsonSolution) {
+                                sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
+                            }
                             state = state.copy(pppStatus = solution.positionType)
                         } else {
-                            sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                            if (exportJsonSolution) {
+                                sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                            }
                             state = state.copy(bestnavPositionType = solution.positionType)
                         }
                     }
@@ -492,7 +528,10 @@ class RecordingForegroundService : Service() {
             getParcelableExtra(EXTRA_USB_DEVICE)
         }
 
-    private class SessionRawRecorder(private val writers: SessionWriters) : RawRecorder {
+    private class SessionRawRecorder(
+        private val writers: SessionWriters,
+        private val recordCorrectionInput: Boolean,
+    ) : RawRecorder {
         var receiverRxBytes: Long = 0
             private set
         var txToReceiverBytes: Long = 0
@@ -511,8 +550,10 @@ class RecordingForegroundService : Service() {
         }
 
         override fun appendCorrectionInputBytes(bytes: ByteArray) {
-            writers.appendCorrectionInput(bytes)
-            correctionInputBytes += bytes.size
+            if (recordCorrectionInput) {
+                writers.appendCorrectionInput(bytes)
+                correctionInputBytes += bytes.size
+            }
         }
 
         override fun close() {
@@ -524,6 +565,28 @@ class RecordingForegroundService : Service() {
         override fun recordEvent(event: CaptureEvent) {
             val json = """{"timestamp":"${event.timestamp}","type":"${event.type}","message":"${event.message.replace("\"", "\\\"")}"}"""
             writers.appendEventJson(json)
+        }
+    }
+
+    private class NmeaSentenceExporter {
+        private val lineBuffer = StringBuilder()
+
+        fun accept(bytes: ByteArray): List<String> {
+            val sentences = mutableListOf<String>()
+            bytes.toString(Charsets.US_ASCII).forEach { character ->
+                when (character) {
+                    '\n' -> {
+                        val line = lineBuffer.toString().trim()
+                        if (line.startsWith("$") && line.length >= 6) {
+                            sentences += "$line\r\n"
+                        }
+                        lineBuffer.clear()
+                    }
+                    '\r' -> Unit
+                    else -> lineBuffer.append(character)
+                }
+            }
+            return sentences
         }
     }
 
@@ -540,6 +603,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BAUD_SWITCH_COMMANDS = "baudSwitchCommands"
         const val EXTRA_MODE_COMMANDS = "modeCommands"
         const val EXTRA_SHUTDOWN_COMMANDS = "shutdownCommands"
+        const val EXTRA_NTRIP_ENABLED = "ntripEnabled"
         const val EXTRA_NTRIP_HOST = "ntripHost"
         const val EXTRA_NTRIP_PORT = "ntripPort"
         const val EXTRA_NTRIP_MOUNTPOINT = "ntripMountpoint"
@@ -552,6 +616,17 @@ class RecordingForegroundService : Service() {
         const val EXTRA_RECEIVER_ROLE = "receiverRole"
         const val EXTRA_RECEIVER_PROFILE_ID = "receiverProfileId"
         const val EXTRA_UM980_PROFILE_ID = "um980ProfileId"
+        const val EXTRA_COMMAND_PROFILE_ID = "commandProfileId"
+        const val EXTRA_USB_BAUD_PROFILE_ID = "usbBaudProfileId"
+        const val EXTRA_NTRIP_CASTER_PROFILE_ID = "ntripCasterProfileId"
+        const val EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID = "ntripMountpointProfileId"
+        const val EXTRA_RECORDING_POLICY_ID = "recordingPolicyId"
+        const val EXTRA_STORAGE_PROFILE_ID = "storageProfileId"
+        const val EXTRA_STORAGE_KIND = "storageKind"
+        const val EXTRA_RECORD_NTRIP_CORRECTION_INPUT = "recordNtripCorrectionInput"
+        const val EXTRA_EXPORT_NMEA = "exportNmea"
+        const val EXTRA_EXPORT_JSON_SOLUTION = "exportJsonSolution"
+        const val EXTRA_RECORD_REMOTE_BASE_RAW = "recordRemoteBaseRaw"
         const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
         const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"

@@ -5,23 +5,47 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class NtripClientTest {
     @Test
-    fun `request rendering includes ntrip v1 headers and runtime basic auth`() {
+    fun `request rendering uses ntrip v2 headers by default`() {
         val request = NtripRequest(
             host = "caster.example",
             port = 2101,
             mountpoint = "MOUNT",
             credentials = NtripCredentials(username = "rover", password = "secret"),
             userAgent = "RtkCollectorTest/1",
+        )
+
+        val rendered = request.render()
+
+        assertTrue(rendered.startsWith("GET /MOUNT HTTP/1.1\r\n"))
+        assertTrue(rendered.contains("Host: caster.example:2101\r\n"))
+        assertTrue(rendered.contains("User-Agent: RtkCollectorTest/1\r\n"))
+        assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
+        assertTrue(rendered.contains("Connection: close\r\n"))
+        assertTrue(rendered.contains("Authorization: Basic cm92ZXI6c2VjcmV0\r\n"))
+        assertTrue(rendered.endsWith("\r\n\r\n"))
+    }
+
+    @Test
+    fun `request rendering can use ntrip v1 compatibility headers`() {
+        val request = NtripRequest(
+            host = "caster.example",
+            port = 2101,
+            mountpoint = "MOUNT",
+            credentials = NtripCredentials(username = "rover", password = "secret"),
+            userAgent = "RtkCollectorTest/1",
+            protocolVersion = NtripProtocolVersion.NTRIP_V1,
         )
 
         val rendered = request.render()
@@ -33,6 +57,75 @@ class NtripClientTest {
         assertTrue(rendered.contains("Connection: close\r\n"))
         assertTrue(rendered.contains("Authorization: Basic cm92ZXI6c2VjcmV0\r\n"))
         assertTrue(rendered.endsWith("\r\n\r\n"))
+    }
+
+    @Test
+    fun `request rejects crlf in rendered host mountpoint and user agent fields`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            defaultRequest().copy(host = "caster.example\r\nX-Bad: yes")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            defaultRequest().copy(mountpoint = "MOUNT\r\nX-Bad: yes")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            defaultRequest().copy(userAgent = "RtkCollector\r\nX-Bad: yes")
+        }
+    }
+
+    @Test
+    fun `http 403 response is rejected as authorization failure`() {
+        val connector = FakeNtripSocketConnector(
+            FakeNtripSocket(inputBytes = "HTTP/1.1 403 Forbidden\r\n\r\n".toByteArray()),
+        )
+        val client = NtripClient(request = defaultRequest(), connector = connector)
+
+        val result = client.connectOnce()
+
+        assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+        assertEquals(NtripFailureKind.AUTHORIZATION_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
+    }
+
+    @Test
+    fun `authentication failures do not enter reconnect loop`() {
+        val connector = QueueingNtripSocketConnector(
+            FakeNtripSocket(inputBytes = "HTTP/1.1 403 Forbidden\r\n\r\n".toByteArray()),
+            FakeNtripSocket(inputBytes = "ICY 200 OK\r\n\r\n".toByteArray()),
+        )
+        val states = mutableListOf<NtripConnectionState>()
+        val client = NtripClient(
+            request = defaultRequest(),
+            connector = connector,
+            reconnectPolicy = NtripReconnectPolicy(maxAttempts = 2, delayMillis = 0),
+        )
+
+        val result = client.runWithReconnect(onState = { states += it.state })
+
+        assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+        assertEquals(NtripFailureKind.AUTHORIZATION_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
+        assertFalse(states.contains(NtripConnectionState.RECONNECT_WAIT))
+    }
+
+    @Test
+    fun `v2 request can fall back to v1 compatibility on unsupported caster response`() {
+        val v2Socket = FakeNtripSocket(inputBytes = "HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n".toByteArray())
+        val v1Socket = FakeNtripSocket(inputBytes = "ICY 200 OK\r\n\r\n".toByteArray() + byteArrayOf(0x01, 0x02))
+        val connector = QueueingNtripSocketConnector(
+            v2Socket,
+            v1Socket,
+        )
+        val streamed = ByteArrayOutputStream()
+        val client = NtripClient(
+            request = defaultRequest(),
+            connector = connector,
+            reconnectPolicy = NtripReconnectPolicy(maxAttempts = 1, delayMillis = 0),
+        )
+
+        val result = client.runWithReconnect(onRtcmBytes = { streamed.write(it) })
+
+        assertInstanceOf(NtripConnectionResult.Completed::class.java, result)
+        assertArrayEquals(byteArrayOf(0x01, 0x02), streamed.toByteArray())
+        assertTrue(v2Socket.outputText().startsWith("GET /MOUNT HTTP/1.1\r\n"))
+        assertTrue(v1Socket.outputText().startsWith("GET /MOUNT HTTP/1.0\r\n"))
     }
 
     @Test
@@ -68,7 +161,7 @@ class NtripClientTest {
     }
 
     @Test
-    fun `non icy and non http 200 response is rejected as typed failure`() {
+    fun `http 401 response is rejected as authentication failure`() {
         val connector = FakeNtripSocketConnector(
             FakeNtripSocket(inputBytes = "HTTP/1.1 401 Unauthorized\r\n\r\n".toByteArray()),
         )
@@ -77,7 +170,7 @@ class NtripClientTest {
         val result = client.connectOnce()
 
         assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
-        assertEquals(NtripFailureKind.UNSUPPORTED_RESPONSE, (result as NtripConnectionResult.Failure).failure.kind)
+        assertEquals(NtripFailureKind.AUTHENTICATION_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
     }
 
     @Test
@@ -103,7 +196,7 @@ class NtripClientTest {
         client.connectOnce(ggaLines = listOf("\$GPGGA,1*00", "\$GPGGA,2*00"))
 
         val output = socket.outputText()
-        assertTrue(output.contains("GET /MOUNT HTTP/1.0\r\n"))
+        assertTrue(output.contains("GET /MOUNT HTTP/1.1\r\n"))
         assertTrue(output.contains("\$GPGGA,1*00\r\n"))
         assertTrue(output.contains("\$GPGGA,2*00\r\n"))
     }
@@ -161,6 +254,40 @@ class NtripClientTest {
 
         assertFalse(thread.isAlive)
         assertTrue(socket.closed)
+    }
+
+    @Test
+    fun `cancel during reconnect delay returns stopped instead of throwing interrupted exception`() {
+        val connector = QueueingNtripSocketConnector(
+            FakeNtripSocket(inputBytes = "HTTP/1.1 503 Service Unavailable\r\n\r\n".toByteArray()),
+            FakeNtripSocket(inputBytes = "ICY 200 OK\r\n\r\n".toByteArray()),
+        )
+        val states = mutableListOf<NtripConnectionState>()
+        val delayStarted = CountDownLatch(1)
+        val result = AtomicReference<NtripConnectionResult>()
+        val client = NtripClient(
+            request = defaultRequest(),
+            connector = connector,
+            reconnectPolicy = NtripReconnectPolicy(maxAttempts = 2, delayMillis = 5_000),
+            delay = {
+                delayStarted.countDown()
+                Thread.sleep(it)
+            },
+        )
+        val thread = Thread {
+            result.set(client.runWithReconnect(onState = { states += it.state }))
+        }
+
+        thread.start()
+        assertTrue(delayStarted.await(2, TimeUnit.SECONDS))
+        client.cancel()
+        thread.interrupt()
+        thread.join(2_000)
+
+        assertFalse(thread.isAlive)
+        assertTrue(states.contains(NtripConnectionState.STOPPED))
+        assertInstanceOf(NtripConnectionResult.Failure::class.java, result.get())
+        assertEquals(NtripFailureKind.CANCELLED, (result.get() as NtripConnectionResult.Failure).failure.kind)
     }
 
     private fun defaultRequest(): NtripRequest = NtripRequest(

@@ -11,9 +11,15 @@ workflow details and expected recording artifacts are shown before validation.
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;
-- profile baud and post-profile serial baud;
-- editable init, workflow-mode and shutdown command sequences;
-- optional NTRIP host, port, mountpoint, username, password and GGA upload line;
+- command profiles for reusable init and shutdown scripts;
+- USB/baud profiles for profile baud, post-profile serial baud and optional
+  remembered USB identity;
+- NTRIP caster and mountpoint profiles, including typed mountpoint entry and
+  stored Keystore-backed password references;
+- recording policies for derived NMEA/JSONL exports, NTRIP correction input and
+  optional remote-base raw observations where a source supports them;
+- storage profiles, currently with app-private storage as the implemented
+  recording target and SAF visible-folder support planned in the profile model;
 - manual fixed-base coordinates or pasted/imported `base-position.json`;
 - foreground-service start/stop;
 - live receiver RX, receiver TX, correction input and NTRIP state counters.
@@ -81,8 +87,10 @@ User flow:
 5. Stop recording and export the session folder.
 
 The session records the raw receiver stream, events, quality logs and the
-receiver's in-device solution where available. Raw observations are requested
-where the receiver supports them.
+receiver's in-device solution where available. Derived NMEA/JSONL solution
+sidecars are produced from the receiver RX stream according to the selected
+recording policy. Raw observations are requested where the receiver supports
+them.
 
 ## Rover With NTRIP Fed To Receiver
 
@@ -92,12 +100,14 @@ to a capable rover receiver.
 User flow:
 
 1. Select the rover receiver profile.
-2. Configure NTRIP caster host, port and mountpoint.
+2. Select or edit an NTRIP caster profile and mountpoint profile. The mountpoint
+   can be typed directly or selected from a cached/fetched sourcetable when that
+   support is available.
 3. Store credentials as secret references; passwords are never written to
    `session.json`.
 4. Start recording.
-5. The app records receiver RX, correction input, TX bytes sent to the receiver,
-   receiver solution, quality events and NTRIP state.
+5. The app records receiver RX, selected correction input, TX bytes sent to the
+   receiver, selected derived solution sidecars, quality events and NTRIP state.
 
 The receiver's internal RTK float/fix solution is separate from any future
 Android-side solution engine.

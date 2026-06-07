@@ -144,6 +144,10 @@ Prefer the strongest feasible verification for the touched code:
   separate from post-switch mode/log commands: send init, send the baud switch,
   reconfigure the host serial bridge without purging RX/TX, drain through the
   recorded RX path, then send mode/log commands.
+- On Android shared-storage workspaces, avoid running multiple Gradle compiles
+  in parallel. Kotlin incremental cache files can collide and produce false
+  unresolved-reference errors; rerun verification sequentially after stopping
+  daemons.
 
 Known local caveat: Android SDK Java tools work in Termux, but Google native
 tools such as `aapt2` may be x86-64 Linux binaries and may not run on this

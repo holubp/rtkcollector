@@ -76,6 +76,8 @@ class SessionWritersTest {
                 mountpoint = "MOUNT",
                 usernamePresent = true,
                 secretRef = "ntrip/MOUNT",
+                protocol = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+                finalStatus = "AUTHORIZATION_FAILED",
             ),
             antenna = AntennaMetadata(),
             sessionUuid = "00000000-0000-0000-0000-000000000001",
@@ -84,6 +86,13 @@ class SessionWritersTest {
             workflowName = "Rover + NTRIP to receiver",
             receiverRole = "ROVER",
             um980ProfileId = "um980-rover-ntrip",
+            commandProfileId = "um980-default-commands",
+            usbBaudProfileId = "um980-230400",
+            ntripCasterProfileId = "ntrip-caster-default",
+            ntripMountpointProfileId = "ntrip-mountpoint-default",
+            recordingPolicyId = "default-record-everything",
+            storageProfileId = "app-private",
+            storageKind = "APP_PRIVATE",
             coordinateSource = null,
             validationSummary = "valid",
             expectedArtifacts = listOf("receiver-rx.raw", "tx-to-receiver.raw"),
@@ -96,6 +105,39 @@ class SessionWritersTest {
         assertEquals(true, exported.contains("usernamePresent"))
         assertTrue(exported.contains("ntrip/MOUNT"))
         assertTrue(exported.contains("rover-ntrip-to-receiver"))
+        assertTrue(exported.contains("um980-default-commands"))
+        assertTrue(exported.contains("ntrip-caster-default"))
+        assertTrue(exported.contains("NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"))
+        assertTrue(exported.contains("AUTHORIZATION_FAILED"))
         assertTrue(exported.contains("tx-to-receiver.raw"))
+    }
+
+    @Test
+    fun `nmea solution sidecar appends without truncating existing file`() {
+        SessionWriters.open(tempDir).use { writers ->
+            writers.appendReceiverSolutionNmea("\$GPGGA,1*00\r\n")
+        }
+        SessionWriters.open(tempDir).use { writers ->
+            writers.appendReceiverSolutionNmea("\$GPGGA,2*00\r\n")
+        }
+
+        assertEquals(
+            "\$GPGGA,1*00\r\n\$GPGGA,2*00\r\n",
+            Files.readString(tempDir.resolve("receiver-solution.nmea")),
+        )
+    }
+
+    @Test
+    fun `session json rewrite leaves complete json and removes temporary file`() {
+        SessionWriters.open(tempDir).use { writers ->
+            writers.writeSessionJson("""{"sessionUuid":"one","stoppedAt":null}""")
+            writers.writeSessionJson("""{"sessionUuid":"one","stoppedAt":"now"}""")
+        }
+
+        assertEquals(
+            """{"sessionUuid":"one","stoppedAt":"now"}""",
+            Files.readString(tempDir.resolve("session.json")).trim(),
+        )
+        assertFalse(Files.exists(tempDir.resolve("session.json.tmp")))
     }
 }

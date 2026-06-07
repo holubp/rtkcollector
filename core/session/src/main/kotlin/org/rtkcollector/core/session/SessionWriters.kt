@@ -6,6 +6,7 @@ import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 
 class SessionWriters private constructor(
@@ -15,17 +16,15 @@ class SessionWriters private constructor(
     private val correctionInput: OutputStream,
     private val events: OutputStream,
     private val qualityLive: OutputStream,
+    private val receiverSolutionNmea: OutputStream,
     private val receiverSolution: OutputStream,
     private val receiverPppSolution: OutputStream,
     private val extractedRtcm: OutputStream,
 ) : Closeable {
     fun writeSessionJson(json: String) {
-        Files.writeString(
-            sessionDirectory.resolve(SessionArtifactFile.SESSION_JSON.fileName),
+        writeAtomicText(
+            fileName = SessionArtifactFile.SESSION_JSON.fileName,
             json.trimEnd() + "\n",
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
         )
     }
 
@@ -47,6 +46,10 @@ class SessionWriters private constructor(
 
     fun appendQualityLiveJson(json: String) {
         qualityLive.writeJsonLine(json)
+    }
+
+    fun appendReceiverSolutionNmea(sentence: String) {
+        receiverSolutionNmea.write(sentence.toByteArray(StandardCharsets.US_ASCII))
     }
 
     fun appendReceiverSolutionJson(json: String) {
@@ -77,6 +80,7 @@ class SessionWriters private constructor(
         correctionInput.flush()
         events.flush()
         qualityLive.flush()
+        receiverSolutionNmea.flush()
         receiverSolution.flush()
         receiverPppSolution.flush()
         extractedRtcm.flush()
@@ -88,6 +92,7 @@ class SessionWriters private constructor(
         correctionInput.close()
         events.close()
         qualityLive.close()
+        receiverSolutionNmea.close()
         receiverSolution.close()
         receiverPppSolution.close()
         extractedRtcm.close()
@@ -103,9 +108,36 @@ class SessionWriters private constructor(
                 correctionInput = sessionDirectory.appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
                 events = sessionDirectory.appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
                 qualityLive = sessionDirectory.appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
+                receiverSolutionNmea = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
                 receiverSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_JSONL.fileName),
                 receiverPppSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL.fileName),
                 extractedRtcm = sessionDirectory.appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
+            )
+        }
+    }
+
+    private fun writeAtomicText(fileName: String, text: String) {
+        val target = sessionDirectory.resolve(fileName)
+        val temporary = sessionDirectory.resolve("$fileName.tmp")
+        Files.writeString(
+            temporary,
+            text,
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+        )
+        runCatching {
+            Files.move(
+                temporary,
+                target,
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        }.getOrElse {
+            Files.move(
+                temporary,
+                target,
+                StandardCopyOption.REPLACE_EXISTING,
             )
         }
     }
@@ -130,6 +162,13 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
         appendJsonField("workflowName", metadata.workflowName)
         appendJsonField("receiverRole", metadata.receiverRole)
         appendJsonField("um980ProfileId", metadata.um980ProfileId)
+        appendJsonField("commandProfileId", metadata.commandProfileId)
+        appendJsonField("usbBaudProfileId", metadata.usbBaudProfileId)
+        appendJsonField("ntripCasterProfileId", metadata.ntripCasterProfileId)
+        appendJsonField("ntripMountpointProfileId", metadata.ntripMountpointProfileId)
+        appendJsonField("recordingPolicyId", metadata.recordingPolicyId)
+        appendJsonField("storageProfileId", metadata.storageProfileId)
+        appendJsonField("storageKind", metadata.storageKind)
         appendJsonField("coordinateSource", metadata.coordinateSource)
         appendJsonField("validationSummary", metadata.validationSummary)
         appendJsonArrayField("expectedArtifacts", metadata.expectedArtifacts)
@@ -192,6 +231,8 @@ private fun StringBuilder.appendNtripMetadata(ntrip: NtripSessionMetadata) {
     appendJsonField("usernamePresent", ntrip.usernamePresent)
     appendJsonField("ggaUploadEnabled", ntrip.ggaUploadEnabled)
     appendJsonField("secretRef", ntrip.secretRef)
+    appendJsonField("protocol", ntrip.protocol)
+    appendJsonField("finalStatus", ntrip.finalStatus)
     append("}")
 }
 

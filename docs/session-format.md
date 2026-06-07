@@ -10,7 +10,8 @@ session/
   correction-input.raw
   events.jsonl
   quality-live.jsonl
-  device-solution.jsonl optional
+  receiver-solution.nmea optional, derived from receiver RX
+  receiver-solution.jsonl optional, derived from receiver RX
   receiver-ppp-solution.jsonl optional
   rtklib-solution.jsonl optional, V2
   init-script.txt
@@ -49,6 +50,13 @@ Required fields:
 - `startedAt`
 - `stoppedAt`
 - `ntrip`
+- `commandProfileId`
+- `usbBaudProfileId`
+- `ntripCasterProfileId`
+- `ntripMountpointProfileId`
+- `recordingPolicyId`
+- `storageProfileId`
+- `storageKind`
 - `antenna`
 - `sessionUuid`
 - `linkedBaseSessionUuid`
@@ -67,11 +75,14 @@ supported, record normal device solution and record receiver PPP solution where
 supported.
 
 Experimental V1 writes `receiver-rx.raw`, `tx-to-receiver.raw`,
-`correction-input.raw`, `events.jsonl` and `quality-live.jsonl` as separate
-append-only artifacts. Receiver RX is the authoritative raw capture. Receiver
-TX includes init commands, shutdown commands and RTCM correction bytes that were
-sent to the receiver. Correction input records the NTRIP byte stream before
-receiver injection.
+`correction-input.raw`, `events.jsonl`, `quality-live.jsonl` and selected
+derived solution sidecars as separate append-only artifacts. Receiver RX is the
+authoritative raw capture. Receiver TX includes init commands, shutdown commands
+and RTCM correction bytes that were sent to the receiver. Correction input
+records the NTRIP byte stream before receiver injection. `receiver-solution.nmea`
+and solution JSONL files are advisory exports derived from the RX stream and may
+be disabled by recording policy; parser/export failure must not stop raw
+recording.
 
 ## `base-position.json`
 

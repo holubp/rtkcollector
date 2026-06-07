@@ -5,10 +5,14 @@
 The NTRIP client manages caster connection, mountpoint selection,
 authentication, optional GGA upload and RTCM byte stream receipt.
 
-Experimental V1 implements a small NTRIP v1 client for receiving RTCM bytes and
-transmitting them to the receiver serial input. In code and artifacts this path
-is called receiver TX, meaning Android-to-receiver transmitted bytes. It is a
-client only; it is not an NTRIP caster or server.
+Experimental V1 implements an NTRIP client for receiving RTCM bytes and
+transmitting them to the receiver serial input. The client sends NTRIP v2-style
+HTTP requests by default and has a controlled v1 compatibility retry for caster
+responses that indicate protocol-version incompatibility. Authentication and
+authorization failures such as HTTP `401` and `403` are non-retryable field
+errors, not reconnect loops. In code and artifacts the Android-to-receiver path
+is called receiver TX. The app is a client only; it is not an NTRIP caster or
+server.
 
 ## Reconnect State Machine
 
@@ -21,7 +25,9 @@ streaming -> stopped
 any error -> reconnect-wait or stopped
 ```
 
-Reconnects should use bounded backoff and clear user-visible state.
+Reconnects should use bounded backoff and clear user-visible state. Stop during
+reconnect delay is intentional cancellation and must not surface an
+`InterruptedException` as an app error.
 
 ## Correction Routing
 

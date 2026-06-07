@@ -7,6 +7,7 @@ enum class SessionArtifactFile(val fileName: String) {
     CORRECTION_INPUT_RAW("correction-input.raw"),
     EVENTS_JSONL("events.jsonl"),
     QUALITY_LIVE_JSONL("quality-live.jsonl"),
+    RECEIVER_SOLUTION_NMEA("receiver-solution.nmea"),
     RECEIVER_SOLUTION_JSONL("receiver-solution.jsonl"),
     RECEIVER_PPP_SOLUTION_JSONL("receiver-ppp-solution.jsonl"),
     BASE_POSITION_JSON("base-position.json"),

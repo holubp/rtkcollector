@@ -6,8 +6,9 @@ The NTRIP client manages caster connection, mountpoint selection,
 authentication, optional GGA upload and RTCM byte stream receipt.
 
 Experimental V1 implements a small NTRIP v1 client for receiving RTCM bytes and
-feeding them to receiver TX. It is a client only; it is not an NTRIP caster or
-server.
+transmitting them to the receiver serial input. In code and artifacts this path
+is called receiver TX, meaning Android-to-receiver transmitted bytes. It is a
+client only; it is not an NTRIP caster or server.
 
 ## Reconnect State Machine
 

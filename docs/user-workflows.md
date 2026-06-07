@@ -51,10 +51,13 @@ Recommended first test flow:
 6. Stop recording and check the session folder path shown by the UI.
 7. Repeat with NTRIP only after passive capture is stable.
 
-The default UM980 mode sequence requests `BESTNAVB` receiver solution and
-`OBSVMCMPB` raw observations at at least `1 Hz`, plus binary ephemeris and
-diagnostic side messages. User changes to command scripts are validated against
-a conservative deny-list before start.
+The generated UM980 mode sequence requests `BESTNAVB` receiver solution,
+`GPGGA` and `OBSVMCMPB` raw observations at `1 Hz`. Temporary-base workflows
+also enable receiver PPP where supported and request `PPPNAVB` status every
+10 seconds. Fixed-base RTCM output uses documented RTCM message command
+families such as `RTCM1006`, `RTCM1074`, `RTCM1084`, `RTCM1094` and
+`RTCM1124`. User changes to command scripts are validated against a
+conservative deny-list before start.
 
 If a profile changes receiver baud, RtkCollector opens the USB serial bridge at
 the profile baud, sends the profile, reconfigures the host serial bridge to the

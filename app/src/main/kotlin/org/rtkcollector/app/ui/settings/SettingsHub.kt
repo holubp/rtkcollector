@@ -1,0 +1,47 @@
+package org.rtkcollector.app.ui.settings
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun SettingsHub(
+    onNtripCaster: () -> Unit,
+    onNtripMountpoint: () -> Unit,
+    onCommands: () -> Unit,
+    onRecordingOutputs: () -> Unit,
+    onStorage: () -> Unit,
+    onSessions: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        SettingsButton("NTRIP casters", onNtripCaster)
+        SettingsButton("NTRIP mountpoints", onNtripMountpoint)
+        SettingsButton("Command scripts", onCommands)
+        SettingsButton("Recording outputs", onRecordingOutputs)
+        SettingsButton("Storage", onStorage)
+        SettingsButton("Sessions", onSessions)
+        SettingsButton("Back", onBack)
+    }
+}
+
+@Composable
+private fun SettingsButton(label: String, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Text(label)
+    }
+}

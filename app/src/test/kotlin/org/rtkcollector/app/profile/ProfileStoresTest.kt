@@ -8,6 +8,36 @@ import org.junit.jupiter.api.Test
 
 class ProfileStoresTest {
     @Test
+    fun `settings set rename rejects protected built in`() {
+        val profiles = listOf(RecordingSettingsSet.builtInRoverNtrip())
+
+        assertThrows(IllegalArgumentException::class.java) {
+            renameProfile(
+                profiles = profiles,
+                profileId = "um980-rover-ntrip",
+                newName = "Renamed",
+                idOf = RecordingSettingsSet::id,
+                isProtectedOf = RecordingSettingsSet::isProtected,
+            ) { profile, name -> profile.copy(name = name) }
+        }
+    }
+
+    @Test
+    fun `settings set json redacts secret material`() {
+        val json = RecordingSettingsSet.builtInRoverNtrip()
+            .copy(
+                overrides = SettingsSetOverrides(
+                    ntripCaster = NtripCasterOverride(secretId = "secret-1"),
+                ),
+            )
+            .toJson()
+            .toString()
+
+        assertTrue(json.contains("secret-1"))
+        assertTrue(!json.contains("password"))
+    }
+
+    @Test
     fun `renaming editable command profile updates name`() {
         val profiles = listOf(CommandProfile(id = "commands", name = "Original"))
 

@@ -48,6 +48,20 @@ class ProfileStores(context: Context) {
     fun saveStorageProfiles(profiles: List<StorageProfile>) =
         writeProfiles("storageProfiles", profiles.onEach(StorageProfile::validate).map(StorageProfile::toJson))
 
+    fun settingsSets(): List<RecordingSettingsSet> =
+        readProfiles("settingsSets", ::defaultSettingsSets, RecordingSettingsSet::fromJson)
+
+    fun saveSettingsSets(settingsSets: List<RecordingSettingsSet>) =
+        writeProfiles("settingsSets", settingsSets.onEach(RecordingSettingsSet::validate).map(RecordingSettingsSet::toJson))
+
+    fun selectedSettingsSetId(): String =
+        preferences.getString("selectedSettingsSetId", null) ?: defaultSettingsSets().first().id
+
+    fun saveSelectedSettingsSetId(id: String) {
+        require(id.isNotBlank()) { "Selected settings set id must not be blank." }
+        preferences.edit().putString("selectedSettingsSetId", id).apply()
+    }
+
     fun duplicateId(prefix: String): String =
         "$prefix-${System.currentTimeMillis()}"
 
@@ -126,4 +140,7 @@ class ProfileStores(context: Context) {
                 kind = "APP_PRIVATE",
             ),
         )
+
+    private fun defaultSettingsSets(): List<RecordingSettingsSet> =
+        listOf(RecordingSettingsSet.builtInRoverNtrip())
 }

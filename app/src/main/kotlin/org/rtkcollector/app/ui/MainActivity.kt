@@ -1,5 +1,10 @@
 package org.rtkcollector.app.ui
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,14 +12,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
+import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.profiles.NtripMountpointEditorState
 import org.rtkcollector.app.ui.profiles.NtripMountpointScreen
 import org.rtkcollector.app.ui.profiles.SimpleSettingsScreen
@@ -32,12 +41,39 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RtkCollectorApp() {
     var screen by remember { mutableStateOf(AppScreen.HOME) }
-    val state = DashboardState.planned(
-        workflow = "Plain rover recording",
-        mountpoint = "n/a",
-        receiver = "UM980",
-        storage = "App-private",
-    )
+    val context = LocalContext.current
+    var state by remember {
+        mutableStateOf(
+            DashboardState.planned(
+                workflow = "Plain rover recording",
+                mountpoint = "n/a",
+                receiver = "UM980",
+                storage = "App-private",
+            ),
+        )
+    }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == RecordingForegroundService.ACTION_STATE) {
+                    state = dashboardStateFromRecordingIntent(intent)
+                }
+            }
+        }
+        val filter = IntentFilter(RecordingForegroundService.ACTION_STATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, filter)
+        }
+        context.startService(
+            Intent(context, RecordingForegroundService::class.java).setAction(RecordingForegroundService.ACTION_QUERY),
+        )
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+        }
+    }
 
     MaterialTheme {
         Surface(

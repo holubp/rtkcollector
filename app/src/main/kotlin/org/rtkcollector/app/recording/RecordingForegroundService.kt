@@ -79,7 +79,12 @@ class RecordingForegroundService : Service() {
         when (intent?.action) {
             ACTION_START -> startRecording(intent)
             ACTION_STOP -> stopRecording(sendShutdown = true)
-            ACTION_QUERY -> broadcastState()
+            ACTION_QUERY -> {
+                broadcastState()
+                if (!running.get()) {
+                    stopSelf(startId)
+                }
+            }
             ACTION_UPDATE_NTRIP -> updateNtrip(intent)
             ACTION_DISABLE_NTRIP -> disableNtrip()
         }
@@ -214,8 +219,12 @@ class RecordingForegroundService : Service() {
             state = state.copy(
                 running = true,
                 lifecycle = RecordingLifecycleState.RECORDING,
+                workflowLabel = intent.getStringExtra(EXTRA_WORKFLOW_NAME) ?: intent.getStringExtra(EXTRA_WORKFLOW_ID) ?: "n/a",
+                receiverLabel = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID) ?: "n/a",
+                storageLabel = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID) ?: intent.getStringExtra(EXTRA_STORAGE_KIND) ?: "n/a",
                 sessionPath = openedSession.displayPath,
-                ntripState = "Not configured",
+                ntripState = if (intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) "Configured" else "Not configured",
+                ntripUrl = ntripDisplayUrl(intent),
                 rawRecordingActive = true,
                 correctionsActive = false,
             )
@@ -249,6 +258,8 @@ class RecordingForegroundService : Service() {
                     receiverRxBytes = recorder.receiverRxBytes,
                     txToReceiverBytes = recorder.txToReceiverBytes,
                     correctionInputBytes = recorder.correctionInputBytes,
+                    nmeaBytes = recorder.nmeaBytes,
+                    ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                 )
                 broadcastState()
             }.onFailure { error ->
@@ -302,6 +313,8 @@ class RecordingForegroundService : Service() {
                     }
                     state = state.copy(
                         correctionInputBytes = recorder.correctionInputBytes,
+                        nmeaBytes = recorder.nmeaBytes,
+                        ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                         txToReceiverBytes = recorder.txToReceiverBytes,
                         correctionsActive = true,
                     )
@@ -317,6 +330,7 @@ class RecordingForegroundService : Service() {
         val ntripProblem = snapshot.state == NtripRuntimeState.AUTH_ERROR || snapshot.state == NtripRuntimeState.NETWORK_ERROR
         state = state.copy(
             ntripState = snapshot.state.name,
+            ntripTransferred = bytesDisplay(activeRecorder?.correctionInputBytes ?: state.correctionInputBytes),
             lastError = snapshot.message ?: state.lastError,
             errorCategory = if (ntripProblem) RecordingErrorCategory.NTRIP else state.errorCategory,
             errorSeverity = if (ntripProblem) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
@@ -513,6 +527,44 @@ class RecordingForegroundService : Service() {
         return value
     }
 
+    private fun ntripDisplayUrl(intent: Intent): String {
+        val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
+        val mountpoint = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).orEmpty()
+        if (host.isBlank() || mountpoint.isBlank()) return "n/a"
+        val port = intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)
+        return "$host:$port/$mountpoint"
+    }
+
+    private fun latLonDisplay(latDeg: Double?, lonDeg: Double?): String =
+        if (latDeg == null || lonDeg == null) "n/a" else "%.9f, %.9f".format(java.util.Locale.US, latDeg, lonDeg)
+
+    private fun metersDisplay(value: Double?): String =
+        if (value == null) "n/a" else "%.3f m".format(java.util.Locale.US, value)
+
+    private fun satelliteDisplay(used: Int?, inView: Int?): String =
+        when {
+            used == null && inView == null -> "n/a"
+            inView == null -> used.toString()
+            used == null -> "n/a / $inView"
+            else -> "$used / $inView"
+        }
+
+    private fun dopPairDisplay(hdop: Double?, vdop: Double?): String =
+        when {
+            hdop == null && vdop == null -> "n/a"
+            vdop == null -> "%.1f / n/a".format(java.util.Locale.US, hdop)
+            hdop == null -> "n/a / %.1f".format(java.util.Locale.US, vdop)
+            else -> "%.1f / %.1f".format(java.util.Locale.US, hdop, vdop)
+        }
+
+    private fun bytesDisplay(bytes: Long): String =
+        when {
+            bytes < 1000 -> "$bytes B"
+            bytes < 1_000_000 -> "%.1f kB".format(java.util.Locale.US, bytes / 1000.0)
+            bytes < 1_000_000_000 -> "%.1f MB".format(java.util.Locale.US, bytes / 1_000_000.0)
+            else -> "%.1f GB".format(java.util.Locale.US, bytes / 1_000_000_000.0)
+        }
+
     private fun classifyStartError(error: Throwable): RecordingErrorCategory {
         val message = error.message.orEmpty()
         return when {
@@ -635,14 +687,34 @@ class RecordingForegroundService : Service() {
             Intent(ACTION_STATE).apply {
                 setPackage(packageName)
                 putExtra(EXTRA_STATE_RUNNING, state.running)
+                putExtra(EXTRA_STATE_WORKFLOW_LABEL, state.workflowLabel)
+                putExtra(EXTRA_STATE_RECEIVER_LABEL, state.receiverLabel)
+                putExtra(EXTRA_STATE_STORAGE_LABEL, state.storageLabel)
                 putExtra(EXTRA_STATE_SESSION_PATH, state.sessionPath)
                 putExtra(EXTRA_STATE_RX_BYTES, state.receiverRxBytes)
                 putExtra(EXTRA_STATE_TX_BYTES, state.txToReceiverBytes)
                 putExtra(EXTRA_STATE_CORRECTION_BYTES, state.correctionInputBytes)
+                putExtra(EXTRA_STATE_NMEA_BYTES, state.nmeaBytes)
                 putExtra(EXTRA_STATE_NTRIP, state.ntripState)
+                putExtra(EXTRA_STATE_NTRIP_URL, state.ntripUrl)
+                putExtra(EXTRA_STATE_NTRIP_TRANSFERRED, state.ntripTransferred)
+                putExtra(EXTRA_STATE_NTRIP_RATES, state.ntripRates)
+                putExtra(EXTRA_STATE_NTRIP_STATION_ID, state.ntripStationId)
+                putExtra(EXTRA_STATE_NTRIP_BASE_LAT_LON, state.ntripBaseLatLon)
                 putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
                 putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
+                putExtra(EXTRA_STATE_LAT_LON, state.latLon)
+                putExtra(EXTRA_STATE_ELLIPSOIDAL_HEIGHT, state.ellipsoidalHeight)
+                putExtra(EXTRA_STATE_ALTITUDE, state.altitude)
+                putExtra(EXTRA_STATE_UTC_TIME, state.utcTime)
+                putExtra(EXTRA_STATE_SATELLITES, state.satellites)
+                putExtra(EXTRA_STATE_PDOP, state.pdop)
+                putExtra(EXTRA_STATE_HDOP_VDOP, state.hdopVdop)
+                putExtra(EXTRA_STATE_HORIZONTAL_ACCURACY, state.horizontalAccuracy)
+                putExtra(EXTRA_STATE_VERTICAL_ACCURACY, state.verticalAccuracy)
+                putExtra(EXTRA_STATE_DIFFERENTIAL_AGE, state.differentialAge)
+                putExtra(EXTRA_STATE_BASELINE, state.baseline)
                 putExtra(EXTRA_STATE_RTCM_FRAMES, state.rtcmFrames)
                 putExtra(EXTRA_STATE_ERROR, state.lastError)
                 putExtra(EXTRA_STATE_LIFECYCLE, state.lifecycle.name)
@@ -669,13 +741,23 @@ class RecordingForegroundService : Service() {
             consumers = listOf(
                 AdvisoryConsumer("nmea-gga") { bytes ->
                     if (exportNmea) {
-                        nmeaExporter.accept(bytes).forEach(sessionWriters::appendReceiverSolutionNmea)
+                        nmeaExporter.accept(bytes).forEach { sentence ->
+                            sessionWriters.appendReceiverSolutionNmea(sentence)
+                            activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
+                        }
                     }
                     ggaParser.accept(bytes).forEach { fix ->
                         if (exportJsonSolution) {
                             sessionWriters.appendReceiverSolutionJson(fix.toJson())
                         }
-                        state = state.copy(ggaFixQuality = fix.fixQuality)
+                        state = state.copy(
+                            ggaFixQuality = fix.fixQuality,
+                            latLon = latLonDisplay(fix.latDeg, fix.lonDeg),
+                            altitude = metersDisplay(fix.altitudeM),
+                            utcTime = fix.utcTime.ifBlank { state.utcTime },
+                            satellites = satelliteDisplay(fix.satelliteCount, null),
+                            hdopVdop = dopPairDisplay(fix.hdop, null),
+                        )
                     }
                 },
                 AdvisoryConsumer("um980-ascii-solution") { bytes ->
@@ -684,12 +766,20 @@ class RecordingForegroundService : Service() {
                             if (exportJsonSolution) {
                                 sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
                             }
-                            state = state.copy(pppStatus = solution.positionType)
+                            state = state.copy(
+                                pppStatus = solution.positionType,
+                                latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
+                                ellipsoidalHeight = metersDisplay(solution.heightM),
+                            )
                         } else {
                             if (exportJsonSolution) {
                                 sessionWriters.appendReceiverSolutionJson(solution.toJson())
                             }
-                            state = state.copy(bestnavPositionType = solution.positionType)
+                            state = state.copy(
+                                bestnavPositionType = solution.positionType,
+                                latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
+                                ellipsoidalHeight = metersDisplay(solution.heightM),
+                            )
                         }
                     }
                 },
@@ -757,6 +847,8 @@ class RecordingForegroundService : Service() {
             private set
         var correctionInputBytes: Long = 0
             private set
+        var nmeaBytes: Long = 0
+            private set
 
         override fun appendReceiverBytes(bytes: ByteArray) {
             writers.appendReceiverRx(bytes)
@@ -777,6 +869,10 @@ class RecordingForegroundService : Service() {
 
         override fun close() {
             writers.flush()
+        }
+
+        fun recordNmeaBytes(bytes: Int) {
+            nmeaBytes += bytes
         }
     }
 
@@ -855,14 +951,34 @@ class RecordingForegroundService : Service() {
         const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"
 
         const val EXTRA_STATE_RUNNING = "running"
+        const val EXTRA_STATE_WORKFLOW_LABEL = "workflowLabel"
+        const val EXTRA_STATE_RECEIVER_LABEL = "receiverLabel"
+        const val EXTRA_STATE_STORAGE_LABEL = "storageLabel"
         const val EXTRA_STATE_SESSION_PATH = "sessionPath"
         const val EXTRA_STATE_RX_BYTES = "receiverRxBytes"
         const val EXTRA_STATE_TX_BYTES = "txToReceiverBytes"
         const val EXTRA_STATE_CORRECTION_BYTES = "correctionInputBytes"
+        const val EXTRA_STATE_NMEA_BYTES = "nmeaBytes"
         const val EXTRA_STATE_NTRIP = "ntripState"
+        const val EXTRA_STATE_NTRIP_URL = "ntripUrl"
+        const val EXTRA_STATE_NTRIP_TRANSFERRED = "ntripTransferred"
+        const val EXTRA_STATE_NTRIP_RATES = "ntripRates"
+        const val EXTRA_STATE_NTRIP_STATION_ID = "ntripStationId"
+        const val EXTRA_STATE_NTRIP_BASE_LAT_LON = "ntripBaseLatLon"
         const val EXTRA_STATE_GGA_FIX_QUALITY = "ggaFixQuality"
         const val EXTRA_STATE_BESTNAV_POSITION_TYPE = "bestnavPositionType"
         const val EXTRA_STATE_PPP_STATUS = "pppStatus"
+        const val EXTRA_STATE_LAT_LON = "latLon"
+        const val EXTRA_STATE_ELLIPSOIDAL_HEIGHT = "ellipsoidalHeight"
+        const val EXTRA_STATE_ALTITUDE = "altitude"
+        const val EXTRA_STATE_UTC_TIME = "utcTime"
+        const val EXTRA_STATE_SATELLITES = "satellites"
+        const val EXTRA_STATE_PDOP = "pdop"
+        const val EXTRA_STATE_HDOP_VDOP = "hdopVdop"
+        const val EXTRA_STATE_HORIZONTAL_ACCURACY = "horizontalAccuracy"
+        const val EXTRA_STATE_VERTICAL_ACCURACY = "verticalAccuracy"
+        const val EXTRA_STATE_DIFFERENTIAL_AGE = "differentialAge"
+        const val EXTRA_STATE_BASELINE = "baseline"
         const val EXTRA_STATE_RTCM_FRAMES = "rtcmFrames"
         const val EXTRA_STATE_ERROR = "lastError"
         const val EXTRA_STATE_LIFECYCLE = "lifecycle"

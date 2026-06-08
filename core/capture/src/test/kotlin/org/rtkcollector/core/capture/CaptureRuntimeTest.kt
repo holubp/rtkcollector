@@ -75,6 +75,35 @@ class CaptureRuntimeTest {
         assertArrayEquals(byteArrayOf(0x31), recorder.receiverBytes())
     }
 
+    @Test
+    fun `advisory failure plus event sink failure does not hide recorded rx bytes`() {
+        val recorder = MemoryRecorder()
+        val transport = FakeSerialTransport(reads = queueOf(byteArrayOf(0x51, 0x52)))
+        val runtime = CaptureRuntime(
+            transport = transport,
+            recorder = recorder,
+            eventSink = ThrowingEvents(),
+            advisoryReceiverBytes = { error("parser failed after raw write") },
+        )
+
+        runtime.open()
+        val bytesRead = runtime.readOnce(maxBytes = 1024)
+
+        assertEquals(2, bytesRead)
+        assertArrayEquals(byteArrayOf(0x51, 0x52), recorder.receiverBytes())
+        assertEquals(true, transport.isOpen)
+    }
+
+    @Test
+    fun `advisory fanout consumer failure plus event sink failure does not throw`() {
+        val fanout = AdvisoryFanout(
+            eventSink = ThrowingEvents(),
+            consumers = listOf(AdvisoryConsumer("bad-sidecar") { error("sidecar failed") }),
+        )
+
+        fanout.accept(byteArrayOf(0x61))
+    }
+
     private class FakeSerialTransport(
         private val reads: ArrayDeque<ByteArray> = ArrayDeque(),
     ) : SerialTransport {
@@ -133,6 +162,12 @@ class CaptureRuntimeTest {
         }
 
         fun types(): List<String> = events.map { it.type }
+    }
+
+    private class ThrowingEvents : CaptureEventSink {
+        override fun recordEvent(event: CaptureEvent) {
+            error("event sidecar failed")
+        }
     }
 
     private fun queueOf(vararg chunks: ByteArray): ArrayDeque<ByteArray> =

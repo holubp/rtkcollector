@@ -63,12 +63,14 @@ class CaptureRuntime(
     }
 
     private fun recordEvent(type: String, message: String) {
-        eventSink.recordEvent(
-            CaptureEvent(
-                timestamp = Instant.now().toString(),
-                type = type,
-                message = message,
-            ),
-        )
+        runCatching {
+            eventSink.recordEvent(
+                CaptureEvent(
+                    timestamp = Instant.now().toString(),
+                    type = type,
+                    message = message,
+                ),
+            )
+        }
     }
 }

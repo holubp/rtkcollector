@@ -24,7 +24,7 @@ class AdvisoryFanout(
         consumers.forEach { consumer ->
             runCatching { consumer.accept(bytes) }
                 .onFailure { error ->
-                    eventSink.recordEvent(
+                    eventSink.recordBestEffort(
                         CaptureEvent(
                             timestamp = Instant.now().toString(),
                             type = "advisory-consumer-error",
@@ -53,7 +53,7 @@ class AsyncAdvisoryFanout(
                 val bytes = queue.poll(100, TimeUnit.MILLISECONDS) ?: continue
                 runCatching { delegate.accept(bytes) }
                     .onFailure { error ->
-                        eventSink.recordEvent(
+                        eventSink.recordBestEffort(
                             CaptureEvent(
                                 timestamp = Instant.now().toString(),
                                 type = "advisory-async-error",
@@ -76,7 +76,7 @@ class AsyncAdvisoryFanout(
         if (!queue.offer(bytes.copyOf())) {
             droppedChunks.incrementAndGet()
             if (dropEventRecorded.compareAndSet(false, true)) {
-                eventSink.recordEvent(
+                eventSink.recordBestEffort(
                     CaptureEvent(
                         timestamp = Instant.now().toString(),
                         type = "advisory-queue-dropped",
@@ -92,7 +92,7 @@ class AsyncAdvisoryFanout(
         worker.join(1_000)
         val dropped = droppedChunks.get()
         if (dropped > 1) {
-            eventSink.recordEvent(
+            eventSink.recordBestEffort(
                 CaptureEvent(
                     timestamp = Instant.now().toString(),
                     type = "advisory-queue-drop-summary",
@@ -101,4 +101,8 @@ class AsyncAdvisoryFanout(
             )
         }
     }
+}
+
+private fun CaptureEventSink.recordBestEffort(event: CaptureEvent) {
+    runCatching { recordEvent(event) }
 }

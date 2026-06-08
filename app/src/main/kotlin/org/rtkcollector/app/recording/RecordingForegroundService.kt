@@ -13,7 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import org.rtkcollector.app.MainActivity
+import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.core.capture.AdvisoryConsumer

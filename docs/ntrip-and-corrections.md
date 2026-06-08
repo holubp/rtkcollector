@@ -43,6 +43,11 @@ Reconnects should use bounded backoff and clear user-visible state. Stop during
 reconnect delay is intentional cancellation and must not surface an
 `InterruptedException` as an app error.
 
+Authentication and authorisation failures (`401` and `403`) are terminal for
+the active NTRIP attempt and must not be retried indefinitely. Network failures
+are degraded retry states. In both cases, receiver recording continues unless
+USB or raw storage fails.
+
 ## Correction Routing
 
 - RTCM bytes from NTRIP must be validated enough to avoid obvious framing

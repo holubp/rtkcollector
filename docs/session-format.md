@@ -90,6 +90,11 @@ rather than a filesystem path. SAF tree URIs are profile/runtime routing data;
 they are not credentials, but exports should avoid treating them as portable
 paths because they are Android-provider specific.
 
+Runtime NTRIP changes are represented as redacted `events.jsonl` entries, not
+as markers in `receiver-rx.raw`. Future structured exports such as GPX must be
+finalised with best-effort closing syntax; failure to finalise them is a
+sidecar error and does not invalidate raw RX.
+
 ## `base-position.json`
 
 Required fields:

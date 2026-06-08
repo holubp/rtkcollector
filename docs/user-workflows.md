@@ -111,6 +111,17 @@ User flow:
 The receiver's internal RTK float/fix solution is separate from any future
 Android-side solution engine.
 
+### Live NTRIP Changes During Recording
+
+For NTRIP-enabled workflows, the UI can request a live caster or mountpoint
+update without stopping raw receiver recording. The service cancels the old
+NTRIP client, records a redacted event, starts the new NTRIP client and
+continues writing `receiver-rx.raw`. `correction-input.raw` and
+`tx-to-receiver.raw` remain append-only across the switch.
+
+The user can also disable NTRIP during recording. This stops correction feeding
+but leaves raw receiver capture active.
+
 ## Storage Profiles
 
 The default storage profile writes sessions under the app-private external

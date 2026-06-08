@@ -8,6 +8,9 @@ opens USB, owns the capture loop, writes session artifacts, runs optional NTRIP,
 holds the wake lock while recording and performs stop/shutdown cleanup.
 Advisory parsing and RTCM extraction run behind a bounded queue; when the queue
 is full, advisory bytes may be dropped but raw receiver recording continues.
+Stop is idempotent. Repeated stop requests must not duplicate receiver shutdown
+commands or surface expected thread cancellation as a user error. Raw writer
+flush and close are prioritised over derived sidecar finalisation.
 
 ## Requirements
 

@@ -33,4 +33,10 @@ dependencies {
     implementation(project(":core:workflow"))
     implementation(project(":receiver:unicore-n4"))
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.14.1")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.14.1")
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    useJUnitPlatform()
 }

@@ -1,0 +1,114 @@
+package org.rtkcollector.app.ui.dashboard
+
+data class DashboardState(
+    val isRecording: Boolean,
+    val status: DashboardStatus,
+    val position: PositionCardState,
+    val fix: FixCardState,
+    val ntrip: NtripCardState,
+    val files: FilesCardState,
+    val primaryAction: DashboardAction,
+    val secondaryActions: List<DashboardAction>,
+) {
+    companion object {
+        fun planned(
+            workflow: String,
+            mountpoint: String,
+            receiver: String,
+            storage: String,
+        ): DashboardState =
+            DashboardState(
+                isRecording = false,
+                status = DashboardStatus(workflow, mountpoint, receiver, storage),
+                position = PositionCardState(),
+                fix = FixCardState(),
+                ntrip = NtripCardState(),
+                files = FilesCardState(),
+                primaryAction = DashboardAction("Start", DashboardActionKind.START),
+                secondaryActions = listOf(DashboardAction("Menu", DashboardActionKind.MENU)),
+            )
+
+        fun running(
+            status: DashboardStatus,
+            position: PositionCardState,
+            fix: FixCardState,
+            ntrip: NtripCardState,
+            files: FilesCardState,
+        ): DashboardState =
+            DashboardState(
+                isRecording = true,
+                status = status,
+                position = position,
+                fix = fix,
+                ntrip = ntrip,
+                files = files,
+                primaryAction = DashboardAction("Stop", DashboardActionKind.STOP),
+                secondaryActions = listOf(
+                    DashboardAction("NTRIP", DashboardActionKind.NTRIP),
+                    DashboardAction("Mark", DashboardActionKind.MARK),
+                ),
+            )
+    }
+}
+
+data class DashboardStatus(
+    val workflow: String = "n/a",
+    val mountpoint: String = "n/a",
+    val receiver: String = "n/a",
+    val storage: String = "n/a",
+)
+
+data class PositionCardState(
+    val latLon: String = "n/a",
+    val ellipsoidalHeight: String = "n/a",
+    val altitude: String = "n/a",
+    val utcTime: String = "n/a",
+    val latError: String = "n/a",
+    val lonError: String = "n/a",
+)
+
+data class FixCardState(
+    val fixType: String = "n/a",
+    val satellites: String = "n/a",
+    val pdop: String = "n/a",
+    val hdopVdop: String = "n/a",
+    val horizontalAccuracy: String = "n/a",
+    val verticalAccuracy: String = "n/a",
+    val differentialAge: String = "n/a",
+    val baseline: String = "n/a",
+    val pppStatus: String = "n/a",
+    val rtklibStatus: String = "Not configured",
+)
+
+data class NtripCardState(
+    val url: String = "n/a",
+    val status: String = "n/a",
+    val transferred: String = "n/a",
+    val stationId: String = "n/a",
+    val baseLatLon: String = "n/a",
+    val rates: String = "n/a",
+)
+
+data class FilesCardState(
+    val sessionLocation: String = "n/a",
+    val receiverRxBytes: String = "0 B",
+    val txToReceiverBytes: String = "0 B",
+    val ntripBytes: String = "0 B",
+    val nmeaBytes: String = "0 B",
+    val zipShareEnabled: Boolean = false,
+)
+
+data class DashboardAction(
+    val label: String,
+    val kind: DashboardActionKind,
+)
+
+enum class DashboardActionKind {
+    START,
+    STOP,
+    NTRIP,
+    MARK,
+    MENU,
+    SHARE_ZIP,
+    NEW_SESSION,
+}

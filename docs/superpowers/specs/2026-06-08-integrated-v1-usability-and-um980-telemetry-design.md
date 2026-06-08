@@ -19,6 +19,7 @@ In scope:
   start/stop.
 - Dense tiled monitoring dashboard for portrait and landscape screens.
 - Full profile CRUD for V1 profile groups.
+- Save/load/rename settings sets for different field situations.
 - Live NTRIP mountpoint switching during recording.
 - UM980 binary rover profile with BESTNAVB, STADOPB, compressed raw
   observations, ephemeris, ionosphere and UTC messages.
@@ -73,9 +74,9 @@ Tiles:
   rates.
 - Files: session folder, receiver RX bytes, TX-to-receiver bytes, correction
   input bytes, generated NMEA bytes and artifact/session action status.
-- Profiles: one compact tile with rows for workflow, command script profile,
-  baud profile, NTRIP caster profile, recording/output profile and storage
-  location profile.
+- Profiles: one compact tile with rows for workflow, active settings set,
+  command script profile, baud profile, NTRIP caster profile,
+  recording/output profile and storage location profile.
 
 No separate "Change mountpoint" button is needed. Tapping the NTRIP mountpoint
 field opens the contextual live mountpoint picker.
@@ -131,6 +132,61 @@ Before recording, the app validates:
 
 During recording, only the active NTRIP mountpoint can be changed live. Other
 profile edits apply to the next session.
+
+## Settings Sets
+
+Settings sets are the top-level saved field setups. They let the user switch
+between complete configurations for different situations without rebuilding the
+same workflow/profile selections by hand.
+
+A settings set stores:
+
+- selected workflow/mode;
+- receiver profile and receiver/device selection;
+- USB device identity where available;
+- profile baud and recording serial baud;
+- selected command script profile plus any local init/shutdown command edits;
+- selected NTRIP caster profile plus secret references and redacted metadata;
+- selected NTRIP mountpoint profile plus local mountpoint or metadata overrides;
+- selected recording/output profile;
+- selected storage location profile;
+- selected base position or base-position profile reference where applicable;
+- active recording/export options;
+- relevant validation policy selections.
+
+The model is hybrid:
+
+- primary configuration is stored as profile references;
+- local modifications are stored as explicit overrides beside those references;
+- loading the settings set must restore the exact active setup represented by
+  the references plus overrides.
+
+Loading a settings set must not silently overwrite the reusable profile library.
+If a saved override differs from the referenced profile, the UI should present
+the active configuration as a profile with local changes, for example
+`UM980 rover default + local changes`. The user can then keep it as a local
+override, save it back into an editable profile, or copy it into a new profile.
+
+Settings set operations:
+
+- save current settings as a named settings set;
+- update the active settings set from current settings;
+- load a settings set;
+- rename a settings set;
+- copy a settings set;
+- delete user-created settings sets.
+
+Built-in settings sets may be provided for common workflows, but they are
+protected and copy-only.
+
+During recording, settings sets are read-only. Loading, updating, renaming or
+deleting a settings set applies before the next recording only. The only live
+configuration change in V1 remains the active NTRIP mountpoint switch.
+
+Settings sets must never contain plaintext NTRIP passwords or tokens. They may
+store secret references and redacted metadata. If a settings set is copied,
+exported or backed up in the future, secrets must remain external and may need
+to be re-linked by the user.
 
 ## Baud Selection
 
@@ -333,6 +389,8 @@ ZIP creation:
 Focused JVM tests:
 
 - profile CRUD and protected built-ins;
+- settings set save/load/rename/copy/delete behavior, including profile
+  references plus local overrides and secret redaction;
 - Compose dashboard state models and clickable-field routing;
 - baud selector allowed values and baud-transition plan;
 - UM980 binary stream classification;

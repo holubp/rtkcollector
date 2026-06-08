@@ -62,4 +62,14 @@ class Um980StreamParserTest {
         assertEquals(malformedSync.toList(), records.first().bytes.toList())
         assertEquals(valid.toList(), records.last().bytes.toList())
     }
+
+    @Test
+    fun `malformed short header length is rejected as soon as header byte arrives`() {
+        val parser = Um980StreamParser()
+
+        val records = parser.accept(byteArrayOf(0xAA.toByte(), 0x44, 0xB5.toByte(), 1))
+
+        assertEquals(listOf("noise"), records.map { it.kind })
+        assertEquals(listOf(0xAA.toByte(), 0x44, 0xB5.toByte(), 1), records.single().bytes.toList())
+    }
 }

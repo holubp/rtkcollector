@@ -90,9 +90,10 @@ class Um980StreamParser {
     }
 
     private fun binaryFrameEnd(input: ByteArray, start: Int): BinaryFrameEnd {
-        if (start + BINARY_HEADER_LENGTH > input.size) return BinaryFrameEnd.Incomplete
+        if (start + 4 > input.size) return BinaryFrameEnd.Incomplete
         val headerLength = input[start + 3].toInt() and 0xff
         if (headerLength < BINARY_HEADER_LENGTH) return BinaryFrameEnd.Invalid
+        if (start + BINARY_HEADER_LENGTH > input.size) return BinaryFrameEnd.Incomplete
         if (start + headerLength > input.size) return BinaryFrameEnd.Incomplete
         val payloadLength = u16(input, start + 6)
         val end = start + headerLength + payloadLength + CRC_LENGTH

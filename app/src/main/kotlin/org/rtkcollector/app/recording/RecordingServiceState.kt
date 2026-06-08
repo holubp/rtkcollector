@@ -50,6 +50,8 @@ data class RecordingServiceState(
     val ellipsoidalHeight: String = "n/a",
     val altitude: String = "n/a",
     val utcTime: String = "n/a",
+    val latError: String = "n/a",
+    val lonError: String = "n/a",
     val satellites: String = "n/a",
     val pdop: String = "n/a",
     val hdopVdop: String = "n/a",

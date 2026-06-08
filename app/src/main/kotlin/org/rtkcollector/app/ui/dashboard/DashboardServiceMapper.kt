@@ -16,8 +16,8 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         ellipsoidalHeight = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ELLIPSOIDAL_HEIGHT) ?: "n/a",
         altitude = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ALTITUDE) ?: "n/a",
         utcTime = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UTC_TIME) ?: "n/a",
-        latError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_HORIZONTAL_ACCURACY) ?: "n/a",
-        lonError = "n/a",
+        latError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_ERROR) ?: "n/a",
+        lonError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LON_ERROR) ?: "n/a",
     )
     val ggaFixQuality = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, -1).takeIf { it >= 0 }
     val fix = FixCardState(

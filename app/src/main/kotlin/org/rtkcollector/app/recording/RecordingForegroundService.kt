@@ -558,6 +558,15 @@ class RecordingForegroundService : Service() {
     private fun metersDisplay(value: Double?): String =
         if (value == null) "n/a" else "%.3f m".format(java.util.Locale.US, value)
 
+    private fun distanceDisplay(valueMeters: Double?): String =
+        if (valueMeters == null) {
+            "n/a"
+        } else if (valueMeters >= 1000.0) {
+            "%.3f km".format(java.util.Locale.US, valueMeters / 1000.0)
+        } else {
+            "%.3f m".format(java.util.Locale.US, valueMeters)
+        }
+
     private fun satelliteDisplay(used: Int?, inView: Int?): String =
         when {
             used == null && inView == null -> "n/a"
@@ -730,6 +739,8 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_HDOP_VDOP, state.hdopVdop)
                 putExtra(EXTRA_STATE_HORIZONTAL_ACCURACY, state.horizontalAccuracy)
                 putExtra(EXTRA_STATE_VERTICAL_ACCURACY, state.verticalAccuracy)
+                putExtra(EXTRA_STATE_LAT_ERROR, state.latError)
+                putExtra(EXTRA_STATE_LON_ERROR, state.lonError)
                 putExtra(EXTRA_STATE_DIFFERENTIAL_AGE, state.differentialAge)
                 putExtra(EXTRA_STATE_BASELINE, state.baseline)
                 putExtra(EXTRA_STATE_RTCM_FRAMES, state.rtcmFrames)
@@ -837,7 +848,7 @@ class RecordingForegroundService : Service() {
         """{"type":"um980-ascii-solution","logName":"${logName.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"heightM":${heightM ?: "null"}}"""
 
     private fun Um980Telemetry.toJson(): String =
-        """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"stationId":${stationId.jsonStringOrNull()}}"""
+        """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"pdop":${pdop ?: "null"},"hdop":${hdop ?: "null"},"vdop":${vdop ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"baselineLengthM":${baselineLengthM ?: "null"},"stationId":${stationId.jsonStringOrNull()},"utcTime":${utcTime.jsonStringOrNull()}}"""
 
     private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
         copy(
@@ -845,9 +856,15 @@ class RecordingForegroundService : Service() {
             latLon = latLonDisplay(telemetry.latDeg, telemetry.lonDeg).takeUnless { it == "n/a" } ?: latLon,
             altitude = metersDisplay(telemetry.altitudeM).takeUnless { it == "n/a" } ?: altitude,
             ellipsoidalHeight = metersDisplay(telemetry.ellipsoidalHeightM).takeUnless { it == "n/a" } ?: ellipsoidalHeight,
+            latError = telemetry.latErrorM?.let(::metersDisplay) ?: latError,
+            lonError = telemetry.lonErrorM?.let(::metersDisplay) ?: lonError,
             horizontalAccuracy = telemetry.latErrorM?.let(::metersDisplay) ?: horizontalAccuracy,
             verticalAccuracy = telemetry.verticalAccuracyM?.let(::metersDisplay) ?: verticalAccuracy,
+            utcTime = telemetry.utcTime ?: utcTime,
+            pdop = telemetry.pdop?.let { "%.1f".format(java.util.Locale.US, it) } ?: pdop,
+            hdopVdop = dopPairDisplay(telemetry.hdop, telemetry.vdop),
             differentialAge = telemetry.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) } ?: differentialAge,
+            baseline = telemetry.baselineLengthM?.let(::distanceDisplay) ?: baseline,
             satellites = satelliteDisplay(telemetry.satellitesUsed, telemetry.satellitesInView).takeUnless { it == "n/a" } ?: satellites,
         )
 
@@ -1023,6 +1040,8 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_PDOP = "pdop"
         const val EXTRA_STATE_HDOP_VDOP = "hdopVdop"
         const val EXTRA_STATE_HORIZONTAL_ACCURACY = "horizontalAccuracy"
+        const val EXTRA_STATE_LAT_ERROR = "latError"
+        const val EXTRA_STATE_LON_ERROR = "lonError"
         const val EXTRA_STATE_VERTICAL_ACCURACY = "verticalAccuracy"
         const val EXTRA_STATE_DIFFERENTIAL_AGE = "differentialAge"
         const val EXTRA_STATE_BASELINE = "baseline"

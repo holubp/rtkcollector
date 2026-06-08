@@ -2,22 +2,14 @@ plugins {
     id("com.android.application")
 }
 
-val localCompileSdk = providers.gradleProperty("termuxCompileSdk")
-    .map(String::toInt)
-    .getOrElse(36)
-
-val localTargetSdk = providers.gradleProperty("termuxTargetSdk")
-    .map(String::toInt)
-    .getOrElse(36)
-
 android {
     namespace = "org.rtkcollector.app"
-    compileSdk = localCompileSdk
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.rtkcollector.app"
         minSdk = 26
-        targetSdk = localTargetSdk
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
     }

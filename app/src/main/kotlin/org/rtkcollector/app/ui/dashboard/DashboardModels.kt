@@ -16,14 +16,18 @@ data class DashboardState(
             mountpoint: String,
             receiver: String,
             storage: String,
+            position: PositionCardState = PositionCardState(),
+            fix: FixCardState = FixCardState(),
+            ntrip: NtripCardState = NtripCardState(),
+            files: FilesCardState = FilesCardState(),
         ): DashboardState =
             DashboardState(
                 isRecording = false,
                 status = DashboardStatus(workflow, mountpoint, receiver, storage),
-                position = PositionCardState(),
-                fix = FixCardState(),
-                ntrip = NtripCardState(),
-                files = FilesCardState(),
+                position = position,
+                fix = fix,
+                ntrip = ntrip,
+                files = files,
                 primaryAction = DashboardAction("Start", DashboardActionKind.START),
                 secondaryActions = listOf(DashboardAction("Menu", DashboardActionKind.MENU)),
             )

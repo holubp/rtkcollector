@@ -72,4 +72,23 @@ class Um980StreamParserTest {
         assertEquals(listOf("noise"), records.map { it.kind })
         assertEquals(listOf(0xAA.toByte(), 0x44, 0xB5.toByte(), 1), records.single().bytes.toList())
     }
+
+    @Test
+    fun `implausibly large binary payload length is rejected instead of buffered`() {
+        val oversized = byteArrayOf(
+            0xAA.toByte(),
+            0x44,
+            0xB5.toByte(),
+            24,
+            0,
+            0,
+            0xff.toByte(),
+            0xff.toByte(),
+        ) + ByteArray(16)
+
+        val records = Um980StreamParser().accept(oversized)
+
+        assertEquals(listOf("noise"), records.map { it.kind })
+        assertEquals(oversized.toList(), records.single().bytes.toList())
+    }
 }

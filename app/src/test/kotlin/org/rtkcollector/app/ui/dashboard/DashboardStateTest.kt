@@ -24,6 +24,27 @@ class DashboardStateTest {
     }
 
     @Test
+    fun `planned session can preserve last known files after stop`() {
+        val state = DashboardState.planned(
+            workflow = "Rover + NTRIP",
+            mountpoint = "TUBO00CZE0",
+            receiver = "UM980",
+            storage = "SAF folder",
+            files = FilesCardState(
+                sessionLocation = "content://session/current",
+                receiverRxBytes = "123 B",
+                zipShareEnabled = true,
+            ),
+        )
+
+        assertFalse(state.isRecording)
+        assertEquals(DashboardActionKind.START, state.primaryAction.kind)
+        assertEquals("content://session/current", state.files.sessionLocation)
+        assertEquals("123 B", state.files.receiverRxBytes)
+        assertTrue(state.files.zipShareEnabled)
+    }
+
+    @Test
     fun `running session keeps stop visible`() {
         val state = DashboardState.running(
             status = DashboardStatus("Rover + NTRIP", "TUBO00CZE0", "UM980", "SAF folder"),

@@ -87,6 +87,9 @@ Important docs:
 - Foreground service owns recording, wake lock and session writers.
 - UI code should be thin: collect user intent, display state and send explicit
   start/stop commands.
+- Compose UI work must keep Menu and Start/Stop outside scrollable content so
+  the recording controls remain visible across phone/tablet portrait and
+  landscape layouts.
 - Keep raw capture independent from Compose, Activity lifecycle and advisory
   parsers.
 - Record receiver RX, app TX to receiver, correction input, events, quality and
@@ -143,6 +146,8 @@ Prefer the strongest feasible verification for the touched code:
   host where Android SDK native tools can execute.
 - Hardware-facing UM980 changes: document manual hardware smoke tests and the
   exact receiver/USB/baud assumptions.
+- UM980 live parsers must be byte-level for mixed NMEA, UM980 ASCII and UM980
+  binary streams. Do not feed arbitrary binary bytes into line-oriented parsers.
 - UM980 profile-to-runtime baud changes must keep receiver baud-switch commands
   separate from post-switch mode/log commands: send init, send the baud switch,
   reconfigure the host serial bridge without purging RX/TX, drain through the

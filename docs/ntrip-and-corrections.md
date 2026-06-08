@@ -34,6 +34,10 @@ those cached names or type a mountpoint directly. Typed mountpoints remain valid
 when sourcetable fetching is unavailable, blocked by credentials or unsupported
 by the caster.
 
+Fetching caster mountpoints must update the cached list only. The current
+mountpoint text changes only when the user types a new value or explicitly
+selects an item from the fetched list.
+
 ## Reconnect State Machine
 
 The client should move through explicit states:

@@ -96,6 +96,7 @@ class Um980StreamParser {
         if (start + BINARY_HEADER_LENGTH > input.size) return BinaryFrameEnd.Incomplete
         if (start + headerLength > input.size) return BinaryFrameEnd.Incomplete
         val payloadLength = u16(input, start + 6)
+        if (payloadLength > MAX_BINARY_PAYLOAD_LENGTH) return BinaryFrameEnd.Invalid
         val end = start + headerLength + payloadLength + CRC_LENGTH
         return if (end <= input.size) BinaryFrameEnd.Complete(end) else BinaryFrameEnd.Incomplete
     }
@@ -142,6 +143,7 @@ class Um980StreamParser {
     private companion object {
         const val BINARY_HEADER_LENGTH = 24
         const val CRC_LENGTH = 4
+        const val MAX_BINARY_PAYLOAD_LENGTH = 4096
     }
 
     private sealed class BinaryFrameEnd {

@@ -8,6 +8,9 @@ tools.
 
 The Android UI lets the user choose a workflow and receiver profile. The derived
 workflow details and expected recording artifacts are shown before validation.
+The Home screen uses a Compose dashboard that shows the effective session
+configuration and live telemetry in compact cards: Position, Fix, NTRIP and
+Files. Detailed profile editing is reached from Menu.
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;
@@ -23,6 +26,15 @@ It also provides the experimental real-recording controls:
 - manual fixed-base coordinates or pasted/imported `base-position.json`;
 - foreground-service start/stop;
 - live receiver RX, receiver TX, correction input and NTRIP state counters.
+
+The Files card shows the active session location and recorded byte counts. The
+session browser model distinguishes active sessions from completed sessions and
+keeps ZIP sharing disabled while recording unless an explicit partial snapshot
+mode is added. Future Android share actions should copy the session location,
+copy file locations, share selected files through Android send-to apps, or
+create and share a ZIP after recording stops. Start/Stop and Menu are intended
+to stay outside scrollable content so they remain reachable in portrait and
+landscape layouts.
 
 This UI intentionally does not implement RTKLIB, show maps, load shapefiles,
 provide GIS editing or collect field features.

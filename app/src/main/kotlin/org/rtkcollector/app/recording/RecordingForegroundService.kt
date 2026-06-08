@@ -47,7 +47,10 @@ import org.rtkcollector.receiver.unicore.NmeaGgaFix
 import org.rtkcollector.receiver.unicore.NmeaGgaParser
 import org.rtkcollector.receiver.unicore.Um980AsciiSolution
 import org.rtkcollector.receiver.unicore.Um980AsciiSolutionParser
+import org.rtkcollector.receiver.unicore.Um980BinaryParser
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
+import org.rtkcollector.receiver.unicore.Um980StreamParser
+import org.rtkcollector.receiver.unicore.Um980Telemetry
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
@@ -749,51 +752,66 @@ class RecordingForegroundService : Service() {
         val ggaParser = NmeaGgaParser()
         val nmeaExporter = NmeaSentenceExporter()
         val solutionParser = Um980AsciiSolutionParser()
+        val streamParser = Um980StreamParser()
         val rtcmExtractor = Rtcm3Extractor(validateCrc = true)
         return AdvisoryFanout(
             eventSink = eventSink,
             consumers = listOf(
-                AdvisoryConsumer("nmea-gga") { bytes ->
-                    if (exportNmea) {
-                        nmeaExporter.accept(bytes).forEach { sentence ->
-                            sessionWriters.appendReceiverSolutionNmea(sentence)
-                            activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
-                        }
-                    }
-                    ggaParser.accept(bytes).forEach { fix ->
-                        if (exportJsonSolution) {
-                            sessionWriters.appendReceiverSolutionJson(fix.toJson())
-                        }
-                        state = state.copy(
-                            ggaFixQuality = fix.fixQuality,
-                            latLon = latLonDisplay(fix.latDeg, fix.lonDeg),
-                            altitude = metersDisplay(fix.altitudeM),
-                            utcTime = fix.utcTime.ifBlank { state.utcTime },
-                            satellites = satelliteDisplay(fix.satelliteCount, null),
-                            hdopVdop = dopPairDisplay(fix.hdop, null),
-                        )
-                    }
-                },
-                AdvisoryConsumer("um980-ascii-solution") { bytes ->
-                    solutionParser.accept(bytes).forEach { solution ->
-                        if (solution.logName.startsWith("PPP")) {
-                            if (exportJsonSolution) {
-                                sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
+                AdvisoryConsumer("um980-mixed-stream") { bytes ->
+                    streamParser.accept(bytes).forEach { record ->
+                        when (record.kind) {
+                            "nmea" -> {
+                                if (exportNmea) {
+                                    nmeaExporter.accept(record.bytes).forEach { sentence ->
+                                        sessionWriters.appendReceiverSolutionNmea(sentence)
+                                        activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
+                                    }
+                                }
+                                ggaParser.accept(record.bytes).forEach { fix ->
+                                    if (exportJsonSolution) {
+                                        sessionWriters.appendReceiverSolutionJson(fix.toJson())
+                                    }
+                                    state = state.copy(
+                                        ggaFixQuality = fix.fixQuality,
+                                        latLon = latLonDisplay(fix.latDeg, fix.lonDeg),
+                                        altitude = metersDisplay(fix.altitudeM),
+                                        utcTime = fix.utcTime.ifBlank { state.utcTime },
+                                        satellites = satelliteDisplay(fix.satelliteCount, null),
+                                        hdopVdop = dopPairDisplay(fix.hdop, null),
+                                    )
+                                }
                             }
-                            state = state.copy(
-                                pppStatus = solution.positionType,
-                                latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
-                                ellipsoidalHeight = metersDisplay(solution.heightM),
-                            )
-                        } else {
-                            if (exportJsonSolution) {
-                                sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                            "unicore_ascii" -> {
+                                solutionParser.accept(record.bytes).forEach { solution ->
+                                    if (solution.logName.startsWith("PPP")) {
+                                        if (exportJsonSolution) {
+                                            sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
+                                        }
+                                        state = state.copy(
+                                            pppStatus = solution.positionType,
+                                            latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
+                                            ellipsoidalHeight = metersDisplay(solution.heightM),
+                                        )
+                                    } else {
+                                        if (exportJsonSolution) {
+                                            sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                                        }
+                                        state = state.copy(
+                                            bestnavPositionType = solution.positionType,
+                                            latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
+                                            ellipsoidalHeight = metersDisplay(solution.heightM),
+                                        )
+                                    }
+                                }
                             }
-                            state = state.copy(
-                                bestnavPositionType = solution.positionType,
-                                latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
-                                ellipsoidalHeight = metersDisplay(solution.heightM),
-                            )
+                            "unicore_binary" -> {
+                                Um980BinaryParser.parseBestnavb(record.bytes)?.let { telemetry ->
+                                    if (exportJsonSolution) {
+                                        sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
+                                    }
+                                    state = state.withUm980Telemetry(telemetry)
+                                }
+                            }
                         }
                     }
                 },
@@ -817,6 +835,21 @@ class RecordingForegroundService : Service() {
 
     private fun Um980AsciiSolution.toJson(): String =
         """{"type":"um980-ascii-solution","logName":"${logName.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"heightM":${heightM ?: "null"}}"""
+
+    private fun Um980Telemetry.toJson(): String =
+        """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"stationId":${stationId.jsonStringOrNull()}}"""
+
+    private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
+        copy(
+            bestnavPositionType = telemetry.positionType ?: bestnavPositionType,
+            latLon = latLonDisplay(telemetry.latDeg, telemetry.lonDeg).takeUnless { it == "n/a" } ?: latLon,
+            altitude = metersDisplay(telemetry.altitudeM).takeUnless { it == "n/a" } ?: altitude,
+            ellipsoidalHeight = metersDisplay(telemetry.ellipsoidalHeightM).takeUnless { it == "n/a" } ?: ellipsoidalHeight,
+            horizontalAccuracy = telemetry.latErrorM?.let(::metersDisplay) ?: horizontalAccuracy,
+            verticalAccuracy = telemetry.verticalAccuracyM?.let(::metersDisplay) ?: verticalAccuracy,
+            differentialAge = telemetry.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) } ?: differentialAge,
+            satellites = satelliteDisplay(telemetry.satellitesUsed, telemetry.satellitesInView).takeUnless { it == "n/a" } ?: satellites,
+        )
 
     private fun String?.jsonStringOrNull(): String =
         if (this == null) "null" else "\"${jsonEscape()}\""

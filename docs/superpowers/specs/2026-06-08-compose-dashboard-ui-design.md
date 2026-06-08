@@ -74,7 +74,9 @@ The bottom action bar is always visible and contains:
 
 - before recording: `Start`;
 - while recording: `Stop`, `NTRIP`, optional `Mark`;
-- after recording: `New`, `Share ZIP`, optional `Open session`.
+- after recording: `New` and optional `Open session`. `Share ZIP` is a planned
+  follow-up action unless Android share/ZIP wiring is implemented in the same
+  pass.
 
 Only the middle dashboard content scrolls. Critical actions must never be
 inside the scroll area.
@@ -170,11 +172,14 @@ removing fields.
 
 ### Files Card
 
-Required fields and actions:
+Required fields:
 
 - session folder or SAF-backed session location;
 - key recorded files and byte counters, including receiver RX, TX to receiver,
-  NTRIP correction input and NMEA solution export where enabled;
+  NTRIP correction input and NMEA solution export where enabled.
+
+Planned actions, not fully implemented in this dashboard pass:
+
 - copy folder/location;
 - copy selected file path/location;
 - copy file list;
@@ -382,13 +387,18 @@ reviewed baud-switch command.
 
 ## Sessions Screen
 
-The Sessions screen lists:
+Implemented in this dashboard pass:
 
-- active session at the top when recording;
+- active/current session at the top when service state reports a session
+  location;
+- empty state when no current or recent session is available.
+
+Planned follow-up browser capabilities:
+
 - recent sessions;
 - older sessions with search/filter where practical.
 
-Session detail shows:
+Planned session detail should show:
 
 - workflow and receiver;
 - NTRIP metadata without secrets;
@@ -396,10 +406,11 @@ Session detail shows:
 - storage location;
 - file list with sizes;
 - validation/warnings;
-- copy/share actions.
+- planned copy/share actions.
 
 The browser should remain useful beyond the most recent session. It should not
-block the dashboard work, but it is in scope for the Compose UI pass.
+block the dashboard work. Complex session history, detail, Android share intents
+and ZIP creation are follow-up work unless explicitly implemented.
 
 ## Error Handling
 
@@ -410,7 +421,8 @@ UI errors must be explicit and field-oriented:
 - live NTRIP update failures show degraded NTRIP status while recording
   continues;
 - parser gaps show `n/a` and warnings while raw recording continues;
-- share/ZIP errors show actionable messages and do not alter session files;
+- future share/ZIP errors show actionable messages and do not alter session
+  files;
 - SAF permission loss blocks new SAF recording and explains the required folder
   re-selection.
 
@@ -434,7 +446,7 @@ Required tests and validation:
 - app compile on a full Android host;
 - manual portrait and landscape screenshot review on phone/tablet dimensions;
 - field smoke test: plain rover, rover + NTRIP to UM980, temporary-base with
-  PPP enabled, stop/share session.
+  PPP enabled, and stop the session cleanly.
 
 In the local Termux environment, Android resource linking may remain limited by
 native Android 36 tooling. Use `:app:compileDebugKotlin` locally where full APK
@@ -454,7 +466,8 @@ The implementation should be reviewable:
 7. Expand service state for telemetry.
 8. Implement UM980 mixed-stream and binary `BESTNAVB` parsing.
 9. Implement controlled baud-transition model.
-10. Implement Sessions browser and file/share/ZIP actions.
+10. Implement Sessions browser and file/share/ZIP eligibility model. Android
+    share intents and ZIP creation are follow-up work unless explicitly added.
 11. Add responsive screenshot/manual validation notes.
 
 Each slice should keep raw recording behaviour unchanged unless explicitly

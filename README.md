@@ -14,13 +14,15 @@ specifications, pure Kotlin workflow/session/correction primitives, a simple
 Android UI and an experimental UM980 USB/NTRIP recording vertical slice. It is
 not a production Android field application.
 
-The Android UI can still show workflow validation details, and now also exposes
-an experimental real-recording path: USB device permission, UM980 runtime
-commands, optional NTRIP client settings, foreground-service recording, live byte
-counters and stop/shutdown control. On local Termux, APK assembly may be blocked
-by the Android Gradle Plugin invoking SDK native binaries such as `aapt2` that
-are not usable on this Termux/Android host; use `:app:compileDebugKotlin` to
-validate the Kotlin/UI code locally.
+The Android UI now opens to an experimental Compose dashboard with compact
+Position, Fix, NTRIP and Files cards, plus Menu and Start/Stop controls that are
+kept outside scrolling content. The existing real-recording path remains
+available for USB device permission, UM980 runtime commands, optional NTRIP
+client settings, foreground-service recording, live byte counters and
+stop/shutdown control. On local Termux, APK assembly may be blocked by the
+Android Gradle Plugin invoking SDK native binaries such as `aapt2` that are not
+usable on this Termux/Android host; use `:app:compileDebugKotlin` to validate
+the Kotlin/UI code locally.
 
 ## Core Goals
 

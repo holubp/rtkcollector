@@ -56,6 +56,10 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             mountpoint = status.mountpoint,
             receiver = status.receiver,
             storage = status.storage,
+            position = position,
+            fix = fix,
+            ntrip = ntrip,
+            files = files,
         )
     }
 }

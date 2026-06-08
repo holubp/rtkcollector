@@ -40,10 +40,9 @@ Create:
 - `app/src/main/kotlin/org/rtkcollector/app/ui/settings/SettingsHub.kt`: settings menu surface.
 - `app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileEditorModels.kt`: reusable profile editor state/actions.
 - `app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileScreens.kt`: profile list/editor Compose screens.
-- `app/src/main/kotlin/org/rtkcollector/app/ui/sessions/SessionBrowserModels.kt`: session list/file/share state.
-- `app/src/main/kotlin/org/rtkcollector/app/ui/sessions/SessionsScreen.kt`: current/recent/older sessions and detail.
+- `app/src/main/kotlin/org/rtkcollector/app/ui/sessions/SessionBrowserModels.kt`: session list/file/share eligibility state.
+- `app/src/main/kotlin/org/rtkcollector/app/ui/sessions/SessionsScreen.kt`: current session list surface.
 - `app/src/main/kotlin/org/rtkcollector/app/share/SessionShareModels.kt`: share/ZIP eligibility model.
-- `app/src/main/kotlin/org/rtkcollector/app/share/SessionShareController.kt`: Android `ACTION_SEND` / `ACTION_SEND_MULTIPLE` intents and ZIP creation.
 - `app/src/test/kotlin/org/rtkcollector/app/ui/dashboard/DashboardFormattersTest.kt`.
 - `app/src/test/kotlin/org/rtkcollector/app/ui/dashboard/DashboardStateTest.kt`.
 - `app/src/test/kotlin/org/rtkcollector/app/profile/ProfileStoresTest.kt`.
@@ -1765,12 +1764,20 @@ private fun dashboardStateFrom(intent: Intent): DashboardState {
         nmeaBytes = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_NMEA_BYTES, 0)),
         zipShareEnabled = !running,
     )
-    return if (running) DashboardState.running(status, position, fix, ntrip, files) else DashboardState.planned(
-        workflow = status.workflow,
-        mountpoint = status.mountpoint,
-        receiver = status.receiver,
-        storage = status.storage,
-    )
+    return if (running) {
+        DashboardState.running(status, position, fix, ntrip, files)
+    } else {
+        DashboardState.planned(
+            workflow = status.workflow,
+            mountpoint = status.mountpoint,
+            receiver = status.receiver,
+            storage = status.storage,
+            position = position,
+            fix = fix,
+            ntrip = ntrip,
+            files = files,
+        )
+    }
 }
 ```
 
@@ -2126,9 +2133,10 @@ and Files. Detailed profile editing is reached from Menu.
 Add:
 
 ```markdown
-The Files card shows the active session location and recorded files. After
-recording stops, the user can copy the session location, copy file locations,
-share selected files through Android send-to apps, or create and share a ZIP.
+The Files card shows the active session location and recorded byte counts. The
+session browser model distinguishes active sessions from completed sessions and
+keeps ZIP sharing disabled while recording unless an explicit partial snapshot
+mode is added. Android copy/share intents and ZIP creation are follow-up work.
 ```
 
 - [ ] **Step 2: Update NTRIP docs**
@@ -2217,7 +2225,7 @@ Spec coverage:
 - Dashboard telemetry and service state: Tasks 2, 7, 9.
 - UM980 binary/mixed-stream parsing: Tasks 7, 8.
 - Controlled baud sequencing: Task 10.
-- Session browser and file/share/ZIP: Task 11.
+- Session browser and file/share/ZIP eligibility model: Task 11.
 - Documentation and final validation: Task 12.
 
 Known planned limitations in this plan:

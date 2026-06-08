@@ -4,6 +4,10 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
 import org.rtkcollector.core.session.SessionArtifactFile
+import org.rtkcollector.core.session.SessionWriterCloseReport
+import org.rtkcollector.core.session.SessionWriterIssue
+import org.rtkcollector.core.session.SessionWriterIssueCategory
+import org.rtkcollector.core.session.SessionWriterIssueSeverity
 import org.rtkcollector.core.session.SessionWriters
 import java.io.BufferedOutputStream
 import java.io.Closeable
@@ -24,6 +28,9 @@ internal interface RecordingSessionWriters : Closeable {
     fun appendExtractedRtcm(bytes: ByteArray)
     fun writeBasePositionJson(json: String)
     fun flush()
+    fun finish(): SessionWriterCloseReport = SessionWriterCloseReport()
+    fun flushRaw()
+    fun closeAll(): SessionWriterCloseReport
 }
 
 internal class PathRecordingSessionWriters private constructor(
@@ -41,6 +48,25 @@ internal class PathRecordingSessionWriters private constructor(
     override fun appendExtractedRtcm(bytes: ByteArray) = delegate.appendExtractedRtcm(bytes)
     override fun writeBasePositionJson(json: String) = delegate.writeBasePositionJson(json)
     override fun flush() = delegate.flush()
+    override fun flushRaw() = delegate.flush()
+    override fun closeAll(): SessionWriterCloseReport {
+        val issue = runCatching {
+            delegate.flush()
+            delegate.close()
+        }.exceptionOrNull() ?: return SessionWriterCloseReport()
+
+        return SessionWriterCloseReport(
+            issues = listOf(
+                SessionWriterIssue(
+                    artifact = SessionArtifactFile.RECEIVER_RX_RAW.fileName,
+                    category = SessionWriterIssueCategory.RAW_RX,
+                    severity = SessionWriterIssueSeverity.FATAL,
+                    message = issue.message ?: "Session writer close failed",
+                ),
+            ),
+        )
+    }
+
     override fun close() = delegate.close()
 
     companion object {
@@ -119,6 +145,78 @@ internal class SafRecordingSessionWriters private constructor(
         extractedRtcm.flush()
     }
 
+    override fun flushRaw() {
+        receiverRx.flush()
+    }
+
+    override fun closeAll(): SessionWriterCloseReport {
+        val issues = mutableListOf<SessionWriterIssue>()
+        closeStream(
+            stream = receiverRx,
+            artifact = SessionArtifactFile.RECEIVER_RX_RAW,
+            category = SessionWriterIssueCategory.RAW_RX,
+            severity = SessionWriterIssueSeverity.FATAL,
+            issues = issues,
+        )
+        closeStream(
+            stream = txToReceiver,
+            artifact = SessionArtifactFile.TX_TO_RECEIVER_RAW,
+            category = SessionWriterIssueCategory.BINARY_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = correctionInput,
+            artifact = SessionArtifactFile.CORRECTION_INPUT_RAW,
+            category = SessionWriterIssueCategory.BINARY_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = extractedRtcm,
+            artifact = SessionArtifactFile.RTCM_EXTRACTED_RTCM3,
+            category = SessionWriterIssueCategory.BINARY_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = events,
+            artifact = SessionArtifactFile.EVENTS_JSONL,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = qualityLive,
+            artifact = SessionArtifactFile.QUALITY_LIVE_JSONL,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = receiverSolutionNmea,
+            artifact = SessionArtifactFile.RECEIVER_SOLUTION_NMEA,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = receiverSolution,
+            artifact = SessionArtifactFile.RECEIVER_SOLUTION_JSONL,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = receiverPppSolution,
+            artifact = SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        return SessionWriterCloseReport(issues)
+    }
+
     override fun close() {
         receiverRx.close()
         txToReceiver.close()
@@ -190,6 +288,26 @@ internal class SafRecordingSessionWriters private constructor(
                 extractedRtcm = appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
             )
         }
+    }
+}
+
+private fun closeStream(
+    stream: OutputStream,
+    artifact: SessionArtifactFile,
+    category: SessionWriterIssueCategory,
+    severity: SessionWriterIssueSeverity,
+    issues: MutableList<SessionWriterIssue>,
+) {
+    runCatching {
+        stream.flush()
+        stream.close()
+    }.onFailure { error ->
+        issues += SessionWriterIssue(
+            artifact = artifact.fileName,
+            category = category,
+            severity = severity,
+            message = error.message ?: "Failed to close ${artifact.fileName}",
+        )
     }
 }
 

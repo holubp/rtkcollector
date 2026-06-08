@@ -17,6 +17,33 @@ import java.util.concurrent.TimeUnit
 
 class NtripClientTest {
     @Test
+    fun `default stream request user agent is accepted by strict ntrip casters`() {
+        val request = NtripRequest(
+            host = "caster.example",
+            port = 2101,
+            mountpoint = "MOUNT",
+        )
+
+        val rendered = request.render()
+
+        assertTrue(rendered.contains("User-Agent: NTRIP RtkCollector/0.1\r\n"))
+        assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
+    }
+
+    @Test
+    fun `default sourcetable request user agent is accepted by strict ntrip casters`() {
+        val request = NtripSourcetableRequest(
+            host = "caster.example",
+            port = 2101,
+        )
+
+        val rendered = request.render()
+
+        assertTrue(rendered.contains("User-Agent: NTRIP RtkCollector/0.1\r\n"))
+        assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
+    }
+
+    @Test
     fun `request rendering uses ntrip v2 headers by default`() {
         val request = NtripRequest(
             host = "caster.example",

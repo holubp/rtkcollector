@@ -14,6 +14,12 @@ errors, not reconnect loops. In code and artifacts the Android-to-receiver path
 is called receiver TX. The app is a client only; it is not an NTRIP caster or
 server.
 
+Some strict casters reject generic application-style `User-Agent` values even
+when credentials and mountpoint are correct. Default stream and sourcetable
+requests must identify RtkCollector as an NTRIP client, for example
+`User-Agent: NTRIP RtkCollector/0.1`, while still sending
+`Ntrip-Version: Ntrip/2.0` for V2 requests.
+
 ## Caster And Mountpoint Profiles
 
 V1 separates reusable caster settings from reusable mountpoint settings. A

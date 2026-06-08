@@ -19,12 +19,14 @@ enum class NtripProtocolVersion {
     NTRIP_V1,
 }
 
+const val DEFAULT_NTRIP_USER_AGENT: String = "NTRIP RtkCollector/0.1"
+
 data class NtripRequest(
     val host: String,
     val port: Int,
     val mountpoint: String,
     val credentials: NtripCredentials? = null,
-    val userAgent: String = "RtkCollector/0.1",
+    val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
 ) {
     init {
@@ -86,7 +88,7 @@ data class NtripSourcetableRequest(
     val host: String,
     val port: Int,
     val credentials: NtripCredentials? = null,
-    val userAgent: String = "RtkCollector/0.1",
+    val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
 ) {
     init {

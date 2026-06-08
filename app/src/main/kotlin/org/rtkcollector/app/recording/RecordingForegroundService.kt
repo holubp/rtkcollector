@@ -205,16 +205,14 @@ class RecordingForegroundService : Service() {
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
             shutdownCommands = intent.getStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS).orEmpty().validatedCommands()
-            sendCommandLines(captureRuntime, initCommands)
-            if (profileBaud != serialBaud) {
-                require(baudSwitchCommands.isNotEmpty()) {
-                    "Profile baud differs from recording baud but no receiver baud-switch command was supplied."
-                }
-                sendCommandLines(captureRuntime, baudSwitchCommands)
-                usbTransport.reconfigureBaud(serialBaud)
-            }
-            drainAfterProfile(captureRuntime)
-            sendCommandLines(captureRuntime, modeCommands)
+            val baudPlan = Um980BaudTransitionPlan.build(
+                profileBaud = profileBaud,
+                serialBaud = serialBaud,
+                initCommands = initCommands,
+                baudSwitchCommands = baudSwitchCommands,
+                modeCommands = modeCommands,
+            )
+            executeBaudTransition(baudPlan, captureRuntime, usbTransport)
 
             state = state.copy(
                 running = true,
@@ -508,6 +506,22 @@ class RecordingForegroundService : Service() {
                 captureRuntime.sendToReceiver("$command\r\n".toByteArray(Charsets.US_ASCII))
                 Thread.sleep(100)
             }
+    }
+
+    private fun executeBaudTransition(
+        plan: Um980BaudTransitionPlan,
+        captureRuntime: CaptureRuntime,
+        usbTransport: AndroidUsbSerialTransport,
+    ) {
+        plan.steps.forEach { step ->
+            when (step) {
+                is Um980BaudStep.OpenHostAtProfileBaud -> Unit
+                is Um980BaudStep.SendCommands -> sendCommandLines(captureRuntime, step.commands)
+                Um980BaudStep.PauseAfterDeviceBaudCommand -> Thread.sleep(500)
+                is Um980BaudStep.ReconfigureHostBaud -> usbTransport.reconfigureBaud(step.baud)
+                Um980BaudStep.DrainTransitionalRx -> drainAfterProfile(captureRuntime)
+            }
+        }
     }
 
     private fun List<String>.validatedCommands(): List<String> =

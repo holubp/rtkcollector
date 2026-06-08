@@ -23,15 +23,23 @@ import org.rtkcollector.core.capture.CaptureEvent
 import org.rtkcollector.core.capture.CaptureEventSink
 import org.rtkcollector.core.capture.CaptureRuntime
 import org.rtkcollector.core.capture.RawRecorder
-import org.rtkcollector.core.correction.CorrectionStatus
+import org.rtkcollector.core.correction.DefaultNtripRuntimeClient
 import org.rtkcollector.core.correction.NtripClient
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripReconnectPolicy
 import org.rtkcollector.core.correction.NtripRequest
+import org.rtkcollector.core.correction.NtripRuntimeConfig
+import org.rtkcollector.core.correction.NtripRuntimeController
+import org.rtkcollector.core.correction.NtripRuntimeSnapshot
+import org.rtkcollector.core.correction.NtripRuntimeState
 import org.rtkcollector.core.correction.Rtcm3Extractor
 import org.rtkcollector.core.session.AntennaMetadata
 import org.rtkcollector.core.session.NtripSessionMetadata
 import org.rtkcollector.core.session.SerialParameters
+import org.rtkcollector.core.session.SessionWriterCloseReport
+import org.rtkcollector.core.session.SessionWriterIssue
+import org.rtkcollector.core.session.SessionWriterIssueCategory
+import org.rtkcollector.core.session.SessionWriterIssueSeverity
 import org.rtkcollector.core.session.SessionMetadata
 import org.rtkcollector.core.session.SessionMode
 import org.rtkcollector.core.session.exportSessionMetadata
@@ -47,14 +55,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class RecordingForegroundService : Service() {
     private val running = AtomicBoolean(false)
+    private val stopping = AtomicBoolean(false)
+    private val shutdownSent = AtomicBoolean(false)
     private var captureThread: Thread? = null
-    private var ntripThread: Thread? = null
     private var runtime: CaptureRuntime? = null
     private var transport: AndroidUsbSerialTransport? = null
     private var writers: RecordingSessionWriters? = null
     private var advisoryFanout: AsyncAdvisoryFanout? = null
     private var activeSessionMetadata: SessionMetadata? = null
-    private var ntripClient: NtripClient? = null
+    private var activeRecorder: SessionRawRecorder? = null
+    private var ntripController: NtripRuntimeController? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
@@ -70,6 +80,8 @@ class RecordingForegroundService : Service() {
             ACTION_START -> startRecording(intent)
             ACTION_STOP -> stopRecording(sendShutdown = true)
             ACTION_QUERY -> broadcastState()
+            ACTION_UPDATE_NTRIP -> updateNtrip(intent)
+            ACTION_DISABLE_NTRIP -> disableNtrip()
         }
         return START_NOT_STICKY
     }
@@ -85,6 +97,17 @@ class RecordingForegroundService : Service() {
         if (!running.compareAndSet(false, true)) {
             return
         }
+        stopping.set(false)
+        shutdownSent.set(false)
+        state = state.copy(
+            lifecycle = RecordingLifecycleState.STARTING,
+            errorCategory = RecordingErrorCategory.NONE,
+            errorSeverity = RecordingErrorSeverity.NONE,
+            lastError = null,
+            rawRecordingActive = false,
+            correctionsActive = false,
+        )
+        broadcastState()
 
         startForeground(NOTIFICATION_ID, notification("Starting recording"))
         acquireWakeLock()
@@ -144,6 +167,7 @@ class RecordingForegroundService : Service() {
                 writers = sessionWriters,
                 recordCorrectionInput = intent.getBooleanExtra(EXTRA_RECORD_NTRIP_CORRECTION_INPUT, true),
             )
+            activeRecorder = recorder
             val eventSink = SessionEventSink(sessionWriters)
             val usbTransport = AndroidUsbSerialTransport(
                 usbManager = usbManager,
@@ -187,13 +211,28 @@ class RecordingForegroundService : Service() {
             drainAfterProfile(captureRuntime)
             sendCommandLines(captureRuntime, modeCommands)
 
-            state = state.copy(running = true, sessionPath = openedSession.displayPath, ntripState = "Not configured")
+            state = state.copy(
+                running = true,
+                lifecycle = RecordingLifecycleState.RECORDING,
+                sessionPath = openedSession.displayPath,
+                ntripState = "Not configured",
+                rawRecordingActive = true,
+                correctionsActive = false,
+            )
             broadcastState()
 
             captureThread = Thread({ captureLoop(captureRuntime, recorder) }, "rtkcollector-capture").also { it.start() }
             maybeStartNtrip(intent, captureRuntime, recorder)
         } catch (error: Throwable) {
-            state = state.copy(running = false, lastError = error.message)
+            state = state.copy(
+                running = false,
+                lifecycle = RecordingLifecycleState.FAILED,
+                lastError = error.message,
+                errorCategory = classifyStartError(error),
+                errorSeverity = RecordingErrorSeverity.FATAL,
+                rawRecordingActive = false,
+                correctionsActive = false,
+            )
             broadcastState()
             stopRecording(sendShutdown = false)
         }
@@ -213,7 +252,11 @@ class RecordingForegroundService : Service() {
                 )
                 broadcastState()
             }.onFailure { error ->
-                state = state.copy(lastError = error.message)
+                state = state.copy(
+                    lastError = error.message,
+                    errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+                    errorSeverity = RecordingErrorSeverity.DEGRADED,
+                )
                 broadcastState()
                 Thread.sleep(250)
             }
@@ -226,15 +269,68 @@ class RecordingForegroundService : Service() {
         recorder: SessionRawRecorder,
     ) {
         if (!intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) {
-            state = state.copy(ntripState = "Disabled")
+            state = state.copy(ntripState = "Disabled", correctionsActive = false)
+            broadcastState()
             return
         }
+        val config = ntripRuntimeConfig(intent)
+        if (config == null) {
+            return
+        }
+        startNtripController(config, captureRuntime, recorder)
+    }
+
+    private fun startNtripController(
+        config: NtripRuntimeConfig,
+        captureRuntime: CaptureRuntime,
+        recorder: SessionRawRecorder,
+    ) {
+        val controller = NtripRuntimeController(
+            clientFactory = { runtimeConfig ->
+                DefaultNtripRuntimeClient(
+                    NtripClient(
+                        request = runtimeConfig.request,
+                        reconnectPolicy = NtripReconnectPolicy(maxAttempts = Int.MAX_VALUE, delayMillis = 5_000),
+                    ),
+                )
+            },
+            emit = ::handleNtripSnapshot,
+            onRtcmBytes = { bytes ->
+                if (running.get()) {
+                    synchronized(runtimeLock) {
+                        captureRuntime.injectCorrectionBytes(bytes)
+                    }
+                    state = state.copy(
+                        correctionInputBytes = recorder.correctionInputBytes,
+                        txToReceiverBytes = recorder.txToReceiverBytes,
+                        correctionsActive = true,
+                    )
+                    broadcastState()
+                }
+            },
+        )
+        ntripController = controller
+        controller.start(config)
+    }
+
+    private fun handleNtripSnapshot(snapshot: NtripRuntimeSnapshot) {
+        val ntripProblem = snapshot.state == NtripRuntimeState.AUTH_ERROR || snapshot.state == NtripRuntimeState.NETWORK_ERROR
+        state = state.copy(
+            ntripState = snapshot.state.name,
+            lastError = snapshot.message ?: state.lastError,
+            errorCategory = if (ntripProblem) RecordingErrorCategory.NTRIP else state.errorCategory,
+            errorSeverity = if (ntripProblem) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
+            correctionsActive = snapshot.correctionsActive,
+        )
+        broadcastState()
+    }
+
+    private fun ntripRuntimeConfig(intent: Intent): NtripRuntimeConfig? {
         val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
         val mountpoint = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).orEmpty()
         if (host.isBlank() || mountpoint.isBlank()) {
-            return
+            return null
         }
-
         val request = NtripRequest(
             host = host,
             port = validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
@@ -243,52 +339,81 @@ class RecordingForegroundService : Service() {
                 NtripCredentials(username = username, password = intent.getStringExtra(EXTRA_NTRIP_PASSWORD).orEmpty())
             },
         )
-        val ggaLine = intent.getStringExtra(EXTRA_NTRIP_GGA)?.takeIf { it.isNotBlank() }
-        ntripThread = Thread(
-            {
-                val client = NtripClient(
-                    request = request,
-                    reconnectPolicy = NtripReconnectPolicy(maxAttempts = Int.MAX_VALUE, delayMillis = 5_000),
-                )
-                ntripClient = client
-                client.runWithReconnect(
-                    ggaLines = listOfNotNull(ggaLine),
-                    onState = { correctionStatus: CorrectionStatus ->
-                        state = state.copy(ntripState = correctionStatus.state.name, lastError = correctionStatus.lastError)
-                        broadcastState()
-                    },
-                    onRtcmBytes = { bytes ->
-                        if (running.get()) {
-                            captureRuntime.injectCorrectionBytes(bytes)
-                            state = state.copy(
-                                correctionInputBytes = recorder.correctionInputBytes,
-                                txToReceiverBytes = recorder.txToReceiverBytes,
-                            )
-                            broadcastState()
-                        }
-                    },
-                )
-            },
-            "rtkcollector-ntrip",
-        ).also { it.start() }
+        return NtripRuntimeConfig(
+            request = request,
+            ggaLines = listOfNotNull(intent.getStringExtra(EXTRA_NTRIP_GGA)?.takeIf { it.isNotBlank() }),
+        )
+    }
+
+    private fun updateNtrip(intent: Intent) {
+        val captureRuntime = runtime
+        if (!running.get() || captureRuntime == null) {
+            state = state.copy(
+                lastError = "Cannot update NTRIP: no active recording.",
+                errorCategory = RecordingErrorCategory.NTRIP,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return
+        }
+        val config = ntripRuntimeConfig(intent)
+        if (config == null) {
+            state = state.copy(
+                lastError = "Cannot update NTRIP: host and mountpoint are required.",
+                errorCategory = RecordingErrorCategory.NTRIP,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return
+        }
+        val recorder = activeRecorder ?: return
+        runCatching {
+            writers?.appendEventJson(
+                """{"type":"ntrip-config-updated","host":"${config.request.host.jsonEscape()}","mountpoint":"${config.request.mountpoint.jsonEscape()}","usernamePresent":${config.request.credentials != null}}""",
+            )
+        }
+        if (ntripController == null) {
+            startNtripController(config, captureRuntime, recorder)
+        } else {
+            ntripController?.update(config)
+        }
+    }
+
+    private fun disableNtrip() {
+        ntripController?.disable("User disabled NTRIP during recording.")
+        runCatching { writers?.appendEventJson("""{"type":"ntrip-disabled","reason":"user"}""") }
+        state = state.copy(ntripState = "DISABLED", correctionsActive = false)
+        broadcastState()
     }
 
     private fun stopRecording(sendShutdown: Boolean) {
-        if (!running.getAndSet(false) && runtime == null) {
+        if (!stopping.compareAndSet(false, true)) {
+            broadcastState()
             return
         }
-        if (sendShutdown) {
+        if (!running.getAndSet(false) && runtime == null && writers == null && transport == null) {
+            stopping.set(false)
+            return
+        }
+        state = state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false)
+        broadcastState()
+        if (sendShutdown && shutdownSent.compareAndSet(false, true)) {
             runCatching {
                 runtime?.let { captureRuntime ->
                     synchronized(runtimeLock) {
                         sendCommandLines(captureRuntime, shutdownCommands)
                     }
                 }
+            }.onFailure { error ->
+                state = state.copy(
+                    lastError = error.message,
+                    errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                    errorSeverity = RecordingErrorSeverity.DEGRADED,
+                )
+                broadcastState()
             }
         }
-        runCatching { ntripClient?.cancel() }
-        runCatching { ntripThread?.interrupt() }
-        runCatching { ntripThread?.join(1500) }
+        runCatching { ntripController?.stop() }
         runCatching { captureThread?.join(1500) }
         runCatching { advisoryFanout?.close() }
         synchronized(runtimeLock) {
@@ -301,18 +426,52 @@ class RecordingForegroundService : Service() {
                     }
             }
             runCatching { runtime?.close() }
-            runCatching { writers?.flush() }
-            runCatching { writers?.close() }
+            val closeReport = runCatching { writers?.closeAll() }
+                .getOrElse { error ->
+                    SessionWriterCloseReport(
+                        issues = listOf(
+                            SessionWriterIssue(
+                                artifact = "session-writers",
+                                category = SessionWriterIssueCategory.RAW_RX,
+                                severity = SessionWriterIssueSeverity.FATAL,
+                                message = error.message ?: "Writer close failed.",
+                            ),
+                        ),
+                    )
+                }
+            if (closeReport != null && closeReport.issues.isNotEmpty()) {
+                state = state.copy(
+                    lastError = closeReport.userMessage,
+                    errorCategory = RecordingErrorCategory.STORAGE,
+                    errorSeverity = if (closeReport.hasFatalIssue) {
+                        RecordingErrorSeverity.FATAL
+                    } else {
+                        RecordingErrorSeverity.DEGRADED
+                    },
+                    rawRecordingActive = false,
+                )
+            }
         }
         runtime = null
         transport = null
         writers = null
         advisoryFanout = null
         activeSessionMetadata = null
-        ntripClient = null
+        activeRecorder = null
+        ntripController = null
         shutdownCommands = emptyList()
         releaseWakeLock()
-        state = state.copy(running = false)
+        state = state.copy(
+            running = false,
+            lifecycle = if (state.errorSeverity == RecordingErrorSeverity.FATAL) {
+                RecordingLifecycleState.FAILED
+            } else {
+                RecordingLifecycleState.STOPPED
+            },
+            rawRecordingActive = false,
+            correctionsActive = false,
+        )
+        stopping.set(false)
         broadcastState()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -343,6 +502,17 @@ class RecordingForegroundService : Service() {
     private fun validatePort(value: Int): Int {
         require(value in 1..65535) { "NTRIP port must be between 1 and 65535." }
         return value
+    }
+
+    private fun classifyStartError(error: Throwable): RecordingErrorCategory {
+        val message = error.message.orEmpty()
+        return when {
+            message.contains("USB", ignoreCase = true) -> RecordingErrorCategory.USB
+            message.contains("SAF", ignoreCase = true) -> RecordingErrorCategory.STORAGE
+            message.contains("storage", ignoreCase = true) -> RecordingErrorCategory.STORAGE
+            message.contains("command", ignoreCase = true) -> RecordingErrorCategory.RECEIVER_COMMAND
+            else -> RecordingErrorCategory.SERVICE_LIFECYCLE
+        }
     }
 
     private fun drainAfterProfile(captureRuntime: CaptureRuntime) {
@@ -466,6 +636,11 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
                 putExtra(EXTRA_STATE_RTCM_FRAMES, state.rtcmFrames)
                 putExtra(EXTRA_STATE_ERROR, state.lastError)
+                putExtra(EXTRA_STATE_LIFECYCLE, state.lifecycle.name)
+                putExtra(EXTRA_STATE_ERROR_CATEGORY, state.errorCategory.name)
+                putExtra(EXTRA_STATE_ERROR_SEVERITY, state.errorSeverity.name)
+                putExtra(EXTRA_STATE_RAW_ACTIVE, state.rawRecordingActive)
+                putExtra(EXTRA_STATE_CORRECTIONS_ACTIVE, state.correctionsActive)
             },
         )
     }
@@ -629,6 +804,8 @@ class RecordingForegroundService : Service() {
         const val ACTION_START = "org.rtkcollector.app.recording.START"
         const val ACTION_STOP = "org.rtkcollector.app.recording.STOP"
         const val ACTION_QUERY = "org.rtkcollector.app.recording.QUERY"
+        const val ACTION_UPDATE_NTRIP = "org.rtkcollector.app.recording.UPDATE_NTRIP"
+        const val ACTION_DISABLE_NTRIP = "org.rtkcollector.app.recording.DISABLE_NTRIP"
         const val ACTION_STATE = "org.rtkcollector.app.recording.STATE"
 
         const val EXTRA_USB_DEVICE = "usbDevice"
@@ -679,6 +856,11 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_PPP_STATUS = "pppStatus"
         const val EXTRA_STATE_RTCM_FRAMES = "rtcmFrames"
         const val EXTRA_STATE_ERROR = "lastError"
+        const val EXTRA_STATE_LIFECYCLE = "lifecycle"
+        const val EXTRA_STATE_ERROR_CATEGORY = "errorCategory"
+        const val EXTRA_STATE_ERROR_SEVERITY = "errorSeverity"
+        const val EXTRA_STATE_RAW_ACTIVE = "rawRecordingActive"
+        const val EXTRA_STATE_CORRECTIONS_ACTIVE = "correctionsActive"
 
         private const val CHANNEL_ID = "rtkcollector-recording"
         private const val NOTIFICATION_ID = 101

@@ -100,6 +100,8 @@ class MainActivity : Activity() {
     private lateinit var fetchNtripMountpointsButton: Button
     private lateinit var saveNtripMountpointProfileButton: Button
     private lateinit var copyNtripMountpointProfileButton: Button
+    private lateinit var updateNtripButton: Button
+    private lateinit var disableNtripButton: Button
     private lateinit var saveRecordingPolicyButton: Button
     private lateinit var copyRecordingPolicyButton: Button
     private lateinit var saveStorageProfileButton: Button
@@ -266,6 +268,8 @@ class MainActivity : Activity() {
         fetchNtripMountpointsButton = Button(this).apply { text = "Fetch mountpoints from caster" }
         saveNtripMountpointProfileButton = Button(this).apply { text = "Save NTRIP mountpoint profile" }
         copyNtripMountpointProfileButton = Button(this).apply { text = "Copy NTRIP mountpoint profile" }
+        updateNtripButton = Button(this).apply { text = "Update NTRIP while recording" }
+        disableNtripButton = Button(this).apply { text = "Disable NTRIP now" }
         saveRecordingPolicyButton = Button(this).apply { text = "Save recording policy" }
         copyRecordingPolicyButton = Button(this).apply { text = "Copy recording policy" }
         saveStorageProfileButton = Button(this).apply { text = "Save storage profile" }
@@ -299,6 +303,13 @@ class MainActivity : Activity() {
         fetchNtripMountpointsButton.setOnClickListener { fetchNtripMountpoints() }
         saveNtripMountpointProfileButton.setOnClickListener { saveSelectedNtripMountpointProfile(copy = false) }
         copyNtripMountpointProfileButton.setOnClickListener { saveSelectedNtripMountpointProfile(copy = true) }
+        updateNtripButton.setOnClickListener { updateNtripWhileRecording() }
+        disableNtripButton.setOnClickListener {
+            startService(
+                Intent(this, RecordingForegroundService::class.java)
+                    .setAction(RecordingForegroundService.ACTION_DISABLE_NTRIP),
+            )
+        }
         saveRecordingPolicyButton.setOnClickListener { saveSelectedRecordingPolicy(copy = false) }
         copyRecordingPolicyButton.setOnClickListener { saveSelectedRecordingPolicy(copy = true) }
         saveStorageProfileButton.setOnClickListener { saveSelectedStorageProfile(copy = false) }
@@ -378,6 +389,8 @@ class MainActivity : Activity() {
         root.addView(ntripPasswordEdit)
         root.addView(label("Optional GGA upload line"))
         root.addView(ntripGgaEdit)
+        root.addView(updateNtripButton)
+        root.addView(disableNtripButton)
         root.addView(label("Recording policy"))
         root.addView(recordingPolicySpinner)
         root.addView(recordNtripCorrectionInputCheck)
@@ -950,10 +963,39 @@ class MainActivity : Activity() {
         monitorText.text = "Starting recording service..."
     }
 
+    private fun updateNtripWhileRecording() {
+        val host = ntripHostEdit.text.toString().trim()
+        val port = parseIntField(ntripPortEdit, "NTRIP port", 1..65535) ?: return
+        val mountpoint = ntripMountpointEdit.text.toString().trim()
+        if (host.isBlank() || mountpoint.isBlank()) {
+            monitorText.text = "Cannot update NTRIP: host and mountpoint are required."
+            return
+        }
+        val username = ntripUsernameEdit.text.toString().trim()
+        val secretRef = selectedNtripCasterProfile()?.secretId?.takeIf { it.isNotBlank() }
+            ?: ntripCasterSecretRef(host, username)
+        val runtimePassword = resolveNtripPassword(secretRef)
+        val intent = Intent(this, RecordingForegroundService::class.java).apply {
+            action = RecordingForegroundService.ACTION_UPDATE_NTRIP
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, host)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, port)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, mountpoint)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, username)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, runtimePassword)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_SECRET_REF, secretRef)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_GGA, ntripGgaEdit.text.toString())
+        }
+        startService(intent)
+        monitorText.text = "Requested live NTRIP update."
+    }
+
     private fun buildServiceStateText(intent: Intent): String =
         buildString {
             appendLine()
             appendLine("Service running: ${intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)}")
+            appendLine("Lifecycle: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LIFECYCLE) ?: "n/a"}")
+            appendLine("Raw recording active: ${intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RAW_ACTIVE, false)}")
+            appendLine("Corrections active: ${intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_CORRECTIONS_ACTIVE, false)}")
             appendLine("Session: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SESSION_PATH) ?: "n/a"}")
             appendLine("Receiver RX bytes: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RX_BYTES, 0)}")
             appendLine("TX to receiver bytes: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_TX_BYTES, 0)}")
@@ -964,6 +1006,8 @@ class MainActivity : Activity() {
             appendLine("BESTNAV position: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE) ?: "n/a"}")
             appendLine("PPP status: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS) ?: "n/a"}")
             appendLine("RTCM frames seen: ${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTCM_FRAMES, 0)}")
+            appendLine("Error category: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_CATEGORY) ?: "NONE"}")
+            appendLine("Error severity: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_SEVERITY) ?: "NONE"}")
             appendLine("Last error: ${intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR) ?: "none"}")
         }
 

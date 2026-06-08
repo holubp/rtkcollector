@@ -5,10 +5,10 @@ import org.json.JSONObject
 data class CommandProfile(
     val id: String,
     val name: String,
-    val isProtected: Boolean = false,
     val receiverFamily: String = "um980-n4",
     val initScript: String = "# Optional user init commands",
     val shutdownScript: String = "",
+    val isProtected: Boolean = false,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "Command profile id must not be blank." }
@@ -42,13 +42,13 @@ data class CommandProfile(
 data class UsbBaudProfile(
     val id: String,
     val name: String,
-    val isProtected: Boolean = false,
     val profileBaud: Int = 230400,
     val serialBaud: Int = 230400,
     val usbVid: Int? = null,
     val usbPid: Int? = null,
     val usbDeviceName: String? = null,
     val usbProductName: String? = null,
+    val isProtected: Boolean = false,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "USB/baud profile id must not be blank." }
@@ -91,13 +91,13 @@ data class UsbBaudProfile(
 data class NtripCasterProfile(
     val id: String,
     val name: String,
-    val isProtected: Boolean = false,
     val host: String = "",
     val port: Int = 2101,
     val username: String = "",
     val secretId: String = "",
     val protocolPolicy: String = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
     val sourcetableMountpoints: List<String> = emptyList(),
+    val isProtected: Boolean = false,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "NTRIP caster profile id must not be blank." }
@@ -138,11 +138,11 @@ data class NtripMountpointProfile(
     val id: String,
     val name: String,
     val casterProfileId: String,
-    val isProtected: Boolean = false,
     val mountpoint: String = "",
     val ggaUploadPolicy: String = "NONE",
     val expectedFormat: String = "RTCM3",
     val remoteBaseRawAvailable: Boolean = false,
+    val isProtected: Boolean = false,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "NTRIP mountpoint profile id must not be blank." }
@@ -180,7 +180,6 @@ data class NtripMountpointProfile(
 data class RecordingPolicyProfile(
     val id: String,
     val name: String,
-    val isProtected: Boolean = false,
     val recordReceiverRx: Boolean = true,
     val recordTxToReceiver: Boolean = true,
     val recordNtripCorrectionInput: Boolean = true,
@@ -188,6 +187,7 @@ data class RecordingPolicyProfile(
     val exportJsonSolution: Boolean = true,
     val exportGpx: Boolean = false,
     val recordRemoteBaseRaw: Boolean = false,
+    val isProtected: Boolean = false,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "Recording policy id must not be blank." }
@@ -229,9 +229,9 @@ data class RecordingPolicyProfile(
 data class StorageProfile(
     val id: String,
     val name: String,
-    val isProtected: Boolean = false,
     val kind: String = "APP_PRIVATE",
     val treeUri: String? = null,
+    val isProtected: Boolean = false,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "Storage profile id must not be blank." }

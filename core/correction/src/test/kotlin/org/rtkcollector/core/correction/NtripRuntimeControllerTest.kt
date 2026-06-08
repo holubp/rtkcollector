@@ -79,6 +79,28 @@ class NtripRuntimeControllerTest {
         assertEquals(listOf("MOUNT", "NEW"), requests.map { it.mountpoint })
     }
 
+    @Test
+    fun `disable ignores late state and bytes from stale client`() {
+        val staleClient = LateEmittingRuntimeClient()
+        val states = mutableListOf<NtripRuntimeSnapshot>()
+        val bytes = mutableListOf<ByteArray>()
+        val controller = NtripRuntimeController(
+            clientFactory = { staleClient },
+            emit = states::add,
+            onRtcmBytes = bytes::add,
+        )
+
+        controller.start(NtripRuntimeConfig(defaultRequest()))
+        assertTrue(staleClient.started.await(2, TimeUnit.SECONDS))
+        controller.disable("disabled")
+        staleClient.emitStreamingAndBytes()
+
+        assertEquals(NtripRuntimeState.DISABLED, states.last().state)
+        assertTrue(bytes.isEmpty())
+
+        staleClient.finish()
+    }
+
     private fun defaultRequest(): NtripRequest =
         NtripRequest(host = "caster.example", port = 2101, mountpoint = "MOUNT")
 
@@ -122,6 +144,42 @@ class NtripRuntimeControllerTest {
 
         override fun cancel() {
             cancelled = true
+        }
+    }
+
+    private class LateEmittingRuntimeClient : NtripRuntimeClient {
+        val started = CountDownLatch(1)
+        private val finish = CountDownLatch(1)
+        private lateinit var stateCallback: (CorrectionStatus) -> Unit
+        private lateinit var bytesCallback: (ByteArray) -> Unit
+
+        override fun run(
+            ggaLines: Iterable<String>,
+            onState: (CorrectionStatus) -> Unit,
+            onRtcmBytes: (ByteArray) -> Unit,
+        ): NtripConnectionResult {
+            stateCallback = onState
+            bytesCallback = onRtcmBytes
+            started.countDown()
+            finish.await(3, TimeUnit.SECONDS)
+            return NtripConnectionResult.Failure(
+                NtripFailure(
+                    kind = NtripFailureKind.CANCELLED,
+                    state = NtripConnectionState.STOPPED,
+                    message = "finished",
+                ),
+            )
+        }
+
+        override fun cancel() = Unit
+
+        fun emitStreamingAndBytes() {
+            stateCallback(CorrectionStatus(NtripConnectionState.STREAMING))
+            bytesCallback(byteArrayOf(0x01, 0x02))
+        }
+
+        fun finish() {
+            finish.countDown()
         }
     }
 }

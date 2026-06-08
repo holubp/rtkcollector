@@ -356,7 +356,16 @@ class RecordingForegroundService : Service() {
             broadcastState()
             return
         }
-        val config = ntripRuntimeConfig(intent)
+        val config = runCatching { ntripRuntimeConfig(intent) }
+            .getOrElse { error ->
+                state = state.copy(
+                    lastError = "Cannot update NTRIP: ${error.message ?: error.javaClass.simpleName}",
+                    errorCategory = RecordingErrorCategory.NTRIP,
+                    errorSeverity = RecordingErrorSeverity.DEGRADED,
+                )
+                broadcastState()
+                return
+            }
         if (config == null) {
             state = state.copy(
                 lastError = "Cannot update NTRIP: host and mountpoint are required.",

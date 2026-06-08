@@ -18,6 +18,13 @@ class DashboardServiceMapperTest {
             putExtra(RecordingForegroundService.EXTRA_STATE_SESSION_PATH, "content://session/current")
             putExtra(RecordingForegroundService.EXTRA_STATE_RX_BYTES, 123L)
             putExtra(RecordingForegroundService.EXTRA_STATE_TX_BYTES, 45L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_LAT_ERROR, "0.010 m")
+            putExtra(RecordingForegroundService.EXTRA_STATE_LON_ERROR, "0.011 m")
+            putExtra(RecordingForegroundService.EXTRA_STATE_BASELINE, "12.345 m")
+            putExtra(RecordingForegroundService.EXTRA_STATE_PDOP, "1.2")
+            putExtra(RecordingForegroundService.EXTRA_STATE_HDOP_VDOP, "0.8 / 1.0")
+            putExtra(RecordingForegroundService.EXTRA_STATE_LAT_LON, "48.100000000, 17.100000000")
+            putExtra(RecordingForegroundService.EXTRA_STATE_UTC_TIME, "12:34:56Z")
         }
 
         val state = dashboardStateFromRecordingIntent(intent)
@@ -28,5 +35,12 @@ class DashboardServiceMapperTest {
         assertEquals("123 B", state.files.receiverRxBytes)
         assertEquals("45 B", state.files.txToReceiverBytes)
         assertTrue(state.files.zipShareEnabled)
+        assertEquals("0.010 m", state.position.latError)
+        assertEquals("0.011 m", state.position.lonError)
+        assertEquals("12.345 m", state.fix.baseline)
+        assertEquals("1.2", state.fix.pdop)
+        assertEquals("0.8 / 1.0", state.fix.hdopVdop)
+        assertEquals("48.100000000, 17.100000000", state.position.latLon)
+        assertEquals("12:34:56Z", state.position.utcTime)
     }
 }

@@ -99,7 +99,12 @@ class SessionWriters private constructor(
     }
 
     companion object {
-        fun open(sessionDirectory: Path): SessionWriters {
+        fun openNew(sessionDirectory: Path): SessionWriters {
+            requireNewSessionDirectory(sessionDirectory)
+            return openAppendForRecovery(sessionDirectory)
+        }
+
+        fun openAppendForRecovery(sessionDirectory: Path): SessionWriters {
             Files.createDirectories(sessionDirectory)
             return SessionWriters(
                 sessionDirectory = sessionDirectory,
@@ -113,6 +118,14 @@ class SessionWriters private constructor(
                 receiverPppSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL.fileName),
                 extractedRtcm = sessionDirectory.appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
             )
+        }
+
+        fun open(sessionDirectory: Path): SessionWriters = openNew(sessionDirectory)
+
+        private fun requireNewSessionDirectory(sessionDirectory: Path) {
+            if (Files.exists(sessionDirectory) && Files.list(sessionDirectory).use { it.findAny().isPresent }) {
+                error("Refusing to open non-empty session directory for a new recording: $sessionDirectory")
+            }
         }
     }
 

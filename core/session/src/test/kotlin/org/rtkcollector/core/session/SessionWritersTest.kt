@@ -4,10 +4,12 @@ import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 
 class SessionWritersTest {
     @TempDir
@@ -54,6 +56,42 @@ class SessionWritersTest {
             Files.readAllBytes(tempDir.resolve("rtcm-extracted.rtcm3")),
         )
         assertEquals("""{"frame":"ETRF2000"}""", Files.readString(tempDir.resolve("base-position.json")).trim())
+    }
+
+    @Test
+    fun `openNew rejects a non-empty session directory`() {
+        val sessionDirectory = Files.createTempDirectory("rtkcollector-existing-session")
+        Files.write(
+            sessionDirectory.resolve(SessionArtifactFile.RECEIVER_RX_RAW.fileName),
+            byteArrayOf(0x01, 0x02),
+            StandardOpenOption.CREATE,
+            StandardOpenOption.APPEND,
+        )
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            SessionWriters.openNew(sessionDirectory)
+        }
+
+        assertTrue(error.message!!.contains("non-empty session directory"))
+        assertArrayEquals(
+            byteArrayOf(0x01, 0x02),
+            Files.readAllBytes(sessionDirectory.resolve(SessionArtifactFile.RECEIVER_RX_RAW.fileName)),
+        )
+    }
+
+    @Test
+    fun `openAppendForRecovery appends receiver rx without truncating`() {
+        val sessionDirectory = Files.createTempDirectory("rtkcollector-recovery-session")
+        Files.createDirectories(sessionDirectory)
+        val rxPath = sessionDirectory.resolve(SessionArtifactFile.RECEIVER_RX_RAW.fileName)
+        Files.write(rxPath, byteArrayOf(0x01, 0x02), StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+
+        SessionWriters.openAppendForRecovery(sessionDirectory).use { writers ->
+            writers.appendReceiverRx(byteArrayOf(0x03))
+            writers.flush()
+        }
+
+        assertArrayEquals(byteArrayOf(0x01, 0x02, 0x03), Files.readAllBytes(rxPath))
     }
 
     @Test
@@ -114,10 +152,10 @@ class SessionWritersTest {
 
     @Test
     fun `nmea solution sidecar appends without truncating existing file`() {
-        SessionWriters.open(tempDir).use { writers ->
+        SessionWriters.openNew(tempDir).use { writers ->
             writers.appendReceiverSolutionNmea("\$GPGGA,1*00\r\n")
         }
-        SessionWriters.open(tempDir).use { writers ->
+        SessionWriters.openAppendForRecovery(tempDir).use { writers ->
             writers.appendReceiverSolutionNmea("\$GPGGA,2*00\r\n")
         }
 

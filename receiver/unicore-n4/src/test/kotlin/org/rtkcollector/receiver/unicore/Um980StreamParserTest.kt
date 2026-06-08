@@ -38,4 +38,28 @@ class Um980StreamParserTest {
         assertEquals(listOf("unicore_binary"), records.map { it.kind })
         assertEquals(binary.toList(), records.single().bytes.toList())
     }
+
+    @Test
+    fun `binary sync can be split across chunks`() {
+        val binary = Um980BinaryParserTest.bestnavbFrame()
+        val parser = Um980StreamParser()
+
+        assertEquals(emptyList<Um980StreamRecord>(), parser.accept(binary.copyOfRange(0, 2)))
+        val records = parser.accept(binary.copyOfRange(2, binary.size))
+
+        assertEquals(listOf("unicore_binary"), records.map { it.kind })
+        assertEquals(binary.toList(), records.single().bytes.toList())
+    }
+
+    @Test
+    fun `malformed binary header is classified as noise and parser resynchronises`() {
+        val malformedSync = byteArrayOf(0xAA.toByte(), 0x44, 0xB5.toByte(), 1, 2, 3)
+        val valid = Um980BinaryParserTest.bestnavbFrame()
+
+        val records = Um980StreamParser().accept(malformedSync + valid)
+
+        assertEquals(listOf("noise", "unicore_binary"), records.map { it.kind })
+        assertEquals(malformedSync.toList(), records.first().bytes.toList())
+        assertEquals(valid.toList(), records.last().bytes.toList())
+    }
 }

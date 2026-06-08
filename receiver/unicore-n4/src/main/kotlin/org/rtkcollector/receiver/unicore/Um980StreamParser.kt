@@ -39,26 +39,43 @@ class Um980StreamParser {
                     }
                 }
                 hasBinarySync(data, index) -> {
-                    val frameEnd = binaryFrameEnd(data, index)
-                    if (frameEnd == null) {
-                        pending = data.copyOfRange(index, data.size)
-                        index = data.size
-                    } else {
-                        val frame = data.copyOfRange(index, frameEnd)
-                        if (Um980BinaryParser.isValidFrame(frame)) {
-                            records += Um980StreamRecord("unicore_binary", frame)
-                            index = frameEnd
-                        } else {
+                    when (val frameEnd = binaryFrameEnd(data, index)) {
+                        BinaryFrameEnd.Incomplete -> {
+                            pending = data.copyOfRange(index, data.size)
+                            index = data.size
+                        }
+                        BinaryFrameEnd.Invalid -> {
                             val next = nextKnownStart(data, index + 1)
                             records += Um980StreamRecord("noise", data.copyOfRange(index, next))
                             index = next
+                        }
+                        is BinaryFrameEnd.Complete -> {
+                            val frame = data.copyOfRange(index, frameEnd.endExclusive)
+                            if (Um980BinaryParser.isValidFrame(frame)) {
+                                records += Um980StreamRecord("unicore_binary", frame)
+                                index = frameEnd.endExclusive
+                            } else {
+                                val next = nextKnownStart(data, index + 1)
+                                records += Um980StreamRecord("noise", data.copyOfRange(index, next))
+                                index = next
+                            }
                         }
                     }
                 }
                 else -> {
                     val next = nextKnownStart(data, index + 1)
-                    records += Um980StreamRecord("noise", data.copyOfRange(index, next))
-                    index = next
+                    val keep = partialBinarySyncSuffixLength(data, index, next)
+                    if (keep > 0) {
+                        val noiseEnd = next - keep
+                        if (noiseEnd > index) {
+                            records += Um980StreamRecord("noise", data.copyOfRange(index, noiseEnd))
+                        }
+                        pending = data.copyOfRange(noiseEnd, data.size)
+                        index = data.size
+                    } else {
+                        records += Um980StreamRecord("noise", data.copyOfRange(index, next))
+                        index = next
+                    }
                 }
             }
         }
@@ -72,14 +89,14 @@ class Um980StreamParser {
         return -1
     }
 
-    private fun binaryFrameEnd(input: ByteArray, start: Int): Int? {
-        if (start + BINARY_HEADER_LENGTH > input.size) return null
+    private fun binaryFrameEnd(input: ByteArray, start: Int): BinaryFrameEnd {
+        if (start + BINARY_HEADER_LENGTH > input.size) return BinaryFrameEnd.Incomplete
         val headerLength = input[start + 3].toInt() and 0xff
-        if (headerLength < BINARY_HEADER_LENGTH) return null
-        if (start + headerLength > input.size) return null
+        if (headerLength < BINARY_HEADER_LENGTH) return BinaryFrameEnd.Invalid
+        if (start + headerLength > input.size) return BinaryFrameEnd.Incomplete
         val payloadLength = u16(input, start + 6)
         val end = start + headerLength + payloadLength + CRC_LENGTH
-        return if (end <= input.size) end else null
+        return if (end <= input.size) BinaryFrameEnd.Complete(end) else BinaryFrameEnd.Incomplete
     }
 
     private fun nextKnownStart(input: ByteArray, start: Int): Int {
@@ -98,6 +115,16 @@ class Um980StreamParser {
     private fun u16(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8)
 
+    private fun partialBinarySyncSuffixLength(input: ByteArray, start: Int, end: Int): Int {
+        if (end != input.size) return 0
+        val length = end - start
+        return when {
+            length >= 2 && input[end - 2] == 0xAA.toByte() && input[end - 1] == 0x44.toByte() -> 2
+            length >= 1 && input[end - 1] == 0xAA.toByte() -> 1
+            else -> 0
+        }
+    }
+
     private fun mergeAdjacentNoise(records: List<Um980StreamRecord>): List<Um980StreamRecord> {
         val merged = mutableListOf<Um980StreamRecord>()
         records.forEach { record ->
@@ -114,5 +141,11 @@ class Um980StreamParser {
     private companion object {
         const val BINARY_HEADER_LENGTH = 24
         const val CRC_LENGTH = 4
+    }
+
+    private sealed class BinaryFrameEnd {
+        data class Complete(val endExclusive: Int) : BinaryFrameEnd()
+        data object Incomplete : BinaryFrameEnd()
+        data object Invalid : BinaryFrameEnd()
     }
 }

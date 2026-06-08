@@ -74,6 +74,7 @@ class ProfileStores(context: Context) {
             CommandProfile(
                 id = "um980-default-commands",
                 name = "UM980 default commands",
+                isProtected = true,
             ),
         )
 
@@ -82,6 +83,7 @@ class ProfileStores(context: Context) {
             UsbBaudProfile(
                 id = "um980-230400",
                 name = "UM980 230400",
+                isProtected = true,
                 profileBaud = 230400,
                 serialBaud = 230400,
             ),
@@ -92,6 +94,7 @@ class ProfileStores(context: Context) {
             NtripCasterProfile(
                 id = "ntrip-caster-default",
                 name = "NTRIP caster",
+                isProtected = true,
             ),
         )
 
@@ -101,6 +104,7 @@ class ProfileStores(context: Context) {
                 id = "ntrip-mountpoint-default",
                 name = "NTRIP mountpoint",
                 casterProfileId = "ntrip-caster-default",
+                isProtected = true,
             ),
         )
 
@@ -109,6 +113,7 @@ class ProfileStores(context: Context) {
             RecordingPolicyProfile(
                 id = "default-record-everything",
                 name = "Default V1 recording policy",
+                isProtected = true,
             ),
         )
 
@@ -117,6 +122,7 @@ class ProfileStores(context: Context) {
             StorageProfile(
                 id = "app-private",
                 name = "App-private external storage",
+                isProtected = true,
                 kind = "APP_PRIVATE",
             ),
         )

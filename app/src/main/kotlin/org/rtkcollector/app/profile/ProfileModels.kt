@@ -5,6 +5,7 @@ import org.json.JSONObject
 data class CommandProfile(
     val id: String,
     val name: String,
+    val isProtected: Boolean = false,
     val receiverFamily: String = "um980-n4",
     val initScript: String = "# Optional user init commands",
     val shutdownScript: String = "",
@@ -16,11 +17,12 @@ data class CommandProfile(
     }
 
     fun copyProfile(id: String, name: String): CommandProfile =
-        copy(id = id, name = name).also(CommandProfile::validate)
+        copy(id = id, name = name, isProtected = false).also(CommandProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)
+        .put("isProtected", isProtected)
         .put("receiverFamily", receiverFamily)
         .put("initScript", initScript)
         .put("shutdownScript", shutdownScript)
@@ -29,6 +31,7 @@ data class CommandProfile(
         fun fromJson(json: JSONObject): CommandProfile = CommandProfile(
             id = json.getString("id"),
             name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
             receiverFamily = json.optString("receiverFamily", "um980-n4"),
             initScript = json.optString("initScript", "# Optional user init commands"),
             shutdownScript = json.optString("shutdownScript", ""),
@@ -39,6 +42,7 @@ data class CommandProfile(
 data class UsbBaudProfile(
     val id: String,
     val name: String,
+    val isProtected: Boolean = false,
     val profileBaud: Int = 230400,
     val serialBaud: Int = 230400,
     val usbVid: Int? = null,
@@ -54,11 +58,12 @@ data class UsbBaudProfile(
     }
 
     fun copyProfile(id: String, name: String): UsbBaudProfile =
-        copy(id = id, name = name).also(UsbBaudProfile::validate)
+        copy(id = id, name = name, isProtected = false).also(UsbBaudProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)
+        .put("isProtected", isProtected)
         .put("profileBaud", profileBaud)
         .put("serialBaud", serialBaud)
         .putNullable("usbVid", usbVid)
@@ -72,6 +77,7 @@ data class UsbBaudProfile(
         fun fromJson(json: JSONObject): UsbBaudProfile = UsbBaudProfile(
             id = json.getString("id"),
             name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
             profileBaud = json.optInt("profileBaud", 230400),
             serialBaud = json.optInt("serialBaud", 230400),
             usbVid = json.optNullableInt("usbVid"),
@@ -85,6 +91,7 @@ data class UsbBaudProfile(
 data class NtripCasterProfile(
     val id: String,
     val name: String,
+    val isProtected: Boolean = false,
     val host: String = "",
     val port: Int = 2101,
     val username: String = "",
@@ -99,11 +106,12 @@ data class NtripCasterProfile(
     }
 
     fun copyProfile(id: String, name: String): NtripCasterProfile =
-        copy(id = id, name = name).also(NtripCasterProfile::validate)
+        copy(id = id, name = name, isProtected = false).also(NtripCasterProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)
+        .put("isProtected", isProtected)
         .put("host", host)
         .put("port", port)
         .put("username", username)
@@ -115,6 +123,7 @@ data class NtripCasterProfile(
         fun fromJson(json: JSONObject): NtripCasterProfile = NtripCasterProfile(
             id = json.getString("id"),
             name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
             host = json.optString("host", ""),
             port = json.optInt("port", 2101),
             username = json.optString("username", ""),
@@ -129,6 +138,7 @@ data class NtripMountpointProfile(
     val id: String,
     val name: String,
     val casterProfileId: String,
+    val isProtected: Boolean = false,
     val mountpoint: String = "",
     val ggaUploadPolicy: String = "NONE",
     val expectedFormat: String = "RTCM3",
@@ -141,12 +151,13 @@ data class NtripMountpointProfile(
     }
 
     fun copyProfile(id: String, name: String): NtripMountpointProfile =
-        copy(id = id, name = name).also(NtripMountpointProfile::validate)
+        copy(id = id, name = name, isProtected = false).also(NtripMountpointProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)
         .put("casterProfileId", casterProfileId)
+        .put("isProtected", isProtected)
         .put("mountpoint", mountpoint)
         .put("ggaUploadPolicy", ggaUploadPolicy)
         .put("expectedFormat", expectedFormat)
@@ -157,6 +168,7 @@ data class NtripMountpointProfile(
             id = json.getString("id"),
             name = json.getString("name"),
             casterProfileId = json.getString("casterProfileId"),
+            isProtected = json.optProtectedFlag(),
             mountpoint = json.optString("mountpoint", ""),
             ggaUploadPolicy = json.optString("ggaUploadPolicy", "NONE"),
             expectedFormat = json.optString("expectedFormat", "RTCM3"),
@@ -168,6 +180,7 @@ data class NtripMountpointProfile(
 data class RecordingPolicyProfile(
     val id: String,
     val name: String,
+    val isProtected: Boolean = false,
     val recordReceiverRx: Boolean = true,
     val recordTxToReceiver: Boolean = true,
     val recordNtripCorrectionInput: Boolean = true,
@@ -183,11 +196,12 @@ data class RecordingPolicyProfile(
     }
 
     fun copyProfile(id: String, name: String): RecordingPolicyProfile =
-        copy(id = id, name = name).also(RecordingPolicyProfile::validate)
+        copy(id = id, name = name, isProtected = false).also(RecordingPolicyProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)
+        .put("isProtected", isProtected)
         .put("recordReceiverRx", recordReceiverRx)
         .put("recordTxToReceiver", recordTxToReceiver)
         .put("recordNtripCorrectionInput", recordNtripCorrectionInput)
@@ -200,6 +214,7 @@ data class RecordingPolicyProfile(
         fun fromJson(json: JSONObject): RecordingPolicyProfile = RecordingPolicyProfile(
             id = json.getString("id"),
             name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
             recordReceiverRx = json.optBoolean("recordReceiverRx", true),
             recordTxToReceiver = json.optBoolean("recordTxToReceiver", true),
             recordNtripCorrectionInput = json.optBoolean("recordNtripCorrectionInput", true),
@@ -214,6 +229,7 @@ data class RecordingPolicyProfile(
 data class StorageProfile(
     val id: String,
     val name: String,
+    val isProtected: Boolean = false,
     val kind: String = "APP_PRIVATE",
     val treeUri: String? = null,
 ) {
@@ -225,11 +241,12 @@ data class StorageProfile(
     }
 
     fun copyProfile(id: String, name: String): StorageProfile =
-        copy(id = id, name = name).also(StorageProfile::validate)
+        copy(id = id, name = name, isProtected = false).also(StorageProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)
+        .put("isProtected", isProtected)
         .put("kind", kind)
         .putNullable("treeUri", treeUri)
 
@@ -237,14 +254,94 @@ data class StorageProfile(
         fun fromJson(json: JSONObject): StorageProfile = StorageProfile(
             id = json.getString("id"),
             name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
             kind = json.optString("kind", "APP_PRIVATE"),
             treeUri = json.optNullableString("treeUri"),
         ).also(StorageProfile::validate)
     }
 }
 
+data class WorkflowProfileDefaults(
+    val workflowId: String,
+    val receiverProfileId: String,
+    val commandProfileId: String,
+    val usbBaudProfileId: String,
+    val ntripCasterProfileId: String? = null,
+    val ntripMountpointProfileId: String? = null,
+    val recordingOutputProfileId: String,
+    val storageProfileId: String,
+) {
+    fun validate() {
+        require(workflowId.isNotBlank()) { "Workflow profile defaults workflow id must not be blank." }
+        require(receiverProfileId.isNotBlank()) { "Workflow profile defaults receiver profile id must not be blank." }
+        require(commandProfileId.isNotBlank()) { "Workflow profile defaults command profile id must not be blank." }
+        require(usbBaudProfileId.isNotBlank()) { "Workflow profile defaults USB/baud profile id must not be blank." }
+        require(recordingOutputProfileId.isNotBlank()) {
+            "Workflow profile defaults recording output profile id must not be blank."
+        }
+        require(storageProfileId.isNotBlank()) { "Workflow profile defaults storage profile id must not be blank." }
+        require(ntripCasterProfileId == null || ntripCasterProfileId.isNotBlank()) {
+            "Workflow profile defaults NTRIP caster profile id must not be blank."
+        }
+        require(ntripMountpointProfileId == null || ntripMountpointProfileId.isNotBlank()) {
+            "Workflow profile defaults NTRIP mountpoint profile id must not be blank."
+        }
+    }
+
+    fun toJson(): JSONObject = JSONObject()
+        .put("workflowId", workflowId)
+        .put("receiverProfileId", receiverProfileId)
+        .put("commandProfileId", commandProfileId)
+        .put("usbBaudProfileId", usbBaudProfileId)
+        .putNullable("ntripCasterProfileId", ntripCasterProfileId)
+        .putNullable("ntripMountpointProfileId", ntripMountpointProfileId)
+        .put("recordingOutputProfileId", recordingOutputProfileId)
+        .put("storageProfileId", storageProfileId)
+
+    companion object {
+        fun fromJson(json: JSONObject): WorkflowProfileDefaults = WorkflowProfileDefaults(
+            workflowId = json.getString("workflowId"),
+            receiverProfileId = json.getString("receiverProfileId"),
+            commandProfileId = json.getString("commandProfileId"),
+            usbBaudProfileId = json.getString("usbBaudProfileId"),
+            ntripCasterProfileId = json.optNullableString("ntripCasterProfileId"),
+            ntripMountpointProfileId = json.optNullableString("ntripMountpointProfileId"),
+            recordingOutputProfileId = json.getString("recordingOutputProfileId"),
+            storageProfileId = json.getString("storageProfileId"),
+        ).also(WorkflowProfileDefaults::validate)
+    }
+}
+
+fun <T> renameProfile(
+    profiles: List<T>,
+    profileId: String,
+    newName: String,
+    idOf: (T) -> String,
+    isProtectedOf: (T) -> Boolean,
+    rename: (T, String) -> T,
+): List<T> {
+    require(profileId.isNotBlank()) { "Profile id must not be blank." }
+    require(newName.isNotBlank()) { "Profile name must not be blank." }
+
+    var found = false
+    val renamed = profiles.map { profile ->
+        if (idOf(profile) != profileId) {
+            profile
+        } else {
+            found = true
+            require(!isProtectedOf(profile)) { "Protected profiles cannot be renamed." }
+            rename(profile, newName)
+        }
+    }
+    require(found) { "Profile '$profileId' was not found." }
+    return renamed
+}
+
 private fun JSONObject.putNullable(name: String, value: Any?): JSONObject =
     if (value == null) put(name, JSONObject.NULL) else put(name, value)
+
+private fun JSONObject.optProtectedFlag(): Boolean =
+    optBoolean("isProtected", optBoolean("protected", false))
 
 private fun JSONObject.optNullableString(name: String): String? =
     if (has(name) && !isNull(name)) optString(name).takeIf(String::isNotBlank) else null

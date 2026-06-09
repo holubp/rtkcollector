@@ -230,7 +230,7 @@ private fun DashboardCards(state: DashboardState) {
             Metric("TX to receiver", state.files.txToReceiverBytes)
             Metric("NTRIP raw", state.files.ntripBytes)
             Metric("NMEA", state.files.nmeaBytes)
-            Metric("ZIP share", if (state.files.zipShareEnabled) "Available" else "After stop")
+            Metric("ZIP share", state.files.zipShareLabel)
         }
         DashboardCard("Profiles") {
             MajorValue(state.profiles.settingsSet)

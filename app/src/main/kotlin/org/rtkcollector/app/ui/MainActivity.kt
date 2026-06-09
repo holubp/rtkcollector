@@ -1491,11 +1491,12 @@ private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {
 
 private fun ProfileStores.selectedMountpointLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    val override = settingsSet.overrides.ntripMountpoint?.mountpoint?.takeIf { it.isNotBlank() }
-    val profileMountpoint = settingsSet.ntripMountpointProfileRef?.id?.let { id ->
-        ntripMountpointProfiles().firstOrNull { it.id == id }?.mountpoint
-    }
-    return override ?: profileMountpoint?.takeIf { it.isNotBlank() } ?: "n/a"
+    val profile = settingsSet.ntripMountpointProfileRef?.id?.let { id ->
+        ntripMountpointProfiles().firstOrNull { it.id == id }
+    } ?: return "n/a"
+    return profile.name.takeIf { it.isNotBlank() }
+        ?: profile.mountpoint.takeIf { it.isNotBlank() }
+        ?: "n/a"
 }
 
 private fun ProfileStores.selectedStorageLabel(selectedSettingsSetId: String): String {

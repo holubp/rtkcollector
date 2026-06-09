@@ -112,7 +112,17 @@ data class FilesCardState(
     val ntripBytes: String = "0 B",
     val nmeaBytes: String = "0 B",
     val zipShareEnabled: Boolean = false,
-)
+) {
+    val hasRecording: Boolean
+        get() = sessionLocation.isNotBlank() && !sessionLocation.equals("n/a", ignoreCase = true)
+
+    val zipShareLabel: String
+        get() = when {
+            !hasRecording -> "No recording available yet"
+            zipShareEnabled -> "Available"
+            else -> "After stop"
+        }
+}
 
 data class ProfilesCardState(
     val settingsSet: String = "n/a",

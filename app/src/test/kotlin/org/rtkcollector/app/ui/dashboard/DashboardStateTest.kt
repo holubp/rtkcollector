@@ -42,6 +42,7 @@ class DashboardStateTest {
         assertEquals("content://session/current", state.files.sessionLocation)
         assertEquals("123 B", state.files.receiverRxBytes)
         assertTrue(state.files.zipShareEnabled)
+        assertEquals("Available", state.files.zipShareLabel)
     }
 
     @Test
@@ -78,5 +79,7 @@ class DashboardStateTest {
         assertEquals("n/a", NtripCardState().status)
         assertEquals("0 B", FilesCardState().receiverRxBytes)
         assertFalse(FilesCardState().zipShareEnabled)
+        assertEquals("No recording available yet", FilesCardState(zipShareEnabled = true).zipShareLabel)
+        assertEquals("After stop", FilesCardState(sessionLocation = ".../session").zipShareLabel)
     }
 }

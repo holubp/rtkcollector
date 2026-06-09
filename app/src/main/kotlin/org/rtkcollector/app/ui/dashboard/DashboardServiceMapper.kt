@@ -6,6 +6,7 @@ import org.rtkcollector.app.recording.RecordingForegroundService
 fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val running = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
     val status = DashboardStatus(
+        settingsSet = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_SET_LABEL) ?: "n/a",
         workflow = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_WORKFLOW_LABEL) ?: "n/a",
         mountpoint = mountpointFromUrl(intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL)),
         receiver = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_LABEL) ?: "n/a",

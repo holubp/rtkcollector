@@ -36,6 +36,20 @@ class SettingsSetModelsTest {
     }
 
     @Test
+    fun `settings set round trip preserves workflow activation policy`() {
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            id = "ask-workflow",
+            name = "Ask workflow",
+            isProtected = false,
+            workflowApplicationPolicy = WorkflowApplicationPolicy.LET_USER_SELECT,
+        )
+
+        val decoded = RecordingSettingsSet.fromJson(settingsSet.toJson())
+
+        assertEquals(WorkflowApplicationPolicy.LET_USER_SELECT, decoded.workflowApplicationPolicy)
+    }
+
+    @Test
     fun `settings set rejects plaintext ntrip password override`() {
         assertThrows(IllegalArgumentException::class.java) {
             RecordingSettingsSet(

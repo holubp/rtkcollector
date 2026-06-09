@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -38,6 +40,7 @@ fun HomeDashboard(
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
     onWorkflow: () -> Unit,
+    onSettingsSet: () -> Unit,
     onReceiver: () -> Unit,
     onStorage: () -> Unit,
     onMark: () -> Unit,
@@ -82,6 +85,7 @@ fun HomeDashboard(
             StatusStrip(
                 status = state.status,
                 onWorkflow = onWorkflow,
+                onSettingsSet = onSettingsSet,
                 onMountpoint = onNtrip,
                 onReceiver = onReceiver,
                 onStorage = onStorage,
@@ -135,6 +139,7 @@ private fun BottomActionBar(
 private fun StatusStrip(
     status: DashboardStatus,
     onWorkflow: () -> Unit,
+    onSettingsSet: () -> Unit,
     onMountpoint: () -> Unit,
     onReceiver: () -> Unit,
     onStorage: () -> Unit,
@@ -144,6 +149,7 @@ private fun StatusStrip(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        StatusChip("Settings", status.settingsSet, onSettingsSet)
         StatusChip("Workflow", status.workflow, onWorkflow)
         StatusChip("Mountpoint", status.mountpoint, onMountpoint)
         StatusChip("Receiver", status.receiver, onReceiver)
@@ -153,8 +159,17 @@ private fun StatusStrip(
 
 @Composable
 private fun StatusChip(label: String, value: String, onClick: () -> Unit) {
+    val missing = value.isMissingDashboardValue()
     AssistChip(
         onClick = onClick,
+        colors = if (missing) {
+            AssistChipDefaults.assistChipColors(
+                containerColor = Color(0xFFFFDAD6),
+                labelColor = Color(0xFF8C1D18),
+            )
+        } else {
+            AssistChipDefaults.assistChipColors()
+        },
         label = {
             Text(
                 text = "$label: $value",
@@ -163,6 +178,14 @@ private fun StatusChip(label: String, value: String, onClick: () -> Unit) {
             )
         },
     )
+}
+
+private fun String.isMissingDashboardValue(): Boolean {
+    val normalized = trim()
+    return normalized.isBlank() ||
+        normalized.equals("n/a", ignoreCase = true) ||
+        normalized.startsWith("Select ", ignoreCase = true) ||
+        normalized.equals("Not selected", ignoreCase = true)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -283,6 +306,7 @@ private fun HomeDashboardPortraitPreview() {
             onMenu = {},
             onNtrip = {},
             onWorkflow = {},
+            onSettingsSet = {},
             onReceiver = {},
             onStorage = {},
             onMark = {},
@@ -300,6 +324,7 @@ private fun HomeDashboardLandscapePreview() {
             onMenu = {},
             onNtrip = {},
             onWorkflow = {},
+            onSettingsSet = {},
             onReceiver = {},
             onStorage = {},
             onMark = {},

@@ -35,6 +35,7 @@ import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
+import org.rtkcollector.app.profile.WorkflowApplicationPolicy
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.recording.SessionZipExporter
@@ -87,11 +88,17 @@ fun RtkCollectorApp() {
     @Suppress("UNUSED_VARIABLE")
     val currentProfileRevision = profileRevision
     val usbDeviceChoices = remember(currentProfileRevision) { context.currentUsbDeviceChoices() }
+    var selectedWorkflowId by remember {
+        val initialWorkflowId = profileStore.selectedWorkflowId()
+            ?: settingsSets.firstOrNull { it.id == selectedSettingsSetId }.applyWorkflowPolicy(null)
+        profileStore.saveSelectedWorkflowId(initialWorkflowId)
+        mutableStateOf(initialWorkflowId)
+    }
     var state by remember {
         val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
         mutableStateOf(
             DashboardState.planned(
-                workflow = selected?.workflowId?.workflowName() ?: "Rover + NTRIP to receiver",
+                workflow = selectedWorkflowId.workflowLabel(),
                 mountpoint = profileStore.selectedMountpointLabel(selectedSettingsSetId),
                 receiver = "UM980",
                 storage = profileStore.selectedStorageLabel(selectedSettingsSetId),
@@ -148,6 +155,13 @@ fun RtkCollectorApp() {
                     },
                     onMenu = { screen = AppScreen.SETTINGS },
                     onNtrip = { dashboardSelector = DashboardSelector.MOUNTPOINT },
+                    onSettingsSet = {
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing settings set.", Toast.LENGTH_LONG).show()
+                        } else {
+                            dashboardSelector = DashboardSelector.SETTINGS_SET
+                        }
+                    },
                     onWorkflow = {
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
@@ -748,18 +762,26 @@ fun RtkCollectorApp() {
                     onSelect = { id ->
                         when (selector) {
                             DashboardSelector.WORKFLOW -> {
+                                selectedWorkflowId = id
+                                profileStore.saveSelectedWorkflowId(id)
+                                state = state.copy(status = state.status.copy(workflow = id.workflowName()))
+                            }
+                            DashboardSelector.SETTINGS_SET -> {
                                 selectedSettingsSetId = id
                                 profileStore.saveSelectedSettingsSetId(id)
                                 settingsSets = profileStore.settingsSets()
+                                val selectedSet = settingsSets.firstOrNull { it.id == id }
+                                selectedWorkflowId = selectedSet.applyWorkflowPolicy(selectedWorkflowId)
+                                profileStore.saveSelectedWorkflowId(selectedWorkflowId)
                                 state = state.copy(
                                     status = state.status.copy(
-                                        workflow = settingsSets.firstOrNull { it.id == id }?.workflowId?.workflowName() ?: state.status.workflow,
+                                        settingsSet = selectedSet?.displayNameWithOverrides() ?: "n/a",
+                                        workflow = selectedWorkflowId.workflowLabel(),
                                         mountpoint = profileStore.selectedMountpointLabel(id),
                                         storage = profileStore.selectedStorageLabel(id),
                                     ),
                                     profiles = state.profiles.copy(
-                                        settingsSet = settingsSets.firstOrNull { it.id == id }?.displayNameWithOverrides()
-                                            ?: state.profiles.settingsSet,
+                                        settingsSet = selectedSet?.displayNameWithOverrides() ?: state.profiles.settingsSet,
                                     ),
                                 )
                             }
@@ -847,8 +869,14 @@ private fun ProfileStores.profileEditorData(
                 fields = listOf(
                     EditableProfileField("name", "Name", set.name),
                     EditableProfileField(
+                        key = "workflowApplicationPolicy",
+                        label = "Workflow when activating this settings set",
+                        value = set.workflowApplicationPolicy,
+                        optionItems = WORKFLOW_APPLICATION_POLICY_OPTIONS,
+                    ),
+                    EditableProfileField(
                         key = "workflowId",
-                        label = "Workflow mode",
+                        label = "Specific workflow",
                         value = set.workflowId,
                         optionItems = WORKFLOW_MODE_OPTIONS,
                     ),
@@ -1039,6 +1067,7 @@ private fun ProfileStores.saveProfileEditorData(
                     require(!set.isProtected) { "Protected settings sets cannot be edited." }
                     set.copy(
                         name = values.required("name"),
+                        workflowApplicationPolicy = values.required("workflowApplicationPolicy"),
                         workflowId = values.required("workflowId"),
                         commandProfileRef = reference(values.required("commandProfileId"), commandProfiles().map { it.id to it.name }),
                         usbBaudProfileRef = reference(values.required("usbBaudProfileId"), usbBaudProfiles().map { it.id to it.name }),
@@ -1221,6 +1250,12 @@ private val WORKFLOW_MODE_OPTIONS = listOf(
     EditableProfileOption("fixed-base", "Fixed base"),
 )
 
+private val WORKFLOW_APPLICATION_POLICY_OPTIONS = listOf(
+    EditableProfileOption(WorkflowApplicationPolicy.SET_SPECIFIC, "Select specific workflow"),
+    EditableProfileOption(WorkflowApplicationPolicy.LET_USER_SELECT, "Let user select before start"),
+    EditableProfileOption(WorkflowApplicationPolicy.LEAVE_INTACT, "Leave current workflow intact"),
+)
+
 private enum class ProfileKind {
     SETTINGS_SET,
     NTRIP_CASTER,
@@ -1237,6 +1272,7 @@ private data class ProfileEditorTarget(
 )
 
 private enum class DashboardSelector(val title: String) {
+    SETTINGS_SET("Load settings set"),
     WORKFLOW("Select workflow"),
     MOUNTPOINT("Select NTRIP mountpoint"),
     RECEIVER("Select receiver command profile"),
@@ -1298,17 +1334,22 @@ private fun buildDashboardStartIntent(context: Context): Intent? {
         id = settingsSet.storageProfileRef.id,
         label = "storage location profile",
     )
-    val workflowUsesNtrip = settingsSet.workflowId.workflowUsesNtrip()
+    val workflowId = profileStore.selectedWorkflowId()
+    if (workflowId.isNullOrBlank()) {
+        Toast.makeText(context, "Cannot start: workflow is not selected.", Toast.LENGTH_LONG).show()
+        return null
+    }
+    val workflowUsesNtrip = workflowId.workflowUsesNtrip()
     val activeConfig = try {
         ActiveRecordingConfig.resolve(
-            settingsSet = settingsSet,
+            settingsSet = settingsSet.copy(workflowId = workflowId),
             commandProfile = commandProfile,
             usbBaudProfile = usbProfile,
             ntripCasterProfile = ntripCaster,
             ntripMountpointProfile = ntripMountpoint,
             recordingPolicyProfile = recordingPolicy,
             storageProfile = storageProfile,
-            workflowName = settingsSet.workflowId.workflowName(),
+            workflowName = workflowId.workflowName(),
             workflowUsesNtrip = workflowUsesNtrip,
             passwordLookup = NtripSecretStore(context)::getPassword,
         )
@@ -1395,8 +1436,9 @@ private fun buildNtripUpdateIntent(context: Context): Intent? {
         profileStore.ntripMountpointProfiles().findByReference(reference.id, "NTRIP mountpoint profile")
     }
     val activeConfig = try {
+        val workflowId = profileStore.selectedWorkflowId()
         ActiveRecordingConfig.resolve(
-            settingsSet = settingsSet,
+            settingsSet = settingsSet.copy(workflowId = workflowId ?: settingsSet.workflowId),
             commandProfile = profileStore.commandProfiles().findByReference(
                 id = settingsSet.commandProfileRef.id,
                 label = "command profile",
@@ -1415,8 +1457,8 @@ private fun buildNtripUpdateIntent(context: Context): Intent? {
                 id = settingsSet.storageProfileRef.id,
                 label = "storage location profile",
             ),
-            workflowName = settingsSet.workflowId.workflowName(),
-            workflowUsesNtrip = settingsSet.workflowId.workflowUsesNtrip(),
+            workflowName = workflowId.workflowLabel(),
+            workflowUsesNtrip = workflowId?.workflowUsesNtrip() == true,
             passwordLookup = NtripSecretStore(context)::getPassword,
         ).also(ActiveRecordingConfig::validateForStart)
     } catch (error: IllegalArgumentException) {
@@ -1537,6 +1579,9 @@ private inline fun <reified T> List<T>.findByReference(id: String, label: String
 private fun String.workflowUsesNtrip(): Boolean =
     contains("ntrip", ignoreCase = true)
 
+private fun String?.workflowLabel(): String =
+    this?.workflowName() ?: "Select workflow"
+
 private fun String.workflowName(): String =
     when (this) {
         "plain-rover" -> "Plain rover recording"
@@ -1544,6 +1589,13 @@ private fun String.workflowName(): String =
         "base-calibration" -> "Temporary base preparation"
         "fixed-base" -> "Fixed base operation"
         else -> replace('-', ' ').replaceFirstChar { it.titlecase() }
+    }
+
+private fun RecordingSettingsSet?.applyWorkflowPolicy(currentWorkflowId: String?): String? =
+    when (this?.workflowApplicationPolicy) {
+        WorkflowApplicationPolicy.LET_USER_SELECT -> null
+        WorkflowApplicationPolicy.LEAVE_INTACT -> currentWorkflowId
+        else -> this?.workflowId ?: currentWorkflowId
     }
 
 private fun CommandProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
@@ -1572,7 +1624,16 @@ private fun dashboardSelectorRows(
 ): List<ProfileListRow> {
     val selectedSettingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
     return when (selector) {
-        DashboardSelector.WORKFLOW -> SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows
+        DashboardSelector.SETTINGS_SET -> SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows
+        DashboardSelector.WORKFLOW -> WORKFLOW_MODE_OPTIONS.map { option ->
+            ProfileListRow(
+                id = option.value,
+                name = option.label,
+                isProtected = false,
+                hasLocalOverrides = false,
+                isSelected = option.value == profileStore.selectedWorkflowId(),
+            )
+        }
         DashboardSelector.MOUNTPOINT -> profileStore.ntripMountpointProfiles().map { profile ->
             profile.profileRow(isSelected = profile.id == selectedSettingsSet?.ntripMountpointProfileRef?.id)
         }

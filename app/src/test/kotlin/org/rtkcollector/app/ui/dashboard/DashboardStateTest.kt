@@ -47,7 +47,12 @@ class DashboardStateTest {
     @Test
     fun `running session keeps stop visible`() {
         val state = DashboardState.running(
-            status = DashboardStatus("Rover + NTRIP", "TUBO00CZE0", "UM980", "SAF folder"),
+            status = DashboardStatus(
+                workflow = "Rover + NTRIP",
+                mountpoint = "TUBO00CZE0",
+                receiver = "UM980",
+                storage = "SAF folder",
+            ),
             position = PositionCardState(latLon = "50.087451234, 14.421253456"),
             fix = FixCardState(fixType = "RTK float"),
             ntrip = NtripCardState(status = "Streaming"),

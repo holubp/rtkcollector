@@ -3,6 +3,17 @@ package org.rtkcollector.app.profile
 import org.json.JSONObject
 
 private val SETTINGS_SET_PROFILES_SET = setOf("APP_PRIVATE", "SAF_TREE")
+private val WORKFLOW_APPLICATION_POLICIES = setOf(
+    WorkflowApplicationPolicy.SET_SPECIFIC,
+    WorkflowApplicationPolicy.LET_USER_SELECT,
+    WorkflowApplicationPolicy.LEAVE_INTACT,
+)
+
+object WorkflowApplicationPolicy {
+    const val SET_SPECIFIC = "SET_SPECIFIC"
+    const val LET_USER_SELECT = "LET_USER_SELECT"
+    const val LEAVE_INTACT = "LEAVE_INTACT"
+}
 
 data class ProfileReference(
     val id: String,
@@ -117,6 +128,7 @@ data class RecordingSettingsSet(
     val id: String,
     val name: String,
     val workflowId: String,
+    val workflowApplicationPolicy: String = WorkflowApplicationPolicy.SET_SPECIFIC,
     val receiverProfileId: String,
     val commandProfileRef: ProfileReference,
     val usbBaudProfileRef: ProfileReference,
@@ -134,6 +146,9 @@ data class RecordingSettingsSet(
         require(id.isNotBlank()) { "Settings set id must not be blank." }
         require(name.isNotBlank()) { "Settings set name must not be blank." }
         require(workflowId.isNotBlank()) { "Settings set workflow id must not be blank." }
+        require(workflowApplicationPolicy in WORKFLOW_APPLICATION_POLICIES) {
+            "Settings set workflow application policy is invalid."
+        }
         require(receiverProfileId.isNotBlank()) { "Settings set receiver profile id must not be blank." }
         commandProfileRef.validate()
         usbBaudProfileRef.validate()
@@ -193,6 +208,7 @@ object SettingsSetJson {
         .put("id", settingsSet.id)
         .put("name", settingsSet.name)
         .put("workflowId", settingsSet.workflowId)
+        .put("workflowApplicationPolicy", settingsSet.workflowApplicationPolicy)
         .put("receiverProfileId", settingsSet.receiverProfileId)
         .put("commandProfile", settingsSet.commandProfileRef.toJson())
         .put("usbBaudProfile", settingsSet.usbBaudProfileRef.toJson())
@@ -208,6 +224,10 @@ object SettingsSetJson {
         id = json.getString("id"),
         name = json.getString("name"),
         workflowId = json.getString("workflowId"),
+        workflowApplicationPolicy = json.optString(
+            "workflowApplicationPolicy",
+            WorkflowApplicationPolicy.SET_SPECIFIC,
+        ),
         receiverProfileId = json.getString("receiverProfileId"),
         commandProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_COMMAND)),
         usbBaudProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_USB_BAUD)),

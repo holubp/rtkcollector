@@ -104,6 +104,19 @@ class ProfileStores(context: Context) {
         preferences.edit().putString("selectedSettingsSetId", id).apply()
     }
 
+    fun selectedWorkflowId(): String? =
+        preferences.getString("selectedWorkflowId", null)?.takeIf(String::isNotBlank)
+
+    fun saveSelectedWorkflowId(id: String?) {
+        preferences.edit().apply {
+            if (id.isNullOrBlank()) {
+                remove("selectedWorkflowId")
+            } else {
+                putString("selectedWorkflowId", id)
+            }
+        }.apply()
+    }
+
     fun duplicateId(prefix: String): String =
         "$prefix-${System.currentTimeMillis()}"
 

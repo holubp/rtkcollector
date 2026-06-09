@@ -25,7 +25,13 @@ data class DashboardState(
         ): DashboardState =
             DashboardState(
                 isRecording = false,
-                status = DashboardStatus(workflow, mountpoint, receiver, storage),
+                status = DashboardStatus(
+                    workflow = workflow,
+                    mountpoint = mountpoint,
+                    receiver = receiver,
+                    storage = storage,
+                    settingsSet = profiles.settingsSet,
+                ),
                 position = position,
                 fix = fix,
                 ntrip = ntrip,
@@ -61,6 +67,7 @@ data class DashboardState(
 }
 
 data class DashboardStatus(
+    val settingsSet: String = "n/a",
     val workflow: String = "n/a",
     val mountpoint: String = "n/a",
     val receiver: String = "n/a",

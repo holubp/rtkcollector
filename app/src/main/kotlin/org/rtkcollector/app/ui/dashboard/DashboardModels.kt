@@ -48,7 +48,7 @@ data class DashboardState(
                 files = files,
                 profiles = profiles,
                 primaryAction = DashboardAction("Start", DashboardActionKind.START),
-                secondaryActions = listOf(DashboardAction("Menu", DashboardActionKind.MENU)),
+                secondaryActions = listOf(DashboardAction("USB access", DashboardActionKind.USB_PERMISSION)),
             )
 
         fun running(
@@ -153,6 +153,7 @@ enum class DashboardActionKind {
     STOP,
     NTRIP,
     MARK,
+    USB_PERMISSION,
     MENU,
     SHARE_ZIP,
     NEW_SESSION,

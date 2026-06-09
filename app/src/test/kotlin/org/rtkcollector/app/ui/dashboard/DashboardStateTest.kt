@@ -18,7 +18,7 @@ class DashboardStateTest {
         assertFalse(state.isRecording)
         assertEquals("Start", state.primaryAction.label)
         assertEquals(DashboardActionKind.START, state.primaryAction.kind)
-        assertEquals(listOf(DashboardAction("Menu", DashboardActionKind.MENU)), state.secondaryActions)
+        assertEquals(listOf(DashboardAction("USB access", DashboardActionKind.USB_PERMISSION)), state.secondaryActions)
         assertEquals("Rover + NTRIP", state.status.workflow)
         assertEquals("TUBO00CZE0", state.status.mountpoint)
     }

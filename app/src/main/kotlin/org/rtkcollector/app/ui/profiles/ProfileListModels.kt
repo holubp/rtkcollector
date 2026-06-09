@@ -53,6 +53,11 @@ data class ProfileEditorData(
     val fields: List<EditableProfileField>,
 )
 
+data class ProfileEditorAction(
+    val label: String,
+    val onClick: () -> Unit,
+)
+
 data class EditableProfileOption(
     val value: String,
     val label: String,

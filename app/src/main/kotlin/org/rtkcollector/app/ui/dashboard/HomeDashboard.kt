@@ -39,6 +39,7 @@ fun HomeDashboard(
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
+    onUsbPermission: () -> Unit,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onReceiver: () -> Unit,
@@ -70,6 +71,7 @@ fun HomeDashboard(
                 state = state,
                 onPrimaryAction = onPrimaryAction,
                 onNtrip = onNtrip,
+                onUsbPermission = onUsbPermission,
                 onMark = onMark,
             )
         },
@@ -100,6 +102,7 @@ private fun BottomActionBar(
     state: DashboardState,
     onPrimaryAction: () -> Unit,
     onNtrip: () -> Unit,
+    onUsbPermission: () -> Unit,
     onMark: () -> Unit,
 ) {
     Surface(shadowElevation = 3.dp) {
@@ -117,12 +120,15 @@ private fun BottomActionBar(
             }
             state.secondaryActions
                 .filter { action ->
-                    action.kind == DashboardActionKind.NTRIP || action.kind == DashboardActionKind.MARK
+                    action.kind == DashboardActionKind.NTRIP ||
+                        action.kind == DashboardActionKind.MARK ||
+                        action.kind == DashboardActionKind.USB_PERMISSION
                 }
                 .forEach { action ->
                     TextButton(
                         onClick = when (action.kind) {
                             DashboardActionKind.NTRIP -> onNtrip
+                            DashboardActionKind.USB_PERMISSION -> onUsbPermission
                             DashboardActionKind.MARK -> onMark
                             else -> onPrimaryAction
                         },
@@ -305,6 +311,7 @@ private fun HomeDashboardPortraitPreview() {
             onPrimaryAction = {},
             onMenu = {},
             onNtrip = {},
+            onUsbPermission = {},
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
@@ -323,6 +330,7 @@ private fun HomeDashboardLandscapePreview() {
             onPrimaryAction = {},
             onMenu = {},
             onNtrip = {},
+            onUsbPermission = {},
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},

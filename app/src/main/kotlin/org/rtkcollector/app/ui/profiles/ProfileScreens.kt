@@ -340,6 +340,7 @@ fun ProfileEditorScreen(
     data: ProfileEditorData,
     onBack: () -> Unit,
     onSave: (Map<String, String>) -> Unit,
+    actions: List<ProfileEditorAction> = emptyList(),
 ) {
     var values by remember {
         mutableStateOf(data.fields.associate { it.key to it.value })
@@ -365,6 +366,20 @@ fun ProfileEditorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (actions.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        actions.forEach { action ->
+                            TextButton(onClick = action.onClick) {
+                                Text(action.label)
+                            }
+                        }
+                    }
+                }
+            }
             items(data.fields, key = { it.key }) { field ->
                 if (field.boolean) {
                     Row(

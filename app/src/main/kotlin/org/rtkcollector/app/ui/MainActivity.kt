@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.app.PendingIntent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
@@ -50,6 +51,7 @@ import org.rtkcollector.app.ui.profiles.NtripMountpointEditorState
 import org.rtkcollector.app.ui.profiles.NtripMountpointScreen
 import org.rtkcollector.app.ui.profiles.EditableProfileField
 import org.rtkcollector.app.ui.profiles.EditableProfileOption
+import org.rtkcollector.app.ui.profiles.ProfileEditorAction
 import org.rtkcollector.app.ui.profiles.ProfileEditorData
 import org.rtkcollector.app.ui.profiles.ProfileEditorScreen
 import org.rtkcollector.app.ui.profiles.ProfileListScreen
@@ -103,14 +105,26 @@ fun RtkCollectorApp() {
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == RecordingForegroundService.ACTION_STATE) {
-                    state = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(
-                        profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId),
-                    )
+                when (intent.action) {
+                    RecordingForegroundService.ACTION_STATE -> {
+                        state = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(
+                            profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId),
+                        )
+                    }
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED,
+                    UsbManager.ACTION_USB_DEVICE_DETACHED,
+                    ACTION_USB_PERMISSION -> {
+                        profileRevision++
+                    }
                 }
             }
         }
-        val filter = IntentFilter(RecordingForegroundService.ACTION_STATE)
+        val filter = IntentFilter().apply {
+            addAction(RecordingForegroundService.ACTION_STATE)
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            addAction(ACTION_USB_PERMISSION)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -148,6 +162,10 @@ fun RtkCollectorApp() {
                     },
                     onMenu = { screen = AppScreen.SETTINGS },
                     onNtrip = { dashboardSelector = DashboardSelector.MOUNTPOINT },
+                    onUsbPermission = {
+                        requestSelectedUsbPermission(context, selectedSettingsSetId)
+                        profileRevision++
+                    },
                     onSettingsSet = {
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing settings set.", Toast.LENGTH_LONG).show()
@@ -717,6 +735,19 @@ fun RtkCollectorApp() {
                         )
                         ProfileEditorScreen(
                             data = data,
+                            actions = if (target.kind == ProfileKind.USB_BAUD) {
+                                listOf(
+                                    ProfileEditorAction("Refresh USB") {
+                                        profileRevision++
+                                    },
+                                    ProfileEditorAction("Request USB permission") {
+                                        requestUsbPermissionForProfile(context, target.id)
+                                        profileRevision++
+                                    },
+                                )
+                            } else {
+                                emptyList()
+                            },
                             onBack = { screen = target.kind.backScreen() },
                             onSave = { values ->
                                 runCatching {
@@ -1252,6 +1283,8 @@ private val WORKFLOW_APPLICATION_POLICY_OPTIONS = listOf(
     EditableProfileOption(WorkflowApplicationPolicy.LEAVE_INTACT, "Leave current workflow intact"),
 )
 
+private const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"
+
 private enum class ProfileKind {
     SETTINGS_SET,
     NTRIP_CASTER,
@@ -1478,6 +1511,50 @@ private fun buildNtripUpdateIntent(context: Context): Intent? {
         activeConfig.ntrip.baseLatDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LAT, it) }
         activeConfig.ntrip.baseLonDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LON, it) }
     }
+}
+
+private fun requestSelectedUsbPermission(context: Context, selectedSettingsSetId: String) {
+    val profileStore = ProfileStores(context)
+    val settingsSet = profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
+    requestUsbPermissionForProfile(context, settingsSet?.usbBaudProfileRef?.id)
+}
+
+private fun requestUsbPermissionForProfile(context: Context, usbProfileId: String?) {
+    val profileStore = ProfileStores(context)
+    val usbProfile = usbProfileId?.let { id ->
+        profileStore.usbBaudProfiles().firstOrNull { it.id == id }
+    } ?: profileStore.usbBaudProfiles().firstOrNull()
+    if (usbProfile == null) {
+        Toast.makeText(context, "No USB/baud profile is selected.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    val device = usbManager.selectUsbDevice(usbProfile)
+    if (device == null) {
+        val message = if (usbProfile.usbVid != null || usbProfile.usbPid != null) {
+            "Selected USB receiver is not connected."
+        } else {
+            "No USB receiver is connected."
+        }
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        return
+    }
+    if (usbManager.hasPermission(device)) {
+        Toast.makeText(context, "USB permission is already granted.", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    } else {
+        PendingIntent.FLAG_UPDATE_CURRENT
+    }
+    val permissionIntent = PendingIntent.getBroadcast(
+        context,
+        0,
+        Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
+        flags,
+    )
+    usbManager.requestPermission(device, permissionIntent)
 }
 
 private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {

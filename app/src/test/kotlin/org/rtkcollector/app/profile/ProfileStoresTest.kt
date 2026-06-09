@@ -132,6 +132,11 @@ class ProfileStoresTest {
     }
 
     @Test
+    fun `new command profile has no hidden pre runtime init script`() {
+        assertEquals("", CommandProfile(id = "commands", name = "Commands").initScript)
+    }
+
+    @Test
     fun `ascii ppp nmea profile contains requested ppp and nmea commands`() {
         val script = ProfileStores.UM980_ASCII_PPP_NMEA_SCRIPT
 

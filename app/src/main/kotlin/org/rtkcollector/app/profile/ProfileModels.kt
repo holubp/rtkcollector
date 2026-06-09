@@ -6,7 +6,7 @@ data class CommandProfile(
     val id: String,
     val name: String,
     val receiverFamily: String = "um980-n4",
-    val initScript: String = "# Optional user init commands",
+    val initScript: String = "",
     val runtimeScript: String = "",
     val shutdownScript: String = "",
     val isProtected: Boolean = false,
@@ -35,7 +35,7 @@ data class CommandProfile(
             name = json.getString("name"),
             isProtected = json.optProtectedFlag(),
             receiverFamily = json.optString("receiverFamily", "um980-n4"),
-            initScript = json.optString("initScript", "# Optional user init commands"),
+            initScript = json.optString("initScript", ""),
             runtimeScript = json.optString("runtimeScript", ""),
             shutdownScript = json.optString("shutdownScript", ""),
         ).also(CommandProfile::validate)

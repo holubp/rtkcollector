@@ -962,8 +962,7 @@ private fun ProfileStores.profileEditorData(
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("receiverFamily", "Receiver family", profile.receiverFamily),
-                    EditableProfileField("initScript", "Init script", profile.initScript, multiline = true),
-                    EditableProfileField("runtimeScript", "Runtime script", profile.runtimeScript, multiline = true),
+                    EditableProfileField("runtimeScript", "Init script", profile.runtimeScript, multiline = true),
                     EditableProfileField("shutdownScript", "Shutdown script", profile.shutdownScript, multiline = true),
                 ),
             )
@@ -1094,7 +1093,7 @@ private fun ProfileStores.saveProfileEditorData(
                     profile.copy(
                         name = values.required("name"),
                         receiverFamily = values.required("receiverFamily"),
-                        initScript = values.optional("initScript").orEmpty(),
+                        initScript = "",
                         runtimeScript = values.optional("runtimeScript").orEmpty(),
                         shutdownScript = values.optional("shutdownScript").orEmpty(),
                     )

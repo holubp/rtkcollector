@@ -47,6 +47,7 @@ import org.rtkcollector.app.ui.profiles.SettingsSetListState
 import org.rtkcollector.app.ui.profiles.NtripMountpointEditorState
 import org.rtkcollector.app.ui.profiles.NtripMountpointScreen
 import org.rtkcollector.app.ui.profiles.EditableProfileField
+import org.rtkcollector.app.ui.profiles.EditableProfileOption
 import org.rtkcollector.app.ui.profiles.ProfileEditorData
 import org.rtkcollector.app.ui.profiles.ProfileEditorScreen
 import org.rtkcollector.app.ui.profiles.ProfileListScreen
@@ -777,13 +778,48 @@ private fun ProfileStores.profileEditorData(
                 title = "Edit settings set",
                 fields = listOf(
                     EditableProfileField("name", "Name", set.name),
-                    EditableProfileField("workflowId", "Workflow ID", set.workflowId),
-                    EditableProfileField("commandProfileId", "Command profile ID", set.commandProfileRef.id),
-                    EditableProfileField("usbBaudProfileId", "USB/baud profile ID", set.usbBaudProfileRef.id),
-                    EditableProfileField("ntripCasterProfileId", "NTRIP caster profile ID", set.ntripCasterProfileRef?.id.orEmpty()),
-                    EditableProfileField("ntripMountpointProfileId", "NTRIP mountpoint profile ID", set.ntripMountpointProfileRef?.id.orEmpty()),
-                    EditableProfileField("recordingOutputProfileId", "Recording output profile ID", set.recordingOutputProfileRef.id),
-                    EditableProfileField("storageProfileId", "Storage location profile ID", set.storageProfileRef.id),
+                    EditableProfileField(
+                        key = "workflowId",
+                        label = "Workflow mode",
+                        value = set.workflowId,
+                        optionItems = WORKFLOW_MODE_OPTIONS,
+                    ),
+                    EditableProfileField(
+                        key = "commandProfileId",
+                        label = "Command profile",
+                        value = set.commandProfileRef.id,
+                        optionItems = commandProfiles().profileOptions(CommandProfile::id, CommandProfile::name),
+                    ),
+                    EditableProfileField(
+                        key = "usbBaudProfileId",
+                        label = "USB/baud profile",
+                        value = set.usbBaudProfileRef.id,
+                        optionItems = usbBaudProfiles().profileOptions(UsbBaudProfile::id, UsbBaudProfile::name),
+                    ),
+                    EditableProfileField(
+                        key = "ntripCasterProfileId",
+                        label = "NTRIP caster profile",
+                        value = set.ntripCasterProfileRef?.id.orEmpty(),
+                        optionItems = nullableProfileOptions(ntripCasterProfiles().profileOptions(NtripCasterProfile::id, NtripCasterProfile::name)),
+                    ),
+                    EditableProfileField(
+                        key = "ntripMountpointProfileId",
+                        label = "NTRIP mountpoint profile",
+                        value = set.ntripMountpointProfileRef?.id.orEmpty(),
+                        optionItems = nullableProfileOptions(ntripMountpointProfiles().profileOptions(NtripMountpointProfile::id, NtripMountpointProfile::name)),
+                    ),
+                    EditableProfileField(
+                        key = "recordingOutputProfileId",
+                        label = "Recording output profile",
+                        value = set.recordingOutputProfileRef.id,
+                        optionItems = recordingPolicyProfiles().profileOptions(RecordingPolicyProfile::id, RecordingPolicyProfile::name),
+                    ),
+                    EditableProfileField(
+                        key = "storageProfileId",
+                        label = "Storage location profile",
+                        value = set.storageProfileRef.id,
+                        optionItems = storageProfiles().profileOptions(StorageProfile::id, StorageProfile::name),
+                    ),
                 ),
             )
         }
@@ -807,11 +843,29 @@ private fun ProfileStores.profileEditorData(
                 title = "Edit NTRIP mountpoint",
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
-                    EditableProfileField("casterProfileId", "Caster profile ID", profile.casterProfileId),
+                    EditableProfileField(
+                        key = "casterProfileId",
+                        label = "Caster profile",
+                        value = profile.casterProfileId,
+                        optionItems = ntripCasterProfiles().profileOptions(NtripCasterProfile::id, NtripCasterProfile::name),
+                    ),
                     EditableProfileField("mountpoint", "Mountpoint", profile.mountpoint),
                     EditableProfileField("ggaUploadPolicy", "GGA upload policy", profile.ggaUploadPolicy),
-                    EditableProfileField("expectedFormat", "Expected format", profile.expectedFormat),
-                    EditableProfileField("remoteBaseRawAvailable", "Remote base raw available", profile.remoteBaseRawAvailable.toString()),
+                    EditableProfileField(
+                        key = "expectedFormat",
+                        label = "Expected format",
+                        value = profile.expectedFormat,
+                        optionItems = listOf(
+                            EditableProfileOption("RTCM3", "RTCM3"),
+                            EditableProfileOption("UNKNOWN", "Unknown"),
+                        ),
+                    ),
+                    EditableProfileField(
+                        key = "remoteBaseRawAvailable",
+                        label = "Remote base raw available",
+                        value = profile.remoteBaseRawAvailable.toString(),
+                        boolean = true,
+                    ),
                 ),
             )
         }
@@ -856,12 +910,12 @@ private fun ProfileStores.profileEditorData(
                 title = "Edit recording outputs",
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
-                    EditableProfileField("recordTxToReceiver", "Record app TX to receiver", profile.recordTxToReceiver.toString()),
-                    EditableProfileField("recordNtripCorrectionInput", "Record NTRIP correction input", profile.recordNtripCorrectionInput.toString()),
-                    EditableProfileField("exportNmea", "Export derived NMEA", profile.exportNmea.toString()),
-                    EditableProfileField("exportJsonSolution", "Export JSON solution", profile.exportJsonSolution.toString()),
-                    EditableProfileField("exportGpx", "Export GPX", profile.exportGpx.toString()),
-                    EditableProfileField("recordRemoteBaseRaw", "Record remote base raw", profile.recordRemoteBaseRaw.toString()),
+                    EditableProfileField("recordTxToReceiver", "Record app TX to receiver", profile.recordTxToReceiver.toString(), boolean = true),
+                    EditableProfileField("recordNtripCorrectionInput", "Record NTRIP correction input", profile.recordNtripCorrectionInput.toString(), boolean = true),
+                    EditableProfileField("exportNmea", "Export derived NMEA", profile.exportNmea.toString(), boolean = true),
+                    EditableProfileField("exportJsonSolution", "Export JSON solution", profile.exportJsonSolution.toString(), boolean = true),
+                    EditableProfileField("exportGpx", "Export GPX", profile.exportGpx.toString(), boolean = true),
+                    EditableProfileField("recordRemoteBaseRaw", "Record remote base raw", profile.recordRemoteBaseRaw.toString(), boolean = true),
                 ),
             )
         }
@@ -870,7 +924,15 @@ private fun ProfileStores.profileEditorData(
                 title = "Edit storage location profile",
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
-                    EditableProfileField("kind", "Kind: APP_PRIVATE or SAF_TREE", profile.kind),
+                    EditableProfileField(
+                        key = "kind",
+                        label = "Storage kind",
+                        value = profile.kind,
+                        optionItems = listOf(
+                            EditableProfileOption("APP_PRIVATE", "App-private storage"),
+                            EditableProfileOption("SAF_TREE", "Selected Android folder"),
+                        ),
+                    ),
                     EditableProfileField("treeUri", "SAF tree URI", profile.treeUri.orEmpty()),
                 ),
             )
@@ -1064,6 +1126,13 @@ private val SELECTABLE_BAUD_RATES = listOf(
     "256000",
     "460800",
     "921600",
+)
+
+private val WORKFLOW_MODE_OPTIONS = listOf(
+    EditableProfileOption("plain-rover", "Plain rover"),
+    EditableProfileOption("rover-ntrip", "Rover with NTRIP"),
+    EditableProfileOption("base-calibration", "Temporary base recording"),
+    EditableProfileOption("fixed-base", "Fixed base"),
 )
 
 private enum class ProfileKind {
@@ -1336,6 +1405,12 @@ private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): Prof
 
 private fun StorageProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
     ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+
+private fun <T> List<T>.profileOptions(idOf: (T) -> String, nameOf: (T) -> String): List<EditableProfileOption> =
+    map { EditableProfileOption(idOf(it), nameOf(it)) }
+
+private fun nullableProfileOptions(options: List<EditableProfileOption>): List<EditableProfileOption> =
+    listOf(EditableProfileOption("", "None")) + options
 
 private inline fun List<RecordingSettingsSet>.updateSelected(
     selectedId: String,

@@ -11,6 +11,16 @@ data class DashboardState(
     val primaryAction: DashboardAction,
     val secondaryActions: List<DashboardAction>,
 ) {
+    fun withPlannedConfiguration(planned: DashboardState): DashboardState =
+        if (isRecording) {
+            this
+        } else {
+            copy(
+                status = planned.status,
+                profiles = planned.profiles,
+            )
+        }
+
     companion object {
         fun planned(
             workflow: String,

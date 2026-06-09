@@ -95,16 +95,7 @@ fun RtkCollectorApp() {
         mutableStateOf(initialWorkflowId)
     }
     var state by remember {
-        val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
-        mutableStateOf(
-            DashboardState.planned(
-                workflow = selectedWorkflowId.workflowLabel(),
-                mountpoint = profileStore.selectedMountpointLabel(selectedSettingsSetId),
-                receiver = "UM980",
-                storage = profileStore.selectedStorageLabel(selectedSettingsSetId),
-                profiles = ProfilesCardState(settingsSet = selected?.displayNameWithOverrides() ?: "n/a"),
-            ),
-        )
+        mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
     }
     BackHandler(enabled = screen != AppScreen.HOME) {
         screen = screen.backScreen(profileEditorTarget)
@@ -113,7 +104,9 @@ fun RtkCollectorApp() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == RecordingForegroundService.ACTION_STATE) {
-                    state = dashboardStateFromRecordingIntent(intent)
+                    state = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(
+                        profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId),
+                    )
                 }
             }
         }
@@ -806,7 +799,10 @@ fun RtkCollectorApp() {
                                         set.copy(commandProfileRef = ProfileReference(profile.id, profile.name))
                                     }
                                     profileStore.saveSettingsSets(settingsSets)
-                                    state = state.copy(profiles = state.profiles.copy(commandProfile = profile.name))
+                                    state = state.copy(
+                                        status = state.status.copy(receiver = profile.name),
+                                        profiles = state.profiles.copy(commandProfile = profile.name),
+                                    )
                                 }
                             }
                             DashboardSelector.STORAGE -> {
@@ -1504,10 +1500,30 @@ private fun ProfileStores.selectedStorageLabel(selectedSettingsSetId: String): S
     return storageProfiles().firstOrNull { it.id == settingsSet.storageProfileRef.id }?.name ?: settingsSet.storageProfileRef.name
 }
 
+private fun ProfileStores.selectedReceiverLabel(selectedSettingsSetId: String): String {
+    val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
+    return commandProfiles().firstOrNull { it.id == settingsSet.commandProfileRef.id }?.name ?: settingsSet.commandProfileRef.name
+}
+
 private fun ProfileStores.selectedCasterMountpoints(selectedSettingsSetId: String): List<String> {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return emptyList()
     val casterId = settingsSet.ntripCasterProfileRef?.id ?: return emptyList()
     return ntripCasterProfiles().firstOrNull { it.id == casterId }?.sourcetableMountpoints.orEmpty()
+}
+
+private fun ProfileStores.plannedDashboardState(
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+    selectedWorkflowId: String?,
+): DashboardState {
+    val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+    return DashboardState.planned(
+        workflow = selectedWorkflowId.workflowLabel(),
+        mountpoint = selectedMountpointLabel(selectedSettingsSetId),
+        receiver = selectedReceiverLabel(selectedSettingsSetId),
+        storage = selectedStorageLabel(selectedSettingsSetId),
+        profiles = ProfilesCardState(settingsSet = selected?.displayNameWithOverrides() ?: "n/a"),
+    )
 }
 
 private fun Context.currentUsbDeviceChoices(): List<UsbDeviceChoice> {

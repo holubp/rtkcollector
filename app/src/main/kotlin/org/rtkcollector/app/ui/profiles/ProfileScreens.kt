@@ -433,39 +433,41 @@ fun ProfileEditorScreen(
                         }
                     }
                 } else {
-                    OutlinedTextField(
-                        value = values[field.key].orEmpty(),
-                        onValueChange = { value ->
-                            values = values + (field.key to value)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(field.label) },
-                        minLines = if (field.multiline) 4 else 1,
-                        readOnly = field.readOnly,
-                        singleLine = !field.multiline,
-                        visualTransformation = if (field.secret && field.key !in visibleSecrets) {
-                            PasswordVisualTransformation()
-                        } else {
-                            VisualTransformation.None
-                        },
-                        trailingIcon = if (field.secret) {
-                            {
-                                TextButton(
-                                    onClick = {
-                                        visibleSecrets = if (field.key in visibleSecrets) {
-                                            visibleSecrets - field.key
-                                        } else {
-                                            visibleSecrets + field.key
-                                        }
-                                    },
-                                ) {
-                                    Text(if (field.key in visibleSecrets) "Hide" else "Show")
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(field.label, style = MaterialTheme.typography.labelLarge)
+                        OutlinedTextField(
+                            value = values[field.key].orEmpty(),
+                            onValueChange = { value ->
+                                values = values + (field.key to value)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = if (field.multiline) 4 else 1,
+                            readOnly = field.readOnly,
+                            singleLine = !field.multiline,
+                            visualTransformation = if (field.secret && field.key !in visibleSecrets) {
+                                PasswordVisualTransformation()
+                            } else {
+                                VisualTransformation.None
+                            },
+                            trailingIcon = if (field.secret) {
+                                {
+                                    TextButton(
+                                        onClick = {
+                                            visibleSecrets = if (field.key in visibleSecrets) {
+                                                visibleSecrets - field.key
+                                            } else {
+                                                visibleSecrets + field.key
+                                            }
+                                        },
+                                    ) {
+                                        Text(if (field.key in visibleSecrets) "Hide" else "Show")
+                                    }
                                 }
-                            }
-                        } else {
-                            null
-                        },
-                    )
+                            } else {
+                                null
+                            },
+                        )
+                    }
                 }
             }
             item {

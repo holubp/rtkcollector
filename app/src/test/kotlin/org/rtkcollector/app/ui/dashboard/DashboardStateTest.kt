@@ -73,6 +73,33 @@ class DashboardStateTest {
     }
 
     @Test
+    fun `stopped service state keeps planned configuration chips`() {
+        val serviceState = DashboardState.planned(
+            workflow = "n/a",
+            mountpoint = "a",
+            receiver = "n/a",
+            storage = "n/a",
+            files = FilesCardState(sessionLocation = "content://session/current", receiverRxBytes = "123 B"),
+        )
+        val planned = DashboardState.planned(
+            workflow = "Rover + NTRIP",
+            mountpoint = "n/a",
+            receiver = "UM980",
+            storage = "App-private external storage",
+            profiles = ProfilesCardState(settingsSet = "UM980 rover + NTRIP"),
+        )
+
+        val merged = serviceState.withPlannedConfiguration(planned)
+
+        assertEquals("Rover + NTRIP", merged.status.workflow)
+        assertEquals("n/a", merged.status.mountpoint)
+        assertEquals("UM980", merged.status.receiver)
+        assertEquals("App-private external storage", merged.status.storage)
+        assertEquals("content://session/current", merged.files.sessionLocation)
+        assertEquals("123 B", merged.files.receiverRxBytes)
+    }
+
+    @Test
     fun `card states have dashboard friendly defaults`() {
         assertEquals("n/a", PositionCardState().latLon)
         assertEquals("Not configured", FixCardState().rtklibStatus)

@@ -9,6 +9,7 @@ object Um980BinaryParser {
     private const val STADOPB_MESSAGE_ID = 954
     private const val BINARY_HEADER_LENGTH = 24
     private const val CRC_LENGTH = 4
+    private const val MAX_BINARY_PAYLOAD_LENGTH = 4096
     private const val BESTNAVB_MIN_PAYLOAD_LENGTH = 120
     private const val STADOPB_MIN_PAYLOAD_LENGTH = 42
 
@@ -49,13 +50,12 @@ object Um980BinaryParser {
                 index += 1
                 continue
             }
-            val headerLength = input[index + 3].toInt() and 0xff
-            if (headerLength < BINARY_HEADER_LENGTH || index + headerLength + CRC_LENGTH > input.size) {
+            val payloadLength = u16(input, index + 6)
+            if (payloadLength > MAX_BINARY_PAYLOAD_LENGTH) {
                 index += 1
                 continue
             }
-            val payloadLength = u16(input, index + 6)
-            val frameLength = headerLength + payloadLength + CRC_LENGTH
+            val frameLength = BINARY_HEADER_LENGTH + payloadLength + CRC_LENGTH
             if (index + frameLength > input.size) {
                 break
             }
@@ -73,23 +73,20 @@ object Um980BinaryParser {
     fun isValidFrame(frame: ByteArray): Boolean {
         if (frame.size < BINARY_HEADER_LENGTH + CRC_LENGTH) return false
         if (!hasBinarySync(frame, 0)) return false
-        val headerLength = frame[3].toInt() and 0xff
-        if (headerLength < BINARY_HEADER_LENGTH) return false
-        if (frame.size < headerLength + CRC_LENGTH) return false
         val payloadLength = u16(frame, 6)
-        val expectedLength = headerLength + payloadLength + CRC_LENGTH
+        if (payloadLength > MAX_BINARY_PAYLOAD_LENGTH) return false
+        val expectedLength = BINARY_HEADER_LENGTH + payloadLength + CRC_LENGTH
         if (frame.size != expectedLength) return false
         return u32(frame, frame.size - CRC_LENGTH) == crc32(frame, 0, frame.size - CRC_LENGTH)
     }
 
     fun parseBestnavb(frame: ByteArray): Um980Telemetry? {
         if (!isValidFrame(frame)) return null
-        val headerLength = frame[3].toInt() and 0xff
         if (messageId(frame) != BESTNAVB_MESSAGE_ID) return null
         val payloadLength = u16(frame, 6)
         if (payloadLength < BESTNAVB_MIN_PAYLOAD_LENGTH) return null
         val payload = ByteBuffer
-            .wrap(frame.copyOfRange(headerLength, headerLength + payloadLength))
+            .wrap(frame.copyOfRange(BINARY_HEADER_LENGTH, BINARY_HEADER_LENGTH + payloadLength))
             .order(ByteOrder.LITTLE_ENDIAN)
         val solutionStatus = payload.getInt(0)
         val positionType = payload.getInt(4)
@@ -107,7 +104,7 @@ object Um980BinaryParser {
             latErrorM = payload.getFloat(40).toDouble(),
             lonErrorM = payload.getFloat(44).toDouble(),
             verticalAccuracyM = payload.getFloat(48).toDouble(),
-            stationId = stationId(frame.copyOfRange(headerLength + 52, headerLength + 56)),
+            stationId = stationId(frame.copyOfRange(BINARY_HEADER_LENGTH + 52, BINARY_HEADER_LENGTH + 56)),
             differentialAgeS = payload.getFloat(56).toDouble(),
             solutionAgeS = payload.getFloat(60).toDouble(),
             satellitesInView = payload.get(64).toInt() and 0xff,
@@ -120,12 +117,11 @@ object Um980BinaryParser {
 
     fun parseStadopb(frame: ByteArray): Um980Telemetry? {
         if (!isValidFrame(frame)) return null
-        val headerLength = frame[3].toInt() and 0xff
         if (messageId(frame) != STADOPB_MESSAGE_ID) return null
         val payloadLength = u16(frame, 6)
         if (payloadLength < STADOPB_MIN_PAYLOAD_LENGTH) return null
         val payload = ByteBuffer
-            .wrap(frame.copyOfRange(headerLength, headerLength + payloadLength))
+            .wrap(frame.copyOfRange(BINARY_HEADER_LENGTH, BINARY_HEADER_LENGTH + payloadLength))
             .order(ByteOrder.LITTLE_ENDIAN)
         val tracked = payload.getShort(40).toInt() and 0xffff
         return Um980Telemetry(

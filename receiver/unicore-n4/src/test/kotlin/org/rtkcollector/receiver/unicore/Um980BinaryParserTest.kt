@@ -66,6 +66,7 @@ class Um980BinaryParserTest {
         val frame = bestnavbFrame()
         val invalid = frame.copyOf().also { it[it.lastIndex] = (it.last() + 1).toByte() }
 
+        assertEquals(0, frame[3].toInt())
         assertEquals(frame.toList(), Um980BinaryParser.extractFrames(frame).single().toList())
         assertTrue(Um980BinaryParser.isValidFrame(frame))
         assertFalse(Um980BinaryParser.isValidFrame(invalid))
@@ -87,7 +88,6 @@ class Um980BinaryParserTest {
             frame[0] = 0xAA.toByte()
             frame[1] = 0x44
             frame[2] = 0xB5.toByte()
-            frame[3] = 24
             putU16(frame, 4, messageId)
             putU16(frame, 6, payloadLength)
             putU16(frame, 10, 2419)
@@ -123,7 +123,6 @@ class Um980BinaryParserTest {
             frame[0] = 0xAA.toByte()
             frame[1] = 0x44
             frame[2] = 0xB5.toByte()
-            frame[3] = 24
             putU16(frame, 4, messageId)
             putU16(frame, 6, payloadLength)
             putU16(frame, 10, 2419)

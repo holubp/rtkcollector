@@ -152,7 +152,12 @@ fun RtkCollectorApp() {
                         if (state.isRecording) {
                             context.startService(RecordingForegroundService.stopIntent(context))
                         } else {
-                            buildDashboardStartIntent(context)?.let { intent ->
+                            buildDashboardStartIntent(
+                                context = context,
+                                settingsSets = settingsSets,
+                                selectedSettingsSetId = selectedSettingsSetId,
+                                selectedWorkflowId = selectedWorkflowId,
+                            )?.let { intent ->
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     context.startForegroundService(intent)
                                 } else {
@@ -232,7 +237,9 @@ fun RtkCollectorApp() {
                         profileStore.saveSettingsSets(updated)
                         state = state.copy(status = state.status.copy(mountpoint = mountpoint.ifBlank { "n/a" }))
                         if (state.isRecording) {
-                            buildNtripUpdateIntent(context)?.let { context.startService(it) }
+                            buildNtripUpdateIntent(context, settingsSets, selectedSettingsSetId, selectedWorkflowId)?.let {
+                                context.startService(it)
+                            }
                         }
                         screen = AppScreen.SETTINGS
                     },
@@ -614,7 +621,9 @@ fun RtkCollectorApp() {
                             profileStore.saveSettingsSets(settingsSets)
                             state = state.copy(status = state.status.copy(mountpoint = profile.displayMountpoint()))
                             if (state.isRecording) {
-                                buildNtripUpdateIntent(context)?.let { context.startService(it) }
+                                buildNtripUpdateIntent(context, settingsSets, selectedSettingsSetId, selectedWorkflowId)?.let {
+                                    context.startService(it)
+                                }
                             }
                         }
                         screen = AppScreen.HOME
@@ -821,7 +830,9 @@ fun RtkCollectorApp() {
                                     profileStore.saveSettingsSets(settingsSets)
                                     state = state.copy(status = state.status.copy(mountpoint = profile.displayMountpoint()))
                                     if (state.isRecording) {
-                                        buildNtripUpdateIntent(context)?.let { context.startService(it) }
+                                        buildNtripUpdateIntent(context, settingsSets, selectedSettingsSetId, selectedWorkflowId)?.let {
+                                            context.startService(it)
+                                        }
                                     }
                                 }
                             }
@@ -1339,9 +1350,14 @@ private fun RtkCollectorAppPreview() {
     RtkCollectorApp()
 }
 
-private fun buildDashboardStartIntent(context: Context): Intent? {
+private fun buildDashboardStartIntent(
+    context: Context,
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+    selectedWorkflowId: String?,
+): Intent? {
     val profileStore = ProfileStores(context)
-    val settingsSet = profileStore.selectedSettingsSet()
+    val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
     val commandProfile = profileStore.commandProfiles().findByReference(
         id = settingsSet.commandProfileRef.id,
         label = "command profile",
@@ -1364,7 +1380,7 @@ private fun buildDashboardStartIntent(context: Context): Intent? {
         id = settingsSet.storageProfileRef.id,
         label = "storage location profile",
     )
-    val workflowId = profileStore.selectedWorkflowId()
+    val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
     if (workflowId.isNullOrBlank()) {
         Toast.makeText(context, "Cannot start: workflow is not selected.", Toast.LENGTH_LONG).show()
         return null
@@ -1456,9 +1472,14 @@ private fun buildDashboardStartIntent(context: Context): Intent? {
     }
 }
 
-private fun buildNtripUpdateIntent(context: Context): Intent? {
+private fun buildNtripUpdateIntent(
+    context: Context,
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+    selectedWorkflowId: String?,
+): Intent? {
     val profileStore = ProfileStores(context)
-    val settingsSet = profileStore.selectedSettingsSet()
+    val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
     val ntripCaster = settingsSet.ntripCasterProfileRef?.let { reference ->
         profileStore.ntripCasterProfiles().findByReference(reference.id, "NTRIP caster profile")
     }
@@ -1466,7 +1487,7 @@ private fun buildNtripUpdateIntent(context: Context): Intent? {
         profileStore.ntripMountpointProfiles().findByReference(reference.id, "NTRIP mountpoint profile")
     }
     val activeConfig = try {
-        val workflowId = profileStore.selectedWorkflowId()
+        val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
         ActiveRecordingConfig.resolve(
             settingsSet = settingsSet.copy(workflowId = workflowId ?: settingsSet.workflowId),
             commandProfile = profileStore.commandProfiles().findByReference(
@@ -1565,6 +1586,7 @@ private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {
 
 private fun ProfileStores.selectedMountpointLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
+    settingsSet.overrides.ntripMountpoint?.mountpoint?.takeIf { it.isNotBlank() }?.let { return it }
     val profile = settingsSet.ntripMountpointProfileRef?.id?.let { id ->
         ntripMountpointProfiles().firstOrNull { it.id == id }
     } ?: return "n/a"

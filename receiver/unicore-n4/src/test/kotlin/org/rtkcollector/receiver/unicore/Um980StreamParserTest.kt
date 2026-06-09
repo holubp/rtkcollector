@@ -7,6 +7,7 @@ class Um980StreamParserTest {
     @Test
     fun `classifies nmea ascii binary and noise records`() {
         val binary = Um980BinaryParserTest.bestnavbFrame()
+        assertEquals(0, binary[3].toInt())
         val bytes = "xx\$GPGGA,123519,4807.038,N,01131.000,E,4,12,0.8,545.4,M,46.9,M,,*47\r\n".encodeToByteArray() +
             "#BESTNAVA,COM1,0,80.0,FINE,2300,1000,0,0,18,0;SOL_COMPUTED,NARROW_INT,50.0,14.0,300.0,0.1,0.1,0.2,12,12*00000000\r\n".encodeToByteArray() +
             binary
@@ -64,13 +65,12 @@ class Um980StreamParserTest {
     }
 
     @Test
-    fun `malformed short header length is rejected as soon as header byte arrives`() {
+    fun `short binary frame header is buffered until enough bytes arrive`() {
         val parser = Um980StreamParser()
 
         val records = parser.accept(byteArrayOf(0xAA.toByte(), 0x44, 0xB5.toByte(), 1))
 
-        assertEquals(listOf("noise"), records.map { it.kind })
-        assertEquals(listOf(0xAA.toByte(), 0x44, 0xB5.toByte(), 1), records.single().bytes.toList())
+        assertEquals(emptyList<Um980StreamRecord>(), records)
     }
 
     @Test

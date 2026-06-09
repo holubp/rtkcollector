@@ -56,6 +56,7 @@ import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
 import org.rtkcollector.app.ui.sessions.SessionListItem
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
+import org.rtkcollector.app.ui.usb.UsbDeviceChoice
 import androidx.core.content.FileProvider
 import java.io.File
 import java.nio.file.Files
@@ -84,6 +85,7 @@ fun RtkCollectorApp() {
     val secretStore = remember(context) { NtripSecretStore(context) }
     @Suppress("UNUSED_VARIABLE")
     val currentProfileRevision = profileRevision
+    val usbDeviceChoices = remember(currentProfileRevision) { context.currentUsbDeviceChoices() }
     var state by remember {
         val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
         mutableStateOf(
@@ -703,6 +705,7 @@ fun RtkCollectorApp() {
                             target = target,
                             settingsSets = settingsSets,
                             passwordLookup = secretStore::getPassword,
+                            usbDeviceChoices = usbDeviceChoices,
                         )
                         ProfileEditorScreen(
                             data = data,
@@ -834,6 +837,7 @@ private fun ProfileStores.profileEditorData(
     target: ProfileEditorTarget,
     settingsSets: List<RecordingSettingsSet>,
     passwordLookup: (String) -> String?,
+    usbDeviceChoices: List<UsbDeviceChoice> = emptyList(),
 ): ProfileEditorData =
     when (target.kind) {
         ProfileKind.SETTINGS_SET -> settingsSets.first { it.id == target.id }.let { set ->
@@ -897,11 +901,20 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("username", "Username", profile.username),
                     EditableProfileField("password", "Password", storedPassword, secret = true),
                     EditableProfileField("protocolPolicy", "Protocol policy", profile.protocolPolicy),
-                    EditableProfileField("sourcetableMountpoints", "Known mountpoints", profile.sourcetableMountpoints.joinToString("\n"), multiline = true),
+                    EditableProfileField(
+                        key = "sourcetableMountpoints",
+                        label = "Known mountpoints",
+                        value = "",
+                        readOnlyList = profile.sourcetableMountpoints.ifEmpty { listOf("No cached mountpoints") },
+                    ),
                 ),
             )
         }
         ProfileKind.NTRIP_MOUNTPOINT -> ntripMountpointProfiles().first { it.id == target.id }.let { profile ->
+            val selectedCasterMountpoints = ntripCasterProfiles()
+                .firstOrNull { it.id == profile.casterProfileId }
+                ?.sourcetableMountpoints
+                .orEmpty()
             ProfileEditorData(
                 title = "Edit NTRIP mountpoint",
                 fields = listOf(
@@ -912,7 +925,12 @@ private fun ProfileStores.profileEditorData(
                         value = profile.casterProfileId,
                         optionItems = ntripCasterProfiles().profileOptions(NtripCasterProfile::id, NtripCasterProfile::name),
                     ),
-                    EditableProfileField("mountpoint", "Mountpoint", profile.mountpoint),
+                    EditableProfileField(
+                        key = "mountpoint",
+                        label = "Mountpoint",
+                        value = profile.mountpoint,
+                        optionItems = selectedCasterMountpoints.map { EditableProfileOption(it, it) },
+                    ),
                     EditableProfileField("ggaUploadPolicy", "GGA upload policy", profile.ggaUploadPolicy),
                     EditableProfileField(
                         key = "expectedFormat",
@@ -933,6 +951,8 @@ private fun ProfileStores.profileEditorData(
             )
         }
         ProfileKind.USB_BAUD -> usbBaudProfiles().first { it.id == target.id }.let { profile ->
+            val profileUsbChoice = profile.usbDeviceChoice()
+            val usbOptions = usbDeviceOptionItems(usbDeviceChoices, profileUsbChoice)
             ProfileEditorData(
                 title = "Edit USB and baud profile",
                 fields = listOf(
@@ -949,10 +969,12 @@ private fun ProfileStores.profileEditorData(
                         value = profile.serialBaud.toString(),
                         options = SELECTABLE_BAUD_RATES,
                     ),
-                    EditableProfileField("usbVid", "USB VID", profile.usbVid?.toString().orEmpty()),
-                    EditableProfileField("usbPid", "USB PID", profile.usbPid?.toString().orEmpty()),
-                    EditableProfileField("usbDeviceName", "USB device name", profile.usbDeviceName.orEmpty()),
-                    EditableProfileField("usbProductName", "USB product name", profile.usbProductName.orEmpty()),
+                    EditableProfileField(
+                        key = "usbDeviceChoice",
+                        label = "USB device",
+                        value = profileUsbChoice?.toProfileValue().orEmpty(),
+                        optionItems = usbOptions,
+                    ),
                 ),
             )
         }
@@ -1062,7 +1084,7 @@ private fun ProfileStores.saveProfileEditorData(
                             ?.lines()
                             ?.map(String::trim)
                             ?.filter(String::isNotBlank)
-                            .orEmpty(),
+                            ?: profile.sourcetableMountpoints,
                     )
                 } else {
                     profile
@@ -1138,14 +1160,15 @@ private fun ProfileStores.saveProfileEditorData(
             usbBaudProfiles().map { profile ->
                 if (profile.id == target.id) {
                     require(!profile.isProtected) { "Protected USB/baud profiles cannot be edited." }
+                    val usbChoice = UsbDeviceChoice.fromProfileValue(values.optional("usbDeviceChoice").orEmpty())
                     profile.copy(
                         name = values.required("name"),
                         profileBaud = values.optional("profileBaud")?.toIntOrNull() ?: 230400,
                         serialBaud = values.optional("serialBaud")?.toIntOrNull() ?: 230400,
-                        usbVid = values.optional("usbVid")?.toIntOrNull(),
-                        usbPid = values.optional("usbPid")?.toIntOrNull(),
-                        usbDeviceName = values.optional("usbDeviceName"),
-                        usbProductName = values.optional("usbProductName"),
+                        usbVid = usbChoice?.vendorId,
+                        usbPid = usbChoice?.productId,
+                        usbDeviceName = usbChoice?.deviceName,
+                        usbProductName = usbChoice?.productName,
                     )
                 } else {
                     profile
@@ -1430,6 +1453,47 @@ private fun ProfileStores.selectedCasterMountpoints(selectedSettingsSetId: Strin
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return emptyList()
     val casterId = settingsSet.ntripCasterProfileRef?.id ?: return emptyList()
     return ntripCasterProfiles().firstOrNull { it.id == casterId }?.sourcetableMountpoints.orEmpty()
+}
+
+private fun Context.currentUsbDeviceChoices(): List<UsbDeviceChoice> {
+    val usbManager = getSystemService(Context.USB_SERVICE) as? UsbManager ?: return emptyList()
+    return usbManager.deviceList.values.map { device ->
+        UsbDeviceChoice(
+            vendorId = device.vendorId,
+            productId = device.productId,
+            deviceName = device.deviceName,
+            productName = runCatching { device.productName }.getOrNull(),
+        )
+    }.sortedWith(compareBy<UsbDeviceChoice> { it.productName.orEmpty() }.thenBy { it.deviceName })
+}
+
+private fun UsbBaudProfile.usbDeviceChoice(): UsbDeviceChoice? {
+    val vid = usbVid ?: return null
+    val pid = usbPid ?: return null
+    return UsbDeviceChoice(
+        vendorId = vid,
+        productId = pid,
+        deviceName = usbDeviceName.orEmpty(),
+        productName = usbProductName,
+    )
+}
+
+private fun usbDeviceOptionItems(
+    connectedChoices: List<UsbDeviceChoice>,
+    selectedChoice: UsbDeviceChoice?,
+): List<EditableProfileOption> {
+    val connectedValues = connectedChoices.map { it.toProfileValue() }.toSet()
+    val remembered = selectedChoice
+        ?.takeUnless { it.toProfileValue() in connectedValues }
+        ?.let { choice ->
+            EditableProfileOption(
+                value = choice.toProfileValue(),
+                label = "${choice.label} (not connected)",
+            )
+        }
+    return listOf(EditableProfileOption("", "Any USB device")) +
+        connectedChoices.map { EditableProfileOption(it.toProfileValue(), it.label) } +
+        listOfNotNull(remembered)
 }
 
 private inline fun <reified T> List<T>.findByReference(id: String, label: String): T =

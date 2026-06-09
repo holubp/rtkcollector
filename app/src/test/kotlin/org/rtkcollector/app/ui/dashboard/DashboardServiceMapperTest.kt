@@ -43,4 +43,42 @@ class DashboardServiceMapperTest {
         assertEquals("48.100000000, 17.100000000", state.position.latLon)
         assertEquals("12:34:56Z", state.position.utcTime)
     }
+
+    @Test
+    fun `ntrip placeholder url does not become mountpoint a`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL, "n/a")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("n/a", state.status.mountpoint)
+    }
+
+    @Test
+    fun `bestnav none falls back to gga fix quality`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "NONE")
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 2)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("DGPS", state.fix.fixType)
+    }
+
+    @Test
+    fun `ppp status can describe fix when bestnav is none`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "NONE")
+            putExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS, "PPP_CONVERGING")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("PPP_CONVERGING", state.fix.fixType)
+    }
 }

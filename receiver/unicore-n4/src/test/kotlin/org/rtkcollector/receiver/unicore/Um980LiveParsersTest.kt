@@ -31,6 +31,43 @@ class Um980LiveParsersTest {
     }
 
     @Test
+    fun `parses GSA dop and satellite use`() {
+        val dop = NmeaGsaParser().parseLine(
+            "\$GNGSA,A,3,04,05,09,12,24,25,29,31,32,36,40,45,1.2,0.8,0.9*00",
+        )
+
+        requireNotNull(dop)
+        assertEquals(3, dop.fixMode)
+        assertEquals(12, dop.satellitesUsed)
+        assertEquals(1.2, dop.pdop)
+        assertEquals(0.8, dop.hdop)
+        assertEquals(0.9, dop.vdop)
+    }
+
+    @Test
+    fun `parses GSV satellites in view`() {
+        val view = NmeaGsvParser().parseLine(
+            "\$GNGSV,3,1,31,01,40,120,42,02,30,130,40,03,20,140,35,04,10,150,30*00",
+        )
+
+        requireNotNull(view)
+        assertEquals(31, view.satellitesInView)
+    }
+
+    @Test
+    fun `parses GST position error estimates`() {
+        val gst = NmeaGstParser().parseLine(
+            "\$GNGST,120000.00,0.10,0.03,0.02,45.0,0.012,0.010,0.025*00",
+        )
+
+        requireNotNull(gst)
+        assertEquals("120000.00", gst.utcTime)
+        assertEquals(0.012, gst.latErrorM)
+        assertEquals(0.010, gst.lonErrorM)
+        assertEquals(0.025, gst.heightErrorM)
+    }
+
+    @Test
     fun `buffers partial parser lines`() {
         val parser = NmeaGgaParser()
 

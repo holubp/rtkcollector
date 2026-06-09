@@ -21,9 +21,10 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         lonError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LON_ERROR) ?: "n/a",
     )
     val ggaFixQuality = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, -1).takeIf { it >= 0 }
+    val bestnavPositionType = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE)
+    val pppStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS)
     val fix = FixCardState(
-        fixType = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE)
-            ?: interpretGgaFixQuality(ggaFixQuality),
+        fixType = displayFixType(bestnavPositionType, ggaFixQuality, pppStatus),
         satellites = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITES) ?: "n/a",
         pdop = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PDOP) ?: "n/a",
         hdopVdop = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_HDOP_VDOP) ?: "n/a",
@@ -31,7 +32,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         verticalAccuracy = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_VERTICAL_ACCURACY) ?: "n/a",
         differentialAge = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_DIFFERENTIAL_AGE) ?: "n/a",
         baseline = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASELINE) ?: "n/a",
-        pppStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS) ?: "n/a",
+        pppStatus = pppStatus ?: "n/a",
     )
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",
@@ -79,4 +80,17 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
 }
 
 private fun mountpointFromUrl(url: String?): String =
-    url?.substringAfterLast('/')?.takeIf { it.isNotBlank() && it != url } ?: "n/a"
+    url
+        ?.takeUnless { it.equals("n/a", ignoreCase = true) }
+        ?.substringAfterLast('/')
+        ?.takeIf { it.isNotBlank() && it != url }
+        ?: "n/a"
+
+private fun displayFixType(bestnavPositionType: String?, ggaFixQuality: Int?, pppStatus: String?): String {
+    val bestnav = bestnavPositionType?.takeIf { type ->
+        type.isNotBlank() && !type.equals("NONE", ignoreCase = true)
+    }
+    return bestnav
+        ?: pppStatus?.takeIf { it.isNotBlank() && !it.equals("n/a", ignoreCase = true) }
+        ?: interpretGgaFixQuality(ggaFixQuality)
+}

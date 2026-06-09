@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.zip.CRC32
 
 class Um980BinaryParserTest {
     @Test
@@ -160,10 +159,19 @@ class Um980BinaryParserTest {
             bytes[offset + 3] = ((value ushr 24) and 0xff).toByte()
         }
 
-        private fun crc32(bytes: ByteArray, offset: Int, length: Int): Long {
-            val crc = CRC32()
-            crc.update(bytes, offset, length)
-            return crc.value
+        private fun crc32(bytes: ByteArray, offset: Int, length: Int): UInt {
+            var crc = 0u
+            for (i in offset until offset + length) {
+                crc = crc xor (bytes[i].toUInt() and 0xffu)
+                repeat(8) {
+                    crc = if ((crc and 1u) != 0u) {
+                        (crc shr 1) xor 0xEDB88320u
+                    } else {
+                        crc shr 1
+                    }
+                }
+            }
+            return crc
         }
     }
 }

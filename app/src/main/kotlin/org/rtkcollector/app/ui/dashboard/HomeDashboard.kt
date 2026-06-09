@@ -8,8 +8,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
@@ -256,7 +257,7 @@ private fun DashboardCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = modifier.widthIn(min = 230.dp, max = 360.dp),
+        modifier = modifier.width(260.dp).heightIn(min = 220.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(
@@ -277,6 +278,7 @@ private fun DashboardCard(
 @Composable
 private fun MajorValue(value: String) {
     Text(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         text = value,
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
@@ -294,6 +296,7 @@ private fun Metric(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 2,

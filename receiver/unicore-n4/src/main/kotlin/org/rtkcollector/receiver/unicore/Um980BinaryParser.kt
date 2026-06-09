@@ -2,9 +2,9 @@ package org.rtkcollector.receiver.unicore
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.zip.CRC32
 
 object Um980BinaryParser {
+    private const val UNICORE_BINARY_CRC32_POLY = 0xEDB88320u
     private const val BESTNAVB_MESSAGE_ID = 2118
     private const val STADOPB_MESSAGE_ID = 954
     private const val BINARY_HEADER_LENGTH = 24
@@ -79,7 +79,7 @@ object Um980BinaryParser {
         val payloadLength = u16(frame, 6)
         val expectedLength = headerLength + payloadLength + CRC_LENGTH
         if (frame.size != expectedLength) return false
-        return u32(frame, frame.size - CRC_LENGTH).toLong() == crc32(frame, 0, frame.size - CRC_LENGTH)
+        return u32(frame, frame.size - CRC_LENGTH) == crc32(frame, 0, frame.size - CRC_LENGTH)
     }
 
     fun parseBestnavb(frame: ByteArray): Um980Telemetry? {
@@ -162,10 +162,19 @@ object Um980BinaryParser {
             ((bytes[offset + 2].toInt() and 0xff).toUInt() shl 16) or
             ((bytes[offset + 3].toInt() and 0xff).toUInt() shl 24)
 
-    private fun crc32(bytes: ByteArray, offset: Int, length: Int): Long {
-        val crc = CRC32()
-        crc.update(bytes, offset, length)
-        return crc.value
+    private fun crc32(bytes: ByteArray, offset: Int, length: Int): UInt {
+        var crc = 0u
+        for (i in offset until offset + length) {
+            crc = crc xor (bytes[i].toUInt() and 0xffu)
+            repeat(8) {
+                crc = if ((crc and 1u) != 0u) {
+                    (crc shr 1) xor UNICORE_BINARY_CRC32_POLY
+                } else {
+                    crc shr 1
+                }
+            }
+        }
+        return crc
     }
 
     private fun stationId(bytes: ByteArray): String? =

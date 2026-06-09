@@ -45,6 +45,9 @@ import org.rtkcollector.core.session.SessionMode
 import org.rtkcollector.core.session.exportSessionMetadata
 import org.rtkcollector.receiver.unicore.NmeaGgaFix
 import org.rtkcollector.receiver.unicore.NmeaGgaParser
+import org.rtkcollector.receiver.unicore.NmeaGsaParser
+import org.rtkcollector.receiver.unicore.NmeaGstParser
+import org.rtkcollector.receiver.unicore.NmeaGsvParser
 import org.rtkcollector.receiver.unicore.Um980AsciiSolution
 import org.rtkcollector.receiver.unicore.Um980AsciiSolutionParser
 import org.rtkcollector.receiver.unicore.Um980BinaryParser
@@ -812,6 +815,9 @@ class RecordingForegroundService : Service() {
         exportJsonSolution: Boolean,
     ): AdvisoryFanout {
         val ggaParser = NmeaGgaParser()
+        val gsaParser = NmeaGsaParser()
+        val gstParser = NmeaGstParser()
+        val gsvParser = NmeaGsvParser()
         val nmeaExporter = NmeaSentenceExporter()
         val solutionParser = Um980AsciiSolutionParser()
         val streamParser = Um980StreamParser()
@@ -838,8 +844,40 @@ class RecordingForegroundService : Service() {
                                         latLon = latLonDisplay(fix.latDeg, fix.lonDeg),
                                         altitude = metersDisplay(fix.altitudeM),
                                         utcTime = fix.utcTime.ifBlank { state.utcTime },
-                                        satellites = satelliteDisplay(fix.satelliteCount, null),
-                                        hdopVdop = dopPairDisplay(fix.hdop, null),
+                                        satellitesUsed = fix.satelliteCount ?: state.satellitesUsed,
+                                        satellites = satelliteDisplay(fix.satelliteCount, state.satellitesInView),
+                                        hdopVdop = dopPairDisplay(fix.hdop, state.vdop),
+                                    )
+                                }
+                                gsaParser.accept(record.bytes).forEach { dop ->
+                                    state = state.copy(
+                                        satellitesUsed = dop.satellitesUsed ?: state.satellitesUsed,
+                                        pdop = dop.pdop?.let { "%.1f".format(java.util.Locale.US, it) } ?: state.pdop,
+                                        vdop = dop.vdop ?: state.vdop,
+                                        hdopVdop = dopPairDisplay(dop.hdop, dop.vdop ?: state.vdop),
+                                        satellites = satelliteDisplay(
+                                            used = dop.satellitesUsed ?: state.satellitesUsed,
+                                            inView = state.satellitesInView,
+                                        ).takeUnless { it == "n/a" } ?: state.satellites,
+                                    )
+                                }
+                                gstParser.accept(record.bytes).forEach { error ->
+                                    val horizontal = listOfNotNull(error.latErrorM, error.lonErrorM).maxOrNull()
+                                    state = state.copy(
+                                        utcTime = error.utcTime.ifBlank { state.utcTime },
+                                        latError = error.latErrorM?.let(::metersDisplay) ?: state.latError,
+                                        lonError = error.lonErrorM?.let(::metersDisplay) ?: state.lonError,
+                                        horizontalAccuracy = horizontal?.let(::metersDisplay) ?: state.horizontalAccuracy,
+                                        verticalAccuracy = error.heightErrorM?.let(::metersDisplay) ?: state.verticalAccuracy,
+                                    )
+                                }
+                                gsvParser.accept(record.bytes).forEach { view ->
+                                    state = state.copy(
+                                        satellitesInView = view.satellitesInView ?: state.satellitesInView,
+                                        satellites = satelliteDisplay(
+                                            used = state.satellitesUsed,
+                                            inView = view.satellitesInView ?: state.satellitesInView,
+                                        ).takeUnless { it == "n/a" } ?: state.satellites,
                                     )
                                 }
                             }
@@ -924,8 +962,11 @@ class RecordingForegroundService : Service() {
             horizontalAccuracy = telemetry.latErrorM?.let(::metersDisplay) ?: horizontalAccuracy,
             verticalAccuracy = telemetry.verticalAccuracyM?.let(::metersDisplay) ?: verticalAccuracy,
             utcTime = telemetry.utcTime ?: utcTime,
+            satellitesUsed = telemetry.satellitesUsed ?: satellitesUsed,
+            satellitesInView = telemetry.satellitesInView ?: telemetry.satellitesTracked ?: satellitesInView,
             pdop = telemetry.pdop?.let { "%.1f".format(java.util.Locale.US, it) } ?: pdop,
-            hdopVdop = dopPairDisplay(telemetry.hdop, telemetry.vdop),
+            vdop = telemetry.vdop ?: vdop,
+            hdopVdop = dopPairDisplay(telemetry.hdop, telemetry.vdop).takeUnless { it == "n/a" } ?: hdopVdop,
             differentialAge = telemetry.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) } ?: differentialAge,
             baseline = telemetry.baselineLengthM?.let(::distanceDisplay) ?: baseline,
             satellites = satelliteDisplay(

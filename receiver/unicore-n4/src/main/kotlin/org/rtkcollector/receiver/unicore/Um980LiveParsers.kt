@@ -13,6 +13,28 @@ data class NmeaGgaFix(
     val altitudeM: Double?,
 )
 
+data class NmeaGsaDop(
+    val talker: String,
+    val fixMode: Int?,
+    val satellitesUsed: Int?,
+    val pdop: Double?,
+    val hdop: Double?,
+    val vdop: Double?,
+)
+
+data class NmeaGstError(
+    val talker: String,
+    val utcTime: String,
+    val latErrorM: Double?,
+    val lonErrorM: Double?,
+    val heightErrorM: Double?,
+)
+
+data class NmeaGsvView(
+    val talker: String,
+    val satellitesInView: Int?,
+)
+
 data class Um980AsciiSolution(
     val logName: String,
     val solutionStatus: String?,
@@ -82,6 +104,109 @@ class NmeaGgaParser {
             "N", "E" -> signed
             else -> null
         }
+    }
+}
+
+class NmeaGsvParser {
+    private val lineBuffer = StringBuilder()
+
+    fun accept(bytes: ByteArray): List<NmeaGsvView> =
+        acceptText(bytes.toString(StandardCharsets.US_ASCII))
+
+    fun acceptText(text: String): List<NmeaGsvView> {
+        val views = mutableListOf<NmeaGsvView>()
+        text.forEach { character ->
+            if (character == '\n') {
+                parseLine(lineBuffer.toString().trim())?.let(views::add)
+                lineBuffer.clear()
+            } else if (character != '\r') {
+                lineBuffer.append(character)
+            }
+        }
+        return views
+    }
+
+    fun parseLine(line: String): NmeaGsvView? {
+        if (!line.startsWith("$") || line.length < 6 || !line.substring(3, 6).equals("GSV", ignoreCase = true)) {
+            return null
+        }
+        val fields = line.substringBefore('*').split(',')
+        if (fields.size < 4) return null
+        return NmeaGsvView(
+            talker = fields[0].removePrefix("$"),
+            satellitesInView = fields[3].toIntOrNull(),
+        )
+    }
+}
+
+class NmeaGsaParser {
+    private val lineBuffer = StringBuilder()
+
+    fun accept(bytes: ByteArray): List<NmeaGsaDop> =
+        acceptText(bytes.toString(StandardCharsets.US_ASCII))
+
+    fun acceptText(text: String): List<NmeaGsaDop> {
+        val dop = mutableListOf<NmeaGsaDop>()
+        text.forEach { character ->
+            if (character == '\n') {
+                parseLine(lineBuffer.toString().trim())?.let(dop::add)
+                lineBuffer.clear()
+            } else if (character != '\r') {
+                lineBuffer.append(character)
+            }
+        }
+        return dop
+    }
+
+    fun parseLine(line: String): NmeaGsaDop? {
+        if (!line.startsWith("$") || line.length < 6 || !line.substring(3, 6).equals("GSA", ignoreCase = true)) {
+            return null
+        }
+        val fields = line.substringBefore('*').split(',')
+        if (fields.size < 18) return null
+        return NmeaGsaDop(
+            talker = fields[0].removePrefix("$"),
+            fixMode = fields[2].toIntOrNull(),
+            satellitesUsed = fields.drop(3).take(12).count(String::isNotBlank),
+            pdop = fields[15].toDoubleOrNull(),
+            hdop = fields[16].toDoubleOrNull(),
+            vdop = fields[17].toDoubleOrNull(),
+        )
+    }
+}
+
+class NmeaGstParser {
+    private val lineBuffer = StringBuilder()
+
+    fun accept(bytes: ByteArray): List<NmeaGstError> =
+        acceptText(bytes.toString(StandardCharsets.US_ASCII))
+
+    fun acceptText(text: String): List<NmeaGstError> {
+        val errors = mutableListOf<NmeaGstError>()
+        text.forEach { character ->
+            if (character == '\n') {
+                parseLine(lineBuffer.toString().trim())?.let(errors::add)
+                lineBuffer.clear()
+            } else if (character != '\r') {
+                lineBuffer.append(character)
+            }
+        }
+        return errors
+    }
+
+    fun parseLine(line: String): NmeaGstError? {
+        if (!line.startsWith("$") || line.length < 6 || !line.substring(3, 6).equals("GST", ignoreCase = true)) {
+            return null
+        }
+        val fields = line.substringBefore('*').split(',')
+        if (fields.size < 9) return null
+        return NmeaGstError(
+            talker = fields[0].removePrefix("$"),
+            utcTime = fields[1],
+            latErrorM = fields[6].toDoubleOrNull(),
+            lonErrorM = fields[7].toDoubleOrNull(),
+            heightErrorM = fields[8].toDoubleOrNull(),
+        )
     }
 }
 

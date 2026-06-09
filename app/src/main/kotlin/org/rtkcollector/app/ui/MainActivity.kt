@@ -52,6 +52,7 @@ import org.rtkcollector.app.ui.profiles.ProfileEditorData
 import org.rtkcollector.app.ui.profiles.ProfileEditorScreen
 import org.rtkcollector.app.ui.profiles.ProfileListScreen
 import org.rtkcollector.app.ui.profiles.ProfileListRow
+import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
 import org.rtkcollector.app.ui.sessions.SessionListItem
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
@@ -77,6 +78,7 @@ fun RtkCollectorApp() {
     var settingsSets by remember { mutableStateOf(profileStore.settingsSets()) }
     var selectedSettingsSetId by remember { mutableStateOf(profileStore.selectedSettingsSetId()) }
     var profileEditorTarget by remember { mutableStateOf<ProfileEditorTarget?>(null) }
+    var dashboardSelector by remember { mutableStateOf<DashboardSelector?>(null) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
     var profileRevision by remember { mutableStateOf(0) }
     val secretStore = remember(context) { NtripSecretStore(context) }
@@ -142,26 +144,26 @@ fun RtkCollectorApp() {
                         }
                     },
                     onMenu = { screen = AppScreen.SETTINGS },
-                    onNtrip = { screen = AppScreen.MOUNTPOINT_SELECTOR },
+                    onNtrip = { dashboardSelector = DashboardSelector.MOUNTPOINT },
                     onWorkflow = {
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
                         } else {
-                            screen = AppScreen.SETTINGS_SET_SELECTOR
+                            dashboardSelector = DashboardSelector.WORKFLOW
                         }
                     },
                     onReceiver = {
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
                         } else {
-                            screen = AppScreen.COMMAND_SELECTOR
+                            dashboardSelector = DashboardSelector.RECEIVER
                         }
                     },
                     onStorage = {
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing storage.", Toast.LENGTH_LONG).show()
                         } else {
-                            screen = AppScreen.STORAGE_SELECTOR
+                            dashboardSelector = DashboardSelector.STORAGE
                         }
                     },
                     onMark = {},
@@ -735,6 +737,67 @@ fun RtkCollectorApp() {
                     }
                 }
             }
+            dashboardSelector?.let { selector ->
+                ProfileSelectorDialog(
+                    title = selector.title,
+                    rows = dashboardSelectorRows(selector, profileStore, settingsSets, selectedSettingsSetId),
+                    onSelect = { id ->
+                        when (selector) {
+                            DashboardSelector.WORKFLOW -> {
+                                selectedSettingsSetId = id
+                                profileStore.saveSelectedSettingsSetId(id)
+                                settingsSets = profileStore.settingsSets()
+                                state = state.copy(
+                                    status = state.status.copy(
+                                        workflow = settingsSets.firstOrNull { it.id == id }?.workflowId?.workflowName() ?: state.status.workflow,
+                                        mountpoint = profileStore.selectedMountpointLabel(id),
+                                        storage = profileStore.selectedStorageLabel(id),
+                                    ),
+                                    profiles = state.profiles.copy(
+                                        settingsSet = settingsSets.firstOrNull { it.id == id }?.displayNameWithOverrides()
+                                            ?: state.profiles.settingsSet,
+                                    ),
+                                )
+                            }
+                            DashboardSelector.MOUNTPOINT -> {
+                                profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                    settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                                        set.copy(
+                                            ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
+                                            overrides = set.overrides.copy(ntripMountpoint = null),
+                                        )
+                                    }
+                                    profileStore.saveSettingsSets(settingsSets)
+                                    state = state.copy(status = state.status.copy(mountpoint = profile.mountpoint.ifBlank { profile.name }))
+                                    if (state.isRecording) {
+                                        buildNtripUpdateIntent(context)?.let { context.startService(it) }
+                                    }
+                                }
+                            }
+                            DashboardSelector.RECEIVER -> {
+                                profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                    settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                                        set.copy(commandProfileRef = ProfileReference(profile.id, profile.name))
+                                    }
+                                    profileStore.saveSettingsSets(settingsSets)
+                                    state = state.copy(profiles = state.profiles.copy(commandProfile = profile.name))
+                                }
+                            }
+                            DashboardSelector.STORAGE -> {
+                                profileStore.storageProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                    settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                                        set.copy(storageProfileRef = ProfileReference(profile.id, profile.name))
+                                    }
+                                    profileStore.saveSettingsSets(settingsSets)
+                                    state = state.copy(status = state.status.copy(storage = profile.name))
+                                }
+                            }
+                        }
+                        dashboardSelector = null
+                    },
+                    onDismiss = { dashboardSelector = null },
+                )
+            }
         }
     }
 }
@@ -1150,6 +1213,13 @@ private data class ProfileEditorTarget(
     val id: String,
 )
 
+private enum class DashboardSelector(val title: String) {
+    WORKFLOW("Select workflow"),
+    MOUNTPOINT("Select NTRIP mountpoint"),
+    RECEIVER("Select receiver command profile"),
+    STORAGE("Select storage profile"),
+}
+
 private fun ProfileKind.backScreen(): AppScreen =
     when (this) {
         ProfileKind.SETTINGS_SET -> AppScreen.SETTINGS_SETS
@@ -1405,6 +1475,27 @@ private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): Prof
 
 private fun StorageProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
     ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+
+private fun dashboardSelectorRows(
+    selector: DashboardSelector,
+    profileStore: ProfileStores,
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+): List<ProfileListRow> {
+    val selectedSettingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+    return when (selector) {
+        DashboardSelector.WORKFLOW -> SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows
+        DashboardSelector.MOUNTPOINT -> profileStore.ntripMountpointProfiles().map { profile ->
+            profile.profileRow(isSelected = profile.id == selectedSettingsSet?.ntripMountpointProfileRef?.id)
+        }
+        DashboardSelector.RECEIVER -> profileStore.commandProfiles().map { profile ->
+            profile.profileRow(isSelected = profile.id == selectedSettingsSet?.commandProfileRef?.id)
+        }
+        DashboardSelector.STORAGE -> profileStore.storageProfiles().map { profile ->
+            profile.profileRow(isSelected = profile.id == selectedSettingsSet?.storageProfileRef?.id)
+        }
+    }
+}
 
 private fun <T> List<T>.profileOptions(idOf: (T) -> String, nameOf: (T) -> String): List<EditableProfileOption> =
     map { EditableProfileOption(idOf(it), nameOf(it)) }

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
@@ -1310,19 +1311,30 @@ private fun buildDashboardStartIntent(context: Context): Intent? {
             workflowName = settingsSet.workflowId.workflowName(),
             workflowUsesNtrip = workflowUsesNtrip,
             passwordLookup = NtripSecretStore(context)::getPassword,
-        ).also(ActiveRecordingConfig::validateForStart)
+        )
     } catch (error: IllegalArgumentException) {
         Toast.makeText(context, "Cannot start: ${error.message}", Toast.LENGTH_LONG).show()
         return null
     }
     val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-    val usbDevice = usbManager.deviceList.values.firstOrNull()
+    val usbDevice = usbManager.selectUsbDevice(usbProfile)
     if (usbDevice == null) {
-        Toast.makeText(context, "Cannot start: no USB device found.", Toast.LENGTH_LONG).show()
+        val message = if (usbProfile.usbVid != null || usbProfile.usbPid != null) {
+            "Cannot start: selected USB receiver is not connected."
+        } else {
+            "Cannot start: no USB receiver is connected or selected."
+        }
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         return null
     }
     if (!usbManager.hasPermission(usbDevice)) {
         Toast.makeText(context, "Cannot start: USB permission is not granted.", Toast.LENGTH_LONG).show()
+        return null
+    }
+    try {
+        activeConfig.validateForStart()
+    } catch (error: IllegalArgumentException) {
+        Toast.makeText(context, "Cannot start: ${error.message}", Toast.LENGTH_LONG).show()
         return null
     }
     return Intent(context, RecordingForegroundService::class.java).apply {
@@ -1465,6 +1477,19 @@ private fun Context.currentUsbDeviceChoices(): List<UsbDeviceChoice> {
             productName = runCatching { device.productName }.getOrNull(),
         )
     }.sortedWith(compareBy<UsbDeviceChoice> { it.productName.orEmpty() }.thenBy { it.deviceName })
+}
+
+private fun UsbManager.selectUsbDevice(profile: UsbBaudProfile): UsbDevice? {
+    val devices = deviceList.values
+    val selectedVid = profile.usbVid
+    val selectedPid = profile.usbPid
+    if (selectedVid == null && selectedPid == null) {
+        return devices.firstOrNull()
+    }
+    return devices.firstOrNull { device ->
+        (selectedVid == null || device.vendorId == selectedVid) &&
+            (selectedPid == null || device.productId == selectedPid)
+    }
 }
 
 private fun UsbBaudProfile.usbDeviceChoice(): UsbDeviceChoice? {

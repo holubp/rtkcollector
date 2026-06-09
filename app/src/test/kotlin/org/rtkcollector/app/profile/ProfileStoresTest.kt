@@ -161,6 +161,28 @@ class ProfileStoresTest {
     }
 
     @Test
+    fun `mountpoint display uses actual mountpoint not profile name`() {
+        assertEquals(
+            "n/a",
+            NtripMountpointProfile(
+                id = "mount",
+                name = "TUBO00CZE0",
+                casterProfileId = "caster",
+                mountpoint = "",
+            ).displayMountpoint(),
+        )
+        assertEquals(
+            "TUBO00CZE0",
+            NtripMountpointProfile(
+                id = "mount",
+                name = "Friendly name",
+                casterProfileId = "caster",
+                mountpoint = "TUBO00CZE0",
+            ).displayMountpoint(),
+        )
+    }
+
+    @Test
     fun `settings export password option defaults to redacted`() {
         assertTrue(SettingsSetExportOptions().passwordWarning == null)
         assertTrue(SettingsSetExportOptions(includePlaintextPasswords = true).passwordWarning!!.contains("Plaintext"))

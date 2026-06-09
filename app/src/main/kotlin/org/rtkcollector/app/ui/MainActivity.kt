@@ -37,6 +37,7 @@ import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
+import org.rtkcollector.app.profile.displayMountpoint
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.recording.SessionZipExporter
@@ -611,7 +612,7 @@ fun RtkCollectorApp() {
                                 )
                             }
                             profileStore.saveSettingsSets(settingsSets)
-                            state = state.copy(status = state.status.copy(mountpoint = profile.mountpoint.ifBlank { profile.name }))
+                            state = state.copy(status = state.status.copy(mountpoint = profile.displayMountpoint()))
                             if (state.isRecording) {
                                 buildNtripUpdateIntent(context)?.let { context.startService(it) }
                             }
@@ -818,7 +819,7 @@ fun RtkCollectorApp() {
                                         )
                                     }
                                     profileStore.saveSettingsSets(settingsSets)
-                                    state = state.copy(status = state.status.copy(mountpoint = profile.mountpoint.ifBlank { profile.name }))
+                                    state = state.copy(status = state.status.copy(mountpoint = profile.displayMountpoint()))
                                     if (state.isRecording) {
                                         buildNtripUpdateIntent(context)?.let { context.startService(it) }
                                     }
@@ -1567,9 +1568,7 @@ private fun ProfileStores.selectedMountpointLabel(selectedSettingsSetId: String)
     val profile = settingsSet.ntripMountpointProfileRef?.id?.let { id ->
         ntripMountpointProfiles().firstOrNull { it.id == id }
     } ?: return "n/a"
-    return profile.name.takeIf { it.isNotBlank() }
-        ?: profile.mountpoint.takeIf { it.isNotBlank() }
-        ?: "n/a"
+    return profile.displayMountpoint()
 }
 
 private fun ProfileStores.selectedStorageLabel(selectedSettingsSetId: String): String {

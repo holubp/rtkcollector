@@ -180,6 +180,9 @@ data class NtripMountpointProfile(
     }
 }
 
+fun NtripMountpointProfile.displayMountpoint(): String =
+    mountpoint.takeIf { it.isNotBlank() } ?: "n/a"
+
 data class RecordingPolicyProfile(
     val id: String,
     val name: String,

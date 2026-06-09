@@ -48,8 +48,20 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         nmeaBytes = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_NMEA_BYTES, 0)),
         zipShareEnabled = !running,
     )
+    val profiles = ProfilesCardState(
+        settingsSet = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_SET_LABEL) ?: "n/a",
+        commandProfile = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_COMMAND_PROFILE_LABEL) ?: "n/a",
+        baudProfile = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_BAUD_PROFILE_LABEL) ?: "n/a",
+        ntripCasterProfile = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_NTRIP_CASTER_PROFILE_LABEL)
+            ?: "n/a",
+        recordingOutputProfile = intent.getStringExtra(
+            RecordingForegroundService.EXTRA_STATE_SETTINGS_RECORDING_OUTPUT_PROFILE_LABEL,
+        ) ?: "n/a",
+        storageLocationProfile = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_STORAGE_PROFILE_LABEL)
+            ?: "n/a",
+    )
     return if (running) {
-        DashboardState.running(status, position, fix, ntrip, files)
+        DashboardState.running(status, position, fix, ntrip, files, profiles)
     } else {
         DashboardState.planned(
             workflow = status.workflow,
@@ -60,6 +72,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             fix = fix,
             ntrip = ntrip,
             files = files,
+            profiles = profiles,
         )
     }
 }

@@ -12,6 +12,7 @@ data class ActiveRecordingConfig(
     val serialBaud: Int,
     val initCommands: List<String>,
     val baudSwitchCommands: List<String>,
+    val modeCommands: List<String>,
     val shutdownCommands: List<String>,
     val ntrip: ActiveNtripConfig,
     val recording: ActiveRecordingOutputConfig,
@@ -19,6 +20,14 @@ data class ActiveRecordingConfig(
 ) {
     val expectedSessionArtifactNames: List<String> by lazy {
         recording.expectedSessionArtifacts.map(SessionArtifact::name).sorted()
+    }
+
+    fun validateForStart() {
+        if (ntrip.enabled) {
+            require(ntrip.host.isNotBlank()) { "NTRIP host is required for ${workflowName}." }
+            require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
+            require(ntrip.mountpoint.isNotBlank()) { "NTRIP mountpoint is required for ${workflowName}." }
+        }
     }
 
     companion object {
@@ -42,6 +51,7 @@ data class ActiveRecordingConfig(
             localNtripMountpoint: String? = null,
             localNtripUsername: String? = null,
             localNtripSecretRef: String? = null,
+            modeCommands: List<String> = emptyList(),
         ): ActiveRecordingConfig {
             settingsSet.validate()
             commandProfile.validate()
@@ -67,7 +77,11 @@ data class ActiveRecordingConfig(
             }
 
             val ntripSecretRef =
-                localNtripSecretRef ?: casterOverride?.secretId ?: ntripCasterProfile?.secretId.orEmpty()
+                if (workflowUsesNtrip) {
+                    localNtripSecretRef ?: casterOverride?.secretId ?: ntripCasterProfile?.secretId.orEmpty()
+                } else {
+                    ""
+                }
 
             val ntrip = ActiveNtripConfig(
                 enabled = workflowUsesNtrip,
@@ -76,7 +90,7 @@ data class ActiveRecordingConfig(
                 mountpoint = localNtripMountpoint ?: mountOverride?.mountpoint ?: ntripMountpointProfile?.mountpoint.orEmpty(),
                 username = localNtripUsername ?: casterOverride?.username ?: ntripCasterProfile?.username.orEmpty(),
                 secretRef = ntripSecretRef.takeIf { it.isNotBlank() },
-                password = ntripSecretRef.takeIf { it.isNotBlank() }?.let(passwordLookup),
+                password = ntripSecretRef.takeIf { workflowUsesNtrip && it.isNotBlank() }?.let(passwordLookup),
                 stationId = mountOverride?.stationId,
                 baseLatDeg = mountOverride?.baseLatDeg,
                 baseLonDeg = mountOverride?.baseLonDeg,
@@ -84,13 +98,14 @@ data class ActiveRecordingConfig(
 
             val recordingOutput = ActiveRecordingOutputConfig(
                 recordTxToReceiver = recordingOverride?.recordTxToReceiver ?: recordingPolicyProfile.recordTxToReceiver,
-                recordNtripCorrectionInput = recordingOverride?.recordNtripCorrectionInput
-                    ?: recordingPolicyProfile.recordNtripCorrectionInput,
+                recordNtripCorrectionInput = workflowUsesNtrip &&
+                    (recordingOverride?.recordNtripCorrectionInput ?: recordingPolicyProfile.recordNtripCorrectionInput),
                 exportNmea = recordingOverride?.exportNmea ?: recordingPolicyProfile.exportNmea,
                 exportJsonSolution = recordingOverride?.exportJsonSolution
                     ?: recordingPolicyProfile.exportJsonSolution,
                 exportGpx = recordingOverride?.exportGpx ?: recordingPolicyProfile.exportGpx,
-                recordRemoteBaseRaw = recordingOverride?.recordRemoteBaseRaw ?: recordingPolicyProfile.recordRemoteBaseRaw,
+                recordRemoteBaseRaw = workflowUsesNtrip &&
+                    (recordingOverride?.recordRemoteBaseRaw ?: recordingPolicyProfile.recordRemoteBaseRaw),
             )
 
             val storage = ActiveStorageConfig(
@@ -109,6 +124,7 @@ data class ActiveRecordingConfig(
                 serialBaud = serialBaud,
                 initCommands = (localInitCommands ?: commandOverride?.initScript ?: commandProfile.initScript).commandLines(),
                 baudSwitchCommands = baudSwitchCommands,
+                modeCommands = modeCommands,
                 shutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript).commandLines(),
                 ntrip = ntrip,
                 recording = recordingOutput,

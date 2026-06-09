@@ -48,6 +48,7 @@ import org.rtkcollector.receiver.unicore.NmeaGgaParser
 import org.rtkcollector.receiver.unicore.Um980AsciiSolution
 import org.rtkcollector.receiver.unicore.Um980AsciiSolutionParser
 import org.rtkcollector.receiver.unicore.Um980BinaryParser
+import org.rtkcollector.receiver.unicore.Um980NmeaExporter
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980StreamParser
 import org.rtkcollector.receiver.unicore.Um980Telemetry
@@ -72,6 +73,10 @@ class RecordingForegroundService : Service() {
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
     private val runtimeLock = Any()
+    private val txLock = Any()
+    private var ntripRateWindowStartedAtMillis: Long = 0L
+    private var ntripRateWindowCorrectionBytes: Long = 0L
+    private var ntripRateWindowTxBytes: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -107,8 +112,8 @@ class RecordingForegroundService : Service() {
         }
         stopping.set(false)
         shutdownSent.set(false)
-        state = state.copy(
-            lifecycle = RecordingLifecycleState.STARTING,
+            state = state.copy(
+                lifecycle = RecordingLifecycleState.STARTING,
             errorCategory = RecordingErrorCategory.NONE,
             errorSeverity = RecordingErrorSeverity.NONE,
             lastError = null,
@@ -223,12 +228,26 @@ class RecordingForegroundService : Service() {
                 workflowLabel = intent.getStringExtra(EXTRA_WORKFLOW_NAME) ?: intent.getStringExtra(EXTRA_WORKFLOW_ID) ?: "n/a",
                 receiverLabel = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID) ?: "n/a",
                 storageLabel = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID) ?: intent.getStringExtra(EXTRA_STORAGE_KIND) ?: "n/a",
+                settingsSetLabel = intent.getStringExtra(EXTRA_SETTINGS_SET_NAME) ?: "n/a",
+                settingsCommandProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_COMMAND_PROFILE_NAME) ?: "n/a",
+                settingsBaudProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME) ?: "n/a",
+                settingsNtripCasterProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_NTRIP_CASTER_PROFILE_NAME) ?: "n/a",
+                settingsRecordingOutputProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_RECORDING_OUTPUT_PROFILE_NAME) ?: "n/a",
+                settingsStorageProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_STORAGE_PROFILE_NAME) ?: "n/a",
                 sessionPath = openedSession.displayPath,
                 ntripState = if (intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) "Configured" else "Not configured",
                 ntripUrl = ntripDisplayUrl(intent),
+                ntripStationId = intent.getStringExtra(EXTRA_NTRIP_STATION_ID) ?: "n/a",
+                ntripBaseLatLon = latLonDisplay(
+                    intent.optionalDoubleExtra(EXTRA_NTRIP_BASE_LAT),
+                    intent.optionalDoubleExtra(EXTRA_NTRIP_BASE_LON),
+                ),
                 rawRecordingActive = true,
                 correctionsActive = false,
             )
+            ntripRateWindowStartedAtMillis = System.currentTimeMillis()
+            ntripRateWindowCorrectionBytes = 0L
+            ntripRateWindowTxBytes = 0L
             broadcastState()
 
             captureThread = Thread({ captureLoop(captureRuntime, recorder) }, "rtkcollector-capture").also { it.start() }
@@ -309,13 +328,16 @@ class RecordingForegroundService : Service() {
             emit = ::handleNtripSnapshot,
             onRtcmBytes = { bytes ->
                 if (running.get()) {
-                    synchronized(runtimeLock) {
+                    synchronized(txLock) {
                         captureRuntime.injectCorrectionBytes(bytes)
                     }
+                    ntripRateWindowCorrectionBytes += bytes.size
+                    ntripRateWindowTxBytes += bytes.size
                     state = state.copy(
                         correctionInputBytes = recorder.correctionInputBytes,
                         nmeaBytes = recorder.nmeaBytes,
                         ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
+                        ntripRates = ntripRatesDisplay(),
                         txToReceiverBytes = recorder.txToReceiverBytes,
                         correctionsActive = true,
                     )
@@ -344,6 +366,14 @@ class RecordingForegroundService : Service() {
         val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
         val mountpoint = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).orEmpty()
         if (host.isBlank() || mountpoint.isBlank()) {
+            state = state.copy(
+                ntripState = "CONFIG_ERROR",
+                correctionsActive = false,
+                lastError = "NTRIP host and mountpoint are required before connecting.",
+                errorCategory = RecordingErrorCategory.NTRIP,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
             return null
         }
         val request = NtripRequest(
@@ -424,7 +454,7 @@ class RecordingForegroundService : Service() {
         if (sendShutdown && shutdownSent.compareAndSet(false, true)) {
             runCatching {
                 runtime?.let { captureRuntime ->
-                    synchronized(runtimeLock) {
+                    synchronized(txLock) {
                         sendCommandLines(captureRuntime, shutdownCommands)
                     }
                 }
@@ -506,8 +536,10 @@ class RecordingForegroundService : Service() {
             .map(String::trim)
             .filter { it.isNotEmpty() && !it.startsWith("#") }
             .forEach { command ->
-                captureRuntime.sendToReceiver("$command\r\n".toByteArray(Charsets.US_ASCII))
-                Thread.sleep(100)
+                synchronized(txLock) {
+                    captureRuntime.sendToReceiver("$command\r\n".toByteArray(Charsets.US_ASCII))
+                    Thread.sleep(100)
+                }
             }
     }
 
@@ -589,6 +621,19 @@ class RecordingForegroundService : Service() {
             bytes < 1_000_000 -> "%.1f kB".format(java.util.Locale.US, bytes / 1000.0)
             bytes < 1_000_000_000 -> "%.1f MB".format(java.util.Locale.US, bytes / 1_000_000.0)
             else -> "%.1f GB".format(java.util.Locale.US, bytes / 1_000_000_000.0)
+        }
+
+    private fun ntripRatesDisplay(): String {
+        val elapsedSeconds = ((System.currentTimeMillis() - ntripRateWindowStartedAtMillis).coerceAtLeast(1L)) / 1000.0
+        return "${rateDisplay(ntripRateWindowCorrectionBytes / elapsedSeconds)} from NTRIP / " +
+            "${rateDisplay(ntripRateWindowTxBytes / elapsedSeconds)} to rover"
+    }
+
+    private fun rateDisplay(bytesPerSecond: Double): String =
+        when {
+            bytesPerSecond < 1000.0 -> "%.0f B/s".format(java.util.Locale.US, bytesPerSecond)
+            bytesPerSecond < 1_000_000.0 -> "%.1f kB/s".format(java.util.Locale.US, bytesPerSecond / 1000.0)
+            else -> "%.1f MB/s".format(java.util.Locale.US, bytesPerSecond / 1_000_000.0)
         }
 
     private fun classifyStartError(error: Throwable): RecordingErrorCategory {
@@ -721,6 +766,12 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_TX_BYTES, state.txToReceiverBytes)
                 putExtra(EXTRA_STATE_CORRECTION_BYTES, state.correctionInputBytes)
                 putExtra(EXTRA_STATE_NMEA_BYTES, state.nmeaBytes)
+                putExtra(EXTRA_STATE_SETTINGS_SET_LABEL, state.settingsSetLabel)
+                putExtra(EXTRA_STATE_SETTINGS_COMMAND_PROFILE_LABEL, state.settingsCommandProfileLabel)
+                putExtra(EXTRA_STATE_SETTINGS_BAUD_PROFILE_LABEL, state.settingsBaudProfileLabel)
+                putExtra(EXTRA_STATE_SETTINGS_NTRIP_CASTER_PROFILE_LABEL, state.settingsNtripCasterProfileLabel)
+                putExtra(EXTRA_STATE_SETTINGS_RECORDING_OUTPUT_PROFILE_LABEL, state.settingsRecordingOutputProfileLabel)
+                putExtra(EXTRA_STATE_SETTINGS_STORAGE_PROFILE_LABEL, state.settingsStorageProfileLabel)
                 putExtra(EXTRA_STATE_NTRIP, state.ntripState)
                 putExtra(EXTRA_STATE_NTRIP_URL, state.ntripUrl)
                 putExtra(EXTRA_STATE_NTRIP_TRANSFERRED, state.ntripTransferred)
@@ -820,6 +871,18 @@ class RecordingForegroundService : Service() {
                                     if (exportJsonSolution) {
                                         sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
                                     }
+                                    if (exportNmea) {
+                                        Um980NmeaExporter.export(telemetry).forEach { sentence ->
+                                            sessionWriters.appendReceiverSolutionNmea(sentence)
+                                            activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
+                                        }
+                                    }
+                                    state = state.withUm980Telemetry(telemetry)
+                                }
+                                Um980BinaryParser.parseStadopb(record.bytes)?.let { telemetry ->
+                                    if (exportJsonSolution) {
+                                        sessionWriters.appendQualityLiveJson(telemetry.toJson())
+                                    }
                                     state = state.withUm980Telemetry(telemetry)
                                 }
                             }
@@ -848,7 +911,7 @@ class RecordingForegroundService : Service() {
         """{"type":"um980-ascii-solution","logName":"${logName.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"heightM":${heightM ?: "null"}}"""
 
     private fun Um980Telemetry.toJson(): String =
-        """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"pdop":${pdop ?: "null"},"hdop":${hdop ?: "null"},"vdop":${vdop ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"baselineLengthM":${baselineLengthM ?: "null"},"stationId":${stationId.jsonStringOrNull()},"utcTime":${utcTime.jsonStringOrNull()}}"""
+        """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"satellitesTracked":${satellitesTracked ?: "null"},"gdop":${gdop ?: "null"},"pdop":${pdop ?: "null"},"tdop":${tdop ?: "null"},"hdop":${hdop ?: "null"},"vdop":${vdop ?: "null"},"ndop":${ndop ?: "null"},"edop":${edop ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"baselineLengthM":${baselineLengthM ?: "null"},"stationId":${stationId.jsonStringOrNull()},"utcTime":${utcTime.jsonStringOrNull()}}"""
 
     private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
         copy(
@@ -865,7 +928,10 @@ class RecordingForegroundService : Service() {
             hdopVdop = dopPairDisplay(telemetry.hdop, telemetry.vdop),
             differentialAge = telemetry.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) } ?: differentialAge,
             baseline = telemetry.baselineLengthM?.let(::distanceDisplay) ?: baseline,
-            satellites = satelliteDisplay(telemetry.satellitesUsed, telemetry.satellitesInView).takeUnless { it == "n/a" } ?: satellites,
+            satellites = satelliteDisplay(
+                used = telemetry.satellitesUsed,
+                inView = telemetry.satellitesInView ?: telemetry.satellitesTracked,
+            ).takeUnless { it == "n/a" } ?: satellites,
         )
 
     private fun String?.jsonStringOrNull(): String =
@@ -900,6 +966,9 @@ class RecordingForegroundService : Service() {
             @Suppress("DEPRECATION")
             getParcelableExtra(EXTRA_USB_DEVICE)
         }
+
+    private fun Intent.optionalDoubleExtra(name: String): Double? =
+        if (hasExtra(name)) getDoubleExtra(name, Double.NaN).takeUnless { it.isNaN() } else null
 
     private class SessionRawRecorder(
         private val writers: RecordingSessionWriters,
@@ -992,6 +1061,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_NTRIP_PASSWORD = "ntripPassword"
         const val EXTRA_NTRIP_SECRET_REF = "ntripSecretRef"
         const val EXTRA_NTRIP_GGA = "ntripGga"
+        const val EXTRA_NTRIP_STATION_ID = "ntripStationId"
+        const val EXTRA_NTRIP_BASE_LAT = "ntripBaseLat"
+        const val EXTRA_NTRIP_BASE_LON = "ntripBaseLon"
         const val EXTRA_WORKFLOW_ID = "workflowId"
         const val EXTRA_WORKFLOW_NAME = "workflowName"
         const val EXTRA_RECEIVER_ROLE = "receiverRole"
@@ -1013,12 +1085,24 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
         const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"
+        const val EXTRA_SETTINGS_SET_NAME = "settingsSetName"
+        const val EXTRA_SETTINGS_COMMAND_PROFILE_NAME = "settingsCommandProfileName"
+        const val EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME = "settingsUsbBaudProfileName"
+        const val EXTRA_SETTINGS_NTRIP_CASTER_PROFILE_NAME = "settingsNtripCasterProfileName"
+        const val EXTRA_SETTINGS_RECORDING_OUTPUT_PROFILE_NAME = "settingsRecordingOutputProfileName"
+        const val EXTRA_SETTINGS_STORAGE_PROFILE_NAME = "settingsStorageProfileName"
 
         const val EXTRA_STATE_RUNNING = "running"
         const val EXTRA_STATE_WORKFLOW_LABEL = "workflowLabel"
         const val EXTRA_STATE_RECEIVER_LABEL = "receiverLabel"
         const val EXTRA_STATE_STORAGE_LABEL = "storageLabel"
         const val EXTRA_STATE_SESSION_PATH = "sessionPath"
+        const val EXTRA_STATE_SETTINGS_SET_LABEL = "settingsSetLabel"
+        const val EXTRA_STATE_SETTINGS_COMMAND_PROFILE_LABEL = "settingsCommandProfileLabel"
+        const val EXTRA_STATE_SETTINGS_BAUD_PROFILE_LABEL = "settingsBaudProfileLabel"
+        const val EXTRA_STATE_SETTINGS_NTRIP_CASTER_PROFILE_LABEL = "settingsNtripCasterProfileLabel"
+        const val EXTRA_STATE_SETTINGS_RECORDING_OUTPUT_PROFILE_LABEL = "settingsRecordingOutputProfileLabel"
+        const val EXTRA_STATE_SETTINGS_STORAGE_PROFILE_LABEL = "settingsStorageProfileLabel"
         const val EXTRA_STATE_RX_BYTES = "receiverRxBytes"
         const val EXTRA_STATE_TX_BYTES = "txToReceiverBytes"
         const val EXTRA_STATE_CORRECTION_BYTES = "correctionInputBytes"

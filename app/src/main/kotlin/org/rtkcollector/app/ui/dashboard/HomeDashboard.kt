@@ -194,6 +194,14 @@ private fun DashboardCards(state: DashboardState) {
             Metric("NMEA", state.files.nmeaBytes)
             Metric("ZIP share", if (state.files.zipShareEnabled) "Available" else "After stop")
         }
+        DashboardCard("Profiles") {
+            MajorValue(state.profiles.settingsSet)
+            Metric("Commands", state.profiles.commandProfile)
+            Metric("Baud", state.profiles.baudProfile)
+            Metric("NTRIP caster", state.profiles.ntripCasterProfile)
+            Metric("Recording policy", state.profiles.recordingOutputProfile)
+            Metric("Storage", state.profiles.storageLocationProfile)
+        }
     }
 }
 
@@ -204,7 +212,7 @@ private fun DashboardCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = modifier.widthIn(min = 260.dp, max = 380.dp),
+        modifier = modifier.widthIn(min = 230.dp, max = 360.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(

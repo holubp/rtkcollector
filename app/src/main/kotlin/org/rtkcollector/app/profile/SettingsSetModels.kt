@@ -216,49 +216,73 @@ object SettingsSetJson {
         recordingOutputProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_RECORDING_OUTPUT)),
         storageProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_STORAGE)),
         basePositionProfileRef = json.optJSONObject(KEY_BASE_POSITION)?.let(ProfileReference::fromJson),
-        overrides = SettingsSetOverridesJson.fromJson(json.getJSONObject("overrides")),
+        overrides = SettingsSetOverridesJson.fromJson(json.optJSONObject("overrides") ?: JSONObject()),
         isProtected = json.optBoolean("isProtected", false),
     )
 }
 
 private fun SettingsSetOverrides.toJson(): JSONObject {
-    val nmea = JSONObject()
+    val json = JSONObject()
     command?.let {
-        nmea.putNullable("initScript", it.initScript)
-        nmea.putNullable("shutdownScript", it.shutdownScript)
+        json.put(
+            "command",
+            JSONObject()
+                .putNullable("initScript", it.initScript)
+                .putNullable("shutdownScript", it.shutdownScript),
+        )
     }
     usbBaud?.let {
-        nmea.putNullable("profileBaud", it.profileBaud)
-        nmea.putNullable("serialBaud", it.serialBaud)
-        nmea.putNullable("usbVid", it.usbVid)
-        nmea.putNullable("usbPid", it.usbPid)
-        nmea.putNullable("usbDeviceName", it.usbDeviceName)
+        json.put(
+            "usbBaud",
+            JSONObject()
+                .putNullable("profileBaud", it.profileBaud)
+                .putNullable("serialBaud", it.serialBaud)
+                .putNullable("usbVid", it.usbVid)
+                .putNullable("usbPid", it.usbPid)
+                .putNullable("usbDeviceName", it.usbDeviceName),
+        )
     }
     ntripCaster?.let {
-        nmea.putNullable("host", it.host)
-        nmea.putNullable("port", it.port)
-        nmea.putNullable("username", it.username)
-        nmea.putNullable("secretId", it.secretId)
+        json.put(
+            "ntripCaster",
+            JSONObject()
+                .putNullable("host", it.host)
+                .putNullable("port", it.port)
+                .putNullable("username", it.username)
+                .putNullable("secretId", it.secretId),
+        )
     }
     ntripMountpoint?.let {
-        nmea.putNullable("mountpoint", it.mountpoint)
-        nmea.putNullable("stationId", it.stationId)
-        nmea.putNullable("baseLatDeg", it.baseLatDeg)
-        nmea.putNullable("baseLonDeg", it.baseLonDeg)
+        json.put(
+            "ntripMountpoint",
+            JSONObject()
+                .putNullable("mountpoint", it.mountpoint)
+                .putNullable("stationId", it.stationId)
+                .putNullable("baseLatDeg", it.baseLatDeg)
+                .putNullable("baseLonDeg", it.baseLonDeg),
+        )
     }
     recordingOutput?.let {
-        nmea.putNullable("recordTxToReceiver", it.recordTxToReceiver)
-        nmea.putNullable("recordNtripCorrectionInput", it.recordNtripCorrectionInput)
-        nmea.putNullable("exportNmea", it.exportNmea)
-        nmea.putNullable("exportJsonSolution", it.exportJsonSolution)
-        nmea.putNullable("exportGpx", it.exportGpx)
-        nmea.putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw)
+        json.put(
+            "recordingOutput",
+            JSONObject()
+                .putNullable("recordTxToReceiver", it.recordTxToReceiver)
+                .putNullable("recordNtripCorrectionInput", it.recordNtripCorrectionInput)
+                .putNullable("exportNmea", it.exportNmea)
+                .putNullable("exportJsonSolution", it.exportJsonSolution)
+                .putNullable("exportGpx", it.exportGpx)
+                .putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw),
+        )
     }
     storage?.let {
-        nmea.putNullable("kind", it.kind)
-        nmea.putNullable("treeUri", it.treeUri)
+        json.put(
+            "storage",
+            JSONObject()
+                .putNullable("kind", it.kind)
+                .putNullable("treeUri", it.treeUri),
+        )
     }
-    return nmea
+    return json
 }
 
 private object SettingsSetOverridesJson {

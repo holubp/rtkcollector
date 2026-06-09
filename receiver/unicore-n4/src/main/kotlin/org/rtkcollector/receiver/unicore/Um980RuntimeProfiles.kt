@@ -1,25 +1,30 @@
 package org.rtkcollector.receiver.unicore
 
 object Um980RuntimeProfiles {
-    fun experimentalRoverBasePreparation(): Um980RuntimeProfile =
-        Um980RuntimeProfile(
+    fun experimentalRoverBasePreparation(comPort: String = "COM1", baudRate: Int = 230400): Um980RuntimeProfile {
+        require(comPort.matches(Regex("COM[1-8]"))) { "UM980 COM port must be COM1..COM8." }
+        require(baudRate in setOf(9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600)) {
+            "UM980 baud rate must be one of the supported runtime profile values."
+        }
+        return Um980RuntimeProfile(
             id = "experimental-rover-base-preparation",
             displayName = "Experimental rover/base preparation",
             enabled = true,
             runtimeOnly = true,
             commands = listOf(
-                "UNLOG COM1",
+                "UNLOG $comPort",
                 "MODE ROVER",
                 "CONFIG MMP ENABLE",
                 "VERSIONB",
-                "BESTNAVB COM1 0.2",
-                "OBSVMCMPB COM1 1",
-                "GPSEPHB COM1 300",
-                "GLOEPHB COM1 300",
-                "GALEPHB COM1 300",
-                "BDSEPHB COM1 300",
-                "BD3EPHB COM1 300",
-                "QZSSEPHB COM1 300",
+                "BESTNAVB $comPort 0.1",
+                "OBSVMCMPB $comPort 0.25",
+                "STADOPB $comPort 1",
+                "GPSEPHB $comPort 300",
+                "GLOEPHB $comPort 300",
+                "GALEPHB $comPort 300",
+                "BDSEPHB $comPort 300",
+                "BD3EPHB $comPort 300",
+                "QZSSEPHB $comPort 300",
                 "GPSIONB ONCHANGED",
                 "BDSIONB ONCHANGED",
                 "BD3IONB ONCHANGED",
@@ -30,4 +35,8 @@ object Um980RuntimeProfiles {
                 "GALUTCB ONCHANGED",
             ),
         )
+    }
+
+    fun legacyExperimentalRoverBasePreparation(): Um980RuntimeProfile =
+        experimentalRoverBasePreparation()
 }

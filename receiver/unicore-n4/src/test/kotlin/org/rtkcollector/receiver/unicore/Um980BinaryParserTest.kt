@@ -30,6 +30,29 @@ class Um980BinaryParserTest {
         assertEquals(31, telemetry.satellitesInView)
         assertEquals(0.8, telemetry.differentialAgeS!!, 0.0001)
         assertEquals("1234", telemetry.stationId)
+        assertEquals("2026-05-18T12:49:14Z", telemetry.utcTime)
+        assertEquals(1.2, telemetry.horizontalSpeedMps!!, 0.0001)
+        assertEquals(123.4, telemetry.trackDeg!!, 0.0001)
+        assertEquals(-0.2, telemetry.verticalSpeedMps!!, 0.0001)
+    }
+
+    @Test
+    fun `parses documented STADOPB dop fields`() {
+        val frame = stadopbFrame()
+
+        val telemetry = Um980BinaryParser.parseStadopb(frame)
+
+        requireNotNull(telemetry)
+        assertEquals("STADOPB", telemetry.source)
+        assertEquals(0.8094, telemetry.gdop!!, 0.0001)
+        assertEquals(0.7129, telemetry.pdop!!, 0.0001)
+        assertEquals(0.3831, telemetry.tdop!!, 0.0001)
+        assertEquals(0.6046, telemetry.vdop!!, 0.0001)
+        assertEquals(0.3779, telemetry.hdop!!, 0.0001)
+        assertEquals(0.2902, telemetry.ndop!!, 0.0001)
+        assertEquals(0.2421, telemetry.edop!!, 0.0001)
+        assertEquals(50, telemetry.satellitesTracked)
+        assertEquals(50, telemetry.satellitesInView)
     }
 
     @Test
@@ -87,6 +110,39 @@ class Um980BinaryParserTest {
             payload.put(65, 18)
             payload.putInt(72, 0)
             payload.putInt(76, 50)
+            payload.putDouble(88, 1.2)
+            payload.putDouble(96, 123.4)
+            payload.putDouble(104, -0.2)
+            payloadBytes.copyInto(frame, destinationOffset = 24)
+            putU32(frame, 24 + payloadLength, crc32(frame, 0, 24 + payloadLength).toInt())
+            return frame
+        }
+
+        fun stadopbFrame(messageId: Int = 954): ByteArray {
+            val payloadLength = 42 + 4
+            val frame = ByteArray(24 + payloadLength + 4)
+            frame[0] = 0xAA.toByte()
+            frame[1] = 0x44
+            frame[2] = 0xB5.toByte()
+            frame[3] = 24
+            putU16(frame, 4, messageId)
+            putU16(frame, 6, payloadLength)
+            putU16(frame, 10, 2419)
+            putU32(frame, 12, 132_572_000)
+            val payloadBytes = ByteArray(payloadLength)
+            val payload = ByteBuffer.wrap(payloadBytes).order(ByteOrder.LITTLE_ENDIAN)
+            payload.putInt(0, 0)
+            payload.putFloat(4, 0.8094f)
+            payload.putFloat(8, 0.7129f)
+            payload.putFloat(12, 0.3831f)
+            payload.putFloat(16, 0.6046f)
+            payload.putFloat(20, 0.3779f)
+            payload.putFloat(24, 0.2902f)
+            payload.putFloat(28, 0.2421f)
+            payload.putFloat(32, 5.0f)
+            payload.putFloat(36, 0.0f)
+            payload.putShort(40, 50)
+            payload.putShort(42, 4)
             payloadBytes.copyInto(frame, destinationOffset = 24)
             putU32(frame, 24 + payloadLength, crc32(frame, 0, 24 + payloadLength).toInt())
             return frame

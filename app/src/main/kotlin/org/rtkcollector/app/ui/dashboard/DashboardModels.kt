@@ -7,6 +7,7 @@ data class DashboardState(
     val fix: FixCardState,
     val ntrip: NtripCardState,
     val files: FilesCardState,
+    val profiles: ProfilesCardState,
     val primaryAction: DashboardAction,
     val secondaryActions: List<DashboardAction>,
 ) {
@@ -20,6 +21,7 @@ data class DashboardState(
             fix: FixCardState = FixCardState(),
             ntrip: NtripCardState = NtripCardState(),
             files: FilesCardState = FilesCardState(),
+            profiles: ProfilesCardState = ProfilesCardState(),
         ): DashboardState =
             DashboardState(
                 isRecording = false,
@@ -28,6 +30,7 @@ data class DashboardState(
                 fix = fix,
                 ntrip = ntrip,
                 files = files,
+                profiles = profiles,
                 primaryAction = DashboardAction("Start", DashboardActionKind.START),
                 secondaryActions = listOf(DashboardAction("Menu", DashboardActionKind.MENU)),
             )
@@ -38,6 +41,7 @@ data class DashboardState(
             fix: FixCardState,
             ntrip: NtripCardState,
             files: FilesCardState,
+            profiles: ProfilesCardState = ProfilesCardState(),
         ): DashboardState =
             DashboardState(
                 isRecording = true,
@@ -46,6 +50,7 @@ data class DashboardState(
                 fix = fix,
                 ntrip = ntrip,
                 files = files,
+                profiles = profiles,
                 primaryAction = DashboardAction("Stop", DashboardActionKind.STOP),
                 secondaryActions = listOf(
                     DashboardAction("NTRIP", DashboardActionKind.NTRIP),
@@ -100,6 +105,15 @@ data class FilesCardState(
     val ntripBytes: String = "0 B",
     val nmeaBytes: String = "0 B",
     val zipShareEnabled: Boolean = false,
+)
+
+data class ProfilesCardState(
+    val settingsSet: String = "n/a",
+    val commandProfile: String = "n/a",
+    val baudProfile: String = "n/a",
+    val ntripCasterProfile: String = "n/a",
+    val recordingOutputProfile: String = "n/a",
+    val storageLocationProfile: String = "n/a",
 )
 
 data class DashboardAction(

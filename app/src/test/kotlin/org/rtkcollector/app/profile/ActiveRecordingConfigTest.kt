@@ -2,6 +2,7 @@ package org.rtkcollector.app.profile
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.rtkcollector.core.workflow.SessionArtifact
@@ -121,5 +122,41 @@ class ActiveRecordingConfigTest {
 
         assertTrue(config.recording.expectedSessionArtifacts.contains(SessionArtifact.TX_TO_RECEIVER_RAW))
         assertTrue(config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RAW))
+    }
+
+    @Test
+    fun `ntrip workflow requires host and mountpoint before start`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = ""),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = ""),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+    }
+
+    @Test
+    fun `configured ntrip workflow passes start validation`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        config.validateForStart()
     }
 }

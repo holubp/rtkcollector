@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SessionsScreen(
     sessions: List<SessionListItem>,
+    progressText: String? = null,
+    onCreateZip: (SessionListItem) -> Unit = {},
     onBack: () -> Unit,
 ) {
     Column(
@@ -26,6 +28,13 @@ fun SessionsScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Sessions", style = MaterialTheme.typography.headlineSmall)
+        progressText?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         if (sessions.isEmpty()) {
             Text(
                 text = "No current or recent session is available.",
@@ -49,6 +58,13 @@ fun SessionsScreen(
                     )
                     if (session.isActive) {
                         Text("Active recording", color = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Button(
+                            onClick = { onCreateZip(session) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Share ZIP")
+                        }
                     }
                 }
             }

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun SettingsHub(
+    onSettingsSets: () -> Unit,
     onNtripCaster: () -> Unit,
     onNtripMountpoint: () -> Unit,
     onCommands: () -> Unit,
@@ -29,6 +30,7 @@ fun SettingsHub(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        SettingsButton("Settings sets", onSettingsSets)
         SettingsButton("NTRIP casters", onNtripCaster)
         SettingsButton("NTRIP mountpoints", onNtripMountpoint)
         SettingsButton("Command scripts", onCommands)

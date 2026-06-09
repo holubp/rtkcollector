@@ -103,8 +103,10 @@ class Um980RuntimeProfileTest {
         assertTrue(profile.commands.any { it == "UNLOG COM1" })
         assertTrue(profile.commands.any { it == "MODE ROVER" })
         assertTrue(profile.commands.any { it == "CONFIG MMP ENABLE" })
-        assertTrue(profile.commands.any { it.contains("OBSVMCMPB COM1 1") })
-        assertTrue(profile.commands.any { it.startsWith("BESTNAVB") })
+        assertFalse(profile.commands.any { it.matches(Regex("CONFIG COM[1-8] \\d+")) })
+        assertTrue(profile.commands.any { it == "OBSVMCMPB COM1 0.25" })
+        assertTrue(profile.commands.any { it == "BESTNAVB COM1 0.1" })
+        assertTrue(profile.commands.any { it == "STADOPB COM1 1" })
         assertFalse(profile.commands.any(Um980RuntimeCommandValidator::isPersistentOrRisky))
         profile.renderExecutableCommands()
     }

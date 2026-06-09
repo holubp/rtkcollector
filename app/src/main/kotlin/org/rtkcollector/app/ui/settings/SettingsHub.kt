@@ -17,6 +17,7 @@ fun SettingsHub(
     onSettingsSets: () -> Unit,
     onNtripCaster: () -> Unit,
     onNtripMountpoint: () -> Unit,
+    onUsbBaud: () -> Unit,
     onCommands: () -> Unit,
     onRecordingOutputs: () -> Unit,
     onStorage: () -> Unit,
@@ -33,6 +34,7 @@ fun SettingsHub(
         SettingsButton("Settings sets", onSettingsSets)
         SettingsButton("NTRIP casters", onNtripCaster)
         SettingsButton("NTRIP mountpoints", onNtripMountpoint)
+        SettingsButton("USB and baud", onUsbBaud)
         SettingsButton("Command scripts", onCommands)
         SettingsButton("Recording outputs", onRecordingOutputs)
         SettingsButton("Storage", onStorage)

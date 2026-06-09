@@ -7,6 +7,7 @@ data class CommandProfile(
     val name: String,
     val receiverFamily: String = "um980-n4",
     val initScript: String = "# Optional user init commands",
+    val runtimeScript: String = "",
     val shutdownScript: String = "",
     val isProtected: Boolean = false,
 ) {
@@ -25,6 +26,7 @@ data class CommandProfile(
         .put("isProtected", isProtected)
         .put("receiverFamily", receiverFamily)
         .put("initScript", initScript)
+        .put("runtimeScript", runtimeScript)
         .put("shutdownScript", shutdownScript)
 
     companion object {
@@ -34,6 +36,7 @@ data class CommandProfile(
             isProtected = json.optProtectedFlag(),
             receiverFamily = json.optString("receiverFamily", "um980-n4"),
             initScript = json.optString("initScript", "# Optional user init commands"),
+            runtimeScript = json.optString("runtimeScript", ""),
             shutdownScript = json.optString("shutdownScript", ""),
         ).also(CommandProfile::validate)
     }
@@ -139,7 +142,7 @@ data class NtripMountpointProfile(
     val name: String,
     val casterProfileId: String,
     val mountpoint: String = "",
-    val ggaUploadPolicy: String = "NONE",
+    val ggaUploadPolicy: String = "",
     val expectedFormat: String = "RTCM3",
     val remoteBaseRawAvailable: Boolean = false,
     val isProtected: Boolean = false,
@@ -170,7 +173,7 @@ data class NtripMountpointProfile(
             casterProfileId = json.getString("casterProfileId"),
             isProtected = json.optProtectedFlag(),
             mountpoint = json.optString("mountpoint", ""),
-            ggaUploadPolicy = json.optString("ggaUploadPolicy", "NONE"),
+            ggaUploadPolicy = json.optString("ggaUploadPolicy", ""),
             expectedFormat = json.optString("expectedFormat", "RTCM3"),
             remoteBaseRawAvailable = json.optBoolean("remoteBaseRawAvailable", false),
         ).also(NtripMountpointProfile::validate)

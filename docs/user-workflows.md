@@ -11,6 +11,10 @@ workflow details and expected recording artifacts are shown before validation.
 The Home screen uses a Compose dashboard that shows the effective session
 configuration and live telemetry in compact cards: Position, Fix, NTRIP and
 Files. Detailed profile editing is reached from Menu.
+The dashboard configuration tiles are intentionally lean selectors: Workflow
+selects a settings set, Mountpoint selects an NTRIP mountpoint profile, Receiver
+selects a receiver command profile and Storage selects a storage location
+profile. Full profile creation and editing belongs in Menu.
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;
@@ -18,7 +22,7 @@ It also provides the experimental real-recording controls:
 - USB/baud profiles for profile baud, post-profile serial baud and optional
   remembered USB identity;
 - NTRIP caster and mountpoint profiles, including typed mountpoint entry and
-  stored Keystore-backed password references;
+  stored Keystore-backed passwords;
 - recording policies for derived NMEA/JSONL exports, NTRIP correction input and
   optional remote-base raw observations where a source supports them;
 - storage profiles, with app-private storage as the default and Android SAF
@@ -54,6 +58,13 @@ share the receiver TX path and be recorded separately from receiver RX.
 
 While a real session is active, the foreground service owns capture. The
 Activity only sends start/stop requests and observes service state.
+During recording, only NTRIP mountpoint/caster updates are intended to apply
+live. Workflow, receiver-command and storage profile switches are next-session
+configuration changes and should be made after stopping the active recording.
+
+Settings-set export must keep passwords redacted by default. Plaintext NTRIP
+password export is allowed only through an explicit user option because exported
+files are ordinary user-visible data.
 
 ## Experimental UM980 Recording
 
@@ -70,13 +81,65 @@ Recommended first test flow:
 6. Stop recording and check the session folder path shown by the UI.
 7. Repeat with NTRIP only after passive capture is stable.
 
-The generated UM980 mode sequence requests `BESTNAVB` receiver solution,
-`GPGGA` and `OBSVMCMPB` raw observations at `1 Hz`. Temporary-base workflows
-also enable receiver PPP where supported and request `PPPNAVB` status every
-10 seconds. Fixed-base RTCM output uses documented RTCM message command
-families such as `RTCM1006`, `RTCM1074`, `RTCM1084`, `RTCM1094` and
-`RTCM1124`. User changes to command scripts are validated against a
-conservative deny-list before start.
+The default editable UM980 command profile is `UM980 binary multi-Hz`. It sends
+binary receiver-solution, raw-observation, DOP, ephemeris and ionosphere/time
+logs while avoiding high-rate NMEA chatter:
+
+```text
+UNLOG COM1
+MODE ROVER
+CONFIG MMP ENABLE
+VERSIONB
+BESTNAVB COM1 0.1
+OBSVMCMPB COM1 0.25
+STADOPB COM1 1
+GPSEPHB COM1 300
+GLOEPHB COM1 300
+GALEPHB COM1 300
+BDSEPHB COM1 300
+BD3EPHB COM1 300
+QZSSEPHB COM1 300
+GPSIONB ONCHANGED
+BDSIONB ONCHANGED
+BD3IONB ONCHANGED
+GALIONB ONCHANGED
+GPSUTCB ONCHANGED
+BDSUTCB ONCHANGED
+BD3UTCB ONCHANGED
+GALUTCB ONCHANGED
+```
+
+A second editable profile, `UM980 ASCII PPP/NMEA`, is available for lower-risk
+ASCII/PPP-oriented testing:
+
+```text
+CONFIG PPP ENABLE E6-HAS
+CONFIG PPP DATUM WGS84
+CONFIG PPP TIMEOUT 120
+CONFIG PPP CONVERGE 15 30
+
+MODE ROVER
+
+GNGGA 0.05
+GNRMC 0.05
+GNGST 0.05
+GNGSV 1
+GNGSA 1
+GPGLL 1
+GPGNS 1
+GPGRS 30
+PPPNAVA 10
+ADRNAVA 10
+
+TROPINFOA ONCHANGED
+GPSIONB ONCHANGED
+```
+
+Both profiles are defaults, not immutable firmware recipes: users can copy,
+edit, rename or remove them from Menu > Command scripts. Fixed-base RTCM output
+uses documented RTCM message command families such as `RTCM1006`, `RTCM1074`,
+`RTCM1084`, `RTCM1094` and `RTCM1124` when those workflows are enabled later.
+User changes to command scripts should remain conservative and source-backed.
 
 If a profile changes receiver baud, RtkCollector opens the USB serial bridge at
 the profile baud, sends user init commands, sends the receiver baud-switch

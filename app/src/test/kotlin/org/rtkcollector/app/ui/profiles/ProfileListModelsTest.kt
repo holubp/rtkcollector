@@ -43,4 +43,16 @@ class ProfileListModelsTest {
         assertTrue(state.rows.single().isSelected)
         assertTrue(state.rows.single().canDelete)
     }
+
+    @Test
+    fun `editable profile field can expose fixed options`() {
+        val field = EditableProfileField(
+            key = "serialBaud",
+            label = "Host serial baud",
+            value = "230400",
+            options = listOf("115200", "230400", "921600"),
+        )
+
+        assertEquals(listOf("115200", "230400", "921600"), field.options)
+    }
 }

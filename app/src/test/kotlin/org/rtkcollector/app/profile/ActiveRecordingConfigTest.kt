@@ -125,6 +125,29 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `command profile runtime script becomes mode commands`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "plain-rover"),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                runtimeScript = "MODE ROVER\n\nBESTNAVB COM1 0.1",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Plain rover",
+            workflowUsesNtrip = false,
+            passwordLookup = { null },
+            modeCommands = listOf("FALLBACK"),
+        )
+
+        assertEquals(listOf("MODE ROVER", "BESTNAVB COM1 0.1"), config.modeCommands)
+    }
+
+    @Test
     fun `ntrip workflow requires host and mountpoint before start`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip(),

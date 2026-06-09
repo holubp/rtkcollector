@@ -14,11 +14,11 @@ class SettingsSetModelsTest {
             name = "Car roof rover",
             workflowId = "rover-ntrip",
             receiverProfileId = "um980-n4",
-            commandProfileRef = ProfileReference("um980-default-commands", "UM980 default commands"),
+            commandProfileRef = ProfileReference("um980-binary-multihz", "UM980 binary multi-Hz"),
             usbBaudProfileRef = ProfileReference("um980-230400", "UM980 230400"),
             ntripCasterProfileRef = ProfileReference("caster", "EUREF"),
             ntripMountpointProfileRef = ProfileReference("mount", "TUBO00CZE0"),
-            recordingOutputProfileRef = ProfileReference("default-record-everything", "Default V1 recording policy"),
+            recordingOutputProfileRef = ProfileReference("default-record-everything", "Default V1 recording outputs"),
             storageProfileRef = ProfileReference("app-private", "App-private external storage"),
             overrides = SettingsSetOverrides(
                 command = CommandProfileOverride(initScript = "UNLOG COM1", shutdownScript = "UNLOG COM1"),
@@ -30,7 +30,7 @@ class SettingsSetModelsTest {
 
         assertEquals("field-car-roof", decoded.id)
         assertEquals("rover-ntrip", decoded.workflowId)
-        assertEquals("um980-default-commands", decoded.commandProfileRef.id)
+        assertEquals("um980-binary-multihz", decoded.commandProfileRef.id)
         assertEquals("UNLOG COM1", decoded.overrides.command?.initScript)
         assertTrue(decoded.hasLocalOverrides)
     }

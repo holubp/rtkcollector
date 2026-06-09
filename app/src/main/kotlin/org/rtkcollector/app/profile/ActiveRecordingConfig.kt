@@ -114,6 +114,9 @@ data class ActiveRecordingConfig(
                 treeUri = storageOverride?.treeUri ?: storageProfile.treeUri,
             )
 
+            val resolvedModeCommands = commandProfile.runtimeScript.commandLines()
+                .ifEmpty { modeCommands }
+
             return ActiveRecordingConfig(
                 workflowId = settingsSet.workflowId,
                 workflowName = workflowName,
@@ -124,7 +127,7 @@ data class ActiveRecordingConfig(
                 serialBaud = serialBaud,
                 initCommands = (localInitCommands ?: commandOverride?.initScript ?: commandProfile.initScript).commandLines(),
                 baudSwitchCommands = baudSwitchCommands,
-                modeCommands = modeCommands,
+                modeCommands = resolvedModeCommands,
                 shutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript).commandLines(),
                 ntrip = ntrip,
                 recording = recordingOutput,

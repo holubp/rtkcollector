@@ -37,6 +37,9 @@ fun HomeDashboard(
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
+    onWorkflow: () -> Unit,
+    onReceiver: () -> Unit,
+    onStorage: () -> Unit,
     onMark: () -> Unit,
 ) {
     Scaffold(
@@ -76,7 +79,13 @@ fun HomeDashboard(
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            StatusStrip(state.status)
+            StatusStrip(
+                status = state.status,
+                onWorkflow = onWorkflow,
+                onMountpoint = onNtrip,
+                onReceiver = onReceiver,
+                onStorage = onStorage,
+            )
             DashboardCards(state)
         }
     }
@@ -123,23 +132,29 @@ private fun BottomActionBar(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusStrip(status: DashboardStatus) {
+private fun StatusStrip(
+    status: DashboardStatus,
+    onWorkflow: () -> Unit,
+    onMountpoint: () -> Unit,
+    onReceiver: () -> Unit,
+    onStorage: () -> Unit,
+) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        StatusChip("Workflow", status.workflow)
-        StatusChip("Mountpoint", status.mountpoint)
-        StatusChip("Receiver", status.receiver)
-        StatusChip("Storage", status.storage)
+        StatusChip("Workflow", status.workflow, onWorkflow)
+        StatusChip("Mountpoint", status.mountpoint, onMountpoint)
+        StatusChip("Receiver", status.receiver, onReceiver)
+        StatusChip("Storage", status.storage, onStorage)
     }
 }
 
 @Composable
-private fun StatusChip(label: String, value: String) {
+private fun StatusChip(label: String, value: String, onClick: () -> Unit) {
     AssistChip(
-        onClick = {},
+        onClick = onClick,
         label = {
             Text(
                 text = "$label: $value",
@@ -267,6 +282,9 @@ private fun HomeDashboardPortraitPreview() {
             onPrimaryAction = {},
             onMenu = {},
             onNtrip = {},
+            onWorkflow = {},
+            onReceiver = {},
+            onStorage = {},
             onMark = {},
         )
     }
@@ -281,6 +299,9 @@ private fun HomeDashboardLandscapePreview() {
             onPrimaryAction = {},
             onMenu = {},
             onNtrip = {},
+            onWorkflow = {},
+            onReceiver = {},
+            onStorage = {},
             onMark = {},
         )
     }

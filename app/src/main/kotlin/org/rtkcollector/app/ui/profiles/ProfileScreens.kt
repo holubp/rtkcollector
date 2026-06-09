@@ -11,7 +11,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +31,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,7 +45,9 @@ fun SettingsSetListScreen(
     onCopy: (String) -> Unit,
     onRename: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onAdd: () -> Unit,
     onBack: () -> Unit,
+    showManagementActions: Boolean = true,
 ) {
     ProfileListScreen(
         title = title,
@@ -48,8 +57,10 @@ fun SettingsSetListScreen(
         onCopy = onCopy,
         onRename = onRename,
         onDelete = onDelete,
+        onAdd = onAdd,
         onBack = onBack,
         supportsSelection = true,
+        showManagementActions = showManagementActions,
     )
 }
 
@@ -63,13 +74,22 @@ fun ProfileListScreen(
     onCopy: (String) -> Unit,
     onRename: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onAdd: () -> Unit,
     onBack: () -> Unit,
     supportsSelection: Boolean,
+    showManagementActions: Boolean = true,
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(title) },
+                actions = {
+                    if (showManagementActions) {
+                        TextButton(onClick = onAdd) {
+                            Text("Add")
+                        }
+                    }
+                },
                 navigationIcon = {
                     TextButton(onClick = onBack) {
                         Text("Back")
@@ -87,6 +107,11 @@ fun ProfileListScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text("No profiles yet.")
+                if (showManagementActions) {
+                    Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+                        Text("Add")
+                    }
+                }
             }
             return@Scaffold
         }
@@ -107,6 +132,7 @@ fun ProfileListScreen(
                     onCopy = onCopy,
                     onRename = onRename,
                     onDelete = onDelete,
+                    showManagementActions = showManagementActions,
                 )
             }
         }
@@ -122,6 +148,7 @@ private fun ProfileListItem(
     onCopy: (String) -> Unit,
     onRename: (String) -> Unit,
     onDelete: (String) -> Unit,
+    showManagementActions: Boolean,
 ) {
     Card {
         Column(
@@ -154,34 +181,38 @@ private fun ProfileListItem(
                         Text("Use")
                     }
                 }
-                OutlinedButton(
-                    onClick = { if (row.canEdit) onEdit(row.id) },
-                    enabled = row.canEdit,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Edit")
-                }
-                if (row.canCopy) {
-                    TextButton(onClick = { onCopy(row.id) }, modifier = Modifier.weight(1f)) {
-                        Text("Copy")
+                if (showManagementActions) {
+                    OutlinedButton(
+                        onClick = { if (row.canEdit) onEdit(row.id) },
+                        enabled = row.canEdit,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Edit")
+                    }
+                    if (row.canCopy) {
+                        TextButton(onClick = { onCopy(row.id) }, modifier = Modifier.weight(1f)) {
+                            Text("Copy")
+                        }
                     }
                 }
             }
 
-            HorizontalDivider()
+            if (showManagementActions && (row.canRename || row.canDelete)) {
+                HorizontalDivider()
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (row.canRename) {
-                    TextButton(onClick = { onRename(row.id) }) {
-                        Text("Rename")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (row.canRename) {
+                        TextButton(onClick = { onRename(row.id) }) {
+                            Text("Rename")
+                        }
                     }
-                }
-                if (row.canDelete) {
-                    TextButton(onClick = { onDelete(row.id) }) {
-                        Text("Delete")
+                    if (row.canDelete) {
+                        TextButton(onClick = { onDelete(row.id) }) {
+                            Text("Delete")
+                        }
                     }
                 }
             }
@@ -241,6 +272,8 @@ fun ProfileEditorScreen(
     var values by remember {
         mutableStateOf(data.fields.associate { it.key to it.value })
     }
+    var visibleSecrets by remember { mutableStateOf(emptySet<String>()) }
+    var expandedOptions by remember { mutableStateOf(emptySet<String>()) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -261,16 +294,94 @@ fun ProfileEditorScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(data.fields, key = { it.key }) { field ->
-                OutlinedTextField(
-                    value = values[field.key].orEmpty(),
-                    onValueChange = { value ->
-                        values = values + (field.key to value)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(field.label) },
-                    minLines = if (field.multiline) 4 else 1,
-                    singleLine = !field.multiline,
-                )
+                if (field.boolean) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Checkbox(
+                            checked = values[field.key].equals("true", ignoreCase = true),
+                            onCheckedChange = { checked ->
+                                values = values + (field.key to checked.toString())
+                            },
+                        )
+                        Text(field.label, modifier = Modifier.weight(1f))
+                    }
+                } else if (field.options.isNotEmpty()) {
+                    val expanded = field.key in expandedOptions
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = {
+                            expandedOptions = if (expanded) {
+                                expandedOptions - field.key
+                            } else {
+                                expandedOptions + field.key
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OutlinedTextField(
+                            value = values[field.key].orEmpty(),
+                            onValueChange = {},
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
+                            label = { Text(field.label) },
+                            readOnly = true,
+                            singleLine = true,
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                            },
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expandedOptions = expandedOptions - field.key },
+                        ) {
+                            field.options.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        values = values + (field.key to option)
+                                        expandedOptions = expandedOptions - field.key
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = values[field.key].orEmpty(),
+                        onValueChange = { value ->
+                            values = values + (field.key to value)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(field.label) },
+                        minLines = if (field.multiline) 4 else 1,
+                        singleLine = !field.multiline,
+                        visualTransformation = if (field.secret && field.key !in visibleSecrets) {
+                            PasswordVisualTransformation()
+                        } else {
+                            VisualTransformation.None
+                        },
+                        trailingIcon = if (field.secret) {
+                            {
+                                TextButton(
+                                    onClick = {
+                                        visibleSecrets = if (field.key in visibleSecrets) {
+                                            visibleSecrets - field.key
+                                        } else {
+                                            visibleSecrets + field.key
+                                        }
+                                    },
+                                ) {
+                                    Text(if (field.key in visibleSecrets) "Hide" else "Show")
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                }
             }
             item {
                 Button(

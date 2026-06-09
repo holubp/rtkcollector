@@ -7,25 +7,49 @@ class ProfileStores(context: Context) {
     private val preferences = context.getSharedPreferences("profile-manager", Context.MODE_PRIVATE)
 
     fun commandProfiles(): List<CommandProfile> =
-        readProfiles("commandProfiles", ::defaultCommandProfiles, CommandProfile::fromJson)
+        readProfiles(
+            key = "commandProfiles",
+            defaults = ::defaultCommandProfiles,
+            decode = CommandProfile::fromJson,
+            migrate = ProfileStoreMigrations::commandProfiles,
+            encode = CommandProfile::toJson,
+        )
 
     fun saveCommandProfiles(profiles: List<CommandProfile>) =
         writeProfiles("commandProfiles", profiles.onEach(CommandProfile::validate).map(CommandProfile::toJson))
 
     fun usbBaudProfiles(): List<UsbBaudProfile> =
-        readProfiles("usbBaudProfiles", ::defaultUsbBaudProfiles, UsbBaudProfile::fromJson)
+        readProfiles(
+            key = "usbBaudProfiles",
+            defaults = ::defaultUsbBaudProfiles,
+            decode = UsbBaudProfile::fromJson,
+            migrate = ProfileStoreMigrations::usbBaudProfiles,
+            encode = UsbBaudProfile::toJson,
+        )
 
     fun saveUsbBaudProfiles(profiles: List<UsbBaudProfile>) =
         writeProfiles("usbBaudProfiles", profiles.onEach(UsbBaudProfile::validate).map(UsbBaudProfile::toJson))
 
     fun ntripCasterProfiles(): List<NtripCasterProfile> =
-        readProfiles("ntripCasterProfiles", ::defaultNtripCasterProfiles, NtripCasterProfile::fromJson)
+        readProfiles(
+            key = "ntripCasterProfiles",
+            defaults = ::defaultNtripCasterProfiles,
+            decode = NtripCasterProfile::fromJson,
+            migrate = ProfileStoreMigrations::ntripCasterProfiles,
+            encode = NtripCasterProfile::toJson,
+        )
 
     fun saveNtripCasterProfiles(profiles: List<NtripCasterProfile>) =
         writeProfiles("ntripCasterProfiles", profiles.onEach(NtripCasterProfile::validate).map(NtripCasterProfile::toJson))
 
     fun ntripMountpointProfiles(): List<NtripMountpointProfile> =
-        readProfiles("ntripMountpointProfiles", ::defaultNtripMountpointProfiles, NtripMountpointProfile::fromJson)
+        readProfiles(
+            key = "ntripMountpointProfiles",
+            defaults = ::defaultNtripMountpointProfiles,
+            decode = NtripMountpointProfile::fromJson,
+            migrate = ProfileStoreMigrations::ntripMountpointProfiles,
+            encode = NtripMountpointProfile::toJson,
+        )
 
     fun saveNtripMountpointProfiles(profiles: List<NtripMountpointProfile>) =
         writeProfiles(
@@ -34,7 +58,13 @@ class ProfileStores(context: Context) {
         )
 
     fun recordingPolicyProfiles(): List<RecordingPolicyProfile> =
-        readProfiles("recordingPolicyProfiles", ::defaultRecordingPolicyProfiles, RecordingPolicyProfile::fromJson)
+        readProfiles(
+            key = "recordingPolicyProfiles",
+            defaults = ::defaultRecordingPolicyProfiles,
+            decode = RecordingPolicyProfile::fromJson,
+            migrate = ProfileStoreMigrations::recordingPolicyProfiles,
+            encode = RecordingPolicyProfile::toJson,
+        )
 
     fun saveRecordingPolicyProfiles(profiles: List<RecordingPolicyProfile>) =
         writeProfiles(
@@ -43,13 +73,25 @@ class ProfileStores(context: Context) {
         )
 
     fun storageProfiles(): List<StorageProfile> =
-        readProfiles("storageProfiles", ::defaultStorageProfiles, StorageProfile::fromJson)
+        readProfiles(
+            key = "storageProfiles",
+            defaults = ::defaultStorageProfiles,
+            decode = StorageProfile::fromJson,
+            migrate = ProfileStoreMigrations::storageProfiles,
+            encode = StorageProfile::toJson,
+        )
 
     fun saveStorageProfiles(profiles: List<StorageProfile>) =
         writeProfiles("storageProfiles", profiles.onEach(StorageProfile::validate).map(StorageProfile::toJson))
 
     fun settingsSets(): List<RecordingSettingsSet> =
-        readProfiles("settingsSets", ::defaultSettingsSets, RecordingSettingsSet::fromJson)
+        readProfiles(
+            key = "settingsSets",
+            defaults = ::defaultSettingsSets,
+            decode = RecordingSettingsSet::fromJson,
+            migrate = ProfileStoreMigrations::settingsSets,
+            encode = RecordingSettingsSet::toJson,
+        )
 
     fun saveSettingsSets(settingsSets: List<RecordingSettingsSet>) =
         writeProfiles("settingsSets", settingsSets.onEach(RecordingSettingsSet::validate).map(RecordingSettingsSet::toJson))
@@ -69,12 +111,19 @@ class ProfileStores(context: Context) {
         key: String,
         defaults: () -> List<T>,
         decode: (org.json.JSONObject) -> T,
+        migrate: (List<T>, List<T>) -> List<T> = { profiles, _ -> profiles },
+        encode: ((T) -> org.json.JSONObject)? = null,
     ): List<T> {
         val raw = preferences.getString(key, null) ?: return defaults()
-        return runCatching {
+        val decoded = runCatching {
             val array = JSONArray(raw)
             (0 until array.length()).map { index -> decode(array.getJSONObject(index)) }
         }.getOrElse { defaults() }
+        val migrated = migrate(decoded, defaults())
+        if (migrated != decoded && encode != null) {
+            writeProfiles(key, migrated.map(encode))
+        }
+        return migrated
     }
 
     private fun writeProfiles(key: String, jsonObjects: List<org.json.JSONObject>) {
@@ -86,9 +135,14 @@ class ProfileStores(context: Context) {
     private fun defaultCommandProfiles(): List<CommandProfile> =
         listOf(
             CommandProfile(
-                id = "um980-default-commands",
-                name = "UM980 default commands",
-                isProtected = true,
+                id = "um980-binary-multihz",
+                name = "UM980 binary multi-Hz",
+                runtimeScript = UM980_BINARY_MULTI_HZ_SCRIPT,
+            ),
+            CommandProfile(
+                id = "um980-ascii-ppp-nmea",
+                name = "UM980 ASCII PPP/NMEA",
+                runtimeScript = UM980_ASCII_PPP_NMEA_SCRIPT,
             ),
         )
 
@@ -97,7 +151,6 @@ class ProfileStores(context: Context) {
             UsbBaudProfile(
                 id = "um980-230400",
                 name = "UM980 230400",
-                isProtected = true,
                 profileBaud = 230400,
                 serialBaud = 230400,
             ),
@@ -108,26 +161,17 @@ class ProfileStores(context: Context) {
             NtripCasterProfile(
                 id = "ntrip-caster-default",
                 name = "NTRIP caster",
-                isProtected = true,
             ),
         )
 
     private fun defaultNtripMountpointProfiles(): List<NtripMountpointProfile> =
-        listOf(
-            NtripMountpointProfile(
-                id = "ntrip-mountpoint-default",
-                name = "NTRIP mountpoint",
-                casterProfileId = "ntrip-caster-default",
-                isProtected = true,
-            ),
-        )
+        emptyList()
 
     private fun defaultRecordingPolicyProfiles(): List<RecordingPolicyProfile> =
         listOf(
             RecordingPolicyProfile(
                 id = "default-record-everything",
-                name = "Default V1 recording policy",
-                isProtected = true,
+                name = "Default V1 recording outputs",
             ),
         )
 
@@ -136,11 +180,68 @@ class ProfileStores(context: Context) {
             StorageProfile(
                 id = "app-private",
                 name = "App-private external storage",
-                isProtected = true,
                 kind = "APP_PRIVATE",
             ),
         )
 
     private fun defaultSettingsSets(): List<RecordingSettingsSet> =
         listOf(RecordingSettingsSet.builtInRoverNtrip())
+
+    companion object {
+        const val OLD_UM980_COMMAND_PROFILE_ID = "um980-default-commands"
+        const val UM980_BINARY_MULTI_HZ_PROFILE_ID = "um980-binary-multihz"
+        const val UM980_ASCII_PPP_NMEA_PROFILE_ID = "um980-ascii-ppp-nmea"
+        const val OLD_NTRIP_MOUNTPOINT_PROFILE_ID = "ntrip-mountpoint-default"
+        const val DEFAULT_RECORDING_POLICY_ID = "default-record-everything"
+        const val DEFAULT_STORAGE_PROFILE_ID = "app-private"
+        const val DEFAULT_USB_BAUD_PROFILE_ID = "um980-230400"
+        const val DEFAULT_NTRIP_CASTER_PROFILE_ID = "ntrip-caster-default"
+
+        val UM980_BINARY_MULTI_HZ_SCRIPT: String = """
+            UNLOG COM1
+            MODE ROVER
+            CONFIG MMP ENABLE
+            VERSIONB
+            BESTNAVB COM1 0.1
+            OBSVMCMPB COM1 0.25
+            STADOPB COM1 1
+            GPSEPHB COM1 300
+            GLOEPHB COM1 300
+            GALEPHB COM1 300
+            BDSEPHB COM1 300
+            BD3EPHB COM1 300
+            QZSSEPHB COM1 300
+            GPSIONB ONCHANGED
+            BDSIONB ONCHANGED
+            BD3IONB ONCHANGED
+            GALIONB ONCHANGED
+            GPSUTCB ONCHANGED
+            BDSUTCB ONCHANGED
+            BD3UTCB ONCHANGED
+            GALUTCB ONCHANGED
+        """.trimIndent()
+
+        val UM980_ASCII_PPP_NMEA_SCRIPT: String = """
+            CONFIG PPP ENABLE E6-HAS
+            CONFIG PPP DATUM WGS84
+            CONFIG PPP TIMEOUT 120
+            CONFIG PPP CONVERGE 15 30
+
+            MODE ROVER
+
+            GNGGA 0.05
+            GNRMC 0.05
+            GNGST 0.05
+            GNGSV 1
+            GNGSA 1
+            GPGLL 1
+            GPGNS 1
+            GPGRS 30
+            PPPNAVA 10
+            ADRNAVA 10
+
+            TROPINFOA ONCHANGED
+            GPSIONB ONCHANGED
+        """.trimIndent()
+    }
 }

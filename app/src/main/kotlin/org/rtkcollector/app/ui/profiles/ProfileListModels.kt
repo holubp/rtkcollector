@@ -40,6 +40,9 @@ data class EditableProfileField(
     val label: String,
     val value: String,
     val multiline: Boolean = false,
+    val secret: Boolean = false,
+    val boolean: Boolean = false,
+    val options: List<String> = emptyList(),
 )
 
 data class ProfileEditorData(

@@ -8,6 +8,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,7 +54,6 @@ import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.sessions.SessionListItem
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
-import org.rtkcollector.receiver.unicore.Um980RuntimeProfiles
 import androidx.core.content.FileProvider
 import java.io.File
 import java.nio.file.Files
@@ -77,6 +77,10 @@ fun RtkCollectorApp() {
     var selectedSettingsSetId by remember { mutableStateOf(profileStore.selectedSettingsSetId()) }
     var profileEditorTarget by remember { mutableStateOf<ProfileEditorTarget?>(null) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
+    var profileRevision by remember { mutableStateOf(0) }
+    val secretStore = remember(context) { NtripSecretStore(context) }
+    @Suppress("UNUSED_VARIABLE")
+    val currentProfileRevision = profileRevision
     var state by remember {
         val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
         mutableStateOf(
@@ -88,6 +92,9 @@ fun RtkCollectorApp() {
                 profiles = ProfilesCardState(settingsSet = selected?.displayNameWithOverrides() ?: "n/a"),
             ),
         )
+    }
+    BackHandler(enabled = screen != AppScreen.HOME) {
+        screen = screen.backScreen(profileEditorTarget)
     }
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
@@ -134,13 +141,35 @@ fun RtkCollectorApp() {
                         }
                     },
                     onMenu = { screen = AppScreen.SETTINGS },
-                    onNtrip = { screen = AppScreen.NTRIP_MOUNTPOINT },
+                    onNtrip = { screen = AppScreen.MOUNTPOINT_SELECTOR },
+                    onWorkflow = {
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
+                        } else {
+                            screen = AppScreen.SETTINGS_SET_SELECTOR
+                        }
+                    },
+                    onReceiver = {
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
+                        } else {
+                            screen = AppScreen.COMMAND_SELECTOR
+                        }
+                    },
+                    onStorage = {
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing storage.", Toast.LENGTH_LONG).show()
+                        } else {
+                            screen = AppScreen.STORAGE_SELECTOR
+                        }
+                    },
                     onMark = {},
                 )
                 AppScreen.SETTINGS -> SettingsHub(
                     onSettingsSets = { screen = AppScreen.SETTINGS_SETS },
                     onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
                     onNtripMountpoint = { screen = AppScreen.NTRIP_MOUNTPOINT_PROFILES },
+                    onUsbBaud = { screen = AppScreen.USB_BAUD },
                     onCommands = { screen = AppScreen.COMMANDS },
                     onRecordingOutputs = { screen = AppScreen.RECORDING_OUTPUTS },
                     onStorage = { screen = AppScreen.STORAGE },
@@ -206,6 +235,9 @@ fun RtkCollectorApp() {
                             val updated = settingsSets + copy
                             settingsSets = updated
                             profileStore.saveSettingsSets(updated)
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.SETTINGS_SET, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
                         }
                     },
                     onRename = { id ->
@@ -224,6 +256,7 @@ fun RtkCollectorApp() {
                             }
                             settingsSets = updated
                             profileStore.saveSettingsSets(updated)
+                            profileRevision++
                             if (!item.isProtected && selectedSettingsSetId == id) {
                                 selectedSettingsSetId = updated.firstOrNull()?.id.orEmpty()
                                 if (selectedSettingsSetId.isNotBlank()) {
@@ -231,6 +264,18 @@ fun RtkCollectorApp() {
                                 }
                             }
                         }
+                    },
+                    onAdd = {
+                        val newSet = RecordingSettingsSet.builtInRoverNtrip().copySet(
+                            id = profileStore.duplicateId("settings"),
+                            name = "New settings set",
+                        )
+                        val updated = settingsSets + newSet
+                        settingsSets = updated
+                        profileStore.saveSettingsSets(updated)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.SETTINGS_SET, newSet.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                 )
@@ -245,9 +290,13 @@ fun RtkCollectorApp() {
                     onCopy = { id ->
                         val profiles = profileStore.ntripCasterProfiles()
                         profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("caster"), "${source.name} copy")
                             profileStore.saveNtripCasterProfiles(
-                                profiles + source.copyProfile(profileStore.duplicateId("caster"), "${source.name} copy"),
+                                profiles + copy,
                             )
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_CASTER, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
                         }
                     },
                     onRename = { id ->
@@ -257,6 +306,17 @@ fun RtkCollectorApp() {
                     onDelete = { id ->
                         val profiles = profileStore.ntripCasterProfiles()
                         profileStore.saveNtripCasterProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+                        profileRevision++
+                    },
+                    onAdd = {
+                        val profile = NtripCasterProfile(
+                            id = profileStore.duplicateId("caster"),
+                            name = "New NTRIP caster",
+                        )
+                        profileStore.saveNtripCasterProfiles(profileStore.ntripCasterProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_CASTER, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                     supportsSelection = false,
@@ -272,9 +332,13 @@ fun RtkCollectorApp() {
                     onCopy = { id ->
                         val profiles = profileStore.ntripMountpointProfiles()
                         profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("mount"), "${source.name} copy")
                             profileStore.saveNtripMountpointProfiles(
-                                profiles + source.copyProfile(profileStore.duplicateId("mount"), "${source.name} copy"),
+                                profiles + copy,
                             )
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_MOUNTPOINT, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
                         }
                     },
                     onRename = { id ->
@@ -284,6 +348,19 @@ fun RtkCollectorApp() {
                     onDelete = { id ->
                         val profiles = profileStore.ntripMountpointProfiles()
                         profileStore.saveNtripMountpointProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+                        profileRevision++
+                    },
+                    onAdd = {
+                        val casterId = profileStore.ntripCasterProfiles().firstOrNull()?.id ?: "ntrip-caster-default"
+                        val profile = NtripMountpointProfile(
+                            id = profileStore.duplicateId("mount"),
+                            name = "New mountpoint",
+                            casterProfileId = casterId,
+                        )
+                        profileStore.saveNtripMountpointProfiles(profileStore.ntripMountpointProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_MOUNTPOINT, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                     supportsSelection = false,
@@ -299,9 +376,13 @@ fun RtkCollectorApp() {
                     onCopy = { id ->
                         val profiles = profileStore.commandProfiles()
                         profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("commands"), "${source.name} copy")
                             profileStore.saveCommandProfiles(
-                                profiles + source.copyProfile(profileStore.duplicateId("commands"), "${source.name} copy"),
+                                profiles + copy,
                             )
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.COMMANDS, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
                         }
                     },
                     onRename = { id ->
@@ -311,6 +392,18 @@ fun RtkCollectorApp() {
                     onDelete = { id ->
                         val profiles = profileStore.commandProfiles()
                         profileStore.saveCommandProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+                        profileRevision++
+                    },
+                    onAdd = {
+                        val profile = CommandProfile(
+                            id = profileStore.duplicateId("commands"),
+                            name = "New command profile",
+                            runtimeScript = ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT,
+                        )
+                        profileStore.saveCommandProfiles(profileStore.commandProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.COMMANDS, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                     supportsSelection = false,
@@ -326,9 +419,13 @@ fun RtkCollectorApp() {
                     onCopy = { id ->
                         val profiles = profileStore.recordingPolicyProfiles()
                         profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("recording"), "${source.name} copy")
                             profileStore.saveRecordingPolicyProfiles(
-                                profiles + source.copyProfile(profileStore.duplicateId("recording"), "${source.name} copy"),
+                                profiles + copy,
                             )
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.RECORDING_OUTPUTS, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
                         }
                     },
                     onRename = { id ->
@@ -338,6 +435,17 @@ fun RtkCollectorApp() {
                     onDelete = { id ->
                         val profiles = profileStore.recordingPolicyProfiles()
                         profileStore.saveRecordingPolicyProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+                        profileRevision++
+                    },
+                    onAdd = {
+                        val profile = RecordingPolicyProfile(
+                            id = profileStore.duplicateId("recording"),
+                            name = "New recording output",
+                        )
+                        profileStore.saveRecordingPolicyProfiles(profileStore.recordingPolicyProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.RECORDING_OUTPUTS, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                     supportsSelection = false,
@@ -353,9 +461,13 @@ fun RtkCollectorApp() {
                     onCopy = { id ->
                         val profiles = profileStore.storageProfiles()
                         profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("storage"), "${source.name} copy")
                             profileStore.saveStorageProfiles(
-                                profiles + source.copyProfile(profileStore.duplicateId("storage"), "${source.name} copy"),
+                                profiles + copy,
                             )
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.STORAGE, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
                         }
                     },
                     onRename = { id ->
@@ -365,9 +477,182 @@ fun RtkCollectorApp() {
                     onDelete = { id ->
                         val profiles = profileStore.storageProfiles()
                         profileStore.saveStorageProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+                        profileRevision++
+                    },
+                    onAdd = {
+                        val profile = StorageProfile(
+                            id = profileStore.duplicateId("storage"),
+                            name = "New storage location",
+                        )
+                        profileStore.saveStorageProfiles(profileStore.storageProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.STORAGE, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                     supportsSelection = false,
+                )
+                AppScreen.USB_BAUD -> ProfileListScreen(
+                    title = "USB and baud profiles",
+                    rows = profileStore.usbBaudProfiles().map { it.profileRow() },
+                    onSelect = {},
+                    onEdit = { id ->
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.USB_BAUD, id)
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onCopy = { id ->
+                        val profiles = profileStore.usbBaudProfiles()
+                        profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("baud"), "${source.name} copy")
+                            profileStore.saveUsbBaudProfiles(profiles + copy)
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.USB_BAUD, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
+                        }
+                    },
+                    onRename = { id ->
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.USB_BAUD, id)
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onDelete = { id ->
+                        val profiles = profileStore.usbBaudProfiles()
+                        profileStore.saveUsbBaudProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+                        profileRevision++
+                    },
+                    onAdd = {
+                        val profile = UsbBaudProfile(
+                            id = profileStore.duplicateId("baud"),
+                            name = "New USB/baud profile",
+                        )
+                        profileStore.saveUsbBaudProfiles(profileStore.usbBaudProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.USB_BAUD, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onBack = { screen = AppScreen.SETTINGS },
+                    supportsSelection = false,
+                )
+                AppScreen.SETTINGS_SET_SELECTOR -> ProfileListScreen(
+                    title = "Select workflow/settings",
+                    rows = SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows,
+                    onSelect = { id ->
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
+                            screen = AppScreen.HOME
+                        } else {
+                            selectedSettingsSetId = id
+                            profileStore.saveSelectedSettingsSetId(id)
+                            settingsSets = profileStore.settingsSets()
+                            state = state.copy(
+                                status = state.status.copy(
+                                    workflow = settingsSets.firstOrNull { it.id == id }?.workflowId?.workflowName() ?: state.status.workflow,
+                                    mountpoint = profileStore.selectedMountpointLabel(id),
+                                    storage = profileStore.selectedStorageLabel(id),
+                                ),
+                                profiles = state.profiles.copy(
+                                    settingsSet = settingsSets.firstOrNull { it.id == id }?.displayNameWithOverrides()
+                                        ?: state.profiles.settingsSet,
+                                ),
+                            )
+                            screen = AppScreen.HOME
+                        }
+                    },
+                    onEdit = {},
+                    onCopy = {},
+                    onRename = {},
+                    onDelete = {},
+                    onAdd = {},
+                    onBack = { screen = AppScreen.HOME },
+                    supportsSelection = true,
+                    showManagementActions = false,
+                )
+                AppScreen.MOUNTPOINT_SELECTOR -> ProfileListScreen(
+                    title = "Select NTRIP mountpoint",
+                    rows = profileStore.ntripMountpointProfiles().map {
+                        it.profileRow(isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.ntripMountpointProfileRef?.id)
+                    },
+                    onSelect = { id ->
+                        profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
+                            settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                                set.copy(
+                                    ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
+                                    overrides = set.overrides.copy(ntripMountpoint = null),
+                                )
+                            }
+                            profileStore.saveSettingsSets(settingsSets)
+                            state = state.copy(status = state.status.copy(mountpoint = profile.mountpoint.ifBlank { profile.name }))
+                            if (state.isRecording) {
+                                buildNtripUpdateIntent(context)?.let { context.startService(it) }
+                            }
+                        }
+                        screen = AppScreen.HOME
+                    },
+                    onEdit = {},
+                    onCopy = {},
+                    onRename = {},
+                    onDelete = {},
+                    onAdd = {},
+                    onBack = { screen = AppScreen.HOME },
+                    supportsSelection = true,
+                    showManagementActions = false,
+                )
+                AppScreen.COMMAND_SELECTOR -> ProfileListScreen(
+                    title = "Select receiver command profile",
+                    rows = profileStore.commandProfiles().map {
+                        it.profileRow(isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.commandProfileRef?.id)
+                    },
+                    onSelect = { id ->
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
+                            screen = AppScreen.HOME
+                        } else {
+                            profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                                    set.copy(commandProfileRef = ProfileReference(profile.id, profile.name))
+                                }
+                                profileStore.saveSettingsSets(settingsSets)
+                                state = state.copy(profiles = state.profiles.copy(commandProfile = profile.name))
+                            }
+                            screen = AppScreen.HOME
+                        }
+                    },
+                    onEdit = {},
+                    onCopy = {},
+                    onRename = {},
+                    onDelete = {},
+                    onAdd = {},
+                    onBack = { screen = AppScreen.HOME },
+                    supportsSelection = true,
+                    showManagementActions = false,
+                )
+                AppScreen.STORAGE_SELECTOR -> ProfileListScreen(
+                    title = "Select storage profile",
+                    rows = profileStore.storageProfiles().map {
+                        it.profileRow(isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.storageProfileRef?.id)
+                    },
+                    onSelect = { id ->
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing storage.", Toast.LENGTH_LONG).show()
+                            screen = AppScreen.HOME
+                        } else {
+                            profileStore.storageProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                                    set.copy(storageProfileRef = ProfileReference(profile.id, profile.name))
+                                }
+                                profileStore.saveSettingsSets(settingsSets)
+                                state = state.copy(status = state.status.copy(storage = profile.name))
+                            }
+                            screen = AppScreen.HOME
+                        }
+                    },
+                    onEdit = {},
+                    onCopy = {},
+                    onRename = {},
+                    onDelete = {},
+                    onAdd = {},
+                    onBack = { screen = AppScreen.HOME },
+                    supportsSelection = true,
+                    showManagementActions = false,
                 )
                 AppScreen.SESSIONS -> SessionsScreen(
                     sessions = currentSessions(state),
@@ -411,13 +696,22 @@ fun RtkCollectorApp() {
                     if (target == null) {
                         screen = AppScreen.SETTINGS
                     } else {
-                        val data = profileStore.profileEditorData(target, settingsSets)
+                        val data = profileStore.profileEditorData(
+                            target = target,
+                            settingsSets = settingsSets,
+                            passwordLookup = secretStore::getPassword,
+                        )
                         ProfileEditorScreen(
                             data = data,
                             onBack = { screen = target.kind.backScreen() },
                             onSave = { values ->
                                 runCatching {
-                                    profileStore.saveProfileEditorData(target, values, settingsSets)
+                                    profileStore.saveProfileEditorData(
+                                        target = target,
+                                        values = values,
+                                        settingsSets = settingsSets,
+                                        savePassword = secretStore::putPassword,
+                                    )
                                 }.onSuccess { updated ->
                                     settingsSets = updated
                                     state = state.copy(
@@ -475,6 +769,7 @@ private fun shareZip(context: Context, zipFile: File) {
 private fun ProfileStores.profileEditorData(
     target: ProfileEditorTarget,
     settingsSets: List<RecordingSettingsSet>,
+    passwordLookup: (String) -> String?,
 ): ProfileEditorData =
     when (target.kind) {
         ProfileKind.SETTINGS_SET -> settingsSets.first { it.id == target.id }.let { set ->
@@ -493,6 +788,7 @@ private fun ProfileStores.profileEditorData(
             )
         }
         ProfileKind.NTRIP_CASTER -> ntripCasterProfiles().first { it.id == target.id }.let { profile ->
+            val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
             ProfileEditorData(
                 title = "Edit NTRIP caster",
                 fields = listOf(
@@ -500,7 +796,7 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("host", "Host", profile.host),
                     EditableProfileField("port", "Port", profile.port.toString()),
                     EditableProfileField("username", "Username", profile.username),
-                    EditableProfileField("secretId", "Password secret reference", profile.secretId),
+                    EditableProfileField("password", "Password", storedPassword, secret = true),
                     EditableProfileField("protocolPolicy", "Protocol policy", profile.protocolPolicy),
                     EditableProfileField("sourcetableMountpoints", "Known mountpoints", profile.sourcetableMountpoints.joinToString("\n"), multiline = true),
                 ),
@@ -519,6 +815,30 @@ private fun ProfileStores.profileEditorData(
                 ),
             )
         }
+        ProfileKind.USB_BAUD -> usbBaudProfiles().first { it.id == target.id }.let { profile ->
+            ProfileEditorData(
+                title = "Edit USB and baud profile",
+                fields = listOf(
+                    EditableProfileField("name", "Name", profile.name),
+                    EditableProfileField(
+                        key = "profileBaud",
+                        label = "Receiver profile baud",
+                        value = profile.profileBaud.toString(),
+                        options = SELECTABLE_BAUD_RATES,
+                    ),
+                    EditableProfileField(
+                        key = "serialBaud",
+                        label = "Host serial baud",
+                        value = profile.serialBaud.toString(),
+                        options = SELECTABLE_BAUD_RATES,
+                    ),
+                    EditableProfileField("usbVid", "USB VID", profile.usbVid?.toString().orEmpty()),
+                    EditableProfileField("usbPid", "USB PID", profile.usbPid?.toString().orEmpty()),
+                    EditableProfileField("usbDeviceName", "USB device name", profile.usbDeviceName.orEmpty()),
+                    EditableProfileField("usbProductName", "USB product name", profile.usbProductName.orEmpty()),
+                ),
+            )
+        }
         ProfileKind.COMMANDS -> commandProfiles().first { it.id == target.id }.let { profile ->
             ProfileEditorData(
                 title = "Edit command script",
@@ -526,6 +846,7 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("receiverFamily", "Receiver family", profile.receiverFamily),
                     EditableProfileField("initScript", "Init script", profile.initScript, multiline = true),
+                    EditableProfileField("runtimeScript", "Runtime script", profile.runtimeScript, multiline = true),
                     EditableProfileField("shutdownScript", "Shutdown script", profile.shutdownScript, multiline = true),
                 ),
             )
@@ -560,6 +881,7 @@ private fun ProfileStores.saveProfileEditorData(
     target: ProfileEditorTarget,
     values: Map<String, String>,
     settingsSets: List<RecordingSettingsSet>,
+    savePassword: (String, String) -> Unit,
 ): List<RecordingSettingsSet> {
     when (target.kind) {
         ProfileKind.SETTINGS_SET -> {
@@ -594,12 +916,21 @@ private fun ProfileStores.saveProfileEditorData(
             ntripCasterProfiles().map { profile ->
                 if (profile.id == target.id) {
                     require(!profile.isProtected) { "Protected NTRIP caster profiles cannot be edited." }
+                    val password = values.optional("password")
+                    val secretId = when {
+                        !password.isNullOrBlank() && profile.secretId.isNotBlank() -> profile.secretId
+                        !password.isNullOrBlank() -> "ntrip:${values.optional("host").orEmpty()}:${target.id}:${values.optional("username").orEmpty()}"
+                        else -> profile.secretId
+                    }
+                    if (!password.isNullOrBlank()) {
+                        savePassword(secretId, password)
+                    }
                     profile.copy(
                         name = values.required("name"),
                         host = values.optional("host").orEmpty(),
                         port = values.optional("port")?.toIntOrNull() ?: 2101,
                         username = values.optional("username").orEmpty(),
-                        secretId = values.optional("secretId").orEmpty(),
+                        secretId = secretId,
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
                             "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
                         },
@@ -622,7 +953,7 @@ private fun ProfileStores.saveProfileEditorData(
                         name = values.required("name"),
                         casterProfileId = values.required("casterProfileId"),
                         mountpoint = values.optional("mountpoint").orEmpty(),
-                        ggaUploadPolicy = values.optional("ggaUploadPolicy").orEmpty().ifBlank { "NONE" },
+                        ggaUploadPolicy = values.optional("ggaUploadPolicy").orEmpty(),
                         expectedFormat = values.optional("expectedFormat").orEmpty().ifBlank { "RTCM3" },
                         remoteBaseRawAvailable = values.optional("remoteBaseRawAvailable").toBooleanStrictOrFalse(),
                     )
@@ -639,6 +970,7 @@ private fun ProfileStores.saveProfileEditorData(
                         name = values.required("name"),
                         receiverFamily = values.required("receiverFamily"),
                         initScript = values.optional("initScript").orEmpty(),
+                        runtimeScript = values.optional("runtimeScript").orEmpty(),
                         shutdownScript = values.optional("shutdownScript").orEmpty(),
                     )
                 } else {
@@ -678,6 +1010,24 @@ private fun ProfileStores.saveProfileEditorData(
                 }
             },
         )
+        ProfileKind.USB_BAUD -> saveUsbBaudProfiles(
+            usbBaudProfiles().map { profile ->
+                if (profile.id == target.id) {
+                    require(!profile.isProtected) { "Protected USB/baud profiles cannot be edited." }
+                    profile.copy(
+                        name = values.required("name"),
+                        profileBaud = values.optional("profileBaud")?.toIntOrNull() ?: 230400,
+                        serialBaud = values.optional("serialBaud")?.toIntOrNull() ?: 230400,
+                        usbVid = values.optional("usbVid")?.toIntOrNull(),
+                        usbPid = values.optional("usbPid")?.toIntOrNull(),
+                        usbDeviceName = values.optional("usbDeviceName"),
+                        usbProductName = values.optional("usbProductName"),
+                    )
+                } else {
+                    profile
+                }
+            },
+        )
     }
     return settingsSets
 }
@@ -689,17 +1039,38 @@ private enum class AppScreen {
     NTRIP_MOUNTPOINT,
     NTRIP_MOUNTPOINT_PROFILES,
     COMMANDS,
+    USB_BAUD,
     RECORDING_OUTPUTS,
     STORAGE,
     SESSIONS,
     SETTINGS_SETS,
+    SETTINGS_SET_SELECTOR,
+    MOUNTPOINT_SELECTOR,
+    COMMAND_SELECTOR,
+    STORAGE_SELECTOR,
     PROFILE_EDITOR,
 }
+
+private val SELECTABLE_BAUD_RATES = listOf(
+    "4800",
+    "9600",
+    "14400",
+    "19200",
+    "38400",
+    "57600",
+    "115200",
+    "128000",
+    "230400",
+    "256000",
+    "460800",
+    "921600",
+)
 
 private enum class ProfileKind {
     SETTINGS_SET,
     NTRIP_CASTER,
     NTRIP_MOUNTPOINT,
+    USB_BAUD,
     COMMANDS,
     RECORDING_OUTPUTS,
     STORAGE,
@@ -715,9 +1086,23 @@ private fun ProfileKind.backScreen(): AppScreen =
         ProfileKind.SETTINGS_SET -> AppScreen.SETTINGS_SETS
         ProfileKind.NTRIP_CASTER -> AppScreen.NTRIP_CASTER
         ProfileKind.NTRIP_MOUNTPOINT -> AppScreen.NTRIP_MOUNTPOINT_PROFILES
+        ProfileKind.USB_BAUD -> AppScreen.USB_BAUD
         ProfileKind.COMMANDS -> AppScreen.COMMANDS
         ProfileKind.RECORDING_OUTPUTS -> AppScreen.RECORDING_OUTPUTS
         ProfileKind.STORAGE -> AppScreen.STORAGE
+    }
+
+private fun AppScreen.backScreen(editorTarget: ProfileEditorTarget?): AppScreen =
+    when (this) {
+        AppScreen.HOME -> AppScreen.HOME
+        AppScreen.SETTINGS -> AppScreen.HOME
+        AppScreen.NTRIP_MOUNTPOINT,
+        AppScreen.SETTINGS_SET_SELECTOR,
+        AppScreen.MOUNTPOINT_SELECTOR,
+        AppScreen.COMMAND_SELECTOR,
+        AppScreen.STORAGE_SELECTOR -> AppScreen.HOME
+        AppScreen.PROFILE_EDITOR -> editorTarget?.kind?.backScreen() ?: AppScreen.SETTINGS
+        else -> AppScreen.SETTINGS
     }
 
 @Preview(showBackground = true)
@@ -764,9 +1149,6 @@ private fun buildDashboardStartIntent(context: Context): Intent? {
             workflowName = settingsSet.workflowId.workflowName(),
             workflowUsesNtrip = workflowUsesNtrip,
             passwordLookup = NtripSecretStore(context)::getPassword,
-            modeCommands = Um980RuntimeProfiles
-                .experimentalRoverBasePreparation(baudRate = usbProfile.serialBaud)
-                .commands,
         ).also(ActiveRecordingConfig::validateForStart)
     } catch (error: IllegalArgumentException) {
         Toast.makeText(context, "Cannot start: ${error.message}", Toast.LENGTH_LONG).show()
@@ -806,7 +1188,7 @@ private fun buildDashboardStartIntent(context: Context): Intent? {
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_NAME, activeConfig.workflowName)
         putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, "ROVER")
         putExtra(RecordingForegroundService.EXTRA_RECEIVER_PROFILE_ID, activeConfig.receiverProfileId)
-        putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, "experimental-rover-base-preparation")
+        putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, activeConfig.commandProfileId)
         putExtra(RecordingForegroundService.EXTRA_COMMAND_PROFILE_ID, activeConfig.commandProfileId)
         putExtra(RecordingForegroundService.EXTRA_USB_BAUD_PROFILE_ID, activeConfig.usbBaudProfileId)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, ntripCaster?.id)
@@ -937,20 +1319,29 @@ private fun String.workflowName(): String =
         else -> replace('-', ' ').replaceFirstChar { it.titlecase() }
     }
 
-private fun CommandProfile.profileRow(): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false)
+private fun CommandProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
 
-private fun NtripCasterProfile.profileRow(): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false)
+private fun UsbBaudProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
 
-private fun NtripMountpointProfile.profileRow(): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false)
+private fun NtripCasterProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
 
-private fun RecordingPolicyProfile.profileRow(): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false)
+private fun NtripMountpointProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
 
-private fun StorageProfile.profileRow(): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false)
+private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+
+private fun StorageProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+
+private inline fun List<RecordingSettingsSet>.updateSelected(
+    selectedId: String,
+    transform: (RecordingSettingsSet) -> RecordingSettingsSet,
+): List<RecordingSettingsSet> =
+    map { set -> if (set.id == selectedId) transform(set) else set }
 
 private fun Map<String, String>.required(key: String): String =
     optional(key) ?: error("$key is required.")

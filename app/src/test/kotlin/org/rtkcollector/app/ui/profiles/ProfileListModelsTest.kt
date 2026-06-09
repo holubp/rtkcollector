@@ -54,5 +54,29 @@ class ProfileListModelsTest {
         )
 
         assertEquals(listOf("115200", "230400", "921600"), field.options)
+        assertEquals("230400", field.optionItems[1].value)
+        assertEquals("230400", field.optionItems[1].label)
+    }
+
+    @Test
+    fun `editable profile field can expose labelled options and readonly list`() {
+        val selector = EditableProfileField(
+            key = "commandProfileId",
+            label = "Command profile",
+            value = "um980-binary-multihz",
+            optionItems = listOf(
+                EditableProfileOption("um980-binary-multihz", "UM980 binary multi-Hz"),
+                EditableProfileOption("um980-ascii-ppp-nmea", "UM980 ASCII PPP/NMEA"),
+            ),
+        )
+        val list = EditableProfileField(
+            key = "sourcetableMountpoints",
+            label = "Known mountpoints",
+            value = "",
+            readOnlyList = listOf("TUBO00CZE0", "GOPE00CZE0"),
+        )
+
+        assertEquals("UM980 binary multi-Hz", selector.optionItems.first().label)
+        assertEquals(listOf("TUBO00CZE0", "GOPE00CZE0"), list.readOnlyList)
     }
 }

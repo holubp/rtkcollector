@@ -307,8 +307,20 @@ fun ProfileEditorScreen(
                         )
                         Text(field.label, modifier = Modifier.weight(1f))
                     }
-                } else if (field.options.isNotEmpty()) {
+                } else if (field.readOnlyList.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(field.label, style = MaterialTheme.typography.labelLarge)
+                        field.readOnlyList.forEach { item ->
+                            Text(item, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                } else if (field.optionItems.isNotEmpty()) {
                     val expanded = field.key in expandedOptions
+                    val selectedLabel = field.optionItems.firstOrNull { it.value == values[field.key] }?.label
+                        ?: values[field.key].orEmpty()
                     ExposedDropdownMenuBox(
                         expanded = expanded,
                         onExpandedChange = {
@@ -321,7 +333,7 @@ fun ProfileEditorScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         OutlinedTextField(
-                            value = values[field.key].orEmpty(),
+                            value = selectedLabel,
                             onValueChange = {},
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -337,11 +349,11 @@ fun ProfileEditorScreen(
                             expanded = expanded,
                             onDismissRequest = { expandedOptions = expandedOptions - field.key },
                         ) {
-                            field.options.forEach { option ->
+                            field.optionItems.forEach { option ->
                                 DropdownMenuItem(
-                                    text = { Text(option) },
+                                    text = { Text(option.label) },
                                     onClick = {
-                                        values = values + (field.key to option)
+                                        values = values + (field.key to option.value)
                                         expandedOptions = expandedOptions - field.key
                                     },
                                 )
@@ -357,6 +369,7 @@ fun ProfileEditorScreen(
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(field.label) },
                         minLines = if (field.multiline) 4 else 1,
+                        readOnly = field.readOnly,
                         singleLine = !field.multiline,
                         visualTransformation = if (field.secret && field.key !in visibleSecrets) {
                             PasswordVisualTransformation()

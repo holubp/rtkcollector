@@ -43,9 +43,17 @@ data class EditableProfileField(
     val secret: Boolean = false,
     val boolean: Boolean = false,
     val options: List<String> = emptyList(),
+    val optionItems: List<EditableProfileOption> = options.map { EditableProfileOption(it, it) },
+    val readOnly: Boolean = false,
+    val readOnlyList: List<String> = emptyList(),
 )
 
 data class ProfileEditorData(
     val title: String,
     val fields: List<EditableProfileField>,
+)
+
+data class EditableProfileOption(
+    val value: String,
+    val label: String,
 )

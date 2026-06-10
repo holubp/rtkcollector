@@ -33,6 +33,8 @@ import org.rtkcollector.core.correction.NtripRuntimeController
 import org.rtkcollector.core.correction.NtripRuntimeSnapshot
 import org.rtkcollector.core.correction.NtripRuntimeState
 import org.rtkcollector.core.correction.Rtcm3Extractor
+import org.rtkcollector.core.correction.Rtcm3ReferenceStation
+import org.rtkcollector.core.correction.Rtcm3ReferenceStationParser
 import org.rtkcollector.core.session.AntennaMetadata
 import org.rtkcollector.core.session.NtripSessionMetadata
 import org.rtkcollector.core.session.SerialParameters
@@ -59,18 +61,27 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class RecordingForegroundService : Service() {
     private val running = AtomicBoolean(false)
     private val stopping = AtomicBoolean(false)
     private val shutdownSent = AtomicBoolean(false)
     private var captureThread: Thread? = null
-    private var runtime: CaptureRuntime? = null
-    private var transport: AndroidUsbSerialTransport? = null
+    @Volatile private var runtime: CaptureRuntime? = null
+    @Volatile private var transport: AndroidUsbSerialTransport? = null
     private var writers: RecordingSessionWriters? = null
     private var advisoryFanout: AsyncAdvisoryFanout? = null
     private var activeSessionMetadata: SessionMetadata? = null
     private var activeRecorder: SessionRawRecorder? = null
+    private var activeEventSink: CaptureEventSink? = null
+    private var activeProfileBaud: Int = 230400
+    private var activeBaudPlan: Um980BaudTransitionPlan? = null
+    private var activeUsbVid: Int? = null
+    private var activeUsbPid: Int? = null
     private var ntripController: NtripRuntimeController? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
@@ -185,6 +196,10 @@ class RecordingForegroundService : Service() {
             )
             activeRecorder = recorder
             val eventSink = SessionEventSink(sessionWriters)
+            activeEventSink = eventSink
+            activeProfileBaud = profileBaud
+            activeUsbVid = usbDevice.vendorId
+            activeUsbPid = usbDevice.productId
             val usbTransport = AndroidUsbSerialTransport(
                 usbManager = usbManager,
                 device = usbDevice,
@@ -223,6 +238,7 @@ class RecordingForegroundService : Service() {
                 baudSwitchCommands = baudSwitchCommands,
                 modeCommands = modeCommands,
             )
+            activeBaudPlan = baudPlan
             executeBaudTransition(baudPlan, captureRuntime, usbTransport)
 
             state = state.copy(
@@ -253,8 +269,8 @@ class RecordingForegroundService : Service() {
             ntripRateWindowTxBytes = 0L
             broadcastState()
 
-            captureThread = Thread({ captureLoop(captureRuntime, recorder) }, "rtkcollector-capture").also { it.start() }
-            maybeStartNtrip(intent, captureRuntime, recorder)
+            captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
+            maybeStartNtrip(intent, recorder)
         } catch (error: Throwable) {
             state = state.copy(
                 running = false,
@@ -270,11 +286,11 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun captureLoop(captureRuntime: CaptureRuntime, recorder: SessionRawRecorder) {
+    private fun captureLoop(recorder: SessionRawRecorder) {
         while (running.get()) {
             runCatching {
                 synchronized(runtimeLock) {
-                    captureRuntime.readOnce(READ_BUFFER_BYTES)
+                    runtime?.readOnce(READ_BUFFER_BYTES) ?: 0
                 }
                 state = state.copy(
                     running = true,
@@ -288,18 +304,69 @@ class RecordingForegroundService : Service() {
             }.onFailure { error ->
                 state = state.copy(
                     lastError = error.message,
-                    errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+                    errorCategory = RecordingErrorCategory.USB,
                     errorSeverity = RecordingErrorSeverity.DEGRADED,
+                    rawRecordingActive = false,
                 )
                 broadcastState()
-                Thread.sleep(250)
+                if (!tryReconnectUsb(recorder)) {
+                    Thread.sleep(1_000)
+                }
             }
         }
     }
 
+    private fun tryReconnectUsb(recorder: SessionRawRecorder): Boolean {
+        val vid = activeUsbVid ?: return false
+        val pid = activeUsbPid ?: return false
+        val plan = activeBaudPlan ?: return false
+        val eventSink = activeEventSink ?: return false
+        val fanout = advisoryFanout ?: return false
+        val usbManager = getSystemService(USB_SERVICE) as UsbManager
+        val device = usbManager.deviceList.values.firstOrNull { candidate ->
+            candidate.vendorId == vid && candidate.productId == pid
+        } ?: return false
+        if (!usbManager.hasPermission(device)) {
+            state = state.copy(
+                lastError = "USB receiver reconnected but permission is not granted.",
+                errorCategory = RecordingErrorCategory.USB,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+                rawRecordingActive = false,
+            )
+            broadcastState()
+            return false
+        }
+        return runCatching {
+            synchronized(runtimeLock) {
+                runCatching { transport?.close() }
+                val usbTransport = AndroidUsbSerialTransport(
+                    usbManager = usbManager,
+                    device = device,
+                    options = UsbSerialOpenOptions(activeProfileBaud),
+                )
+                val captureRuntime = CaptureRuntime(
+                    transport = usbTransport,
+                    recorder = recorder,
+                    eventSink = eventSink,
+                    advisoryFanout = fanout,
+                )
+                captureRuntime.open()
+                executeBaudTransition(plan, captureRuntime, usbTransport)
+                transport = usbTransport
+                runtime = captureRuntime
+            }
+            state = state.copy(
+                lastError = null,
+                errorCategory = RecordingErrorCategory.NONE,
+                errorSeverity = RecordingErrorSeverity.NONE,
+                rawRecordingActive = true,
+            )
+            broadcastState()
+        }.isSuccess
+    }
+
     private fun maybeStartNtrip(
         intent: Intent,
-        captureRuntime: CaptureRuntime,
         recorder: SessionRawRecorder,
     ) {
         if (!intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) {
@@ -311,12 +378,11 @@ class RecordingForegroundService : Service() {
         if (config == null) {
             return
         }
-        startNtripController(config, captureRuntime, recorder)
+        startNtripController(config, recorder)
     }
 
     private fun startNtripController(
         config: NtripRuntimeConfig,
-        captureRuntime: CaptureRuntime,
         recorder: SessionRawRecorder,
     ) {
         val controller = NtripRuntimeController(
@@ -331,18 +397,25 @@ class RecordingForegroundService : Service() {
             emit = ::handleNtripSnapshot,
             onRtcmBytes = { bytes ->
                 if (running.get()) {
-                    synchronized(txLock) {
-                        captureRuntime.injectCorrectionBytes(bytes)
+                    val txResult = runCatching {
+                        synchronized(txLock) {
+                            runtime?.injectCorrectionBytes(bytes) ?: error("USB runtime is not available.")
+                        }
                     }
                     ntripRateWindowCorrectionBytes += bytes.size
-                    ntripRateWindowTxBytes += bytes.size
+                    if (txResult.isSuccess) {
+                        ntripRateWindowTxBytes += bytes.size
+                    }
                     state = state.copy(
                         correctionInputBytes = recorder.correctionInputBytes,
                         nmeaBytes = recorder.nmeaBytes,
                         ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                         ntripRates = ntripRatesDisplay(),
                         txToReceiverBytes = recorder.txToReceiverBytes,
-                        correctionsActive = true,
+                        correctionsActive = txResult.isSuccess,
+                        lastError = txResult.exceptionOrNull()?.message ?: state.lastError,
+                        errorCategory = if (txResult.isFailure) RecordingErrorCategory.USB else state.errorCategory,
+                        errorSeverity = if (txResult.isFailure) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
                     )
                     broadcastState()
                 }
@@ -394,8 +467,7 @@ class RecordingForegroundService : Service() {
     }
 
     private fun updateNtrip(intent: Intent) {
-        val captureRuntime = runtime
-        if (!running.get() || captureRuntime == null) {
+        if (!running.get()) {
             state = state.copy(
                 lastError = "Cannot update NTRIP: no active recording.",
                 errorCategory = RecordingErrorCategory.NTRIP,
@@ -430,7 +502,7 @@ class RecordingForegroundService : Service() {
             )
         }
         if (ntripController == null) {
-            startNtripController(config, captureRuntime, recorder)
+            startNtripController(config, recorder)
         } else {
             ntripController?.update(config)
         }
@@ -515,6 +587,10 @@ class RecordingForegroundService : Service() {
         advisoryFanout = null
         activeSessionMetadata = null
         activeRecorder = null
+        activeEventSink = null
+        activeBaudPlan = null
+        activeUsbVid = null
+        activeUsbPid = null
         ntripController = null
         shutdownCommands = emptyList()
         releaseWakeLock()
@@ -638,6 +714,24 @@ class RecordingForegroundService : Service() {
             bytesPerSecond < 1_000_000.0 -> "%.1f kB/s".format(java.util.Locale.US, bytesPerSecond / 1000.0)
             else -> "%.1f MB/s".format(java.util.Locale.US, bytesPerSecond / 1_000_000.0)
         }
+
+    private fun baselineDisplay(roverLatDeg: Double?, roverLonDeg: Double?, baseLatDeg: Double?, baseLonDeg: Double?): String? {
+        if (roverLatDeg == null || roverLonDeg == null || baseLatDeg == null || baseLonDeg == null) {
+            return null
+        }
+        return distanceDisplay(haversineMeters(roverLatDeg, roverLonDeg, baseLatDeg, baseLonDeg))
+    }
+
+    private fun haversineMeters(lat1Deg: Double, lon1Deg: Double, lat2Deg: Double, lon2Deg: Double): Double {
+        val radiusM = 6_371_000.0
+        val lat1 = Math.toRadians(lat1Deg)
+        val lat2 = Math.toRadians(lat2Deg)
+        val dLat = Math.toRadians(lat2Deg - lat1Deg)
+        val dLon = Math.toRadians(lon2Deg - lon1Deg)
+        val a = sin(dLat / 2.0) * sin(dLat / 2.0) +
+            cos(lat1) * cos(lat2) * sin(dLon / 2.0) * sin(dLon / 2.0)
+        return radiusM * 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
+    }
 
     private fun classifyStartError(error: Throwable): RecordingErrorCategory {
         val message = error.message.orEmpty()
@@ -841,12 +935,19 @@ class RecordingForegroundService : Service() {
                                     }
                                     state = state.copy(
                                         ggaFixQuality = fix.fixQuality,
-                                        latLon = latLonDisplay(fix.latDeg, fix.lonDeg),
-                                        altitude = metersDisplay(fix.altitudeM),
+                                        latDeg = fix.latDeg ?: state.latDeg,
+                                        lonDeg = fix.lonDeg ?: state.lonDeg,
+                                        latLon = latLonDisplay(fix.latDeg, fix.lonDeg).takeUnless { it == "n/a" } ?: state.latLon,
+                                        altitude = metersDisplay(fix.altitudeM).takeUnless { it == "n/a" } ?: state.altitude,
+                                        ellipsoidalHeight = metersDisplay(fix.ellipsoidalHeightM).takeUnless { it == "n/a" }
+                                            ?: state.ellipsoidalHeight,
                                         utcTime = fix.utcTime.ifBlank { state.utcTime },
                                         satellitesUsed = fix.satelliteCount ?: state.satellitesUsed,
                                         satellites = satelliteDisplay(fix.satelliteCount, state.satellitesInView),
                                         hdopVdop = dopPairDisplay(fix.hdop, state.vdop),
+                                        differentialAge = fix.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) }
+                                            ?: state.differentialAge,
+                                        ntripStationId = fix.stationId ?: state.ntripStationId,
                                     )
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
@@ -883,14 +984,12 @@ class RecordingForegroundService : Service() {
                             }
                             "unicore_ascii" -> {
                                 solutionParser.accept(record.bytes).forEach { solution ->
-                                    if (solution.logName.startsWith("PPP")) {
+                                    if (solution.logName != "BESTNAVA") {
                                         if (exportJsonSolution) {
                                             sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
                                         }
                                         state = state.copy(
-                                            pppStatus = solution.positionType,
-                                            latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
-                                            ellipsoidalHeight = metersDisplay(solution.heightM),
+                                            pppStatus = solution.positionType ?: state.pppStatus,
                                         )
                                     } else {
                                         if (exportJsonSolution) {
@@ -898,8 +997,11 @@ class RecordingForegroundService : Service() {
                                         }
                                         state = state.copy(
                                             bestnavPositionType = solution.positionType,
-                                            latLon = latLonDisplay(solution.latDeg, solution.lonDeg),
-                                            ellipsoidalHeight = metersDisplay(solution.heightM),
+                                            latDeg = solution.latDeg ?: state.latDeg,
+                                            lonDeg = solution.lonDeg ?: state.lonDeg,
+                                            latLon = latLonDisplay(solution.latDeg, solution.lonDeg).takeUnless { it == "n/a" } ?: state.latLon,
+                                            ellipsoidalHeight = metersDisplay(solution.heightM).takeUnless { it == "n/a" }
+                                                ?: state.ellipsoidalHeight,
                                         )
                                     }
                                 }
@@ -935,7 +1037,12 @@ class RecordingForegroundService : Service() {
                         sessionWriters.appendQualityLiveJson(
                             """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"}}""",
                         )
-                        state = state.copy(rtcmFrames = state.rtcmFrames + 1)
+                        val referenceStation = Rtcm3ReferenceStationParser.parse(frame)
+                        state = if (referenceStation != null) {
+                            state.withRtcmReferenceStation(referenceStation).copy(rtcmFrames = state.rtcmFrames + 1)
+                        } else {
+                            state.copy(rtcmFrames = state.rtcmFrames + 1)
+                        }
                     }
                 },
             ),
@@ -943,7 +1050,7 @@ class RecordingForegroundService : Service() {
     }
 
     private fun NmeaGgaFix.toJson(): String =
-        """{"type":"nmea-gga","talker":"${talker.jsonEscape()}","utcTime":"${utcTime.jsonEscape()}","latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"fixQuality":${fixQuality ?: "null"},"satelliteCount":${satelliteCount ?: "null"},"hdop":${hdop ?: "null"},"altitudeM":${altitudeM ?: "null"}}"""
+        """{"type":"nmea-gga","talker":"${talker.jsonEscape()}","utcTime":"${utcTime.jsonEscape()}","latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"fixQuality":${fixQuality ?: "null"},"satelliteCount":${satelliteCount ?: "null"},"hdop":${hdop ?: "null"},"altitudeM":${altitudeM ?: "null"},"geoidSeparationM":${geoidSeparationM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"stationId":${stationId.jsonStringOrNull()}}"""
 
     private fun Um980AsciiSolution.toJson(): String =
         """{"type":"um980-ascii-solution","logName":"${logName.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"heightM":${heightM ?: "null"}}"""
@@ -954,6 +1061,9 @@ class RecordingForegroundService : Service() {
     private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
         copy(
             bestnavPositionType = telemetry.positionType ?: bestnavPositionType,
+            pppStatus = telemetry.positionType?.takeIf { it.startsWith("PPP", ignoreCase = true) } ?: pppStatus,
+            latDeg = telemetry.latDeg ?: latDeg,
+            lonDeg = telemetry.lonDeg ?: lonDeg,
             latLon = latLonDisplay(telemetry.latDeg, telemetry.lonDeg).takeUnless { it == "n/a" } ?: latLon,
             altitude = metersDisplay(telemetry.altitudeM).takeUnless { it == "n/a" } ?: altitude,
             ellipsoidalHeight = metersDisplay(telemetry.ellipsoidalHeightM).takeUnless { it == "n/a" } ?: ellipsoidalHeight,
@@ -968,12 +1078,27 @@ class RecordingForegroundService : Service() {
             vdop = telemetry.vdop ?: vdop,
             hdopVdop = dopPairDisplay(telemetry.hdop, telemetry.vdop).takeUnless { it == "n/a" } ?: hdopVdop,
             differentialAge = telemetry.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) } ?: differentialAge,
-            baseline = telemetry.baselineLengthM?.let(::distanceDisplay) ?: baseline,
+            baseline = telemetry.baselineLengthM?.let(::distanceDisplay)
+                ?: baselineDisplay(telemetry.latDeg ?: latDeg, telemetry.lonDeg ?: lonDeg, ntripBaseLatDeg, ntripBaseLonDeg)
+                ?: baseline,
+            ntripStationId = telemetry.stationId ?: ntripStationId,
             satellites = satelliteDisplay(
                 used = telemetry.satellitesUsed,
                 inView = telemetry.satellitesInView ?: telemetry.satellitesTracked,
             ).takeUnless { it == "n/a" } ?: satellites,
         )
+
+    private fun RecordingServiceState.withRtcmReferenceStation(station: Rtcm3ReferenceStation): RecordingServiceState {
+        val baseLat = station.latDeg
+        val baseLon = station.lonDeg
+        return copy(
+            ntripStationId = station.stationId.toString(),
+            ntripBaseLatDeg = baseLat,
+            ntripBaseLonDeg = baseLon,
+            ntripBaseLatLon = latLonDisplay(baseLat, baseLon),
+            baseline = baselineDisplay(latDeg, lonDeg, baseLat, baseLon) ?: baseline,
+        )
+    }
 
     private fun String?.jsonStringOrNull(): String =
         if (this == null) "null" else "\"${jsonEscape()}\""

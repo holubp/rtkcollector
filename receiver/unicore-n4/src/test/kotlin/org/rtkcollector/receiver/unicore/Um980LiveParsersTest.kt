@@ -15,6 +15,20 @@ class Um980LiveParsersTest {
         assertEquals(12, fix.satelliteCount)
         assertEquals(48.1173, fix.latDeg!!, 0.0001)
         assertEquals(11.5167, fix.lonDeg!!, 0.0001)
+        assertEquals(545.4, fix.altitudeM)
+        assertEquals(46.9, fix.geoidSeparationM)
+        assertEquals(592.3, fix.ellipsoidalHeightM!!, 0.0001)
+    }
+
+    @Test
+    fun `parses GGA differential age and station id`() {
+        val fix = NmeaGgaParser().parseLine(
+            "\$GNGGA,120000.00,5000.0000,N,01400.0000,E,5,20,0.7,250.0,M,45.0,M,0.5,0001*00",
+        )
+
+        requireNotNull(fix)
+        assertEquals(0.5, fix.differentialAgeS)
+        assertEquals("0001", fix.stationId)
     }
 
     @Test

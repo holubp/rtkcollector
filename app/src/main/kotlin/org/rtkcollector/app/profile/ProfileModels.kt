@@ -56,8 +56,8 @@ data class UsbBaudProfile(
     fun validate() {
         require(id.isNotBlank()) { "USB/baud profile id must not be blank." }
         require(name.isNotBlank()) { "USB/baud profile name must not be blank." }
-        require(profileBaud in BAUD_RANGE) { "Profile baud must be 9600..921600." }
-        require(serialBaud in BAUD_RANGE) { "Serial baud must be 9600..921600." }
+        require(profileBaud in BAUD_RANGE) { "Initial receiver baud must be 9600..921600." }
+        require(serialBaud in BAUD_RANGE) { "Target receiver and host baud must be 9600..921600." }
     }
 
     fun copyProfile(id: String, name: String): UsbBaudProfile =

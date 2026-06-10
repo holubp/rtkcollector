@@ -74,4 +74,8 @@ data class RecordingServiceState(
     val errorSeverity: RecordingErrorSeverity = RecordingErrorSeverity.NONE,
     val rawRecordingActive: Boolean = false,
     val correctionsActive: Boolean = false,
+    val latDeg: Double? = null,
+    val lonDeg: Double? = null,
+    val ntripBaseLatDeg: Double? = null,
+    val ntripBaseLonDeg: Double? = null,
 )

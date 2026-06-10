@@ -11,10 +11,10 @@ data class Um980BaudTransitionPlan(
             baudSwitchCommands: List<String>,
             modeCommands: List<String>,
         ): Um980BaudTransitionPlan {
-            require(profileBaud in BAUD_RANGE) { "Profile baud must be 9600..921600." }
-            require(serialBaud in BAUD_RANGE) { "Serial baud must be 9600..921600." }
+            require(profileBaud in BAUD_RANGE) { "Initial receiver baud must be 9600..921600." }
+            require(serialBaud in BAUD_RANGE) { "Target receiver and host baud must be 9600..921600." }
             require(profileBaud == serialBaud || baudSwitchCommands.isNotEmpty()) {
-                "Profile baud differs from recording baud but no receiver baud-switch command was supplied."
+                "Initial receiver baud differs from target baud but no receiver baud-switch command was supplied."
             }
             val steps = mutableListOf<Um980BaudStep>()
             steps += Um980BaudStep.OpenHostAtProfileBaud(profileBaud)

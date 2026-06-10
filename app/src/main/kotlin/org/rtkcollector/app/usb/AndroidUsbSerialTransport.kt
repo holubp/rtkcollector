@@ -63,7 +63,10 @@ class AndroidUsbSerialTransport(
         val endpoint = inEndpoint ?: error("USB serial IN endpoint is not open.")
         val buffer = ByteArray(maxBytes)
         val count = opened.bulkTransfer(endpoint, buffer, buffer.size, options.readTimeoutMillis)
-        if (count <= 0) return byteArrayOf()
+        if (count < 0) {
+            error("USB serial read failed.")
+        }
+        if (count == 0) return byteArrayOf()
         val received = buffer.copyOf(count)
         return if (ftdiMode) stripFtdiStatus(received, inMaxPacketSize) else received
     }

@@ -100,6 +100,27 @@ class DashboardStateTest {
     }
 
     @Test
+    fun `stopped service state preserves last real mountpoint when planned mountpoint is missing`() {
+        val serviceState = DashboardState.planned(
+            workflow = "Rover + NTRIP",
+            mountpoint = "TUBO00CZE0",
+            receiver = "UM980",
+            storage = "SAF folder",
+            files = FilesCardState(sessionLocation = "content://session/current", receiverRxBytes = "123 B"),
+        )
+        val planned = DashboardState.planned(
+            workflow = "Rover + NTRIP",
+            mountpoint = "n/a",
+            receiver = "UM980",
+            storage = "SAF folder",
+        )
+
+        val merged = serviceState.withPlannedConfiguration(planned)
+
+        assertEquals("TUBO00CZE0", merged.status.mountpoint)
+    }
+
+    @Test
     fun `card states have dashboard friendly defaults`() {
         assertEquals("n/a", PositionCardState().latLon)
         assertEquals("Not configured", FixCardState().rtklibStatus)

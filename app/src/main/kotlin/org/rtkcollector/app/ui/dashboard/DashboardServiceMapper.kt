@@ -32,7 +32,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         verticalAccuracy = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_VERTICAL_ACCURACY) ?: "n/a",
         differentialAge = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_DIFFERENTIAL_AGE) ?: "n/a",
         baseline = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASELINE) ?: "n/a",
-        pppStatus = pppStatus ?: "n/a",
+        pppStatus = displayPppStatus(bestnavPositionType, pppStatus),
     )
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",
@@ -91,6 +91,18 @@ private fun displayFixType(bestnavPositionType: String?, ggaFixQuality: Int?, pp
         type.isNotBlank() && !type.equals("NONE", ignoreCase = true)
     }
     return bestnav
-        ?: pppStatus?.takeIf { it.isNotBlank() && !it.equals("n/a", ignoreCase = true) }
+        ?: pppStatus?.takeIf(::isMeaningfulSolutionStatus)
         ?: interpretGgaFixQuality(ggaFixQuality)
 }
+
+private fun displayPppStatus(bestnavPositionType: String?, pppStatus: String?): String =
+    pppStatus?.takeIf(::isMeaningfulSolutionStatus)
+        ?: bestnavPositionType
+            ?.takeIf(::isMeaningfulSolutionStatus)
+            ?.takeIf { it.startsWith("PPP", ignoreCase = true) }
+        ?: "n/a"
+
+private fun isMeaningfulSolutionStatus(status: String): Boolean =
+    status.isNotBlank() &&
+        !status.equals("n/a", ignoreCase = true) &&
+        !status.equals("NONE", ignoreCase = true)

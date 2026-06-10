@@ -81,4 +81,32 @@ class DashboardServiceMapperTest {
 
         assertEquals("PPP_CONVERGING", state.fix.fixType)
     }
+
+    @Test
+    fun `ppp none does not hide gga fix quality`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "NONE")
+            putExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS, "NONE")
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 5)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("RTK float", state.fix.fixType)
+        assertEquals("n/a", state.fix.pppStatus)
+    }
+
+    @Test
+    fun `bestnav ppp type is also shown in ppp field`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PPP_CONVERGING")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("PPP_CONVERGING", state.fix.fixType)
+        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+    }
 }

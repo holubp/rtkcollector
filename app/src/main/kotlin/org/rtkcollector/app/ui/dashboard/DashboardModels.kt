@@ -15,8 +15,13 @@ data class DashboardState(
         if (isRecording) {
             this
         } else {
+            val plannedStatus = planned.status
             copy(
-                status = planned.status,
+                status = plannedStatus.copy(
+                    mountpoint = plannedStatus.mountpoint.takeUnless { it.isMissingOrBogusMountpoint() }
+                        ?: status.mountpoint.takeUnless { it.isMissingOrBogusMountpoint() }
+                        ?: plannedStatus.mountpoint,
+                ),
                 profiles = planned.profiles,
             )
         }
@@ -74,6 +79,13 @@ data class DashboardState(
                 ),
             )
     }
+}
+
+private fun String.isMissingOrBogusMountpoint(): Boolean {
+    val value = trim()
+    return value.isBlank() ||
+        value.equals("n/a", ignoreCase = true) ||
+        value.equals("a", ignoreCase = true)
 }
 
 data class DashboardStatus(

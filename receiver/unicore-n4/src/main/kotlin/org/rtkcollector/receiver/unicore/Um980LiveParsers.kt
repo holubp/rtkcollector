@@ -11,7 +11,13 @@ data class NmeaGgaFix(
     val satelliteCount: Int?,
     val hdop: Double?,
     val altitudeM: Double?,
-)
+    val geoidSeparationM: Double?,
+    val differentialAgeS: Double?,
+    val stationId: String?,
+) {
+    val ellipsoidalHeightM: Double?
+        get() = if (altitudeM == null || geoidSeparationM == null) null else altitudeM + geoidSeparationM
+}
 
 data class NmeaGsaDop(
     val talker: String,
@@ -81,6 +87,9 @@ class NmeaGgaParser {
             satelliteCount = fields[7].toIntOrNull(),
             hdop = fields[8].toDoubleOrNull(),
             altitudeM = fields[9].toDoubleOrNull(),
+            geoidSeparationM = fields.getOrNull(11)?.toDoubleOrNull(),
+            differentialAgeS = fields.getOrNull(13)?.toDoubleOrNull(),
+            stationId = fields.getOrNull(14)?.takeIf(String::isNotBlank),
         )
     }
 

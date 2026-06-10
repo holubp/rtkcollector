@@ -1027,13 +1027,13 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField(
                         key = "profileBaud",
-                        label = "Receiver profile baud",
+                        label = "Initial receiver baud",
                         value = profile.profileBaud.toString(),
                         options = SELECTABLE_BAUD_RATES,
                     ),
                     EditableProfileField(
                         key = "serialBaud",
-                        label = "Host serial baud",
+                        label = "Target receiver and host baud",
                         value = profile.serialBaud.toString(),
                         options = SELECTABLE_BAUD_RATES,
                     ),

@@ -1,20 +1,24 @@
 package org.rtkcollector.app.ui.dashboard
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,17 +30,32 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import org.rtkcollector.app.ui.common.HelpIcon
+import org.rtkcollector.app.ui.common.HelpOverlay
+import org.rtkcollector.app.ui.common.HelpTopic
+import org.rtkcollector.app.ui.common.TidyColors
+import org.rtkcollector.app.ui.common.TidyMetricRow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeDashboard(
     state: DashboardState,
+    layoutPreference: DashboardLayoutPreference = DashboardLayoutPreference.default,
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
@@ -47,6 +66,8 @@ fun HomeDashboard(
     onStorage: () -> Unit,
     onMark: () -> Unit,
 ) {
+    var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -77,23 +98,22 @@ fun HomeDashboard(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            StatusStrip(
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            CompactDashboard(
+                state = state,
+                layoutPreference = layoutPreference,
                 status = state.status,
                 onWorkflow = onWorkflow,
                 onSettingsSet = onSettingsSet,
                 onMountpoint = onNtrip,
                 onReceiver = onReceiver,
                 onStorage = onStorage,
+                onHelp = { helpTopic = it },
             )
-            DashboardCards(state)
+            HelpOverlay(
+                topic = helpTopic,
+                onDismiss = { helpTopic = null },
+            )
         }
     }
 }
@@ -112,12 +132,17 @@ private fun BottomActionBar(
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Button(
                 onClick = onPrimaryAction,
                 modifier = Modifier.weight(1f),
             ) {
-                Text(state.primaryAction.label, maxLines = 1)
+                Text(
+                    text = state.primaryAction.label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             state.secondaryActions
                 .filter { action ->
@@ -134,16 +159,64 @@ private fun BottomActionBar(
                             else -> onPrimaryAction
                         },
                     ) {
-                        Text(action.label, maxLines = 1)
+                        Text(
+                            text = action.label,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
         }
     }
 }
 
+@Composable
+private fun CompactDashboard(
+    state: DashboardState,
+    layoutPreference: DashboardLayoutPreference,
+    status: DashboardStatus,
+    onWorkflow: () -> Unit,
+    onSettingsSet: () -> Unit,
+    onMountpoint: () -> Unit,
+    onReceiver: () -> Unit,
+    onStorage: () -> Unit,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    val isRailPlaceholder = layoutPreference == DashboardLayoutPreference.RAIL
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (isRailPlaceholder) {
+            Text(
+                text = "Rail preference",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        SetupStrip(
+            status = status,
+            onWorkflow = onWorkflow,
+            onSettingsSet = onSettingsSet,
+            onMountpoint = onMountpoint,
+            onReceiver = onReceiver,
+            onStorage = onStorage,
+        )
+        DashboardCards(
+            state = state,
+            onHelp = onHelp,
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusStrip(
+private fun SetupStrip(
     status: DashboardStatus,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
@@ -153,38 +226,82 @@ private fun StatusStrip(
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        StatusChip("Settings", status.settingsSet, onSettingsSet)
-        StatusChip("Workflow", status.workflow, onWorkflow)
-        StatusChip("Mountpoint", status.mountpoint, onMountpoint)
-        StatusChip("Receiver", status.receiver, onReceiver)
-        StatusChip("Storage", status.storage, onStorage)
+        SetupTile(
+            label = "Settings",
+            value = status.settingsSet,
+            onClick = onSettingsSet,
+        )
+        SetupTile(
+            label = "Workflow",
+            value = status.workflow,
+            onClick = onWorkflow,
+        )
+        SetupTile(
+            label = "Mountpoint",
+            value = status.mountpoint,
+            onClick = onMountpoint,
+        )
+        SetupTile(
+            label = "Receiver",
+            value = status.receiver,
+            onClick = onReceiver,
+        )
+        SetupTile(
+            label = "Storage",
+            value = status.storage,
+            onClick = onStorage,
+        )
     }
 }
 
 @Composable
-private fun StatusChip(label: String, value: String, onClick: () -> Unit) {
+private fun SetupTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val missing = value.isMissingDashboardValue()
-    AssistChip(
-        onClick = onClick,
-        colors = if (missing) {
-            AssistChipDefaults.assistChipColors(
-                containerColor = Color(0xFFFFDAD6),
-                labelColor = Color(0xFF8C1D18),
-            )
-        } else {
-            AssistChipDefaults.assistChipColors()
-        },
-        label = {
+    val background = if (missing) TidyColors.MissingBackground else MaterialTheme.colorScheme.surfaceContainerLow
+    val foreground = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.onSurface
+    val border = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.outlineVariant
+    Surface(
+        modifier = modifier
+            .widthIn(min = 112.dp)
+            .heightIn(min = 54.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "$label: $value"
+            }
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.small,
+        color = background,
+        border = BorderStroke(1.dp, border),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(
-                text = "$label: $value",
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        },
-    )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelMedium,
+                color = foreground,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 private fun String.isMissingDashboardValue(): Boolean {
@@ -195,57 +312,80 @@ private fun String.isMissingDashboardValue(): Boolean {
         normalized.equals("Not selected", ignoreCase = true)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DashboardCards(state: DashboardState) {
-    FlowRow(
+private fun DashboardCards(
+    state: DashboardState,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        DashboardCard("Position") {
+        DashboardCard(
+            title = "Position",
+            helpTopic = HelpTopic.ELLIPSOIDAL_HEIGHT,
+            onHelp = onHelp,
+        ) {
             MajorValue(state.position.latLon)
             Metric("UTC", state.position.utcTime)
-            Metric("Ell. height", state.position.ellipsoidalHeight)
+            Metric("Ellipsoidal height", state.position.ellipsoidalHeight)
             Metric("Altitude", state.position.altitude)
-            Metric("Lat error", state.position.latError)
-            Metric("Lon error", state.position.lonError)
+            DashedSeparator()
+            Metric("Latitude error", state.position.latError)
+            Metric("Longitude error", state.position.lonError)
         }
-        DashboardCard("Fix") {
+        DashboardCard(
+            title = "Fix",
+            helpTopic = HelpTopic.SATS_USED_VIEW,
+            onHelp = onHelp,
+        ) {
             MajorValue(state.fix.fixType)
             Metric("Sats used/view", state.fix.satellites)
             Metric("PDOP", state.fix.pdop)
             Metric("HDOP / VDOP", state.fix.hdopVdop)
+            DashedSeparator()
             Metric("H accuracy", state.fix.horizontalAccuracy)
             Metric("V accuracy", state.fix.verticalAccuracy)
             Metric("Diff age", state.fix.differentialAge)
             Metric("Baseline", state.fix.baseline)
+            DashedSeparator()
             Metric("PPP", state.fix.pppStatus)
             Metric("RTKLIB", state.fix.rtklibStatus)
         }
-        DashboardCard("NTRIP") {
+        DashboardCard(
+            title = "Corrections",
+            helpTopic = HelpTopic.NTRIP_URL,
+            onHelp = onHelp,
+        ) {
             MajorValue(state.ntrip.status)
-            Metric("URL", state.ntrip.url)
-            Metric("Transferred", state.ntrip.transferred)
+            Metric("Caster / mountpoint", state.ntrip.url)
+            Metric("Mountpoint", state.status.mountpoint)
             Metric("Station ID", state.ntrip.stationId)
-            Metric("Base lat/lon", state.ntrip.baseLatLon)
-            Metric("Rates", state.ntrip.rates)
+            Metric("Base position", state.ntrip.baseLatLon)
+            DashedSeparator()
+            Metric("Inbound rate", state.ntrip.rates)
+            Metric("Sent to receiver", state.files.txToReceiverBytes)
+            Metric("Correction bytes", state.files.ntripBytes)
+            Metric("NTRIP transferred", state.ntrip.transferred)
         }
-        DashboardCard("Files") {
+        DashboardCard(
+            title = "Recording",
+            helpTopic = HelpTopic.TX_TO_RECEIVER,
+            onHelp = onHelp,
+        ) {
             MajorValue(state.files.sessionLocation)
-            Metric("RX raw", state.files.receiverRxBytes)
+            Metric("receiver-rx.raw", state.files.receiverRxBytes)
             Metric("TX to receiver", state.files.txToReceiverBytes)
-            Metric("NTRIP raw", state.files.ntripBytes)
-            Metric("NMEA", state.files.nmeaBytes)
+            Metric("correction-input.raw", state.files.ntripBytes)
+            Metric("NMEA export", state.files.nmeaBytes)
             Metric("ZIP share", state.files.zipShareLabel)
-        }
-        DashboardCard("Profiles") {
-            MajorValue(state.profiles.settingsSet)
-            Metric("Commands", state.profiles.commandProfile)
+            DashedSeparator()
+            Metric("Settings set", state.profiles.settingsSet)
+            Metric("Command profile", state.profiles.commandProfile)
             Metric("Baud", state.profiles.baudProfile)
             Metric("NTRIP caster", state.profiles.ntripCasterProfile)
             Metric("Recording policy", state.profiles.recordingOutputProfile)
-            Metric("Storage", state.profiles.storageLocationProfile)
+            Metric("Storage profile", state.profiles.storageLocationProfile)
         }
     }
 }
@@ -253,23 +393,38 @@ private fun DashboardCards(state: DashboardState) {
 @Composable
 private fun DashboardCard(
     title: String,
+    helpTopic: HelpTopic,
+    onHelp: (HelpTopic) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = modifier.width(260.dp).heightIn(min = 220.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 184.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 34.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                HelpIcon(
+                    contentDescription = "$title help",
+                    onClick = { onHelp(helpTopic) },
+                )
+            }
             content()
         }
     }
@@ -278,9 +433,12 @@ private fun DashboardCard(
 @Composable
 private fun MajorValue(value: String) {
     Text(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 68.dp)
+            .heightIn(min = 68.dp, max = 68.dp),
         text = value,
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
@@ -289,18 +447,27 @@ private fun MajorValue(value: String) {
 
 @Composable
 private fun Metric(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+    TidyMetricRow(
+        label = label,
+        value = value,
+        modifier = Modifier.heightIn(min = 22.dp),
+    )
+}
+
+@Composable
+private fun DashedSeparator() {
+    val color = TidyColors.Divider
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(7.dp),
+    ) {
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(0f, size.height / 2f),
+            end = androidx.compose.ui.geometry.Offset(size.width, size.height / 2f),
+            strokeWidth = 1.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f),
         )
     }
 }

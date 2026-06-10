@@ -45,6 +45,33 @@ class ProfileListModelsTest {
     }
 
     @Test
+    fun `profile rename text is trimmed and blank names cannot be saved`() {
+        assertEquals("New name", profileRenameSaveName("  New name  "))
+        assertTrue(canSaveProfileRename("Old name", "  New name  "))
+        assertFalse(canSaveProfileRename("Old name", "   "))
+        assertFalse(canSaveProfileRename("Old name", "Old name"))
+    }
+
+    @Test
+    fun `protected override delete action is labelled as reset`() {
+        val protectedOverrideRow = ProfileListRow(
+            id = "built-in",
+            name = "Built-in",
+            isProtected = true,
+            hasLocalOverrides = true,
+        )
+        val editableRow = ProfileListRow(
+            id = "custom",
+            name = "Custom",
+            isProtected = false,
+            hasLocalOverrides = false,
+        )
+
+        assertEquals("Reset local overrides", profileDeleteActionLabel(protectedOverrideRow))
+        assertEquals("Delete", profileDeleteActionLabel(editableRow))
+    }
+
+    @Test
     fun `editable profile field can expose fixed options`() {
         val field = EditableProfileField(
             key = "serialBaud",

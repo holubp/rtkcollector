@@ -59,7 +59,7 @@ fun SettingsSetListScreen(
     onSelect: (String) -> Unit,
     onEdit: (String) -> Unit,
     onCopy: (String) -> Unit,
-    onRename: (String) -> Unit,
+    onRename: (String, String) -> Boolean,
     onDelete: (String) -> Unit,
     onAdd: () -> Unit,
     onBack: () -> Unit,
@@ -88,13 +88,46 @@ fun ProfileListScreen(
     onSelect: (String) -> Unit,
     onEdit: (String) -> Unit,
     onCopy: (String) -> Unit,
-    onRename: (String) -> Unit,
+    onRename: (String, String) -> Boolean,
     onDelete: (String) -> Unit,
     onAdd: () -> Unit,
     onBack: () -> Unit,
     supportsSelection: Boolean,
     showManagementActions: Boolean = true,
 ) {
+    var renameTarget by remember { mutableStateOf<ProfileListRow?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<ProfileListRow?>(null) }
+
+    renameTarget?.let { row ->
+        ProfileRenameDialog(
+            row = row,
+            value = renameText,
+            onValueChange = { renameText = it },
+            onSave = {
+                if (onRename(row.id, profileRenameSaveName(renameText))) {
+                    renameTarget = null
+                    renameText = ""
+                }
+            },
+            onDismiss = {
+                renameTarget = null
+                renameText = ""
+            },
+        )
+    }
+
+    deleteTarget?.let { row ->
+        ProfileDeleteDialog(
+            row = row,
+            onConfirm = {
+                onDelete(row.id)
+                deleteTarget = null
+            },
+            onDismiss = { deleteTarget = null },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -146,8 +179,11 @@ fun ProfileListScreen(
                     onSelect = onSelect,
                     onEdit = onEdit,
                     onCopy = onCopy,
-                    onRename = onRename,
-                    onDelete = onDelete,
+                    onRename = {
+                        renameTarget = row
+                        renameText = row.name
+                    },
+                    onDelete = { deleteTarget = row },
                     showManagementActions = showManagementActions,
                 )
             }
@@ -162,8 +198,8 @@ private fun ProfileListItem(
     onSelect: (String) -> Unit,
     onEdit: (String) -> Unit,
     onCopy: (String) -> Unit,
-    onRename: (String) -> Unit,
-    onDelete: (String) -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
     showManagementActions: Boolean,
 ) {
     Card(
@@ -239,13 +275,13 @@ private fun ProfileListItem(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             if (showRename) {
-                                TextButton(onClick = { onRename(row.id) }, modifier = Modifier.weight(1f)) {
+                                TextButton(onClick = onRename, modifier = Modifier.weight(1f)) {
                                     Text("Rename")
                                 }
                             }
                             if (showDelete) {
-                                TextButton(onClick = { onDelete(row.id) }, modifier = Modifier.weight(1f)) {
-                                    Text("Delete")
+                                TextButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
+                                    Text(profileDeleteActionLabel(row))
                                 }
                             }
                         }
@@ -255,6 +291,89 @@ private fun ProfileListItem(
         }
     }
 }
+
+@Composable
+private fun ProfileRenameDialog(
+    row: ProfileListRow,
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename profile") },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Profile name") },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onSave,
+                enabled = canSaveProfileRename(row.name, value),
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun ProfileDeleteDialog(
+    row: ProfileListRow,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val action = profileDeleteActionLabel(row)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (row.isProtected) "Reset profile overrides" else "Delete profile") },
+        text = {
+            Text(
+                if (row.isProtected) {
+                    "Reset local overrides for ${row.displayName}?"
+                } else {
+                    "Delete ${row.displayName}? This cannot be undone."
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text(action)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+internal fun profileRenameSaveName(value: String): String = value.trim()
+
+internal fun canSaveProfileRename(currentName: String, value: String): Boolean {
+    val saveName = profileRenameSaveName(value)
+    return saveName.isNotBlank() && saveName != currentName
+}
+
+internal fun profileDeleteActionLabel(row: ProfileListRow): String =
+    if (row.isProtected && row.hasLocalOverrides) "Reset local overrides" else "Delete"
 
 @Composable
 private fun BuiltInLabel() {

@@ -65,7 +65,22 @@ class Um980LiveParsersTest {
         )
 
         requireNotNull(view)
+        assertEquals("GNGSV", view.talker)
         assertEquals(31, view.satellitesInView)
+    }
+
+    @Test
+    fun `GSV tracker sums in view totals by constellation talker`() {
+        val parser = NmeaGsvParser()
+        val tracker = NmeaGsvInViewTracker()
+        val views = parser.acceptText(
+            "\$GPGSV,3,1,09,01,40,120,42*00\r\n" +
+                "\$GLGSV,2,1,08,65,40,120,42*00\r\n",
+        )
+
+        views.forEach(tracker::accept)
+
+        assertEquals(17, tracker.satellitesInView)
     }
 
     @Test

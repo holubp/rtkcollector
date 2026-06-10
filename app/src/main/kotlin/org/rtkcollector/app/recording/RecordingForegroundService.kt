@@ -49,6 +49,7 @@ import org.rtkcollector.receiver.unicore.NmeaGgaFix
 import org.rtkcollector.receiver.unicore.NmeaGgaParser
 import org.rtkcollector.receiver.unicore.NmeaGsaParser
 import org.rtkcollector.receiver.unicore.NmeaGstParser
+import org.rtkcollector.receiver.unicore.NmeaGsvInViewTracker
 import org.rtkcollector.receiver.unicore.NmeaGsvParser
 import org.rtkcollector.receiver.unicore.Um980AsciiSolution
 import org.rtkcollector.receiver.unicore.Um980AsciiSolutionParser
@@ -951,6 +952,7 @@ class RecordingForegroundService : Service() {
         val gsaParser = NmeaGsaParser()
         val gstParser = NmeaGstParser()
         val gsvParser = NmeaGsvParser()
+        val gsvTracker = NmeaGsvInViewTracker()
         val nmeaExporter = NmeaSentenceExporter()
         val solutionParser = Um980AsciiSolutionParser()
         val streamParser = Um980StreamParser()
@@ -1011,11 +1013,12 @@ class RecordingForegroundService : Service() {
                                     )
                                 }
                                 gsvParser.accept(record.bytes).forEach { view ->
+                                    val satellitesInView = gsvTracker.accept(view)
                                     state = state.copy(
-                                        satellitesInView = view.satellitesInView ?: state.satellitesInView,
+                                        satellitesInView = satellitesInView ?: state.satellitesInView,
                                         satellites = satelliteDisplay(
                                             used = state.satellitesUsed,
-                                            inView = view.satellitesInView ?: state.satellitesInView,
+                                            inView = satellitesInView ?: state.satellitesInView,
                                         ).takeUnless { it == "n/a" } ?: state.satellites,
                                     )
                                 }

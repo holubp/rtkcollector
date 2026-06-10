@@ -213,7 +213,7 @@ private fun DashboardCards(state: DashboardState) {
         }
         DashboardCard("Fix") {
             MajorValue(state.fix.fixType)
-            Metric("Sats", state.fix.satellites)
+            Metric("Sats used/view", state.fix.satellites)
             Metric("PDOP", state.fix.pdop)
             Metric("HDOP / VDOP", state.fix.hdopVdop)
             Metric("H accuracy", state.fix.horizontalAccuracy)

@@ -41,6 +41,19 @@ data class NmeaGsvView(
     val satellitesInView: Int?,
 )
 
+class NmeaGsvInViewTracker {
+    private val inViewByTalker = linkedMapOf<String, Int>()
+
+    val satellitesInView: Int?
+        get() = inViewByTalker.values.takeIf { it.isNotEmpty() }?.sum()
+
+    fun accept(view: NmeaGsvView): Int? {
+        val count = view.satellitesInView ?: return satellitesInView
+        inViewByTalker[view.talker] = count
+        return satellitesInView
+    }
+}
+
 data class Um980AsciiSolution(
     val logName: String,
     val solutionStatus: String?,

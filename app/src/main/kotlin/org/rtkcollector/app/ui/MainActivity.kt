@@ -14,8 +14,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +47,7 @@ import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.recording.SessionZipExporter
 import org.rtkcollector.app.recording.SessionZipPlan
 import org.rtkcollector.app.ui.dashboard.DashboardState
+import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
@@ -85,6 +90,8 @@ fun RtkCollectorApp() {
     var selectedSettingsSetId by remember { mutableStateOf(profileStore.selectedSettingsSetId()) }
     var profileEditorTarget by remember { mutableStateOf<ProfileEditorTarget?>(null) }
     var dashboardSelector by remember { mutableStateOf<DashboardSelector?>(null) }
+    var dashboardLayout by remember { mutableStateOf(DashboardLayoutPreference.default) }
+    var showDashboardLayoutDialog by remember { mutableStateOf(false) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
     var profileRevision by remember { mutableStateOf(0) }
     val secretStore = remember(context) { NtripSecretStore(context) }
@@ -148,6 +155,7 @@ fun RtkCollectorApp() {
             when (screen) {
                 AppScreen.HOME -> HomeDashboard(
                     state = state,
+                    layoutPreference = dashboardLayout,
                     onPrimaryAction = {
                         if (state.isRecording) {
                             context.startService(RecordingForegroundService.stopIntent(context))
@@ -202,17 +210,20 @@ fun RtkCollectorApp() {
                     },
                     onMark = {},
                 )
-                AppScreen.SETTINGS -> SettingsHub(
-                    onSettingsSets = { screen = AppScreen.SETTINGS_SETS },
-                    onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
-                    onNtripMountpoint = { screen = AppScreen.NTRIP_MOUNTPOINT_PROFILES },
-                    onUsbBaud = { screen = AppScreen.USB_BAUD },
-                    onCommands = { screen = AppScreen.COMMANDS },
-                    onRecordingOutputs = { screen = AppScreen.RECORDING_OUTPUTS },
-                    onStorage = { screen = AppScreen.STORAGE },
-                    onSessions = { screen = AppScreen.SESSIONS },
-                    onBack = { screen = AppScreen.HOME },
-                )
+                AppScreen.SETTINGS ->
+                    SettingsHub(
+                        onSettingsSets = { screen = AppScreen.SETTINGS_SETS },
+                        dashboardLayoutLabel = dashboardLayout.displayName,
+                        onDashboardLayout = { showDashboardLayoutDialog = true },
+                        onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
+                        onNtripMountpoint = { screen = AppScreen.NTRIP_MOUNTPOINT_PROFILES },
+                        onUsbBaud = { screen = AppScreen.USB_BAUD },
+                        onCommands = { screen = AppScreen.COMMANDS },
+                        onRecordingOutputs = { screen = AppScreen.RECORDING_OUTPUTS },
+                        onStorage = { screen = AppScreen.STORAGE },
+                        onSessions = { screen = AppScreen.SESSIONS },
+                        onBack = { screen = AppScreen.HOME },
+                    )
                 AppScreen.NTRIP_MOUNTPOINT -> NtripMountpointScreen(
                     initialState = NtripMountpointEditorState(
                         mountpointText = profileStore.selectedMountpointLabel(selectedSettingsSetId).takeUnless { it == "n/a" }.orEmpty(),
@@ -863,8 +874,48 @@ fun RtkCollectorApp() {
                     onDismiss = { dashboardSelector = null },
                 )
             }
+            if (showDashboardLayoutDialog) {
+                DashboardLayoutDialog(
+                    selected = dashboardLayout,
+                    onSelect = { layout ->
+                        dashboardLayout = layout
+                        showDashboardLayoutDialog = false
+                    },
+                    onDismiss = { showDashboardLayoutDialog = false },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun DashboardLayoutDialog(
+    selected: DashboardLayoutPreference,
+    onSelect: (DashboardLayoutPreference) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Dashboard layout") },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                DashboardLayoutPreference.entries.forEach { layout ->
+                    TextButton(
+                        onClick = { onSelect(layout) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        val suffix = if (layout == selected) " (selected)" else ""
+                        Text("${layout.displayName}$suffix")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+    )
 }
 
 private fun currentSessions(state: DashboardState): List<SessionListItem> =

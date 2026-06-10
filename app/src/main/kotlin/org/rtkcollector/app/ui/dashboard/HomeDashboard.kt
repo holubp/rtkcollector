@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -99,17 +100,32 @@ fun HomeDashboard(
         },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            CompactDashboard(
-                state = state,
-                layoutPreference = layoutPreference,
-                status = state.status,
-                onWorkflow = onWorkflow,
-                onSettingsSet = onSettingsSet,
-                onMountpoint = onNtrip,
-                onReceiver = onReceiver,
-                onStorage = onStorage,
-                onHelp = { helpTopic = it },
-            )
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val useRailLayout = layoutPreference == DashboardLayoutPreference.RAIL && maxWidth >= 640.dp
+                if (useRailLayout) {
+                    RailDashboard(
+                        state = state,
+                        status = state.status,
+                        onWorkflow = onWorkflow,
+                        onSettingsSet = onSettingsSet,
+                        onMountpoint = onNtrip,
+                        onReceiver = onReceiver,
+                        onStorage = onStorage,
+                        onHelp = { helpTopic = it },
+                    )
+                } else {
+                    CompactDashboard(
+                        state = state,
+                        status = state.status,
+                        onWorkflow = onWorkflow,
+                        onSettingsSet = onSettingsSet,
+                        onMountpoint = onNtrip,
+                        onReceiver = onReceiver,
+                        onStorage = onStorage,
+                        onHelp = { helpTopic = it },
+                    )
+                }
+            }
             HelpOverlay(
                 topic = helpTopic,
                 onDismiss = { helpTopic = null },
@@ -173,7 +189,6 @@ private fun BottomActionBar(
 @Composable
 private fun CompactDashboard(
     state: DashboardState,
-    layoutPreference: DashboardLayoutPreference,
     status: DashboardStatus,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
@@ -182,7 +197,6 @@ private fun CompactDashboard(
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
 ) {
-    val isRailPlaceholder = layoutPreference == DashboardLayoutPreference.RAIL
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -190,15 +204,6 @@ private fun CompactDashboard(
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (isRailPlaceholder) {
-            Text(
-                text = "Rail preference",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
         SetupStrip(
             status = status,
             onWorkflow = onWorkflow,
@@ -210,6 +215,67 @@ private fun CompactDashboard(
         DashboardCards(
             state = state,
             onHelp = onHelp,
+        )
+    }
+}
+
+@Composable
+private fun RailDashboard(
+    state: DashboardState,
+    status: DashboardStatus,
+    onWorkflow: () -> Unit,
+    onSettingsSet: () -> Unit,
+    onMountpoint: () -> Unit,
+    onReceiver: () -> Unit,
+    onStorage: () -> Unit,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Column(
+            modifier = Modifier.widthIn(min = 132.dp, max = 184.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SetupTile(
+                label = "Settings",
+                value = status.settingsSet,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onSettingsSet,
+            )
+            SetupTile(
+                label = "Workflow",
+                value = status.workflow,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onWorkflow,
+            )
+            SetupTile(
+                label = "Mountpoint",
+                value = status.mountpoint,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onMountpoint,
+            )
+            SetupTile(
+                label = "Receiver",
+                value = status.receiver,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onReceiver,
+            )
+            SetupTile(
+                label = "Storage",
+                value = status.storage,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onStorage,
+            )
+        }
+        DashboardCards(
+            state = state,
+            onHelp = onHelp,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -315,10 +381,11 @@ private fun String.isMissingDashboardValue(): Boolean {
 @Composable
 private fun DashboardCards(
     state: DashboardState,
+    modifier: Modifier = Modifier,
     onHelp: (HelpTopic) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         DashboardCard(
@@ -497,6 +564,26 @@ private fun HomeDashboardLandscapePreview() {
     MaterialTheme {
         HomeDashboard(
             state = previewRunningState(),
+            onPrimaryAction = {},
+            onMenu = {},
+            onNtrip = {},
+            onUsbPermission = {},
+            onWorkflow = {},
+            onSettingsSet = {},
+            onReceiver = {},
+            onStorage = {},
+            onMark = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 820, heightDp = 390)
+@Composable
+private fun HomeDashboardRailPreview() {
+    MaterialTheme {
+        HomeDashboard(
+            state = previewRunningState(),
+            layoutPreference = DashboardLayoutPreference.RAIL,
             onPrimaryAction = {},
             onMenu = {},
             onNtrip = {},

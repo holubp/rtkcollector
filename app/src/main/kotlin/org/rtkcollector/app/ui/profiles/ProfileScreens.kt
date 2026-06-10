@@ -1,5 +1,6 @@
 package org.rtkcollector.app.ui.profiles
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -393,13 +394,64 @@ fun ProfileEditorScreen(
     }
     var visibleSecrets by remember { mutableStateOf(emptySet<String>()) }
     var expandedOptions by remember { mutableStateOf(emptySet<String>()) }
+    var showUnsavedPrompt by remember { mutableStateOf(false) }
+    val savedFingerprint = remember(data.fields) {
+        profileEditorFingerprint(data.fields.associate { it.key to it.value })
+    }
+    val unsavedState = UnsavedEditorState(
+        savedFingerprint = savedFingerprint,
+        currentFingerprint = profileEditorFingerprint(values),
+    )
+    val saveValues = {
+        onSave(values.mapValues { it.value.trim() })
+    }
+    val leaveEditor = {
+        if (unsavedState.canLeaveWithoutPrompt) {
+            onBack()
+        } else {
+            showUnsavedPrompt = true
+        }
+    }
+    BackHandler(onBack = leaveEditor)
+    if (showUnsavedPrompt) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedPrompt = false },
+            title = { Text("Unsaved changes") },
+            text = { Text("Save changes before leaving this profile editor?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showUnsavedPrompt = false
+                        saveValues()
+                    },
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            showUnsavedPrompt = false
+                            onBack()
+                        },
+                    ) {
+                        Text("Discard")
+                    }
+                    TextButton(onClick = { showUnsavedPrompt = false }) {
+                        Text("Cancel")
+                    }
+                }
+            },
+        )
+    }
     Scaffold(
         topBar = {
             Column {
                 TopAppBar(
                     title = { Text(data.title) },
                     navigationIcon = {
-                        TextButton(onClick = onBack) {
+                        TextButton(onClick = leaveEditor) {
                             Text("Back")
                         }
                     },
@@ -413,7 +465,7 @@ fun ProfileEditorScreen(
                             Text("Discard")
                         }
                         Button(
-                            onClick = { onSave(values.mapValues { it.value.trim() }) },
+                            onClick = saveValues,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF2E7D32),
                                 contentColor = Color.White,

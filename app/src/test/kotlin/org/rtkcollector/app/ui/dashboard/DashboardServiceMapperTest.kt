@@ -98,7 +98,7 @@ class DashboardServiceMapperTest {
     }
 
     @Test
-    fun `bestnav ppp type is also shown in ppp field`() {
+    fun `bestnav ppp converging type is shown only in ppp field`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
             putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PPP_CONVERGING")
@@ -106,7 +106,50 @@ class DashboardServiceMapperTest {
 
         val state = dashboardStateFromRecordingIntent(intent)
 
-        assertEquals("PPP_CONVERGING", state.fix.fixType)
+        assertEquals("n/a", state.fix.fixType)
         assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+    }
+
+    @Test
+    fun `sbas and psrdiff are displayed as dgps fix`() {
+        val sbasIntent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "SBAS")
+        }
+        val psrdiffIntent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PSRDIFF")
+        }
+
+        assertEquals("DGPS", dashboardStateFromRecordingIntent(sbasIntent).fix.fixType)
+        assertEquals("DGPS", dashboardStateFromRecordingIntent(psrdiffIntent).fix.fixType)
+    }
+
+    @Test
+    fun `ppp converging stays in ppp field and does not replace gga fix type`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PPP_CONVERGING")
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 2)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("DGPS", state.fix.fixType)
+        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+    }
+
+    @Test
+    fun `converged ppp is displayed as ppp fix`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PPP")
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 2)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("PPP", state.fix.fixType)
+        assertEquals("PPP", state.fix.pppStatus)
     }
 }

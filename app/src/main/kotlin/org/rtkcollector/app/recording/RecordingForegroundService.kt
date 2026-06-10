@@ -385,6 +385,7 @@ class RecordingForegroundService : Service() {
         config: NtripRuntimeConfig,
         recorder: SessionRawRecorder,
     ) {
+        val ntripRtcmExtractor = Rtcm3Extractor(validateCrc = true)
         val controller = NtripRuntimeController(
             clientFactory = { runtimeConfig ->
                 DefaultNtripRuntimeClient(
@@ -397,9 +398,10 @@ class RecordingForegroundService : Service() {
             emit = ::handleNtripSnapshot,
             onRtcmBytes = { bytes ->
                 if (running.get()) {
+                    processNtripCorrectionBytes(bytes, recorder, ntripRtcmExtractor)
                     val txResult = runCatching {
                         synchronized(txLock) {
-                            runtime?.injectCorrectionBytes(bytes) ?: error("USB runtime is not available.")
+                            runtime?.sendToReceiver(bytes) ?: error("USB runtime is not available.")
                         }
                     }
                     ntripRateWindowCorrectionBytes += bytes.size
@@ -423,6 +425,27 @@ class RecordingForegroundService : Service() {
         )
         ntripController = controller
         controller.start(config)
+    }
+
+    private fun processNtripCorrectionBytes(
+        bytes: ByteArray,
+        recorder: SessionRawRecorder,
+        rtcmExtractor: Rtcm3Extractor,
+    ) {
+        recorder.appendCorrectionInputBytes(bytes)
+        rtcmExtractor.accept(bytes).forEach { frame ->
+            runCatching {
+                writers?.appendQualityLiveJson(
+                    """{"type":"ntrip-rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"}}""",
+                )
+            }
+            val referenceStation = Rtcm3ReferenceStationParser.parse(frame)
+            state = if (referenceStation != null) {
+                state.withRtcmReferenceStation(referenceStation).copy(rtcmFrames = state.rtcmFrames + 1)
+            } else {
+                state.copy(rtcmFrames = state.rtcmFrames + 1)
+            }
+        }
     }
 
     private fun handleNtripSnapshot(snapshot: NtripRuntimeSnapshot) {
@@ -1060,7 +1083,7 @@ class RecordingForegroundService : Service() {
 
     private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
         copy(
-            bestnavPositionType = telemetry.positionType ?: bestnavPositionType,
+            bestnavPositionType = telemetry.positionType?.takeUnless { it.isPppConvergingType() } ?: bestnavPositionType,
             pppStatus = telemetry.positionType?.takeIf { it.startsWith("PPP", ignoreCase = true) } ?: pppStatus,
             latDeg = telemetry.latDeg ?: latDeg,
             lonDeg = telemetry.lonDeg ?: lonDeg,
@@ -1087,6 +1110,9 @@ class RecordingForegroundService : Service() {
                 inView = telemetry.satellitesInView ?: telemetry.satellitesTracked,
             ).takeUnless { it == "n/a" } ?: satellites,
         )
+
+    private fun String.isPppConvergingType(): Boolean =
+        equals("PPP_CONVERGING", ignoreCase = true)
 
     private fun RecordingServiceState.withRtcmReferenceStation(station: Rtcm3ReferenceStation): RecordingServiceState {
         val baseLat = station.latDeg

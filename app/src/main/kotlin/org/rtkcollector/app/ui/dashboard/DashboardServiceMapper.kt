@@ -87,11 +87,12 @@ private fun mountpointFromUrl(url: String?): String =
         ?: "n/a"
 
 private fun displayFixType(bestnavPositionType: String?, ggaFixQuality: Int?, pppStatus: String?): String {
-    val bestnav = bestnavPositionType?.takeIf { type ->
-        type.isNotBlank() && !type.equals("NONE", ignoreCase = true)
-    }
+    val bestnav = bestnavPositionType
+        ?.takeIf(::isMeaningfulSolutionStatus)
+        ?.let(::displayBestnavPositionType)
+        ?.takeIf(::isMeaningfulSolutionStatus)
     return bestnav
-        ?: pppStatus?.takeIf(::isMeaningfulSolutionStatus)
+        ?: pppStatus?.takeIf { it.equals("PPP", ignoreCase = true) }
         ?: interpretGgaFixQuality(ggaFixQuality)
 }
 
@@ -106,3 +107,14 @@ private fun isMeaningfulSolutionStatus(status: String): Boolean =
     status.isNotBlank() &&
         !status.equals("n/a", ignoreCase = true) &&
         !status.equals("NONE", ignoreCase = true)
+
+private fun displayBestnavPositionType(positionType: String): String =
+    when (positionType.uppercase()) {
+        "PSRDIFF", "SBAS", "INS_PSRDIFF" -> "DGPS"
+        "NARROW_FLOAT", "IONOFREE_FLOAT", "L1_FLOAT", "INS_RTKFLOAT" -> "RTK float"
+        "NARROW_INT", "WIDE_INT", "L1_INT", "INS_RTKFIXED" -> "RTK fix"
+        "SINGLE", "INS_PSRSP" -> "Single"
+        "PPP" -> "PPP"
+        "PPP_CONVERGING" -> "n/a"
+        else -> positionType
+    }

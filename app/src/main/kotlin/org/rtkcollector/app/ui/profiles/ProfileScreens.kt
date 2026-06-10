@@ -9,17 +9,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +37,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+
+private val ActiveProfileBackground = Color(0xFFE8F5E9)
+private val ActiveProfileText = Color(0xFF145A18)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,7 +156,15 @@ private fun ProfileListItem(
     onDelete: (String) -> Unit,
     showManagementActions: Boolean,
 ) {
-    Card {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (row.isSelected) {
+                ActiveProfileBackground
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+        ),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,7 +178,7 @@ private fun ProfileListItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(row.displayName, style = MaterialTheme.typography.titleSmall)
                     if (row.isProtected) {
-                        AssistChip(onClick = {}, label = { Text("Built-in") })
+                        BuiltInLabel()
                     }
                 }
                 if (supportsSelection && row.isSelected) {
@@ -176,51 +186,78 @@ private fun ProfileListItem(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (supportsSelection) {
-                    Button(onClick = { onSelect(row.id) }, modifier = Modifier.weight(1f)) {
-                        Text("Use")
-                    }
-                }
-                if (showManagementActions) {
-                    OutlinedButton(
-                        onClick = { if (row.canEdit) onEdit(row.id) },
-                        enabled = row.canEdit,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("Edit")
-                    }
-                    if (row.canCopy) {
-                        TextButton(onClick = { onCopy(row.id) }, modifier = Modifier.weight(1f)) {
-                            Text("Copy")
-                        }
-                    }
-                }
-            }
-
-            if (showManagementActions && (row.canRename || row.canDelete)) {
-                HorizontalDivider()
-
-                Row(
+            val showUse = supportsSelection && !row.isSelected
+            val showEdit = showManagementActions
+            val showCopy = showManagementActions && row.canCopy
+            val showRename = showManagementActions && row.canRename
+            val showDelete = showManagementActions && row.canDelete
+            if (showUse || showEdit || showCopy || showRename || showDelete) {
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (row.canRename) {
-                        TextButton(onClick = { onRename(row.id) }) {
-                            Text("Rename")
+                    if (showUse || showEdit || showCopy) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (showUse) {
+                                Button(onClick = { onSelect(row.id) }, modifier = Modifier.weight(1f)) {
+                                    Text("Use")
+                                }
+                            }
+                            if (showEdit) {
+                                OutlinedButton(
+                                    onClick = { if (row.canEdit) onEdit(row.id) },
+                                    enabled = row.canEdit,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text("Edit")
+                                }
+                            }
+                            if (showCopy) {
+                                TextButton(onClick = { onCopy(row.id) }, modifier = Modifier.weight(1f)) {
+                                    Text("Copy")
+                                }
+                            }
                         }
                     }
-                    if (row.canDelete) {
-                        TextButton(onClick = { onDelete(row.id) }) {
-                            Text("Delete")
+
+                    if (showRename || showDelete) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (showRename) {
+                                TextButton(onClick = { onRename(row.id) }, modifier = Modifier.weight(1f)) {
+                                    Text("Rename")
+                                }
+                            }
+                            if (showDelete) {
+                                TextButton(onClick = { onDelete(row.id) }, modifier = Modifier.weight(1f)) {
+                                    Text("Delete")
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BuiltInLabel() {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = "Built-in",
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -255,8 +292,8 @@ fun ProfileSelectorDialog(
 
 @Composable
 private fun ProfileSelectorRow(row: ProfileListRow, onSelect: (String) -> Unit) {
-    val background = if (row.isSelected) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surface
-    val foreground = if (row.isSelected) Color(0xFF145A18) else MaterialTheme.colorScheme.onSurface
+    val background = if (row.isSelected) ActiveProfileBackground else MaterialTheme.colorScheme.surface
+    val foreground = if (row.isSelected) ActiveProfileText else MaterialTheme.colorScheme.onSurface
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -280,7 +317,7 @@ private fun ProfileSelectorRow(row: ProfileListRow, onSelect: (String) -> Unit) 
 @Composable
 private fun ActiveLabel() {
     Surface(
-        color = Color(0xFF145A18),
+        color = ActiveProfileText,
         shape = MaterialTheme.shapes.small,
     ) {
         Text(

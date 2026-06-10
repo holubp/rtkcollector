@@ -55,6 +55,21 @@ class Um980BinaryParserTest {
     }
 
     @Test
+    fun `parses documented PPPNAVB status fields`() {
+        val frame = pppnavbFrame(positionType = 68)
+
+        val telemetry = Um980BinaryParser.parsePppnavb(frame)
+
+        requireNotNull(telemetry)
+        assertEquals("PPPNAVB", telemetry.source)
+        assertEquals("SOL_COMPUTED", telemetry.solutionStatus)
+        assertEquals("PPP_CONVERGING", telemetry.positionType)
+        assertEquals(50.087451234, telemetry.latDeg)
+        assertEquals(14.421253456, telemetry.lonDeg)
+        assertEquals(243.812, telemetry.altitudeM)
+    }
+
+    @Test
     fun `returns null for non BESTNAVB message id`() {
         val frame = bestnavbFrame(messageId = 999)
 
@@ -82,7 +97,7 @@ class Um980BinaryParserTest {
     }
 
     companion object {
-        fun bestnavbFrame(messageId: Int = 2118): ByteArray {
+        fun bestnavbFrame(messageId: Int = 2118, positionType: Int = 50): ByteArray {
             val payloadLength = 120
             val frame = ByteArray(24 + payloadLength + 4)
             frame[0] = 0xAA.toByte()
@@ -95,7 +110,7 @@ class Um980BinaryParserTest {
             val payloadBytes = ByteArray(payloadLength)
             val payload = ByteBuffer.wrap(payloadBytes).order(ByteOrder.LITTLE_ENDIAN)
             payload.putInt(0, 0)
-            payload.putInt(4, 50)
+            payload.putInt(4, positionType)
             payload.putDouble(8, 50.087451234)
             payload.putDouble(16, 14.421253456)
             payload.putDouble(24, 243.812)
@@ -112,6 +127,36 @@ class Um980BinaryParserTest {
             payload.putDouble(88, 1.2)
             payload.putDouble(96, 123.4)
             payload.putDouble(104, -0.2)
+            payloadBytes.copyInto(frame, destinationOffset = 24)
+            putU32(frame, 24 + payloadLength, crc32(frame, 0, 24 + payloadLength).toInt())
+            return frame
+        }
+
+        private fun pppnavbFrame(positionType: Int): ByteArray {
+            val payloadLength = 72
+            val frame = ByteArray(24 + payloadLength + 4)
+            frame[0] = 0xAA.toByte()
+            frame[1] = 0x44
+            frame[2] = 0xB5.toByte()
+            putU16(frame, 4, 1026)
+            putU16(frame, 6, payloadLength)
+            putU16(frame, 10, 2419)
+            putU32(frame, 12, 132_572_000)
+            val payloadBytes = ByteArray(payloadLength)
+            val payload = ByteBuffer.wrap(payloadBytes).order(ByteOrder.LITTLE_ENDIAN)
+            payload.putInt(0, 0)
+            payload.putInt(4, positionType)
+            payload.putDouble(8, 50.087451234)
+            payload.putDouble(16, 14.421253456)
+            payload.putDouble(24, 243.812)
+            payload.putFloat(32, 43.611f)
+            payload.putFloat(40, 0.008f)
+            payload.putFloat(44, 0.007f)
+            payload.putFloat(48, 0.06f)
+            payload.putFloat(56, 0.8f)
+            payload.putFloat(60, 0.0f)
+            payload.put(64, 31)
+            payload.put(65, 18)
             payloadBytes.copyInto(frame, destinationOffset = 24)
             putU32(frame, 24 + payloadLength, crc32(frame, 0, 24 + payloadLength).toInt())
             return frame

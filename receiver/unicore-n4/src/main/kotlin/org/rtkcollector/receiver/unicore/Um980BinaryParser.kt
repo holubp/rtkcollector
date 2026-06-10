@@ -6,11 +6,12 @@ import java.nio.ByteOrder
 object Um980BinaryParser {
     private const val UNICORE_BINARY_CRC32_POLY = 0xEDB88320u
     private const val BESTNAVB_MESSAGE_ID = 2118
+    private const val PPPNAVB_MESSAGE_ID = 1026
     private const val STADOPB_MESSAGE_ID = 954
     private const val BINARY_HEADER_LENGTH = 24
     private const val CRC_LENGTH = 4
     private const val MAX_BINARY_PAYLOAD_LENGTH = 4096
-    private const val BESTNAVB_MIN_PAYLOAD_LENGTH = 120
+    private const val NAV_COMMON_MIN_PAYLOAD_LENGTH = 72
     private const val STADOPB_MIN_PAYLOAD_LENGTH = 42
 
     private val solutionStatusNames = mapOf(
@@ -83,8 +84,18 @@ object Um980BinaryParser {
     fun parseBestnavb(frame: ByteArray): Um980Telemetry? {
         if (!isValidFrame(frame)) return null
         if (messageId(frame) != BESTNAVB_MESSAGE_ID) return null
+        return parseNavPayload(frame, source = "BESTNAVB")
+    }
+
+    fun parsePppnavb(frame: ByteArray): Um980Telemetry? {
+        if (!isValidFrame(frame)) return null
+        if (messageId(frame) != PPPNAVB_MESSAGE_ID) return null
+        return parseNavPayload(frame, source = "PPPNAVB")
+    }
+
+    private fun parseNavPayload(frame: ByteArray, source: String): Um980Telemetry? {
         val payloadLength = u16(frame, 6)
-        if (payloadLength < BESTNAVB_MIN_PAYLOAD_LENGTH) return null
+        if (payloadLength < NAV_COMMON_MIN_PAYLOAD_LENGTH) return null
         val payload = ByteBuffer
             .wrap(frame.copyOfRange(BINARY_HEADER_LENGTH, BINARY_HEADER_LENGTH + payloadLength))
             .order(ByteOrder.LITTLE_ENDIAN)
@@ -93,7 +104,7 @@ object Um980BinaryParser {
         val altitudeM = payload.getDouble(24)
         val undulationM = payload.getFloat(32).toDouble()
         return Um980Telemetry(
-            source = "BESTNAVB",
+            source = source,
             utcTime = gpsWeekTowUtc(frame),
             solutionStatus = solutionStatusNames[solutionStatus] ?: "STATUS_$solutionStatus",
             positionType = positionTypeNames[positionType] ?: "TYPE_$positionType",
@@ -109,9 +120,9 @@ object Um980BinaryParser {
             solutionAgeS = payload.getFloat(60).toDouble(),
             satellitesInView = payload.get(64).toInt() and 0xff,
             satellitesUsed = payload.get(65).toInt() and 0xff,
-            horizontalSpeedMps = payload.getDouble(88),
-            trackDeg = payload.getDouble(96),
-            verticalSpeedMps = payload.getDouble(104),
+            horizontalSpeedMps = if (payloadLength >= 96) payload.getDouble(88) else null,
+            trackDeg = if (payloadLength >= 104) payload.getDouble(96) else null,
+            verticalSpeedMps = if (payloadLength >= 112) payload.getDouble(104) else null,
         )
     }
 

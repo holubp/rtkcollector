@@ -47,7 +47,7 @@ data class RecordingServiceState(
     val ntripUrl: String = "n/a",
     val ntripTransferred: String = "0 B",
     val ntripRates: String = "n/a",
-    val ntripStationId: String = "n/a",
+    val ntripStationId: String = "",
     val ntripBaseLatLon: String = "n/a",
     val ggaFixQuality: Int? = null,
     val bestnavPositionType: String? = null,

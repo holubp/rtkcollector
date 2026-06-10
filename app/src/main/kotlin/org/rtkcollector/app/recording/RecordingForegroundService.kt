@@ -256,7 +256,7 @@ class RecordingForegroundService : Service() {
                 sessionPath = openedSession.displayPath,
                 ntripState = if (intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) "Configured" else "Not configured",
                 ntripUrl = ntripDisplayUrl(intent),
-                ntripStationId = intent.getStringExtra(EXTRA_NTRIP_STATION_ID) ?: "n/a",
+                ntripStationId = "",
                 ntripBaseLatLon = latLonDisplay(
                     intent.optionalDoubleExtra(EXTRA_NTRIP_BASE_LAT),
                     intent.optionalDoubleExtra(EXTRA_NTRIP_BASE_LON),
@@ -519,6 +519,19 @@ class RecordingForegroundService : Service() {
             return
         }
         val recorder = activeRecorder ?: return
+        val updatedUrl = ntripDisplayUrl(config)
+        val mountpointChanged = updatedUrl != state.ntripUrl
+        if (mountpointChanged) {
+            state = state.copy(
+                ntripUrl = updatedUrl,
+                ntripStationId = "",
+                ntripBaseLatLon = "n/a",
+                ntripBaseLatDeg = null,
+                ntripBaseLonDeg = null,
+                baseline = "n/a",
+            )
+            broadcastState()
+        }
         runCatching {
             writers?.appendEventJson(
                 """{"type":"ntrip-config-updated","host":"${config.request.host.jsonEscape()}","mountpoint":"${config.request.mountpoint.jsonEscape()}","usernamePresent":${config.request.credentials != null}}""",
@@ -685,6 +698,9 @@ class RecordingForegroundService : Service() {
         val port = intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)
         return "$host:$port/$mountpoint"
     }
+
+    private fun ntripDisplayUrl(config: NtripRuntimeConfig): String =
+        "${config.request.host}:${config.request.port}/${config.request.mountpoint}"
 
     private fun latLonDisplay(latDeg: Double?, lonDeg: Double?): String =
         if (latDeg == null || lonDeg == null) "n/a" else "%.9f, %.9f".format(java.util.Locale.US, latDeg, lonDeg)
@@ -970,7 +986,6 @@ class RecordingForegroundService : Service() {
                                         hdopVdop = dopPairDisplay(fix.hdop, state.vdop),
                                         differentialAge = fix.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) }
                                             ?: state.differentialAge,
-                                        ntripStationId = fix.stationId ?: state.ntripStationId,
                                     )
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
@@ -1042,6 +1057,14 @@ class RecordingForegroundService : Service() {
                                     }
                                     state = state.withUm980Telemetry(telemetry)
                                 }
+                                Um980BinaryParser.parsePppnavb(record.bytes)?.let { telemetry ->
+                                    if (exportJsonSolution) {
+                                        sessionWriters.appendReceiverPppSolutionJson(telemetry.toJson())
+                                    }
+                                    state = state.copy(
+                                        pppStatus = telemetry.positionType ?: state.pppStatus,
+                                    )
+                                }
                                 Um980BinaryParser.parseStadopb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {
                                         sessionWriters.appendQualityLiveJson(telemetry.toJson())
@@ -1104,7 +1127,6 @@ class RecordingForegroundService : Service() {
             baseline = telemetry.baselineLengthM?.let(::distanceDisplay)
                 ?: baselineDisplay(telemetry.latDeg ?: latDeg, telemetry.lonDeg ?: lonDeg, ntripBaseLatDeg, ntripBaseLonDeg)
                 ?: baseline,
-            ntripStationId = telemetry.stationId ?: ntripStationId,
             satellites = satelliteDisplay(
                 used = telemetry.satellitesUsed,
                 inView = telemetry.satellitesInView ?: telemetry.satellitesTracked,

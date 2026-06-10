@@ -2,138 +2,142 @@
 
 ## Purpose
 
-RtkCollector needs an app-wide UI foundation that is tidy, compact, readable
-and self-documented. The dashboard and settings screens must look like one
-carefully designed field instrument, not a collection of unrelated prototype
-forms.
+RtkCollector needs a cleaner Android UI foundation that feels like a precise
+field instrument: compact, orderly, self-documented and careful about small
+details. The current app already has the core recording and dashboard concepts,
+but the visual structure still feels like a prototype: dashboard cards are not
+compact enough, menus are flat, labels and controls are not consistently
+grouped, and profile editors do not yet share one polished interaction model.
 
-This design covers:
+This clean-slate design replaces the earlier UI tidy draft. The approved mockup
+is stored locally under the Superpowers brainstorming artifacts for this design
+session, but the requirements below are the durable source of truth.
 
-- the default monitoring dashboard;
-- a selectable alternate dashboard layout;
-- grouped settings menus;
-- profile list and editor screens;
-- help overlays;
-- unsaved-change handling;
-- keyboard-friendly text-field behaviour.
+This work is UI-only. It must not change receiver recording, NTRIP protocol
+logic, UM980 protocol handling, session writing, workflow validation, RTKLIB
+integration, maps, shapefiles, GIS editing or feature collection.
 
-It does not change receiver recording, NTRIP networking, UM980 protocol logic,
-session writing, workflow validation, maps, GIS, shapefile support or RTKLIB
-integration.
+## Design Principles
 
-## Visual Direction
+- Keep the app useful as a GNSS field instrument, not a decorative dashboard.
+- Preserve the current telemetry inventory; visual tidying must not hide key
+  GNSS fields.
+- Use a clear scan order: setup context first, live observables second,
+  recording controls always reachable.
+- Use larger typography for primary values and smaller typography for secondary
+  values.
+- Use subtle lines, dashed separators and compact sections to show grouping.
+- Avoid random whitespace. Space should separate logical groups.
+- Prefer lists, dropdowns, toggles and checkboxes over typo-prone text fields.
+- Keep help local, concise and dismissible.
 
-The approved primary direction is the **Compact Instrument Panel** mockup.
+## Top-Level Navigation
 
-Characteristics:
+The app keeps a simple top-level structure:
 
-- calm light surfaces;
-- compact cards;
-- thin grey or dashed separators;
-- stable value slots;
-- strong typographic hierarchy;
-- larger text for major live values;
-- smaller text for secondary telemetry;
-- fixed top and bottom controls;
-- vertically scrollable middle content;
-- no normal horizontal scrolling.
+- Home dashboard;
+- Settings;
+- Profile lists and editors;
+- Session browser/sharing.
 
-The UI should feel meticulous and dense, but not cramped. Whitespace must be
-intentional: it separates groups and scan paths rather than leaving arbitrary
-gaps.
+Back navigation must feel native:
 
-## Dashboard Layouts
+- Back from an editor returns to the profile list;
+- Back from a profile list returns to Settings;
+- Back from Settings returns to Home;
+- Back must not close the app while there is still an app screen to return to.
 
-### Default: Compact Instrument Panel
+The same behaviour applies to on-screen Back, Android Back, hardware keyboard
+Back and Escape where available.
 
-The default dashboard is the compact card layout.
+## Home Dashboard
 
-Structure:
+### Default Layout
 
-- frozen top app bar;
-- compact status strip;
-- scrollable middle dashboard;
-- frozen bottom action bar.
+The default Home screen is a compact field dashboard.
 
-The top app bar contains:
+It has:
 
-- `RtkCollector`;
+- frozen top bar;
+- compact setup strip;
+- vertically scrollable middle dashboard;
+- frozen bottom recording/action bar.
+
+The top bar contains:
+
+- app name;
+- short context subtitle;
 - recording state;
-- compact workflow or receiver hint where space allows;
-- `Menu`.
+- Menu action.
 
-The status strip contains:
+The setup strip contains five compact tiles:
 
-- settings set;
-- workflow;
-- mountpoint;
-- receiver;
-- storage.
+- Settings;
+- Workflow;
+- Mountpoint;
+- Receiver;
+- Storage.
 
-Missing required selections use a pale red background with dark red text.
-Selected/active values use the normal compact chip style. The strip must remain
-compact and wrap cleanly on narrow screens.
+Each tile shows a small uppercase label and a compact current value. Missing
+required values use a pale red background with dark red text. Selected values
+use normal neutral styling. Tiles are clickable selectors, not full editors.
+Detailed configuration stays in Settings.
 
-The dashboard cards are:
+The middle dashboard scrolls vertically if the display is too small. Normal use
+must not require horizontal scrolling.
+
+The bottom bar contains:
+
+- primary Start or Stop recording action;
+- USB/access action where relevant;
+- Mark action where relevant.
+
+Start/Stop must never be inside the scrollable content.
+
+### Dashboard Cards
+
+The default dashboard has four primary cards:
 
 - Position;
 - Fix;
-- NTRIP;
-- Files;
-- Profiles or Session.
+- Corrections;
+- Recording.
 
 Each card has:
 
-- a small uppercase title;
-- an optional `(i)` help icon;
-- one major value in larger text;
-- secondary rows in smaller text;
-- grey/dashed separators between logical groups;
-- stable row positions for unavailable values.
+- compact title row;
+- optional `(i)` help icon;
+- one large primary value;
+- smaller secondary metric rows;
+- dashed separators between logical groups;
+- stable label/value rows.
 
-Unavailable values display as `n/a`; fields must not disappear and cause the
-dashboard to jump.
+Live updates must not cause card sizes to jump. The implementation should use
+stable row counts, max lines, ellipsis and fixed label/value structure.
 
-The bottom action bar contains the primary recording action and critical runtime
-actions. `Start`/`Stop` must never be inside the scrollable middle content.
+### Position Card
 
-### Selectable Alternate: Rail Layout
+Primary value:
 
-The alternate dashboard layout is selectable in app settings.
+- latitude and longitude.
 
-It uses the same dashboard state and the same telemetry fields as the compact
-layout. It only rearranges them:
+Secondary values:
 
-- setup/status controls appear in a persistent rail;
-- telemetry cards appear beside the rail;
-- the layout is most useful for landscape and tablet displays.
-
-The rail layout must not become a different feature set. Any field shown in the
-compact layout must remain available in the rail layout.
-
-### Future: Floating/Minimized Layout
-
-The third mockup direction, a hero status plus small cards, is documented as a
-future floating or minimized-window layout. It is not part of this
-implementation pass.
-
-## Dashboard Information Inventory
-
-The tidy-up must not remove GNSS information that is already shown or required.
-
-Position card:
-
-- latitude and longitude;
+- UTC;
 - ellipsoidal height;
 - altitude;
-- UTC date/time;
 - latitude error;
 - longitude error.
 
-Fix card:
+### Fix Card
 
-- interpreted fix type;
-- satellites used and satellites in view, labelled as `Sats used/view`;
+Primary value:
+
+- interpreted fix type.
+
+Secondary values:
+
+- `Sats used/view`;
 - PDOP;
 - HDOP;
 - VDOP;
@@ -144,73 +148,80 @@ Fix card:
 - PPP status;
 - RTKLIB status placeholder.
 
-NTRIP card:
+`Sats used/view` means receiver-solution satellites used followed by visible
+satellites in view. This wording must appear in the UI so the order is not
+ambiguous.
 
-- URL without secrets;
-- connection status;
-- total bytes transferred;
+### Corrections Card
+
+Primary value:
+
+- NTRIP/correction state, for example `Streaming`, `Configured`, `Off`,
+  `Auth error` or `Reconnect wait`.
+
+Secondary values:
+
+- caster host and port;
+- mountpoint;
 - reference station ID;
-- base station latitude/longitude;
+- base position or base distance where known;
 - inbound NTRIP rate;
-- bytes/rate sent to rover;
-- base distance where available.
+- rate/bytes sent to receiver;
+- total correction bytes for the session.
 
-Files card:
+Secrets must never be shown on the dashboard.
 
-- session location or storage profile;
-- receiver RX raw byte count;
-- app TX-to-receiver byte count;
-- correction/NTRIP input byte count;
+### Recording Card
+
+Primary value:
+
+- current session state or session location summary.
+
+Secondary values:
+
+- `receiver-rx.raw` byte count;
+- `tx-to-receiver.raw` byte count;
+- `correction-input.raw` byte count;
 - NMEA export byte count;
 - ZIP/share state.
 
-Profiles/session card:
+ZIP should be shown as unavailable before a recording exists and as available
+only when a shareable archive can be generated or has been generated.
 
-- settings set;
-- command script profile;
-- USB/baud profile;
-- NTRIP caster profile;
-- mountpoint profile where useful;
-- recording output profile;
-- storage location profile.
+## Alternate Dashboard Layout
 
-## Responsive Behaviour
+The app also provides a selectable wide/rail layout.
 
-The dashboard must support phones, tablets, portrait, landscape and unusual
-aspect ratios.
+The rail layout:
 
-Rules:
+- uses the same dashboard state as the default layout;
+- preserves all fields from the default dashboard;
+- places workflow, mountpoint, receiver and storage context in a left rail;
+- places telemetry cards beside the rail;
+- is intended for landscape screens, tablets and users who prefer persistent
+  setup context.
 
-- Use font hierarchy before dropping information.
-- Major values remain readable on small screens.
-- Secondary telemetry may be smaller, but must stay legible.
-- If the display is too small, the middle dashboard scrolls vertically.
-- Top and bottom controls remain frozen.
-- Layout reflows between one, two and three columns based on available width.
-- Normal operation must not require horizontal scrolling.
-- Live value updates must not resize cards enough to make the screen jump.
-
-The implementation should use stable dimensions, row heights, max line counts
-and ellipsis where needed.
+The rail layout must not fork business logic or hide fields. It is an
+arrangement preference only.
 
 ## Settings Hub
 
-The settings hub is grouped by user mental model, not as one flat button list.
+The Settings screen is grouped, not a flat list of buttons.
 
 Groups:
 
 ### Session Setup
 
 - Settings sets;
-- workflow selection/defaults;
-- recording outputs;
-- storage location profiles.
+- Workflow selection;
+- Recording outputs;
+- Storage location profiles.
 
 ### Receiver And USB
 
-- USB device and baud profile;
-- command scripts;
-- receiver family/profile selection.
+- USB device and baud;
+- Command scripts;
+- Receiver family/profile.
 
 ### Corrections
 
@@ -219,31 +230,34 @@ Groups:
 
 ### Sessions
 
-- recent/current sessions;
-- file sharing/export actions.
+- Recent sessions;
+- Sharing/export actions.
 
-Group boundaries use subtle surfaces, headings and thin/dashed separators. The
-screen uses a frozen top area with title and back/menu action where applicable;
-the grouped menu body scrolls underneath.
+Each group uses a subtle surface, a small uppercase group label and row
+separators. Rows may use simple icons to improve scanning, but icons must not
+replace text labels.
+
+The Settings screen uses a frozen top bar with Back, title and Help where
+appropriate. The grouped menu body scrolls underneath.
 
 ## Profile Lists
 
-Profile lists use one consistent row design.
+All profile lists share one visual and interaction model.
 
-Each row shows:
+Rows show:
 
 - profile name;
-- compact summary;
-- built-in/editable state where relevant;
+- compact profile summary;
 - active state where relevant;
-- grouped row actions.
+- built-in/editable status where relevant;
+- grouped actions.
 
-Active profiles are marked by:
+Active rows use:
 
-- pale green row background;
+- pale green background;
 - dark green `Active` label.
 
-Active state must not be presented as a disabled or no-op button.
+Active state is not a disabled button and not a no-op action.
 
 Common actions:
 
@@ -254,98 +268,93 @@ Common actions:
 - Rename;
 - Delete.
 
-Actions must be visually grouped and consistently ordered. Destructive actions
-use subdued grey or red styling depending on risk.
+Actions are grouped in a stable order. Delete should be visually subdued unless
+the current screen is explicitly confirming deletion.
 
-Rename opens a small dialog with:
+Rename is a lightweight dialog, not a full editor screen. It contains:
 
-- editable profile name;
+- editable name field;
 - Save;
 - Discard;
 - Cancel.
-
-Renaming should not require opening the full editor.
 
 ## Profile Editors
 
-Editor screens use a frozen top action bar.
+Profile editors use a frozen top action bar and a scrollable form body.
 
-Top bar:
+Top action bar:
 
 - Back;
 - screen title;
-- Save as a green check or clearly labelled action;
-- Discard as a red X or clearly labelled action;
-- Delete as a grey trash action where allowed.
+- Save action;
+- Discard action;
+- Delete action where allowed.
 
-The editor form scrolls underneath the frozen top bar.
+Save should use green positive styling. Discard should use red negative styling.
+Delete should use grey/destructive styling and require confirmation where data
+loss is possible.
 
 Form rules:
 
-- labels stay visually attached to fields;
-- empty text fields remain empty;
-- meaning belongs in the label, not placeholder text;
-- long scripts use monospaced multiline fields;
-- dropdown values are not free-text fields;
-- booleans are checkboxes or toggles;
-- receiver family is a list, not editable text;
-- baud rates are selected from the valid supported list;
-- profile references are selected from lists, not typed as IDs.
+- labels are visually attached to fields;
+- empty fields remain empty;
+- labels carry meaning, not placeholder text;
+- long command scripts use monospaced multiline fields;
+- receiver family is selected from a list;
+- baud rates are selected from the supported baud list;
+- profile references are selected from lists;
+- booleans use checkboxes or switches;
+- mountpoints are selected from retrieved lists or typed only in fields meant
+  for direct mountpoint entry.
 
-For command scripts:
+Command script editor specifics:
 
-- `Runtime script` is renamed to `Init script`;
-- the old separate current-init-script wording is removed;
-- `Shutdown script` is a label above an empty-capable field;
-- an empty shutdown script field must be visually empty.
+- `Runtime script` is named `Init script`;
+- `Shutdown script` appears as a label above the shutdown script field;
+- an empty shutdown script field is visually empty;
+- the receiver family field is not free text.
 
 ## Help Overlays
 
-Small `(i)` icons appear beside labels or card titles where user help is useful.
+Small `(i)` icons may appear on dashboard cards and important form labels.
 
-Help behaviour:
+Help overlays:
 
-- opens a small overlay/dialog;
-- explains the local field in practical language;
-- can be dismissed by tapping outside, tapping X, or Back;
-- does not navigate away from the current screen;
-- is concise and field-specific.
+- open as small local dialogs;
+- explain one field or card in practical language;
+- are dismissible by outside tap, X, Back or Escape;
+- do not navigate away from the current screen.
 
-Examples:
+Example help text:
 
-- `Sats used/view`: used satellites in the receiver solution versus visible
-  satellites reported by GSV/STADOP-style telemetry.
-- `Ell. height`: height above the ellipsoid, distinct from orthometric altitude.
-- `TX to receiver`: app-transmitted bytes sent toward the receiver serial input.
-- `NTRIP URL`: host, port and mountpoint without password or token.
+- `Sats used/view`: used is the number of satellites in the receiver solution;
+  view is the aggregate visible-satellite count reported by telemetry such as
+  GSV or STADOP.
+- `Ellipsoidal height`: height above the reference ellipsoid, distinct from
+  orthometric altitude.
+- `TX to receiver`: bytes transmitted by the app toward the receiver serial
+  input.
+- `NTRIP URL`: caster host, port and mountpoint without password or token.
 
-## Back And Unsaved Changes
+## Unsaved Changes
 
-Back navigation must behave like normal Android navigation:
+Any editor with unsaved changes intercepts Back.
 
-- Back from a specific editor returns to the profile list or settings group;
-- Back from settings returns to the dashboard;
-- Back should not unexpectedly dismiss the app while there is a previous screen
-  in the app navigation stack.
-
-When a screen has unsaved changes, Back opens a dialog:
+The unsaved-change dialog offers:
 
 - Save;
 - Discard;
 - Cancel.
 
-Save persists changes and leaves the screen. Discard leaves without saving.
-Cancel closes the dialog and keeps the user on the editor.
+Save persists changes and leaves. Discard leaves without saving. Cancel closes
+the dialog and keeps the user on the editor.
 
-The same logic applies to hardware Back, on-screen Back and keyboard Back/Escape
-where available.
+## Hardware Keyboard Behaviour
 
-## Keyboard Behaviour
+The app should preserve normal Android text editing behaviour:
 
-Text fields must preserve normal hardware-keyboard editing behaviour:
-
-- arrow keys move within fields;
-- Ctrl+arrow moves by words where supported by the platform;
+- arrow keys move inside text fields;
+- Ctrl+arrow moves by words where supported;
 - Ctrl+A selects all;
 - Ctrl+C copies;
 - Ctrl+V pastes;
@@ -353,45 +362,65 @@ Text fields must preserve normal hardware-keyboard editing behaviour:
 - Tab moves to the next field;
 - Shift+Tab moves to the previous field.
 
-The implementation should avoid custom key handlers that break platform text
-editing unless a field explicitly requires special behaviour.
+The implementation should avoid custom key handling that breaks standard text
+field behaviour.
 
-## Implementation Quality Bar
+## Responsive Behaviour
 
-The implementation must be checked visually against the approved mockups.
+The UI must support portrait phones, landscape phones, tablets and unusual
+aspect ratios.
 
-Acceptance criteria:
+Rules:
 
-- dashboard cards align consistently;
-- status strip chips align and wrap cleanly;
-- row labels and values do not drift apart;
-- settings menus are grouped and not a flat button wall;
-- editor labels are attached to fields;
-- empty fields do not show misleading placeholder values;
-- frozen controls remain visible on small and wide screens;
-- no card resizing or major layout jumping during live telemetry updates;
-- all current dashboard information remains available;
-- compact and rail layouts are selectable;
-- C is documented but not implemented as a normal layout.
+- Use one dashboard column on narrow screens.
+- Use two dashboard columns on medium screens.
+- Use rail or multi-column layout on wide screens when selected.
+- Top and bottom controls stay visible.
+- Middle content scrolls vertically.
+- Text uses hierarchy rather than uniformly shrinking everything.
+- No normal screen should require horizontal scrolling.
+- Values may ellipsize where needed, but labels and units must remain clear.
 
-Testing should include:
+## Visual Acceptance Criteria
 
-- Compose previews where practical;
-- at least one portrait narrow preview/state;
-- at least one landscape/tablet-style preview/state;
-- focused model tests for any new UI state selection logic;
-- manual emulator or device smoke test when Android tooling is available.
+The implementation is acceptable only if it matches the intent of the approved
+clean-slate mockup:
+
+- main dashboard looks compact and aligned;
+- major telemetry values are visually dominant;
+- secondary telemetry remains visible and readable;
+- setup tiles form a coherent strip, not scattered chips;
+- cards have consistent widths, row spacing and separators;
+- live telemetry updates do not visibly resize the layout;
+- settings are grouped by session setup, receiver/USB, corrections and
+  sessions;
+- profile list rows have consistent actions and active labels;
+- editors keep Save/Discard/Delete visible while form content scrolls;
+- empty fields do not show misleading placeholder text;
+- help overlays are local and dismissible.
+
+## Testing And Review
+
+Implementation should include:
+
+- Compose previews or preview-like states for the default dashboard;
+- a wide/rail layout preview or test state;
+- focused tests for any new layout-preference model;
+- focused tests for any new unsaved-change state model;
+- manual visual review on a narrow portrait viewport;
+- manual visual review on a wide/landscape viewport;
+- verification that existing dashboard telemetry fields are still represented.
 
 ## Out Of Scope
 
-This UI tidy pass does not implement:
+This UI pass does not implement:
 
 - new receiver communication features;
-- new NTRIP protocol behaviour;
+- new NTRIP behaviour;
 - new UM980 parsing fields;
 - RTKLIB integration;
 - PPP/static solving on Android;
 - maps;
 - shapefiles;
 - GIS editing;
-- field-feature collection.
+- feature collection.

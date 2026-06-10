@@ -384,83 +384,150 @@ private fun DashboardCards(
     modifier: Modifier = Modifier,
     onHelp: (HelpTopic) -> Unit,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val useTwoColumns = maxWidth >= 600.dp
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (useTwoColumns) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        PositionCard(state = state, onHelp = onHelp)
+                        CorrectionsCard(state = state, onHelp = onHelp)
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        FixCard(state = state, onHelp = onHelp)
+                        RecordingCard(state = state, onHelp = onHelp)
+                    }
+                }
+            } else {
+                PositionCard(state = state, onHelp = onHelp)
+                FixCard(state = state, onHelp = onHelp)
+                CorrectionsCard(state = state, onHelp = onHelp)
+                RecordingCard(state = state, onHelp = onHelp)
+            }
+            SetupProfilesCard(state = state)
+        }
+    }
+}
+
+@Composable
+private fun PositionCard(
+    state: DashboardState,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    DashboardCard(
+        title = "Position",
+        helpTopic = HelpTopic.ELLIPSOIDAL_HEIGHT,
+        onHelp = onHelp,
     ) {
-        DashboardCard(
-            title = "Position",
-            helpTopic = HelpTopic.ELLIPSOIDAL_HEIGHT,
-            onHelp = onHelp,
-        ) {
-            MajorValue(state.position.latLon)
-            Metric("UTC", state.position.utcTime)
-            Metric("Ellipsoidal height", state.position.ellipsoidalHeight)
-            Metric("Altitude", state.position.altitude)
-            DashedSeparator()
-            Metric("Latitude error", state.position.latError)
-            Metric("Longitude error", state.position.lonError)
-        }
-        DashboardCard(
-            title = "Fix",
-            helpTopic = HelpTopic.SATS_USED_VIEW,
-            onHelp = onHelp,
-        ) {
-            MajorValue(state.fix.fixType)
-            Metric("Sats used/view", state.fix.satellites)
-            Metric("PDOP", state.fix.pdop)
-            Metric("HDOP / VDOP", state.fix.hdopVdop)
-            DashedSeparator()
-            Metric("H accuracy", state.fix.horizontalAccuracy)
-            Metric("V accuracy", state.fix.verticalAccuracy)
-            Metric("Diff age", state.fix.differentialAge)
-            Metric("Baseline", state.fix.baseline)
-            DashedSeparator()
-            Metric("PPP", state.fix.pppStatus)
-            Metric("RTKLIB", state.fix.rtklibStatus)
-        }
-        DashboardCard(
-            title = "Corrections",
-            helpTopic = HelpTopic.NTRIP_URL,
-            onHelp = onHelp,
-        ) {
-            MajorValue(state.ntrip.status)
-            Metric("Caster / mountpoint", state.ntrip.url)
-            Metric("Mountpoint", state.status.mountpoint)
-            Metric("Station ID", state.ntrip.stationId)
-            Metric("Base position", state.ntrip.baseLatLon)
-            DashedSeparator()
-            Metric("Inbound rate", state.ntrip.rates)
-            Metric("Sent to receiver", state.files.txToReceiverBytes)
-            Metric("Correction bytes", state.files.ntripBytes)
-            Metric("NTRIP transferred", state.ntrip.transferred)
-        }
-        DashboardCard(
-            title = "Recording",
-            helpTopic = HelpTopic.TX_TO_RECEIVER,
-            onHelp = onHelp,
-        ) {
-            MajorValue(state.files.sessionLocation)
-            Metric("receiver-rx.raw", state.files.receiverRxBytes)
-            Metric("TX to receiver", state.files.txToReceiverBytes)
-            Metric("correction-input.raw", state.files.ntripBytes)
-            Metric("NMEA export", state.files.nmeaBytes)
-            Metric("ZIP share", state.files.zipShareLabel)
-            DashedSeparator()
-            Metric("Settings set", state.profiles.settingsSet)
-            Metric("Command profile", state.profiles.commandProfile)
-            Metric("Baud", state.profiles.baudProfile)
-            Metric("NTRIP caster", state.profiles.ntripCasterProfile)
-            Metric("Recording policy", state.profiles.recordingOutputProfile)
-            Metric("Storage profile", state.profiles.storageLocationProfile)
-        }
+        MajorValue(state.position.latLon)
+        Metric("UTC", state.position.utcTime)
+        Metric("Ellipsoidal height", state.position.ellipsoidalHeight)
+        Metric("Altitude", state.position.altitude)
+        DashedSeparator()
+        Metric("Latitude error", state.position.latError)
+        Metric("Longitude error", state.position.lonError)
+    }
+}
+
+@Composable
+private fun FixCard(
+    state: DashboardState,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    DashboardCard(
+        title = "Fix",
+        helpTopic = HelpTopic.SATS_USED_VIEW,
+        onHelp = onHelp,
+    ) {
+        MajorValue(state.fix.fixType)
+        Metric("Sats used/view", state.fix.satellites)
+        Metric("PDOP", state.fix.pdop)
+        Metric("HDOP / VDOP", state.fix.hdopVdop)
+        DashedSeparator()
+        Metric("H accuracy", state.fix.horizontalAccuracy)
+        Metric("V accuracy", state.fix.verticalAccuracy)
+        Metric("Diff age", state.fix.differentialAge)
+        Metric("Baseline", state.fix.baseline)
+        DashedSeparator()
+        Metric("PPP", state.fix.pppStatus)
+        Metric("RTKLIB", state.fix.rtklibStatus)
+    }
+}
+
+@Composable
+private fun CorrectionsCard(
+    state: DashboardState,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    DashboardCard(
+        title = "Corrections",
+        helpTopic = HelpTopic.NTRIP_URL,
+        onHelp = onHelp,
+    ) {
+        MajorValue(state.ntrip.status)
+        Metric("Caster / mountpoint", state.ntrip.url)
+        Metric("Mountpoint", state.status.mountpoint)
+        Metric("Station ID", state.ntrip.stationId)
+        Metric("Base position", state.ntrip.baseLatLon)
+        DashedSeparator()
+        Metric("Inbound rate", state.ntrip.rates)
+        Metric("Sent to receiver", state.files.txToReceiverBytes)
+        Metric("Correction bytes", state.files.ntripBytes)
+        Metric("NTRIP transferred", state.ntrip.transferred)
+    }
+}
+
+@Composable
+private fun RecordingCard(
+    state: DashboardState,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    DashboardCard(
+        title = "Recording",
+        helpTopic = HelpTopic.TX_TO_RECEIVER,
+        onHelp = onHelp,
+    ) {
+        MajorValue(state.files.sessionLocation)
+        Metric("receiver-rx.raw", state.files.receiverRxBytes)
+        Metric("TX to receiver", state.files.txToReceiverBytes)
+        Metric("correction-input.raw", state.files.ntripBytes)
+        Metric("NMEA export", state.files.nmeaBytes)
+        Metric("ZIP share", state.files.zipShareLabel)
+    }
+}
+
+@Composable
+private fun SetupProfilesCard(state: DashboardState) {
+    DashboardCard(
+        title = "Setup profiles",
+        helpTopic = null,
+        onHelp = {},
+    ) {
+        Metric("Settings set", state.profiles.settingsSet)
+        Metric("Command profile", state.profiles.commandProfile)
+        Metric("Baud", state.profiles.baudProfile)
+        Metric("NTRIP caster", state.profiles.ntripCasterProfile)
+        Metric("Recording policy", state.profiles.recordingOutputProfile)
+        Metric("Storage profile", state.profiles.storageLocationProfile)
     }
 }
 
 @Composable
 private fun DashboardCard(
     title: String,
-    helpTopic: HelpTopic,
+    helpTopic: HelpTopic?,
     onHelp: (HelpTopic) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
@@ -487,10 +554,12 @@ private fun DashboardCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                HelpIcon(
-                    contentDescription = "$title help",
-                    onClick = { onHelp(helpTopic) },
-                )
+                if (helpTopic != null) {
+                    HelpIcon(
+                        contentDescription = "$title help",
+                        onClick = { onHelp(helpTopic) },
+                    )
+                }
             }
             content()
         }

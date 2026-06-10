@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -34,12 +35,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
 private val ActiveProfileBackground = Color(0xFFE8F5E9)
 private val ActiveProfileText = Color(0xFF145A18)
+private val ReceiverFamilyOptions = listOf(
+    EditableProfileOption("um980-n4", "Unicore UM980 / N4"),
+    EditableProfileOption("ublox-m8p0", "u-blox M8P-0"),
+    EditableProfileOption("ublox-m8p2", "u-blox M8P-2"),
+    EditableProfileOption("ublox-m8t", "u-blox M8T"),
+    EditableProfileOption("generic-nmea-rtcm", "Generic NMEA + RTCM"),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -386,14 +395,54 @@ fun ProfileEditorScreen(
     var expandedOptions by remember { mutableStateOf(emptySet<String>()) }
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(data.title) },
-                navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Text("Back")
+            Column {
+                TopAppBar(
+                    title = { Text(data.title) },
+                    navigationIcon = {
+                        TextButton(onClick = onBack) {
+                            Text("Back")
+                        }
+                    },
+                    actions = {
+                        TextButton(
+                            onClick = onBack,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) {
+                            Text("Discard")
+                        }
+                        Button(
+                            onClick = { onSave(values.mapValues { it.value.trim() }) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2E7D32),
+                                contentColor = Color.White,
+                            ),
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                )
+                if (actions.isNotEmpty()) {
+                    Surface(
+                        tonalElevation = 1.dp,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            actions.forEach { action ->
+                                TextButton(onClick = action.onClick) {
+                                    Text(action.label)
+                                }
+                            }
+                        }
                     }
-                },
-            )
+                }
+            }
         },
     ) { padding ->
         LazyColumn(
@@ -403,20 +452,6 @@ fun ProfileEditorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (actions.isNotEmpty()) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        actions.forEach { action ->
-                            TextButton(onClick = action.onClick) {
-                                Text(action.label)
-                            }
-                        }
-                    }
-                }
-            }
             items(data.fields, key = { it.key }) { field ->
                 if (field.boolean) {
                     Row(
@@ -441,9 +476,10 @@ fun ProfileEditorScreen(
                             Text(item, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                } else if (field.optionItems.isNotEmpty()) {
+                } else if (field.editorOptions().isNotEmpty()) {
+                    val optionItems = field.editorOptions()
                     val expanded = field.key in expandedOptions
-                    val selectedLabel = field.optionItems.firstOrNull { it.value == values[field.key] }?.label
+                    val selectedLabel = optionItems.firstOrNull { it.value == values[field.key] }?.label
                         ?: values[field.key].orEmpty()
                     ExposedDropdownMenuBox(
                         expanded = expanded,
@@ -473,7 +509,7 @@ fun ProfileEditorScreen(
                             expanded = expanded,
                             onDismissRequest = { expandedOptions = expandedOptions - field.key },
                         ) {
-                            field.optionItems.forEach { option ->
+                            optionItems.forEach { option ->
                                 DropdownMenuItem(
                                     text = { Text(option.label) },
                                     onClick = {
@@ -496,6 +532,11 @@ fun ProfileEditorScreen(
                             minLines = if (field.multiline) 4 else 1,
                             readOnly = field.readOnly,
                             singleLine = !field.multiline,
+                            textStyle = if (field.multiline) {
+                                MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+                            } else {
+                                MaterialTheme.typography.bodyMedium
+                            },
                             visualTransformation = if (field.secret && field.key !in visibleSecrets) {
                                 PasswordVisualTransformation()
                             } else {
@@ -522,17 +563,18 @@ fun ProfileEditorScreen(
                     }
                 }
             }
-            item {
-                Button(
-                    onClick = { onSave(values.mapValues { it.value.trim() }) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Save")
-                }
-            }
         }
     }
 }
+
+private fun EditableProfileField.editorOptions(): List<EditableProfileOption> =
+    optionItems.ifEmpty {
+        if (key == "receiverFamily") {
+            ReceiverFamilyOptions
+        } else {
+            emptyList()
+        }
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

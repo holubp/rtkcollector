@@ -558,6 +558,25 @@ private fun HomeDashboardPortraitPreview() {
     }
 }
 
+@Preview(showBackground = true, widthDp = 390, heightDp = 780)
+@Composable
+private fun HomeDashboardReadyMissingPreview() {
+    MaterialTheme {
+        HomeDashboard(
+            state = previewReadyMissingState(),
+            onPrimaryAction = {},
+            onMenu = {},
+            onNtrip = {},
+            onUsbPermission = {},
+            onWorkflow = {},
+            onSettingsSet = {},
+            onReceiver = {},
+            onStorage = {},
+            onMark = {},
+        )
+    }
+}
+
 @Preview(showBackground = true, widthDp = 820, heightDp = 390)
 @Composable
 private fun HomeDashboardLandscapePreview() {
@@ -639,6 +658,50 @@ private fun previewRunningState(): DashboardState =
             txToReceiverBytes = "2.1 MB",
             ntripBytes = "2.1 MB",
             nmeaBytes = "431 kB",
+            zipShareEnabled = false,
+        ),
+    )
+
+private fun previewReadyMissingState(): DashboardState =
+    DashboardState.planned(
+        workflow = "n/a",
+        mountpoint = "n/a",
+        receiver = "n/a",
+        storage = "Storage location profile",
+        position = PositionCardState(
+            latLon = "n/a",
+            ellipsoidalHeight = "n/a",
+            altitude = "n/a",
+            utcTime = "n/a",
+            latError = "n/a",
+            lonError = "n/a",
+        ),
+        fix = FixCardState(
+            fixType = "Not recording",
+            satellites = "0 / 0",
+            pdop = "n/a",
+            hdopVdop = "n/a",
+            horizontalAccuracy = "n/a",
+            verticalAccuracy = "n/a",
+            differentialAge = "n/a",
+            baseline = "n/a",
+            pppStatus = "n/a",
+            rtklibStatus = "Not configured",
+        ),
+        ntrip = NtripCardState(
+            url = "n/a",
+            status = "Disconnected",
+            transferred = "0 B",
+            stationId = "n/a",
+            baseLatLon = "n/a",
+            rates = "0 / 0 B/s",
+        ),
+        files = FilesCardState(
+            sessionLocation = "n/a",
+            receiverRxBytes = "0 B",
+            txToReceiverBytes = "0 B",
+            ntripBytes = "0 B",
+            nmeaBytes = "0 B",
             zipShareEnabled = false,
         ),
     )

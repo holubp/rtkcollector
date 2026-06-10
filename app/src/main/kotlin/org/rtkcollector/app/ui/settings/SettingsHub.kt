@@ -34,12 +34,14 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsHub(
     onSettingsSets: () -> Unit,
+    onWorkflowSelection: () -> Unit,
     dashboardLayoutLabel: String,
     onDashboardLayout: () -> Unit,
     onNtripCaster: () -> Unit,
     onNtripMountpoint: () -> Unit,
     onUsbBaud: () -> Unit,
     onCommands: () -> Unit,
+    onReceiverProfile: () -> Unit,
     onRecordingOutputs: () -> Unit,
     onStorage: () -> Unit,
     onSessions: () -> Unit,
@@ -67,6 +69,7 @@ fun SettingsHub(
         ) {
             SettingsSection("Session setup") {
                 SettingsButton("◎", "Settings sets", onSettingsSets)
+                SettingsButton("⇄", "Workflow selection", onWorkflowSelection)
                 SettingsButton("▤", "Dashboard layout: $dashboardLayoutLabel", onDashboardLayout)
                 SettingsButton("●", "Recording outputs", onRecordingOutputs)
                 SettingsButton("▣", "Storage location profiles", onStorage)
@@ -75,6 +78,7 @@ fun SettingsHub(
             SettingsSection("Receiver and USB") {
                 SettingsButton("USB", "USB device and baud", onUsbBaud)
                 SettingsButton("⌁", "Command scripts", onCommands)
+                SettingsButton("RX", "Receiver family/profile", onReceiverProfile)
             }
 
             SettingsSection("Corrections") {
@@ -163,12 +167,14 @@ private fun SettingsHubPreview() {
     MaterialTheme {
         SettingsHub(
             onSettingsSets = {},
+            onWorkflowSelection = {},
             dashboardLayoutLabel = "Compact field dashboard",
             onDashboardLayout = {},
             onNtripCaster = {},
             onNtripMountpoint = {},
             onUsbBaud = {},
             onCommands = {},
+            onReceiverProfile = {},
             onRecordingOutputs = {},
             onStorage = {},
             onSessions = {},

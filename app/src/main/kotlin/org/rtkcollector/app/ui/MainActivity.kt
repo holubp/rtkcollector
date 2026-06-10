@@ -213,12 +213,28 @@ fun RtkCollectorApp() {
                 AppScreen.SETTINGS ->
                     SettingsHub(
                         onSettingsSets = { screen = AppScreen.SETTINGS_SETS },
+                        onWorkflowSelection = {
+                            if (state.isRecording) {
+                                Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
+                            } else {
+                                dashboardSelector = DashboardSelector.WORKFLOW
+                                screen = AppScreen.HOME
+                            }
+                        },
                         dashboardLayoutLabel = dashboardLayout.displayName,
                         onDashboardLayout = { showDashboardLayoutDialog = true },
                         onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
                         onNtripMountpoint = { screen = AppScreen.NTRIP_MOUNTPOINT_PROFILES },
                         onUsbBaud = { screen = AppScreen.USB_BAUD },
                         onCommands = { screen = AppScreen.COMMANDS },
+                        onReceiverProfile = {
+                            if (state.isRecording) {
+                                Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
+                            } else {
+                                dashboardSelector = DashboardSelector.RECEIVER
+                                screen = AppScreen.HOME
+                            }
+                        },
                         onRecordingOutputs = { screen = AppScreen.RECORDING_OUTPUTS },
                         onStorage = { screen = AppScreen.STORAGE },
                         onSessions = { screen = AppScreen.SESSIONS },

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FTDI bridge observed with the UM980 USB module: 0403:6015. -->
+    <usb-device
+        vendor-id="1027"
+        product-id="24597" />
+</resources>

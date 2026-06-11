@@ -38,6 +38,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -792,48 +797,79 @@ fun ProfileEditorScreen(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(field.label, style = MaterialTheme.typography.labelLarge)
-                        OutlinedTextField(
-                            value = values[field.key].orEmpty(),
-                            onValueChange = { value ->
-                                values = values + (field.key to value)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = if (field.multiline) 4 else 1,
-                            readOnly = field.readOnly,
-                            singleLine = !field.multiline,
-                            textStyle = if (field.multiline) {
-                                MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
-                            } else {
-                                MaterialTheme.typography.bodyMedium
-                            },
-                            visualTransformation = if (field.secret && field.key !in visibleSecrets) {
-                                PasswordVisualTransformation()
-                            } else {
-                                VisualTransformation.None
-                            },
-                            trailingIcon = if (field.secret) {
-                                {
-                                    TextButton(
-                                        onClick = {
-                                            visibleSecrets = if (field.key in visibleSecrets) {
-                                                visibleSecrets - field.key
-                                            } else {
-                                                visibleSecrets + field.key
-                                            }
-                                        },
-                                    ) {
-                                        Text(if (field.key in visibleSecrets) "Hide" else "Show")
+                        if (field.multiline) {
+                            ScriptTextField(
+                                value = values[field.key].orEmpty(),
+                                onValueChange = { value ->
+                                    values = values + (field.key to value)
+                                },
+                                readOnly = field.readOnly,
+                            )
+                        } else {
+                            OutlinedTextField(
+                                value = values[field.key].orEmpty(),
+                                onValueChange = { value ->
+                                    values = values + (field.key to value)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 1,
+                                readOnly = field.readOnly,
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                visualTransformation = if (field.secret && field.key !in visibleSecrets) {
+                                    PasswordVisualTransformation()
+                                } else {
+                                    VisualTransformation.None
+                                },
+                                trailingIcon = if (field.secret) {
+                                    {
+                                        TextButton(
+                                            onClick = {
+                                                visibleSecrets = if (field.key in visibleSecrets) {
+                                                    visibleSecrets - field.key
+                                                } else {
+                                                    visibleSecrets + field.key
+                                                }
+                                            },
+                                        ) {
+                                            Text(if (field.key in visibleSecrets) "Hide" else "Show")
+                                        }
                                     }
-                                }
-                            } else {
-                                null
-                            },
-                        )
+                                } else {
+                                    null
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun ScriptTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    readOnly: Boolean,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .onKeyEvent { event ->
+                event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionLeft ||
+                        event.key == Key.DirectionRight ||
+                        event.key == Key.DirectionUp ||
+                        event.key == Key.DirectionDown)
+            },
+        minLines = 4,
+        readOnly = readOnly,
+        singleLine = false,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+    )
 }
 
 private fun EditableProfileField.editorOptions(): List<EditableProfileOption> =

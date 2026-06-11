@@ -236,7 +236,7 @@ class ProfileStoresTest {
     }
 
     @Test
-    fun `migration appends binary ppp status output to ppp enabled script`() {
+    fun `migration appends binary rtk monitoring outputs to ppp enabled script`() {
         val migrated = ProfileStoreMigrations.commandProfiles(
             profiles = listOf(
                 CommandProfile(
@@ -253,7 +253,12 @@ class ProfileStoresTest {
             defaults = emptyList(),
         )
 
-        assertTrue(migrated.single().runtimeScript.contains("PPPNAVB COM1 1"))
+        val script = migrated.single().runtimeScript
+        assertTrue(script.contains("PPPNAVB COM1 1"))
+        assertTrue(script.contains("ADRNAVB COM1 1"))
+        assertTrue(script.contains("RTKSTATUSB COM1 1"))
+        assertTrue(script.contains("RTCMSTATUSB COM1 ONCHANGED"))
+        assertFalse(script.contains("SAVECONFIG", ignoreCase = true))
     }
 
     @Test

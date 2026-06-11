@@ -12,7 +12,7 @@ internal object ProfileStoreMigrations {
                     name = profile.name.ifBlank { "UM980 binary multi-Hz" },
                     runtimeScript = profile.runtimeScript
                         .ifBlank { ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT }
-                        .migrateUm980BinaryPppStatusOutput(),
+                        .migrateUm980BinaryRtkMonitoringOutput(),
                     isProtected = false,
                 )
                 ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID -> profile.copy(
@@ -114,11 +114,13 @@ internal object ProfileStoreMigrations {
 private fun String.blankOldNone(): String =
     if (equals("NONE", ignoreCase = true)) "" else this
 
-private fun String.migrateUm980BinaryPppStatusOutput(): String {
+private fun String.migrateUm980BinaryRtkMonitoringOutput(): String {
     if (isOldUm980BinaryProfile()) return ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT
     if (!contains("CONFIG PPP ENABLE", ignoreCase = true)) return this
-    if (lineStartsWith("PPPNAVB")) return this
-    return trimEnd() + "\nPPPNAVB COM1 1"
+    return withMissingCommand("PPPNAVB COM1 1")
+        .withMissingCommand("ADRNAVB COM1 1")
+        .withMissingCommand("RTKSTATUSB COM1 1")
+        .withMissingCommand("RTCMSTATUSB COM1 ONCHANGED")
 }
 
 private fun String.isOldUm980BinaryProfile(): Boolean =
@@ -129,6 +131,12 @@ private fun String.isOldUm980BinaryProfile(): Boolean =
 
 private fun String.lineStartsWith(prefix: String): Boolean =
     lineSequence().any { it.trimStart().startsWith(prefix, ignoreCase = true) }
+
+private fun String.withMissingCommand(command: String): String {
+    val commandName = command.substringBefore(' ')
+    if (lineStartsWith(commandName)) return this
+    return trimEnd() + "\n$command"
+}
 
 private fun List<CommandProfile>.required(id: String): CommandProfile =
     firstOrNull { it.id == id } ?: error("Missing default command profile '$id'.")

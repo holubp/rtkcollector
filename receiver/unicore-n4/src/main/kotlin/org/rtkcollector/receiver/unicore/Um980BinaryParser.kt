@@ -5,13 +5,18 @@ import java.nio.ByteOrder
 
 object Um980BinaryParser {
     private const val UNICORE_BINARY_CRC32_POLY = 0xEDB88320u
-    private const val BESTNAVB_MESSAGE_ID = 2118
+    private const val ADRNAVB_MESSAGE_ID = 142
+    private const val RTKSTATUSB_MESSAGE_ID = 509
     private const val PPPNAVB_MESSAGE_ID = 1026
     private const val STADOPB_MESSAGE_ID = 954
+    private const val BESTNAVB_MESSAGE_ID = 2118
+    private const val RTCMSTATUSB_MESSAGE_ID = 2125
     private const val BINARY_HEADER_LENGTH = 24
     private const val CRC_LENGTH = 4
     private const val MAX_BINARY_PAYLOAD_LENGTH = 4096
     private const val NAV_COMMON_MIN_PAYLOAD_LENGTH = 72
+    private const val RTKSTATUSB_MIN_PAYLOAD_LENGTH = 56
+    private const val RTCMSTATUSB_MIN_PAYLOAD_LENGTH = 22
     private const val STADOPB_MIN_PAYLOAD_LENGTH = 42
 
     private val solutionStatusNames = mapOf(
@@ -41,6 +46,14 @@ object Um980BinaryParser {
         56 to "INS_RTKFIXED",
         68 to "PPP_CONVERGING",
         69 to "PPP",
+    )
+    private val rtkCalculateStatusNames = mapOf(
+        0 to "NO_DIFFERENTIAL_DATA",
+        1 to "INSUFFICIENT_BASE_OBSERVATION",
+        2 to "HIGH_CORRECTION_LATENCY",
+        3 to "ACTIVE_IONOSPHERE",
+        4 to "INSUFFICIENT_ROVER_OBSERVATION",
+        5 to "RTK_SOLUTION_AVAILABLE",
     )
 
     fun extractFrames(input: ByteArray): List<ByteArray> {
@@ -93,6 +106,12 @@ object Um980BinaryParser {
         return parseNavPayload(frame, source = "PPPNAVB")
     }
 
+    fun parseAdrnavb(frame: ByteArray): Um980Telemetry? {
+        if (!isValidFrame(frame)) return null
+        if (messageId(frame) != ADRNAVB_MESSAGE_ID) return null
+        return parseNavPayload(frame, source = "ADRNAVB")
+    }
+
     private fun parseNavPayload(frame: ByteArray, source: String): Um980Telemetry? {
         val payloadLength = u16(frame, 6)
         if (payloadLength < NAV_COMMON_MIN_PAYLOAD_LENGTH) return null
@@ -123,6 +142,46 @@ object Um980BinaryParser {
             horizontalSpeedMps = if (payloadLength >= 96) payload.getDouble(88) else null,
             trackDeg = if (payloadLength >= 104) payload.getDouble(96) else null,
             verticalSpeedMps = if (payloadLength >= 112) payload.getDouble(104) else null,
+        )
+    }
+
+    fun parseRtkstatusb(frame: ByteArray): Um980Telemetry? {
+        if (!isValidFrame(frame)) return null
+        if (messageId(frame) != RTKSTATUSB_MESSAGE_ID) return null
+        val payloadLength = u16(frame, 6)
+        if (payloadLength < RTKSTATUSB_MIN_PAYLOAD_LENGTH) return null
+        val payload = ByteBuffer
+            .wrap(frame.copyOfRange(BINARY_HEADER_LENGTH, BINARY_HEADER_LENGTH + payloadLength))
+            .order(ByteOrder.LITTLE_ENDIAN)
+        val positionType = payload.getInt(44)
+        val calculateStatus = payload.getInt(48)
+        return Um980Telemetry(
+            source = "RTKSTATUSB",
+            utcTime = gpsWeekTowUtc(frame),
+            rtkPositionType = positionTypeNames[positionType] ?: "TYPE_$positionType",
+            rtkCalculateStatus = calculateStatus,
+            rtkCalculateStatusDescription = rtkCalculateStatusNames[calculateStatus] ?: "STATUS_$calculateStatus",
+            ionDetected = payload.get(52).toInt() != 0,
+            adrNumber = payload.get(54).toInt() and 0xff,
+        )
+    }
+
+    fun parseRtcmstatusb(frame: ByteArray): Um980Telemetry? {
+        if (!isValidFrame(frame)) return null
+        if (messageId(frame) != RTCMSTATUSB_MESSAGE_ID) return null
+        val payloadLength = u16(frame, 6)
+        if (payloadLength < RTCMSTATUSB_MIN_PAYLOAD_LENGTH) return null
+        val payload = ByteBuffer
+            .wrap(frame.copyOfRange(BINARY_HEADER_LENGTH, BINARY_HEADER_LENGTH + payloadLength))
+            .order(ByteOrder.LITTLE_ENDIAN)
+        return Um980Telemetry(
+            source = "RTCMSTATUSB",
+            utcTime = gpsWeekTowUtc(frame),
+            rtcmMessageId = payload.getInt(0),
+            rtcmMessageCount = payload.getInt(4),
+            rtcmBaseId = payload.getInt(8),
+            rtcmSatelliteCount = payload.getInt(12),
+            rtcmObservableCounts = (16..21).map { offset -> payload.get(offset).toInt() and 0xff },
         )
     }
 

@@ -70,6 +70,84 @@ class Um980BinaryParserTest {
     }
 
     @Test
+    fun `parses adrnavb common navigation payload as rtk view`() {
+        val payload = ByteBuffer.allocate(112).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putInt(0, 0)
+            putInt(4, 50)
+            putDouble(8, 50.087)
+            putDouble(16, 14.421)
+            putDouble(24, 287.3)
+            putFloat(32, 44.0f)
+            putFloat(40, 0.012f)
+            putFloat(44, 0.013f)
+            putFloat(48, 0.025f)
+            position(52)
+            put("TUBO".encodeToByteArray())
+            putFloat(56, 1.2f)
+            putFloat(60, 0.3f)
+            put(64, 21)
+            put(65, 17)
+        }.array()
+
+        val telemetry = Um980BinaryParser.parseAdrnavb(unicoreFrame(142, payload))
+
+        requireNotNull(telemetry)
+        assertEquals("ADRNAVB", telemetry.source)
+        assertEquals("SOL_COMPUTED", telemetry.solutionStatus)
+        assertEquals("NARROW_INT", telemetry.positionType)
+        assertEquals("TUBO", telemetry.stationId)
+        assertEquals(17, telemetry.satellitesUsed)
+        assertEquals(21, telemetry.satellitesInView)
+    }
+
+    @Test
+    fun `parses rtkstatusb calculate status and adr number`() {
+        val payload = ByteBuffer.allocate(64).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putInt(0, 0b11)
+            putInt(8, 0b1)
+            putInt(20, 0b10)
+            putInt(28, 0b100)
+            putInt(36, 0b1000)
+            putInt(44, 34)
+            putInt(48, 5)
+            put(52, 0)
+            put(54, 23)
+        }.array()
+
+        val telemetry = Um980BinaryParser.parseRtkstatusb(unicoreFrame(509, payload))
+
+        requireNotNull(telemetry)
+        assertEquals("RTKSTATUSB", telemetry.source)
+        assertEquals("NARROW_FLOAT", telemetry.rtkPositionType)
+        assertEquals(5, telemetry.rtkCalculateStatus)
+        assertEquals(23, telemetry.adrNumber)
+    }
+
+    @Test
+    fun `parses rtcmstatusb decoded message status`() {
+        val payload = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putInt(0, 1077)
+            putInt(4, 42)
+            putInt(8, 9901)
+            putInt(12, 14)
+            put(16, 14)
+            put(17, 14)
+            put(18, 0)
+            put(19, 0)
+            put(20, 0)
+            put(21, 0)
+        }.array()
+
+        val telemetry = Um980BinaryParser.parseRtcmstatusb(unicoreFrame(2125, payload))
+
+        requireNotNull(telemetry)
+        assertEquals("RTCMSTATUSB", telemetry.source)
+        assertEquals(1077, telemetry.rtcmMessageId)
+        assertEquals(9901, telemetry.rtcmBaseId)
+        assertEquals(14, telemetry.rtcmSatelliteCount)
+    }
+
+    @Test
     fun `returns null for non BESTNAVB message id`() {
         val frame = bestnavbFrame(messageId = 999)
 
@@ -188,6 +266,20 @@ class Um980BinaryParserTest {
             payload.putShort(42, 4)
             payloadBytes.copyInto(frame, destinationOffset = 24)
             putU32(frame, 24 + payloadLength, crc32(frame, 0, 24 + payloadLength).toInt())
+            return frame
+        }
+
+        private fun unicoreFrame(messageId: Int, payload: ByteArray): ByteArray {
+            val frame = ByteArray(24 + payload.size + 4)
+            frame[0] = 0xAA.toByte()
+            frame[1] = 0x44
+            frame[2] = 0xB5.toByte()
+            putU16(frame, 4, messageId)
+            putU16(frame, 6, payload.size)
+            putU16(frame, 10, 2300)
+            putU32(frame, 12, 100_000)
+            payload.copyInto(frame, destinationOffset = 24)
+            putU32(frame, 24 + payload.size, crc32(frame, 0, 24 + payload.size).toInt())
             return frame
         }
 

@@ -55,6 +55,8 @@ import org.rtkcollector.app.sessions.SessionBrowserEntry
 import org.rtkcollector.app.sessions.SessionBrowserState
 import org.rtkcollector.app.sessions.SessionEntryKind
 import org.rtkcollector.app.sessions.sessionBrowserStateOf
+import org.rtkcollector.app.usb.AndroidUsbSerialTransport
+import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
@@ -72,6 +74,7 @@ import org.rtkcollector.app.ui.profiles.ProfileEditorScreen
 import org.rtkcollector.app.ui.profiles.ProfileListScreen
 import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
+import org.rtkcollector.app.ui.profiles.persistentReceiverWriteAction
 import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
@@ -81,6 +84,7 @@ import java.io.File
 import java.nio.file.Paths
 
 private const val TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS = 60L * 60L * 1000L
+private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -899,6 +903,22 @@ fun RtkCollectorApp() {
                                             requestUsbPermissionForProfile(context, target.id)
                                             profileRevision++
                                         }),
+                                    )
+                                }
+                                if (target.kind == ProfileKind.COMMANDS) {
+                                    add(
+                                        persistentReceiverWriteAction(
+                                            onClickWithValues = { values ->
+                                                writeCommandProfilePersistentlyToDevice(
+                                                    context = context,
+                                                    settingsSets = settingsSets,
+                                                    selectedSettingsSetId = selectedSettingsSetId,
+                                                    commandProfileId = target.id,
+                                                    runtimeScript = values["runtimeScript"].orEmpty(),
+                                                    isRecording = state.isRecording,
+                                                )
+                                            },
+                                        ),
                                     )
                                 }
                                 profileEditorDeleteAction(target)?.let { deleteAction ->
@@ -1960,6 +1980,88 @@ private fun requestUsbPermissionForProfile(context: Context, usbProfileId: Strin
     )
     usbManager.requestPermission(device, permissionIntent)
 }
+
+private fun writeCommandProfilePersistentlyToDevice(
+    context: Context,
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+    commandProfileId: String,
+    runtimeScript: String,
+    isRecording: Boolean,
+) {
+    if (isRecording) {
+        Toast.makeText(context, "Stop recording before writing receiver configuration persistently.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val profileStore = ProfileStores(context)
+    val commandProfile = profileStore.commandProfiles().firstOrNull { it.id == commandProfileId }
+    if (commandProfile == null) {
+        Toast.makeText(context, "Command profile is not available.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+        ?: profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
+    if (settingsSet == null) {
+        Toast.makeText(context, "No settings set is selected.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val usbProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == settingsSet.usbBaudProfileRef.id }
+    if (usbProfile == null) {
+        Toast.makeText(context, "USB/baud profile is not available.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    val device = usbManager.selectUsbDevice(usbProfile)
+    if (device == null) {
+        Toast.makeText(context, "Selected USB receiver is not connected.", Toast.LENGTH_LONG).show()
+        return
+    }
+    if (!usbManager.hasPermission(device)) {
+        Toast.makeText(context, "USB permission is required before writing receiver configuration.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val commands = persistentReceiverCommands(runtimeScript)
+    Toast.makeText(context, "Writing persistent receiver configuration...", Toast.LENGTH_SHORT).show()
+    Thread {
+        val transport = AndroidUsbSerialTransport(
+            usbManager = usbManager,
+            device = device,
+            options = UsbSerialOpenOptions(baudRate = usbProfile.profileBaud),
+        )
+        runCatching {
+            transport.open()
+            commands.forEach { command ->
+                transport.write("$command\r\n".toByteArray(Charsets.US_ASCII))
+                Thread.sleep(PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS)
+            }
+        }.onSuccess {
+            runOnMain(context) {
+                Toast.makeText(
+                    context,
+                    "Persistent receiver configuration written for ${commandProfile.name}.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }.onFailure { error ->
+            runOnMain(context) {
+                Toast.makeText(
+                    context,
+                    "Persistent receiver configuration failed: ${error.message}",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+        runCatching { transport.close() }
+    }.start()
+}
+
+internal fun persistentReceiverCommands(runtimeScript: String): List<String> =
+    runtimeScript
+        .lineSequence()
+        .map(String::trim)
+        .filter { it.isNotBlank() && !it.startsWith("#") }
+        .filterNot { it.equals("SAVECONFIG", ignoreCase = true) }
+        .toList() + "SAVECONFIG"
 
 private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {
     val sets = settingsSets()

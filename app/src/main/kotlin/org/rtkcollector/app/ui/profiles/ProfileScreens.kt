@@ -575,6 +575,9 @@ fun ProfileEditorScreen(
             showUnsavedPrompt = true
         }
     }
+    fun runAction(action: ProfileEditorAction) {
+        action.onClickWithValues?.invoke(values.mapValues { it.value.trim() }) ?: action.onClick()
+    }
     BackHandler(onBack = leaveEditor)
     if (showUnsavedPrompt) {
         AlertDialog(
@@ -611,19 +614,25 @@ fun ProfileEditorScreen(
     pendingDestructiveAction?.let { action ->
         AlertDialog(
             onDismissRequest = { pendingDestructiveAction = null },
-            title = { Text(action.label) },
-            text = { Text("Confirm ${action.label.lowercase()} for this profile?") },
+            title = { Text(action.warningTitle ?: action.label) },
+            text = {
+                Text(action.warningBody ?: "Confirm ${action.label.lowercase()} for this profile?")
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         pendingDestructiveAction = null
-                        action.onClick()
+                        runAction(action)
                     },
                     colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
+                        contentColor = if (action.destructive) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
                     ),
                 ) {
-                    Text(action.label)
+                    Text(action.confirmLabel)
                 }
             },
             dismissButton = {
@@ -687,7 +696,15 @@ fun ProfileEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             utilityActions.forEach { action ->
-                                TextButton(onClick = action.onClick) {
+                                TextButton(
+                                    onClick = {
+                                        if (action.warningTitle != null || action.warningBody != null) {
+                                            pendingDestructiveAction = action
+                                        } else {
+                                            runAction(action)
+                                        }
+                                    },
+                                ) {
                                     Text(action.label)
                                 }
                             }

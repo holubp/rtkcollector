@@ -66,7 +66,11 @@ data class ProfileEditorData(
 data class ProfileEditorAction(
     val label: String,
     val onClick: () -> Unit,
+    val onClickWithValues: ((Map<String, String>) -> Unit)? = null,
     val destructive: Boolean = false,
+    val warningTitle: String? = null,
+    val warningBody: String? = null,
+    val confirmLabel: String = label,
 )
 
 data class EditableProfileOption(

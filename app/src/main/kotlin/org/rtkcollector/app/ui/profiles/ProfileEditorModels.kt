@@ -15,3 +15,22 @@ data class NtripMountpointEditorState(
         return copy(mountpointText = mountpoint)
     }
 }
+
+const val PersistentReceiverWriteLabel = "Write init config persistently to device"
+const val PersistentReceiverWriteWarningTitle = "Write receiver configuration?"
+const val PersistentReceiverWriteWarningBody =
+    "This sends the current init script and SAVECONFIG to the receiver. " +
+        "It writes receiver non-volatile memory and can affect other apps, tools and future receiver sessions until manually changed again."
+
+fun persistentReceiverWriteAction(
+    onClick: () -> Unit = {},
+    onClickWithValues: ((Map<String, String>) -> Unit)? = null,
+): ProfileEditorAction =
+    ProfileEditorAction(
+        label = PersistentReceiverWriteLabel,
+        onClick = onClick,
+        onClickWithValues = onClickWithValues,
+        warningTitle = PersistentReceiverWriteWarningTitle,
+        warningBody = PersistentReceiverWriteWarningBody,
+        confirmLabel = "Write persistently",
+    )

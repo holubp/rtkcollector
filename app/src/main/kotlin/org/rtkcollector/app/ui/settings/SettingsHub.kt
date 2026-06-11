@@ -55,6 +55,8 @@ fun SettingsHub(
     onRecordingOutputs: () -> Unit,
     onStorage: () -> Unit,
     onSessions: () -> Unit,
+    onExportSettings: () -> Unit,
+    onImportSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
@@ -111,6 +113,12 @@ fun SettingsHub(
 
                 SettingsSection("Sessions") {
                     SettingsRow("↗", "Recent sessions and sharing", onSessions)
+                }
+
+                SettingsSection("Settings transfer") {
+                    SettingsRow("⇧", "Export settings backup", onExportSettings)
+                    SettingsDivider()
+                    SettingsRow("⇩", "Import settings backup", onImportSettings)
                 }
             }
             HelpOverlay(topic = helpTopic, onDismiss = { helpTopic = null })
@@ -230,6 +238,8 @@ private fun SettingsHubPreview() {
             onRecordingOutputs = {},
             onStorage = {},
             onSessions = {},
+            onExportSettings = {},
+            onImportSettings = {},
             onBack = {},
         )
     }

@@ -5,6 +5,9 @@ import org.rtkcollector.app.recording.RecordingForegroundService
 
 fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val running = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
+    val lastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR)
+    val errorCategory = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_CATEGORY) ?: "NONE"
+    val errorSeverity = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_SEVERITY) ?: "NONE"
     val status = DashboardStatus(
         settingsSet = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_SET_LABEL) ?: "n/a",
         workflow = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_WORKFLOW_LABEL) ?: "n/a",
@@ -34,6 +37,9 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         baseline = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASELINE) ?: "n/a",
         pppStatus = displayPppStatus(pppStatus),
         rtkStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_RTK_STATUS) ?: "n/a",
+        receiverFrequency = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
+            ?: "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz",
+        receiverMode = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_MODE) ?: "n/a",
     )
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",
@@ -64,7 +70,17 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             ?: "n/a",
     )
     return if (running) {
-        DashboardState.running(status, position, fix, ntrip, files, profiles)
+        DashboardState.running(
+            status = status,
+            position = position,
+            fix = fix,
+            ntrip = ntrip,
+            files = files,
+            profiles = profiles,
+            lastError = lastError,
+            errorCategory = errorCategory,
+            errorSeverity = errorSeverity,
+        )
     } else {
         DashboardState.planned(
             workflow = status.workflow,
@@ -76,6 +92,9 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             ntrip = ntrip,
             files = files,
             profiles = profiles,
+            lastError = lastError,
+            errorCategory = errorCategory,
+            errorSeverity = errorSeverity,
         )
     }
 }

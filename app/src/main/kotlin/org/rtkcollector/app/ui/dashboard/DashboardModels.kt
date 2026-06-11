@@ -10,6 +10,9 @@ data class DashboardState(
     val profiles: ProfilesCardState,
     val primaryAction: DashboardAction,
     val secondaryActions: List<DashboardAction>,
+    val lastError: String? = null,
+    val errorCategory: String = "NONE",
+    val errorSeverity: String = "NONE",
 ) {
     fun withPlannedConfiguration(planned: DashboardState): DashboardState =
         if (isRecording) {
@@ -37,6 +40,9 @@ data class DashboardState(
             ntrip: NtripCardState = NtripCardState(),
             files: FilesCardState = FilesCardState(),
             profiles: ProfilesCardState = ProfilesCardState(),
+            lastError: String? = null,
+            errorCategory: String = "NONE",
+            errorSeverity: String = "NONE",
         ): DashboardState =
             DashboardState(
                 isRecording = false,
@@ -54,6 +60,9 @@ data class DashboardState(
                 profiles = profiles,
                 primaryAction = DashboardAction("Start", DashboardActionKind.START),
                 secondaryActions = listOf(DashboardAction("USB access", DashboardActionKind.USB_PERMISSION)),
+                lastError = lastError,
+                errorCategory = errorCategory,
+                errorSeverity = errorSeverity,
             )
 
         fun running(
@@ -63,6 +72,9 @@ data class DashboardState(
             ntrip: NtripCardState,
             files: FilesCardState,
             profiles: ProfilesCardState = ProfilesCardState(),
+            lastError: String? = null,
+            errorCategory: String = "NONE",
+            errorSeverity: String = "NONE",
         ): DashboardState =
             DashboardState(
                 isRecording = true,
@@ -77,6 +89,9 @@ data class DashboardState(
                     DashboardAction("NTRIP", DashboardActionKind.NTRIP),
                     DashboardAction("Mark", DashboardActionKind.MARK),
                 ),
+                lastError = lastError,
+                errorCategory = errorCategory,
+                errorSeverity = errorSeverity,
             )
     }
 }
@@ -133,6 +148,15 @@ data class PositionCardState(
     val lonError: String = "n/a",
 )
 
+fun PositionCardState.latLonLinesForNarrowLayout(): List<String> {
+    val parts = latLon.split(",", limit = 2).map { it.trim() }
+    return if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
+        listOf("Lat ${parts[0]}", "Lon ${parts[1]}")
+    } else {
+        listOf(latLon)
+    }
+}
+
 data class FixCardState(
     val fixType: String = "n/a",
     val satellites: String = "n/a",
@@ -145,6 +169,8 @@ data class FixCardState(
     val pppStatus: String = "n/a",
     val rtkStatus: String = "n/a",
     val rtklibStatus: String = "Not configured",
+    val receiverFrequency: String = "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz",
+    val receiverMode: String = "n/a",
 )
 
 data class NtripCardState(

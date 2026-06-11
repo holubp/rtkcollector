@@ -54,6 +54,9 @@ import org.rtkcollector.receiver.unicore.NmeaGsvParser
 import org.rtkcollector.receiver.unicore.Um980AsciiSolution
 import org.rtkcollector.receiver.unicore.Um980AsciiSolutionParser
 import org.rtkcollector.receiver.unicore.Um980BinaryParser
+import org.rtkcollector.receiver.unicore.Um980MessageFrequencyTracker
+import org.rtkcollector.receiver.unicore.Um980MessageKind
+import org.rtkcollector.receiver.unicore.Um980ModeParser
 import org.rtkcollector.receiver.unicore.Um980NmeaExporter
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980StreamParser
@@ -142,6 +145,8 @@ class RecordingForegroundService : Service() {
             rtcmDecodedAtMillis = null,
             rtcmLastMessageId = null,
             rtcmLastBaseId = null,
+            um980Frequency = DEFAULT_UM980_FREQUENCY_DISPLAY,
+            um980Mode = "n/a",
         )
         broadcastState()
 
@@ -157,6 +162,29 @@ class RecordingForegroundService : Service() {
 
             val serialBaud = validateBaud(intent.getIntExtra(EXTRA_SERIAL_BAUD, 230400), "serial baud")
             val profileBaud = validateBaud(intent.getIntExtra(EXTRA_PROFILE_BAUD, serialBaud), "profile baud")
+            val preflight = RecordingStartPreflight.validate(
+                RecordingStartPreflight.Input(
+                    workflowUsesNtrip = intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false),
+                    usbProfileSelected = !intent.getStringExtra(EXTRA_USB_BAUD_PROFILE_ID).isNullOrBlank(),
+                    usbDeviceConnected = true,
+                    usbPermissionGranted = true,
+                    serialDriverAvailable = true,
+                    serialOpenSucceeded = true,
+                    storageWritable = true,
+                    ntripMountpointConfigured = !intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).isNullOrBlank(),
+                ),
+            )
+            if (!preflight.canStart) {
+                error(preflight.message)
+            }
+            val usbTransport = AndroidUsbSerialTransport(
+                usbManager = usbManager,
+                device = usbDevice,
+                options = UsbSerialOpenOptions(profileBaud),
+            )
+            usbTransport.open()
+            transport = usbTransport
+
             val openedSession = openSessionWriters(intent)
             val sessionWriters = openedSession.writers
             val startedAt = Instant.now().toString()
@@ -209,14 +237,6 @@ class RecordingForegroundService : Service() {
             activeProfileBaud = profileBaud
             activeUsbVid = usbDevice.vendorId
             activeUsbPid = usbDevice.productId
-            val usbTransport = AndroidUsbSerialTransport(
-                usbManager = usbManager,
-                device = usbDevice,
-                options = UsbSerialOpenOptions(profileBaud),
-            )
-            usbTransport.open()
-            transport = usbTransport
-
             val asyncAdvisoryFanout = AsyncAdvisoryFanout(
                 delegate = buildAdvisoryFanout(
                     sessionWriters = sessionWriters,
@@ -240,6 +260,9 @@ class RecordingForegroundService : Service() {
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
             shutdownCommands = intent.getStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS).orEmpty().validatedCommands()
+            val configuredMode = Um980ModeParser.configuredMode(
+                (initCommands + baudSwitchCommands + modeCommands).joinToString("\n"),
+            )
             val baudPlan = Um980BaudTransitionPlan.build(
                 profileBaud = profileBaud,
                 serialBaud = serialBaud,
@@ -272,6 +295,7 @@ class RecordingForegroundService : Service() {
                 ),
                 rawRecordingActive = true,
                 correctionsActive = false,
+                um980Mode = configuredMode?.let { "Commanded $it" } ?: "n/a",
             )
             ntripRateWindowStartedAtMillis = System.currentTimeMillis()
             ntripRateWindowCorrectionBytes = 0L
@@ -787,6 +811,7 @@ class RecordingForegroundService : Service() {
             message.contains("USB", ignoreCase = true) -> RecordingErrorCategory.USB
             message.contains("SAF", ignoreCase = true) -> RecordingErrorCategory.STORAGE
             message.contains("storage", ignoreCase = true) -> RecordingErrorCategory.STORAGE
+            message.contains("NTRIP", ignoreCase = true) -> RecordingErrorCategory.NTRIP
             message.contains("command", ignoreCase = true) -> RecordingErrorCategory.RECEIVER_COMMAND
             else -> RecordingErrorCategory.SERVICE_LIFECYCLE
         }
@@ -952,8 +977,20 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_ERROR_SEVERITY, state.errorSeverity.name)
                 putExtra(EXTRA_STATE_RAW_ACTIVE, state.rawRecordingActive)
                 putExtra(EXTRA_STATE_CORRECTIONS_ACTIVE, state.correctionsActive)
+                putExtra(EXTRA_STATE_UM980_FREQUENCY, state.um980Frequency)
+                putExtra(EXTRA_STATE_UM980_MODE, state.um980Mode)
             },
         )
+    }
+
+    private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980MessageFrequencyTracker) {
+        when (Um980BinaryParser.messageId(frame)) {
+            12, 138 -> frequencyTracker.record(Um980MessageKind.OBSVM, System.currentTimeMillis())
+            142 -> frequencyTracker.record(Um980MessageKind.ADRNAV, System.currentTimeMillis())
+            509 -> frequencyTracker.record(Um980MessageKind.RTKSTATUS, System.currentTimeMillis())
+            1026 -> frequencyTracker.record(Um980MessageKind.PPPNAV, System.currentTimeMillis())
+            2118 -> frequencyTracker.record(Um980MessageKind.BESTNAV, System.currentTimeMillis())
+        }
     }
 
     private fun buildAdvisoryFanout(
@@ -970,6 +1007,7 @@ class RecordingForegroundService : Service() {
         val nmeaExporter = NmeaSentenceExporter()
         val solutionParser = Um980AsciiSolutionParser()
         val streamParser = Um980StreamParser()
+        val frequencyTracker = Um980MessageFrequencyTracker()
         val rtcmExtractor = Rtcm3Extractor(validateCrc = true)
         return AdvisoryFanout(
             eventSink = eventSink,
@@ -985,6 +1023,7 @@ class RecordingForegroundService : Service() {
                                     }
                                 }
                                 ggaParser.accept(record.bytes).forEach { fix ->
+                                    frequencyTracker.record(Um980MessageKind.GGA, System.currentTimeMillis())
                                     if (exportJsonSolution) {
                                         sessionWriters.appendReceiverSolutionJson(fix.toJson())
                                     }
@@ -1041,6 +1080,7 @@ class RecordingForegroundService : Service() {
                                 solutionParser.accept(record.bytes).forEach { solution ->
                                     when (solution.logName) {
                                         "PPPNAVA" -> {
+                                            frequencyTracker.record(Um980MessageKind.PPPNAV, System.currentTimeMillis())
                                             if (exportJsonSolution) {
                                                 sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
                                             }
@@ -1049,12 +1089,14 @@ class RecordingForegroundService : Service() {
                                             )
                                         }
                                         "ADRNAVA" -> {
+                                            frequencyTracker.record(Um980MessageKind.ADRNAV, System.currentTimeMillis())
                                             if (exportJsonSolution) {
                                                 sessionWriters.appendReceiverSolutionJson(solution.toJson())
                                             }
                                             state = state.withReceiverRtkAsciiSolution(solution)
                                         }
                                         "BESTNAVA" -> {
+                                            frequencyTracker.record(Um980MessageKind.BESTNAV, System.currentTimeMillis())
                                             if (exportJsonSolution) {
                                                 sessionWriters.appendReceiverSolutionJson(solution.toJson())
                                             }
@@ -1071,6 +1113,7 @@ class RecordingForegroundService : Service() {
                                 }
                             }
                             "unicore_binary" -> {
+                                recordBinaryFrequency(record.bytes, frequencyTracker)
                                 Um980BinaryParser.parseBestnavb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {
                                         sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
@@ -1119,6 +1162,7 @@ class RecordingForegroundService : Service() {
                                 }
                             }
                         }
+                        state = state.copy(um980Frequency = frequencyTracker.display(System.currentTimeMillis()))
                     }
                 },
                 AdvisoryConsumer("rtcm3-extractor") { bytes ->
@@ -1451,11 +1495,15 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_ERROR_SEVERITY = "errorSeverity"
         const val EXTRA_STATE_RAW_ACTIVE = "rawRecordingActive"
         const val EXTRA_STATE_CORRECTIONS_ACTIVE = "correctionsActive"
+        const val EXTRA_STATE_UM980_FREQUENCY = "um980Frequency"
+        const val EXTRA_STATE_UM980_MODE = "um980Mode"
 
         private const val CHANNEL_ID = "rtkcollector-recording"
         private const val NOTIFICATION_ID = 101
         private const val READ_BUFFER_BYTES = 16 * 1024
         private const val PROFILE_DRAIN_MILLIS = 2000L
+        private const val DEFAULT_UM980_FREQUENCY_DISPLAY =
+            "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)

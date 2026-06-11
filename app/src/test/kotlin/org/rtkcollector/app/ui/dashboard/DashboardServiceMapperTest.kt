@@ -5,9 +5,45 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.rtkcollector.app.recording.RecordingErrorCategory
+import org.rtkcollector.app.recording.RecordingErrorSeverity
 import org.rtkcollector.app.recording.RecordingForegroundService
 
 class DashboardServiceMapperTest {
+    @Test
+    fun `failed service state exposes last error on planned dashboard`() {
+        val intent = Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_ERROR, "USB serial device could not be opened.")
+            .putExtra(RecordingForegroundService.EXTRA_STATE_ERROR_CATEGORY, RecordingErrorCategory.USB.name)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_ERROR_SEVERITY, RecordingErrorSeverity.FATAL.name)
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("USB serial device could not be opened.", state.lastError)
+        assertEquals("USB", state.errorCategory)
+        assertEquals("FATAL", state.errorSeverity)
+    }
+
+    @Test
+    fun `maps receiver diagnostics frequency and mode`() {
+        val intent = Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            .putExtra(
+                RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY,
+                "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/1/1/1/1/4 Hz",
+            )
+            .putExtra(RecordingForegroundService.EXTRA_STATE_UM980_MODE, "Commanded ROVER SURVEY")
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals(
+            "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/1/1/1/1/4 Hz",
+            state.fix.receiverFrequency,
+        )
+        assertEquals("Commanded ROVER SURVEY", state.fix.receiverMode)
+    }
+
     @Test
     fun `stopped service state preserves last session files`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {

@@ -130,4 +130,16 @@ class DashboardStateTest {
         assertEquals("No recording available yet", FilesCardState(zipShareEnabled = true).zipShareLabel)
         assertEquals("After stop", FilesCardState(sessionLocation = ".../session").zipShareLabel)
     }
+
+    @Test
+    fun `position display splits lat and lon for narrow layout`() {
+        val lines = PositionCardState(latLon = "50.087451234, 14.421253456").latLonLinesForNarrowLayout()
+
+        assertEquals(listOf("Lat 50.087451234", "Lon 14.421253456"), lines)
+    }
+
+    @Test
+    fun `position display leaves missing value single line`() {
+        assertEquals(listOf("n/a"), PositionCardState().latLonLinesForNarrowLayout())
+    }
 }

@@ -23,6 +23,11 @@ flush and close are prioritised over derived sidecar finalisation.
 - Users must receive visible warnings when battery optimisation may affect long
   sessions.
 
+Start failures must be reported before or at recording start with a specific
+category such as USB, storage or NTRIP. A failed USB open, missing Android USB
+permission, missing serial driver or unwritable storage target must not appear
+to the user as a silent empty recording.
+
 ## Limits
 
 Android cannot guarantee survival after:

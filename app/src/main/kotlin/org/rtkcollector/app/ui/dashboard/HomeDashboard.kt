@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -59,10 +60,11 @@ private val CompactSetupTileHeight = 46.dp
 private val RailSetupItemHeight = 50.dp
 private val DashboardCardHeaderHeight = 22.dp
 private val DashboardMajorValueHeight = 36.dp
+private val PositionMajorValueHeight = 42.dp
 private val DashboardMetricRowHeight = 16.dp
 private val DashboardSeparatorHeight = 4.dp
-private val PositionDashboardCardHeight = 174.dp
-private val FixDashboardCardHeight = 250.dp
+private val PositionDashboardCardHeight = 180.dp
+private val FixDashboardCardHeight = 282.dp
 private val CorrectionsDashboardCardHeight = 226.dp
 private val RecordingDashboardCardHeight = 162.dp
 private val SetupProfilesDashboardCardHeight = 160.dp
@@ -217,6 +219,7 @@ private fun BottomActionBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -289,6 +292,7 @@ private fun CompactDashboard(
             onReceiver = onReceiver,
             onStorage = onStorage,
         )
+        ErrorStrip(state)
         DashboardCards(
             state = state,
             onSettingsSet = onSettingsSet,
@@ -338,6 +342,7 @@ private fun RailDashboard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                ErrorStrip(state)
                 defaultDashboardSetupItems.forEach { item ->
                     SetupRailItem(
                         label = item.label,
@@ -359,6 +364,26 @@ private fun RailDashboard(
             onSettingsSet = onSettingsSet,
             onHelp = onHelp,
             modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun ErrorStrip(state: DashboardState) {
+    val message = state.lastError?.takeIf { it.isNotBlank() } ?: return
+    Surface(
+        color = TidyColors.MissingBackground,
+        contentColor = TidyColors.MissingText,
+        shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, TidyColors.MissingText),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "${state.errorCategory}: $message",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -570,13 +595,31 @@ private fun PositionCard(
         helpTopic = HelpTopic.ELLIPSOIDAL_HEIGHT,
         onHelp = onHelp,
     ) {
-        MajorValue(state.position.latLon)
+        PositionMajorValue(state.position)
         Metric("UTC", state.position.utcTime)
         Metric("Ellipsoidal height", state.position.ellipsoidalHeight)
         Metric("Altitude", state.position.altitude)
         DashedSeparator()
         Metric("Latitude error", state.position.latError)
         Metric("Longitude error", state.position.lonError)
+    }
+}
+
+@Composable
+private fun PositionMajorValue(position: PositionCardState) {
+    Column(
+        modifier = Modifier.height(PositionMajorValueHeight),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        position.latLonLinesForNarrowLayout().forEach { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -604,6 +647,15 @@ private fun FixCard(
         Metric("PPP", state.fix.pppStatus)
         Metric("RTK", state.fix.rtkStatus)
         Metric("RTKLIB", state.fix.rtklibStatus)
+        DashedSeparator()
+        Metric("Mode", state.fix.receiverMode)
+        Text(
+            text = state.fix.receiverFrequency,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

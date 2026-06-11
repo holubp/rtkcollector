@@ -38,6 +38,9 @@ Fetching caster mountpoints must update the cached list only. The current
 mountpoint text changes only when the user types a new value or explicitly
 selects an item from the fetched list.
 
+The last active NTRIP mountpoint profile may be remembered for convenience, but
+NTRIP must only connect when the selected workflow uses NTRIP corrections.
+
 ## Reconnect State Machine
 
 The client should move through explicit states:
@@ -77,3 +80,7 @@ logs, issue reports or test fixtures.
 The UI may hold a runtime password long enough to build the NTRIP Basic
 Authentication header. Session metadata stores redacted NTRIP metadata and
 credential-presence flags only.
+
+Only an explicit settings backup export may include plaintext credentials, and
+only after user confirmation. That settings backup is separate from recording
+session export and must be treated as secret material by the user.

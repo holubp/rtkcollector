@@ -317,6 +317,30 @@ Use replay/test sessions for deterministic parser, quality-monitor and workflow
 tests. Replay does not require Android foreground-service or wake-lock semantics
 because it is not live hardware recording.
 
+## Settings Backup
+
+RtkCollector can export a user-initiated settings backup for transferring
+profiles between phones. The backup contains receiver command profiles, USB/baud
+profiles, NTRIP caster and mountpoint profiles, recording outputs, storage
+profiles, settings sets and active selections.
+
+NTRIP passwords are excluded by default. The export dialog may include a
+separate checkbox to include plaintext passwords. That option is intended only
+for trusted phone-to-phone transfer and the resulting file must be handled as a
+secret.
+
+## Live Stream Diagnostics
+
+The main dashboard may show compact UM980 receive-frequency diagnostics such as
+`Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/1/1/1/1/4 Hz`. These
+are observed message rates from the incoming receiver stream, not merely the
+configured receiver output periods. A `-` means the app has not seen that message
+type in the current window.
+
+The UM980 mode shown on the dashboard is receiver-reported if such evidence is
+available. Otherwise it is labelled as the mode commanded by the selected init
+script.
+
 ## V2: In-Phone RTKLIB Real-Time
 
 In-phone RTKLIB real-time solution is planned for version 2. V1 keeps the raw

@@ -43,6 +43,12 @@ class NtripSecretStore(
     fun hasPassword(secretId: String): Boolean =
         preferences.contains("$secretId.iv") && preferences.contains("$secretId.ciphertext")
 
+    fun knownSecretIds(): Set<String> =
+        preferences.all.keys
+            .filter { it.endsWith(".iv") }
+            .map { it.removeSuffix(".iv") }
+            .toSet()
+
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(keyStoreType).apply { load(null) }
         (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }

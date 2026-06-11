@@ -7,16 +7,23 @@ import android.content.IntentFilter
 import android.app.PendingIntent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.NtripCasterProfile
@@ -42,6 +50,8 @@ import org.rtkcollector.app.profile.ProfileStores
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.SettingsBackupFile
+import org.rtkcollector.app.profile.SettingsSetExportOptions
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
@@ -81,6 +91,7 @@ import org.rtkcollector.app.ui.settings.SettingsHub
 import org.rtkcollector.app.ui.usb.UsbDeviceChoice
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import androidx.core.content.FileProvider
+import org.json.JSONObject
 import java.io.File
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
@@ -115,6 +126,8 @@ fun RtkCollectorApp() {
         mutableStateOf(DashboardLayoutPreference.default)
     }
     var showDashboardLayoutDialog by remember { mutableStateOf(false) }
+    var showSettingsExportDialog by remember { mutableStateOf(false) }
+    var includePlaintextPasswordsInBackup by remember { mutableStateOf(false) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
     var profileRevision by remember { mutableStateOf(0) }
@@ -164,6 +177,21 @@ fun RtkCollectorApp() {
         val planned = profileStore.plannedDashboardState(updatedSettingsSets, selectedSettingsSetId, selectedWorkflowId)
         state = state.withPlannedConfiguration(planned)
         profileRevision++
+    }
+    val importSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                importSettingsBackup(context, uri)
+            }.onSuccess {
+                settingsSets = profileStore.settingsSets()
+                selectedSettingsSetId = profileStore.selectedSettingsSetId()
+                selectedWorkflowId = profileStore.selectedWorkflowId()
+                refreshProfileUi(settingsSets)
+                Toast.makeText(context, "Settings backup imported.", Toast.LENGTH_LONG).show()
+            }.onFailure { error ->
+                Toast.makeText(context, "Cannot import settings backup: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
     fun renameProfile(kind: ProfileKind, id: String, name: String): Boolean =
         runCatching {
@@ -397,6 +425,13 @@ fun RtkCollectorApp() {
                         onSessions = {
                             refreshSessions()
                             screen = AppScreen.SESSIONS
+                        },
+                        onExportSettings = {
+                            includePlaintextPasswordsInBackup = false
+                            showSettingsExportDialog = true
+                        },
+                        onImportSettings = {
+                            importSettingsLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
                         },
                         onBack = { screen = AppScreen.HOME },
                     )
@@ -720,6 +755,7 @@ fun RtkCollectorApp() {
                     },
                     onSelect = { id ->
                         profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
+                            profileStore.saveLastActiveNtripMountpointProfileId(profile.id)
                             settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                 set.copy(
                                     ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
@@ -978,6 +1014,7 @@ fun RtkCollectorApp() {
                             }
                             DashboardSelector.MOUNTPOINT -> {
                                 profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                    profileStore.saveLastActiveNtripMountpointProfileId(profile.id)
                                     settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                         set.copy(
                                             ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
@@ -1027,8 +1064,64 @@ fun RtkCollectorApp() {
                     onDismiss = { showDashboardLayoutDialog = false },
                 )
             }
+            if (showSettingsExportDialog) {
+                SettingsExportDialog(
+                    includePlaintextPasswords = includePlaintextPasswordsInBackup,
+                    onIncludePlaintextPasswordsChange = { includePlaintextPasswordsInBackup = it },
+                    onExport = {
+                        showSettingsExportDialog = false
+                        runCatching {
+                            shareSettingsBackup(context, includePlaintextPasswordsInBackup)
+                        }.onFailure { error ->
+                            Toast.makeText(context, "Cannot export settings backup: ${error.message}", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    onDismiss = { showSettingsExportDialog = false },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun SettingsExportDialog(
+    includePlaintextPasswords: Boolean,
+    onIncludePlaintextPasswordsChange: (Boolean) -> Unit,
+    onExport: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Export settings backup") },
+        text = {
+            Column {
+                Text("Export profiles and active selections for transfer to another phone.")
+                Row(modifier = Modifier.padding(top = 8.dp)) {
+                    Checkbox(
+                        checked = includePlaintextPasswords,
+                        onCheckedChange = onIncludePlaintextPasswordsChange,
+                    )
+                    Text("Include plaintext NTRIP passwords")
+                }
+                if (includePlaintextPasswords) {
+                    Text(
+                        text = SettingsSetExportOptions(includePlaintextPasswords = true).passwordWarning.orEmpty(),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onExport) {
+                Text("Export")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
@@ -1104,6 +1197,77 @@ private fun buildSessionBrowserState(
 
 private fun runOnMain(context: Context, action: () -> Unit) {
     (context as? ComponentActivity)?.runOnUiThread(action) ?: action()
+}
+
+private fun buildSettingsBackup(
+    context: Context,
+    includePlaintextPasswords: Boolean,
+): SettingsBackupFile {
+    val profileStore = ProfileStores(context)
+    val secretStore = NtripSecretStore(context)
+    val passwords = if (includePlaintextPasswords) {
+        secretStore.knownSecretIds().mapNotNull { id ->
+            secretStore.getPassword(id)?.let { password -> id to password }
+        }.toMap()
+    } else {
+        emptyMap()
+    }
+    return SettingsBackupFile.fromProfiles(
+        commandProfiles = profileStore.commandProfiles(),
+        usbBaudProfiles = profileStore.usbBaudProfiles(),
+        ntripCasterProfiles = profileStore.ntripCasterProfiles(),
+        ntripMountpointProfiles = profileStore.ntripMountpointProfiles(),
+        recordingPolicyProfiles = profileStore.recordingPolicyProfiles(),
+        storageProfiles = profileStore.storageProfiles(),
+        settingsSets = profileStore.settingsSets(),
+        selectedSettingsSetId = profileStore.selectedSettingsSetId(),
+        selectedWorkflowId = profileStore.selectedWorkflowId(),
+        lastActiveNtripMountpointProfileId = profileStore.lastActiveNtripMountpointProfileId(),
+        passwordsBySecretId = passwords,
+        options = SettingsSetExportOptions(includePlaintextPasswords),
+    )
+}
+
+private fun shareSettingsBackup(context: Context, includePlaintextPasswords: Boolean) {
+    val backup = buildSettingsBackup(context, includePlaintextPasswords)
+    val directory = context.cacheDir.resolve("settings-backups").also { it.mkdirs() }
+    val file = directory.resolve("rtkcollector-settings-${System.currentTimeMillis()}.json")
+    file.writeText(backup.toJson().toString(2), Charsets.UTF_8)
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/json"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share RtkCollector settings"))
+}
+
+private fun importSettingsBackup(context: Context, uri: Uri) {
+    val text = context.contentResolver.openInputStream(uri)
+        ?.bufferedReader(Charsets.UTF_8)
+        ?.use { it.readText() }
+        ?: error("Settings backup could not be read.")
+    val backup = SettingsBackupFile.fromJson(JSONObject(text))
+    val profileStore = ProfileStores(context)
+    profileStore.saveCommandProfiles(backup.commandProfiles)
+    profileStore.saveUsbBaudProfiles(backup.usbBaudProfiles)
+    profileStore.saveNtripCasterProfiles(backup.ntripCasterProfiles)
+    profileStore.saveNtripMountpointProfiles(backup.ntripMountpointProfiles)
+    profileStore.saveRecordingPolicyProfiles(backup.recordingPolicyProfiles)
+    profileStore.saveStorageProfiles(backup.storageProfiles)
+    profileStore.saveSettingsSets(backup.settingsSets)
+    backup.selectedSettingsSetId
+        ?.takeIf { id -> backup.settingsSets.any { it.id == id } }
+        ?.let(profileStore::saveSelectedSettingsSetId)
+    profileStore.saveSelectedWorkflowId(backup.selectedWorkflowId)
+    profileStore.saveLastActiveNtripMountpointProfileId(
+        backup.lastActiveNtripMountpointProfileId
+            ?.takeIf { id -> backup.ntripMountpointProfiles.any { it.id == id } },
+    )
+    val secretStore = NtripSecretStore(context)
+    backup.plaintextPasswordsBySecretId.forEach { (secretId, password) ->
+        secretStore.putPassword(secretId, password)
+    }
 }
 
 private fun shareZip(context: Context, zipFile: File) {
@@ -2134,7 +2298,10 @@ private fun ProfileStores.plannedDashboardState(
     selectedWorkflowId: String?,
 ): DashboardState {
     val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
-    val mountpoint = selected.selectedMountpointLabel(ntripMountpointProfiles())
+    val mountpointProfiles = ntripMountpointProfiles()
+    val mountpoint = selected.selectedMountpointLabel(mountpointProfiles)
+        .takeUnless { it.isMissingMountpointValue() }
+        ?: selectedMountpointLabelFromProfileId(lastActiveNtripMountpointProfileId(), mountpointProfiles)
     return DashboardState.planned(
         workflow = selectedWorkflowId.workflowLabel(),
         mountpoint = mountpoint,
@@ -2160,6 +2327,24 @@ internal fun RecordingSettingsSet?.selectedMountpointLabel(
         mountpointProfiles.firstOrNull { it.id == id }
     } ?: return "n/a"
     return profile.displayMountpoint()
+}
+
+internal fun selectedMountpointLabelFromProfileId(
+    profileId: String?,
+    mountpointProfiles: List<NtripMountpointProfile>,
+): String =
+    profileId
+        ?.takeIf { it.isNotBlank() && !it.equals("a", ignoreCase = true) }
+        ?.let { id -> mountpointProfiles.firstOrNull { it.id == id } }
+        ?.displayMountpoint()
+        ?.takeUnless { it.equals("a", ignoreCase = true) }
+        ?: "n/a"
+
+private fun String.isMissingMountpointValue(): Boolean {
+    val value = trim()
+    return value.isBlank() ||
+        value.equals("n/a", ignoreCase = true) ||
+        value.equals("a", ignoreCase = true)
 }
 
 private fun Context.currentUsbDeviceChoices(): List<UsbDeviceChoice> {

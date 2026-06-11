@@ -82,6 +82,8 @@ data class RecordingServiceState(
     val errorSeverity: RecordingErrorSeverity = RecordingErrorSeverity.NONE,
     val rawRecordingActive: Boolean = false,
     val correctionsActive: Boolean = false,
+    val um980Frequency: String = "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz",
+    val um980Mode: String = "n/a",
     val latDeg: Double? = null,
     val lonDeg: Double? = null,
     val ntripBaseLatDeg: Double? = null,

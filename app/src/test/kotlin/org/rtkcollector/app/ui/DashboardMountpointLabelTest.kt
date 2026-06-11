@@ -43,4 +43,18 @@ class DashboardMountpointLabelTest {
 
         assertEquals("USER_TYPED", settingsSet.selectedMountpointLabel(emptyList()))
     }
+
+    @Test
+    fun `missing remembered mountpoint is displayed as missing`() {
+        val label = selectedMountpointLabelFromProfileId("missing", emptyList())
+
+        assertEquals("n/a", label)
+    }
+
+    @Test
+    fun `remembered fake mountpoint is displayed as missing`() {
+        val label = selectedMountpointLabelFromProfileId("a", emptyList())
+
+        assertEquals("n/a", label)
+    }
 }

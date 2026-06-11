@@ -117,6 +117,20 @@ class ProfileStores(context: Context) {
         }.apply()
     }
 
+    fun lastActiveNtripMountpointProfileId(): String? =
+        preferences.getString("lastActiveNtripMountpointProfileId", null)
+            ?.takeIf { it.isNotBlank() && !it.equals("a", ignoreCase = true) }
+
+    fun saveLastActiveNtripMountpointProfileId(id: String?) {
+        preferences.edit().apply {
+            if (id.isNullOrBlank()) {
+                remove("lastActiveNtripMountpointProfileId")
+            } else {
+                putString("lastActiveNtripMountpointProfileId", id)
+            }
+        }.apply()
+    }
+
     fun duplicateId(prefix: String): String =
         "$prefix-${System.currentTimeMillis()}"
 

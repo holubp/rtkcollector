@@ -114,7 +114,7 @@ class DashboardServiceMapperTest {
     }
 
     @Test
-    fun `bestnav ppp converging type is shown only in ppp field`() {
+    fun `bestnav ppp converging type is shown as receiver solution state`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
             putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PPP_CONVERGING")
@@ -122,7 +122,7 @@ class DashboardServiceMapperTest {
 
         val state = dashboardStateFromRecordingIntent(intent)
 
-        assertEquals("n/a", state.fix.fixType)
+        assertEquals("PPP converging", state.fix.fixType)
         assertEquals("PPP_CONVERGING", state.fix.pppStatus)
     }
 

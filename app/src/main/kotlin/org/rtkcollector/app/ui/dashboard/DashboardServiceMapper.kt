@@ -90,6 +90,11 @@ private fun displayFixType(
     bestnavPositionType: String?,
     ggaFixQuality: Int?,
 ): String {
+    if (bestnavPositionType.equals("PPP_CONVERGING", ignoreCase = true)) {
+        interpretGgaFixQuality(ggaFixQuality)
+            .takeIf(::isMeaningfulSolutionStatus)
+            ?.let { return it }
+    }
     val bestnav = bestnavPositionType
         ?.takeIf(::isMeaningfulSolutionStatus)
         ?.let(::displayBestnavPositionType)
@@ -117,6 +122,6 @@ private fun displayBestnavPositionType(positionType: String): String =
         "NARROW_INT", "WIDE_INT", "L1_INT", "INS_RTKFIXED" -> "RTK fix"
         "SINGLE", "INS_PSRSP" -> "Single"
         "PPP" -> "PPP"
-        "PPP_CONVERGING" -> "n/a"
+        "PPP_CONVERGING" -> "PPP converging"
         else -> positionType
     }

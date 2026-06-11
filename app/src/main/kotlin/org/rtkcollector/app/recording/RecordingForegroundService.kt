@@ -1109,7 +1109,7 @@ class RecordingForegroundService : Service() {
 
     private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
         copy(
-            bestnavPositionType = telemetry.positionType?.takeUnless { it.isPppConvergingType() } ?: bestnavPositionType,
+            bestnavPositionType = telemetry.positionType ?: bestnavPositionType,
             pppStatus = telemetry.positionType?.takeIf { it.startsWith("PPP", ignoreCase = true) } ?: pppStatus,
             latDeg = telemetry.latDeg ?: latDeg,
             lonDeg = telemetry.lonDeg ?: lonDeg,
@@ -1135,9 +1135,6 @@ class RecordingForegroundService : Service() {
                 inView = telemetry.satellitesInView ?: telemetry.satellitesTracked,
             ).takeUnless { it == "n/a" } ?: satellites,
         )
-
-    private fun String.isPppConvergingType(): Boolean =
-        equals("PPP_CONVERGING", ignoreCase = true)
 
     private fun RecordingServiceState.withRtcmReferenceStation(station: Rtcm3ReferenceStation): RecordingServiceState {
         val baseLat = station.latDeg

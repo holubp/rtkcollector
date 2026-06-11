@@ -24,7 +24,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val bestnavPositionType = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE)
     val pppStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS)
     val fix = FixCardState(
-        fixType = displayFixType(bestnavPositionType, ggaFixQuality, pppStatus),
+        fixType = displayFixType(bestnavPositionType, ggaFixQuality),
         satellites = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITES) ?: "n/a",
         pdop = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PDOP) ?: "n/a",
         hdopVdop = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_HDOP_VDOP) ?: "n/a",
@@ -86,13 +86,15 @@ private fun mountpointFromUrl(url: String?): String =
         ?.takeIf { it.isNotBlank() && it != url }
         ?: "n/a"
 
-private fun displayFixType(bestnavPositionType: String?, ggaFixQuality: Int?, pppStatus: String?): String {
+private fun displayFixType(
+    bestnavPositionType: String?,
+    ggaFixQuality: Int?,
+): String {
     val bestnav = bestnavPositionType
         ?.takeIf(::isMeaningfulSolutionStatus)
         ?.let(::displayBestnavPositionType)
         ?.takeIf(::isMeaningfulSolutionStatus)
     return bestnav
-        ?: pppStatus?.takeIf { it.equals("PPP", ignoreCase = true) }
         ?: interpretGgaFixQuality(ggaFixQuality)
 }
 

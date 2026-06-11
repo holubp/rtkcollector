@@ -70,7 +70,7 @@ class DashboardServiceMapperTest {
     }
 
     @Test
-    fun `ppp status can describe fix when bestnav is none`() {
+    fun `ppp status does not describe main fix when bestnav is none`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
             putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "NONE")
@@ -79,7 +79,23 @@ class DashboardServiceMapperTest {
 
         val state = dashboardStateFromRecordingIntent(intent)
 
-        assertEquals("PPP_CONVERGING", state.fix.fixType)
+        assertEquals("n/a", state.fix.fixType)
+        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+    }
+
+    @Test
+    fun `converged ppp status alone does not override gga fix quality`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "NONE")
+            putExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS, "PPP")
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 2)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("DGPS", state.fix.fixType)
+        assertEquals("PPP", state.fix.pppStatus)
     }
 
     @Test

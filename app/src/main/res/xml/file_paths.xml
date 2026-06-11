@@ -3,4 +3,7 @@
     <external-files-path
         name="recording_sessions"
         path="sessions/" />
+    <cache-path
+        name="session_share_zips"
+        path="session-share-zips/" />
 </paths>

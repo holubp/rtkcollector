@@ -28,6 +28,14 @@ class DashboardLayoutModelsTest {
     }
 
     @Test
+    fun `rail dashboard only applies in landscape`() {
+        assertEquals(true, shouldUseRailDashboard(DashboardLayoutPreference.RAIL, 900, 500))
+        assertEquals(false, shouldUseRailDashboard(DashboardLayoutPreference.RAIL, 700, 1000))
+        assertEquals(false, shouldUseRailDashboard(DashboardLayoutPreference.RAIL, 500, 300))
+        assertEquals(false, shouldUseRailDashboard(DashboardLayoutPreference.COMPACT_FIELD, 900, 500))
+    }
+
+    @Test
     fun `default setup strip excludes settings profile details`() {
         assertEquals(
             listOf("Workflow", "Mountpoint", "Receiver", "Storage"),

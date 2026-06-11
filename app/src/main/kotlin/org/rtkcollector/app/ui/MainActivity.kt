@@ -1819,9 +1819,10 @@ private fun ProfileStores.plannedDashboardState(
     selectedWorkflowId: String?,
 ): DashboardState {
     val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+    val mountpoint = selected.selectedMountpointLabel(ntripMountpointProfiles())
     return DashboardState.planned(
         workflow = selectedWorkflowId.workflowLabel(),
-        mountpoint = selectedMountpointLabel(selectedSettingsSetId),
+        mountpoint = mountpoint,
         receiver = selectedReceiverLabel(selectedSettingsSetId),
         storage = selectedStorageLabel(selectedSettingsSetId),
         profiles = ProfilesCardState(
@@ -1833,6 +1834,17 @@ private fun ProfileStores.plannedDashboardState(
             storageLocationProfile = selectedStorageLabel(selectedSettingsSetId),
         ),
     )
+}
+
+internal fun RecordingSettingsSet?.selectedMountpointLabel(
+    mountpointProfiles: List<NtripMountpointProfile>,
+): String {
+    val settingsSet = this ?: return "n/a"
+    settingsSet.overrides.ntripMountpoint?.mountpoint?.takeIf { it.isNotBlank() }?.let { return it }
+    val profile = settingsSet.ntripMountpointProfileRef?.id?.let { id ->
+        mountpointProfiles.firstOrNull { it.id == id }
+    } ?: return "n/a"
+    return profile.displayMountpoint()
 }
 
 private fun Context.currentUsbDeviceChoices(): List<UsbDeviceChoice> {

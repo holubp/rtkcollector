@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,7 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -88,7 +88,10 @@ fun HomeDashboard(
                 },
                 actions = {
                     RecordingStateBadge(isRecording = state.isRecording)
-                    TextButton(onClick = onMenu) {
+                    Button(
+                        onClick = onMenu,
+                        colors = dashboardSecondaryButtonColors(),
+                    ) {
                         Text("Menu")
                     }
                 },
@@ -106,7 +109,11 @@ fun HomeDashboard(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val useRailLayout = layoutPreference == DashboardLayoutPreference.RAIL && maxWidth >= 640.dp
+                val useRailLayout = shouldUseRailDashboard(
+                    layoutPreference = layoutPreference,
+                    availableWidthDp = maxWidth.value.toInt(),
+                    availableHeightDp = maxHeight.value.toInt(),
+                )
                 if (useRailLayout) {
                     RailDashboard(
                         state = state,
@@ -217,13 +224,14 @@ private fun BottomActionBar(
                         action.kind == DashboardActionKind.USB_PERMISSION
                 }
                 .forEach { action ->
-                    TextButton(
+                    Button(
                         onClick = when (action.kind) {
                             DashboardActionKind.NTRIP -> onNtrip
                             DashboardActionKind.USB_PERMISSION -> onUsbPermission
                             DashboardActionKind.MARK -> onMark
                             else -> onPrimaryAction
                         },
+                        colors = dashboardSecondaryButtonColors(),
                     ) {
                         Text(
                             text = action.label,
@@ -235,6 +243,12 @@ private fun BottomActionBar(
         }
     }
 }
+
+@Composable
+private fun dashboardSecondaryButtonColors() = ButtonDefaults.buttonColors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+    contentColor = MaterialTheme.colorScheme.onSurface,
+)
 
 @Composable
 private fun CompactDashboard(

@@ -101,6 +101,15 @@ internal const val CompactDashboardTwoColumnMinWidthDp = 340
 internal fun compactDashboardCardColumnCount(availableWidthDp: Int): Int =
     if (availableWidthDp >= CompactDashboardTwoColumnMinWidthDp) 2 else 1
 
+internal fun shouldUseRailDashboard(
+    layoutPreference: DashboardLayoutPreference,
+    availableWidthDp: Int,
+    availableHeightDp: Int,
+): Boolean =
+    layoutPreference == DashboardLayoutPreference.RAIL &&
+        availableWidthDp >= 640 &&
+        availableWidthDp > availableHeightDp
+
 internal enum class DashboardSetupItem(val label: String) {
     WORKFLOW("Workflow"),
     MOUNTPOINT("Mountpoint"),

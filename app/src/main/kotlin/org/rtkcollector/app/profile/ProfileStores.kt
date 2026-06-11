@@ -214,8 +214,13 @@ class ProfileStores(context: Context) {
             UNLOG COM1
             MODE ROVER
             CONFIG MMP ENABLE
+            CONFIG PPP ENABLE E6-HAS
+            CONFIG PPP DATUM WGS84
+            CONFIG PPP TIMEOUT 120
+            CONFIG PPP CONVERGE 15 30
             VERSIONB
-            BESTNAVB COM1 0.1
+            BESTNAVB COM1 0.05
+            PPPNAVB COM1 1
             OBSVMCMPB COM1 0.25
             STADOPB COM1 1
             GPSEPHB COM1 300

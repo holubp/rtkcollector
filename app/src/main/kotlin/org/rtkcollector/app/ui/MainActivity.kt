@@ -25,6 +25,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -85,14 +87,20 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun RtkCollectorApp() {
-    var screen by remember { mutableStateOf(AppScreen.HOME) }
+    var screen by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf(AppScreen.HOME) }
     val context = LocalContext.current
     val profileStore = remember(context) { ProfileStores(context) }
     var settingsSets by remember { mutableStateOf(profileStore.settingsSets()) }
     var selectedSettingsSetId by remember { mutableStateOf(profileStore.selectedSettingsSetId()) }
-    var profileEditorTarget by remember { mutableStateOf<ProfileEditorTarget?>(null) }
-    var dashboardSelector by remember { mutableStateOf<DashboardSelector?>(null) }
-    var dashboardLayout by remember { mutableStateOf(DashboardLayoutPreference.default) }
+    var profileEditorTarget by rememberSaveable(stateSaver = ProfileEditorTargetSaver) {
+        mutableStateOf<ProfileEditorTarget?>(null)
+    }
+    var dashboardSelector by rememberSaveable(stateSaver = DashboardSelectorSaver) {
+        mutableStateOf<DashboardSelector?>(null)
+    }
+    var dashboardLayout by rememberSaveable(stateSaver = DashboardLayoutPreferenceSaver) {
+        mutableStateOf(DashboardLayoutPreference.default)
+    }
     var showDashboardLayoutDialog by remember { mutableStateOf(false) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
     var profileRevision by remember { mutableStateOf(0) }
@@ -1454,6 +1462,13 @@ private enum class AppScreen {
     PROFILE_EDITOR,
 }
 
+private val AppScreenSaver: Saver<AppScreen, String> = Saver(
+    save = { it.name },
+    restore = { name ->
+        runCatching { AppScreen.valueOf(name) }.getOrDefault(AppScreen.HOME)
+    },
+)
+
 private val SELECTABLE_BAUD_RATES = listOf(
     "4800",
     "9600",
@@ -1499,6 +1514,21 @@ private data class ProfileEditorTarget(
     val id: String,
 )
 
+private val ProfileEditorTargetSaver: Saver<ProfileEditorTarget?, String> = Saver(
+    save = { target ->
+        target?.let { "${it.kind.name}:${it.id}" } ?: ""
+    },
+    restore = { saved ->
+        val separator = saved.indexOf(':')
+        if (separator <= 0 || separator == saved.lastIndex) {
+            null
+        } else {
+            val kind = runCatching { ProfileKind.valueOf(saved.substring(0, separator)) }.getOrNull()
+            kind?.let { ProfileEditorTarget(it, saved.substring(separator + 1)) }
+        }
+    },
+)
+
 private enum class DashboardSelector(val title: String) {
     SETTINGS_SET("Load settings set"),
     WORKFLOW("Select workflow"),
@@ -1506,6 +1536,20 @@ private enum class DashboardSelector(val title: String) {
     RECEIVER("Select receiver command profile"),
     STORAGE("Select storage profile"),
 }
+
+private val DashboardSelectorSaver: Saver<DashboardSelector?, String> = Saver(
+    save = { it?.name ?: "" },
+    restore = { name ->
+        name.takeIf(String::isNotBlank)?.let {
+            runCatching { DashboardSelector.valueOf(it) }.getOrNull()
+        }
+    },
+)
+
+private val DashboardLayoutPreferenceSaver: Saver<DashboardLayoutPreference, String> = Saver(
+    save = { it.storageId },
+    restore = { DashboardLayoutPreference.fromStorageId(it) },
+)
 
 private fun ProfileKind.backScreen(): AppScreen =
     when (this) {

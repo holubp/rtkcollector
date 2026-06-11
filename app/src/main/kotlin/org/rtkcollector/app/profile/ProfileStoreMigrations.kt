@@ -10,7 +10,9 @@ internal object ProfileStoreMigrations {
                 ProfileStores.OLD_UM980_COMMAND_PROFILE_ID -> defaults.required(ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID)
                 ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID -> profile.copy(
                     name = profile.name.ifBlank { "UM980 binary multi-Hz" },
-                    runtimeScript = profile.runtimeScript.ifBlank { ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT },
+                    runtimeScript = profile.runtimeScript
+                        .ifBlank { ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT }
+                        .migrateUm980BinaryPppStatusOutput(),
                     isProtected = false,
                 )
                 ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID -> profile.copy(
@@ -111,6 +113,22 @@ internal object ProfileStoreMigrations {
 
 private fun String.blankOldNone(): String =
     if (equals("NONE", ignoreCase = true)) "" else this
+
+private fun String.migrateUm980BinaryPppStatusOutput(): String {
+    if (isOldUm980BinaryProfile()) return ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT
+    if (!contains("CONFIG PPP ENABLE", ignoreCase = true)) return this
+    if (lineStartsWith("PPPNAVB")) return this
+    return trimEnd() + "\nPPPNAVB COM1 1"
+}
+
+private fun String.isOldUm980BinaryProfile(): Boolean =
+    contains("BESTNAVB COM1 0.1", ignoreCase = true) &&
+        contains("OBSVMCMPB COM1 0.25", ignoreCase = true) &&
+        contains("STADOPB COM1 1", ignoreCase = true) &&
+        !contains("CONFIG PPP ENABLE", ignoreCase = true)
+
+private fun String.lineStartsWith(prefix: String): Boolean =
+    lineSequence().any { it.trimStart().startsWith(prefix, ignoreCase = true) }
 
 private fun List<CommandProfile>.required(id: String): CommandProfile =
     firstOrNull { it.id == id } ?: error("Missing default command profile '$id'.")

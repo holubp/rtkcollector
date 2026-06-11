@@ -126,7 +126,9 @@ class ProfileStoresTest {
 
         val decoded = CommandProfile.fromJson(profile.toJson())
 
-        assertTrue(decoded.runtimeScript.contains("BESTNAVB COM1 0.1"))
+        assertTrue(decoded.runtimeScript.contains("CONFIG PPP ENABLE E6-HAS"))
+        assertTrue(decoded.runtimeScript.contains("BESTNAVB COM1 0.05"))
+        assertTrue(decoded.runtimeScript.contains("PPPNAVB COM1 1"))
         assertTrue(decoded.runtimeScript.contains("OBSVMCMPB COM1 0.25"))
         assertTrue(decoded.runtimeScript.contains("STADOPB COM1 1"))
     }
@@ -213,9 +215,31 @@ class ProfileStoresTest {
         )
 
         assertTrue(migrated.none { it.id == ProfileStores.OLD_UM980_COMMAND_PROFILE_ID })
-        assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("BESTNAVB COM1 0.1"))
+        assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("BESTNAVB COM1 0.05"))
+        assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("PPPNAVB COM1 1"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID }.runtimeScript.contains("CONFIG PPP ENABLE E6-HAS"))
         assertTrue(migrated.none { it.isProtected })
+    }
+
+    @Test
+    fun `migration appends binary ppp status output to ppp enabled script`() {
+        val migrated = ProfileStoreMigrations.commandProfiles(
+            profiles = listOf(
+                CommandProfile(
+                    id = ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID,
+                    name = "UM980 binary multi-Hz",
+                    runtimeScript = """
+                        UNLOG COM1
+                        MODE ROVER
+                        CONFIG PPP ENABLE E6-HAS
+                        BESTNAVB COM1 0.05
+                    """.trimIndent(),
+                ),
+            ),
+            defaults = emptyList(),
+        )
+
+        assertTrue(migrated.single().runtimeScript.contains("PPPNAVB COM1 1"))
     }
 
     @Test

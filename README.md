@@ -24,6 +24,18 @@ Android Gradle Plugin invoking SDK native binaries such as `aapt2` that are not
 usable on this Termux/Android host; use `:app:compileDebugKotlin` to validate
 the Kotlin/UI code locally.
 
+## Branding Assets
+
+Source logo files live in `logos/`. Android launcher and compact badge assets
+are generated from `logos/rtkcollector_logo.png` with:
+
+```bash
+python3 tools/generate_brand_assets.py
+```
+
+Generated launcher and badge assets are checked in so Android Studio and CI
+builds do not depend on local image tooling.
+
 ## Core Goals
 
 - Keep the raw receiver capture path authoritative and byte-exact.

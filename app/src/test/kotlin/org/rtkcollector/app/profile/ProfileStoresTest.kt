@@ -2,6 +2,7 @@ package org.rtkcollector.app.profile
 
 import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -127,10 +128,18 @@ class ProfileStoresTest {
         val decoded = CommandProfile.fromJson(profile.toJson())
 
         assertTrue(decoded.runtimeScript.contains("CONFIG PPP ENABLE E6-HAS"))
+        assertTrue(decoded.runtimeScript.contains("MODE ROVER SURVEY"))
+        assertTrue(decoded.runtimeScript.contains("CONFIG RTK TIMEOUT 120"))
+        assertTrue(decoded.runtimeScript.contains("CONFIG RTK RELIABILITY 3 1"))
         assertTrue(decoded.runtimeScript.contains("BESTNAVB COM1 0.05"))
+        assertTrue(decoded.runtimeScript.contains("ADRNAVB COM1 1"))
         assertTrue(decoded.runtimeScript.contains("PPPNAVB COM1 1"))
+        assertTrue(decoded.runtimeScript.contains("RTKSTATUSB COM1 1"))
+        assertTrue(decoded.runtimeScript.contains("RTCMSTATUSB COM1 ONCHANGED"))
         assertTrue(decoded.runtimeScript.contains("OBSVMCMPB COM1 0.25"))
         assertTrue(decoded.runtimeScript.contains("STADOPB COM1 1"))
+        assertFalse(decoded.runtimeScript.contains("SAVECONFIG", ignoreCase = true))
+        assertFalse(decoded.runtimeScript.contains("NCOM20", ignoreCase = true))
     }
 
     @Test
@@ -145,7 +154,9 @@ class ProfileStoresTest {
         assertTrue(script.contains("CONFIG PPP ENABLE E6-HAS"))
         assertTrue(script.contains("GNGGA 0.05"))
         assertTrue(script.contains("PPPNAVA 10"))
+        assertTrue(script.contains("ADRNAVA 10"))
         assertTrue(script.contains("TROPINFOA ONCHANGED"))
+        assertFalse(script.contains("SAVECONFIG", ignoreCase = true))
     }
 
     @Test
@@ -216,7 +227,10 @@ class ProfileStoresTest {
 
         assertTrue(migrated.none { it.id == ProfileStores.OLD_UM980_COMMAND_PROFILE_ID })
         assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("BESTNAVB COM1 0.05"))
+        assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("ADRNAVB COM1 1"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("PPPNAVB COM1 1"))
+        assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("RTKSTATUSB COM1 1"))
+        assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("RTCMSTATUSB COM1 ONCHANGED"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID }.runtimeScript.contains("CONFIG PPP ENABLE E6-HAS"))
         assertTrue(migrated.none { it.isProtected })
     }

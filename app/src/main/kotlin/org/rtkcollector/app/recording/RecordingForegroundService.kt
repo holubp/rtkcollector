@@ -134,6 +134,13 @@ class RecordingForegroundService : Service() {
             lastError = null,
             rawRecordingActive = false,
             correctionsActive = false,
+            receiverRtkStatus = "n/a",
+            rtkPositionType = null,
+            rtkCalculateStatus = null,
+            rtkCalculateStatusDescription = null,
+            rtcmDecodedAtMillis = null,
+            rtcmLastMessageId = null,
+            rtcmLastBaseId = null,
         )
         broadcastState()
 
@@ -918,6 +925,12 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
                 putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
+                putExtra(EXTRA_STATE_RECEIVER_RTK_STATUS, state.receiverRtkStatus)
+                putExtra(EXTRA_STATE_RTK_POSITION_TYPE, state.rtkPositionType)
+                putExtra(EXTRA_STATE_RTK_CALCULATE_STATUS, state.rtkCalculateStatus ?: -1)
+                putExtra(EXTRA_STATE_RTK_CALCULATE_STATUS_DESCRIPTION, state.rtkCalculateStatusDescription)
+                putExtra(EXTRA_STATE_RTCM_LAST_MESSAGE_ID, state.rtcmLastMessageId ?: -1)
+                putExtra(EXTRA_STATE_RTCM_LAST_BASE_ID, state.rtcmLastBaseId ?: -1)
                 putExtra(EXTRA_STATE_LAT_LON, state.latLon)
                 putExtra(EXTRA_STATE_ELLIPSOIDAL_HEIGHT, state.ellipsoidalHeight)
                 putExtra(EXTRA_STATE_ALTITUDE, state.altitude)
@@ -1025,25 +1038,34 @@ class RecordingForegroundService : Service() {
                             }
                             "unicore_ascii" -> {
                                 solutionParser.accept(record.bytes).forEach { solution ->
-                                    if (solution.logName != "BESTNAVA") {
-                                        if (exportJsonSolution) {
-                                            sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
+                                    when (solution.logName) {
+                                        "PPPNAVA" -> {
+                                            if (exportJsonSolution) {
+                                                sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
+                                            }
+                                            state = state.copy(
+                                                pppStatus = solution.positionType ?: state.pppStatus,
+                                            )
                                         }
-                                        state = state.copy(
-                                            pppStatus = solution.positionType ?: state.pppStatus,
-                                        )
-                                    } else {
-                                        if (exportJsonSolution) {
-                                            sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                                        "ADRNAVA" -> {
+                                            if (exportJsonSolution) {
+                                                sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                                            }
+                                            state = state.withReceiverRtkAsciiSolution(solution)
                                         }
-                                        state = state.copy(
-                                            bestnavPositionType = solution.positionType,
-                                            latDeg = solution.latDeg ?: state.latDeg,
-                                            lonDeg = solution.lonDeg ?: state.lonDeg,
-                                            latLon = latLonDisplay(solution.latDeg, solution.lonDeg).takeUnless { it == "n/a" } ?: state.latLon,
-                                            ellipsoidalHeight = metersDisplay(solution.heightM).takeUnless { it == "n/a" }
-                                                ?: state.ellipsoidalHeight,
-                                        )
+                                        "BESTNAVA" -> {
+                                            if (exportJsonSolution) {
+                                                sessionWriters.appendReceiverSolutionJson(solution.toJson())
+                                            }
+                                            state = state.copy(
+                                                bestnavPositionType = solution.positionType,
+                                                latDeg = solution.latDeg ?: state.latDeg,
+                                                lonDeg = solution.lonDeg ?: state.lonDeg,
+                                                latLon = latLonDisplay(solution.latDeg, solution.lonDeg).takeUnless { it == "n/a" } ?: state.latLon,
+                                                ellipsoidalHeight = metersDisplay(solution.heightM).takeUnless { it == "n/a" }
+                                                    ?: state.ellipsoidalHeight,
+                                            ).withReceiverRtkAsciiSolution(solution)
+                                        }
                                     }
                                 }
                             }
@@ -1059,6 +1081,14 @@ class RecordingForegroundService : Service() {
                                         }
                                     }
                                     state = state.withUm980Telemetry(telemetry)
+                                        .withReceiverRtkTelemetry(telemetry)
+                                }
+                                Um980BinaryParser.parseAdrnavb(record.bytes)?.let { telemetry ->
+                                    if (exportJsonSolution) {
+                                        sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
+                                    }
+                                    state = state.withUm980Telemetry(telemetry)
+                                        .withReceiverRtkTelemetry(telemetry)
                                 }
                                 Um980BinaryParser.parsePppnavb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {
@@ -1067,6 +1097,18 @@ class RecordingForegroundService : Service() {
                                     state = state.copy(
                                         pppStatus = telemetry.positionType ?: state.pppStatus,
                                     )
+                                }
+                                Um980BinaryParser.parseRtkstatusb(record.bytes)?.let { telemetry ->
+                                    if (exportJsonSolution) {
+                                        sessionWriters.appendQualityLiveJson(telemetry.toJson())
+                                    }
+                                    state = state.withReceiverRtkTelemetry(telemetry)
+                                }
+                                Um980BinaryParser.parseRtcmstatusb(record.bytes)?.let { telemetry ->
+                                    if (exportJsonSolution) {
+                                        sessionWriters.appendQualityLiveJson(telemetry.toJson())
+                                    }
+                                    state = state.withRtcmDecodedTelemetry(telemetry)
                                 }
                                 Um980BinaryParser.parseStadopb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {
@@ -1105,12 +1147,11 @@ class RecordingForegroundService : Service() {
         """{"type":"um980-ascii-solution","logName":"${logName.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"heightM":${heightM ?: "null"}}"""
 
     private fun Um980Telemetry.toJson(): String =
-        """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"satellitesTracked":${satellitesTracked ?: "null"},"gdop":${gdop ?: "null"},"pdop":${pdop ?: "null"},"tdop":${tdop ?: "null"},"hdop":${hdop ?: "null"},"vdop":${vdop ?: "null"},"ndop":${ndop ?: "null"},"edop":${edop ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"baselineLengthM":${baselineLengthM ?: "null"},"stationId":${stationId.jsonStringOrNull()},"utcTime":${utcTime.jsonStringOrNull()}}"""
+        """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"satellitesTracked":${satellitesTracked ?: "null"},"gdop":${gdop ?: "null"},"pdop":${pdop ?: "null"},"tdop":${tdop ?: "null"},"hdop":${hdop ?: "null"},"vdop":${vdop ?: "null"},"ndop":${ndop ?: "null"},"edop":${edop ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"baselineLengthM":${baselineLengthM ?: "null"},"stationId":${stationId.jsonStringOrNull()},"utcTime":${utcTime.jsonStringOrNull()},"rtkPositionType":${rtkPositionType.jsonStringOrNull()},"rtkCalculateStatus":${rtkCalculateStatus ?: "null"},"rtkCalculateStatusDescription":${rtkCalculateStatusDescription.jsonStringOrNull()},"ionDetected":${ionDetected ?: "null"},"adrNumber":${adrNumber ?: "null"},"gpsSource":${gpsSource ?: "null"},"bdsSource1":${bdsSource1 ?: "null"},"bdsSource2":${bdsSource2 ?: "null"},"gloSource":${gloSource ?: "null"},"galSource1":${galSource1 ?: "null"},"galSource2":${galSource2 ?: "null"},"qzssSource":${qzssSource ?: "null"},"rtcmMessageId":${rtcmMessageId ?: "null"},"rtcmMessageCount":${rtcmMessageCount ?: "null"},"rtcmBaseId":${rtcmBaseId ?: "null"},"rtcmSatelliteCount":${rtcmSatelliteCount ?: "null"},"rtcmObservableCounts":[${rtcmObservableCounts.joinToString(",")}]}"""
 
     private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
         copy(
-            bestnavPositionType = telemetry.positionType ?: bestnavPositionType,
-            pppStatus = telemetry.positionType?.takeIf { it.startsWith("PPP", ignoreCase = true) } ?: pppStatus,
+            bestnavPositionType = telemetry.positionType?.takeIf { telemetry.source == "BESTNAVB" } ?: bestnavPositionType,
             latDeg = telemetry.latDeg ?: latDeg,
             lonDeg = telemetry.lonDeg ?: lonDeg,
             latLon = latLonDisplay(telemetry.latDeg, telemetry.lonDeg).takeUnless { it == "n/a" } ?: latLon,
@@ -1135,6 +1176,78 @@ class RecordingForegroundService : Service() {
                 inView = telemetry.satellitesInView ?: telemetry.satellitesTracked,
             ).takeUnless { it == "n/a" } ?: satellites,
         )
+
+    private fun RecordingServiceState.withReceiverRtkAsciiSolution(solution: Um980AsciiSolution): RecordingServiceState {
+        val status = classifyReceiverRtkStatus(
+            positionType = solution.positionType,
+            solutionStatus = solution.solutionStatus,
+            calculateStatus = rtkCalculateStatus,
+            differentialAgeS = null,
+            recentRtcmDecoded = hasRecentRtcmDecoded(),
+        )
+        return copy(
+            receiverRtkStatus = status.takeUnless { it == "n/a" } ?: receiverRtkStatus,
+            rtkPositionType = solution.positionType ?: rtkPositionType,
+        )
+    }
+
+    private fun RecordingServiceState.withReceiverRtkTelemetry(telemetry: Um980Telemetry): RecordingServiceState {
+        val positionType = telemetry.rtkPositionType ?: telemetry.positionType
+        val calculateStatus = telemetry.rtkCalculateStatus ?: rtkCalculateStatus
+        val status = classifyReceiverRtkStatus(
+            positionType = positionType,
+            solutionStatus = telemetry.solutionStatus,
+            calculateStatus = calculateStatus,
+            differentialAgeS = telemetry.differentialAgeS,
+            recentRtcmDecoded = hasRecentRtcmDecoded(),
+        )
+        return copy(
+            receiverRtkStatus = status.takeUnless { it == "n/a" } ?: receiverRtkStatus,
+            rtkPositionType = positionType ?: rtkPositionType,
+            rtkCalculateStatus = calculateStatus,
+            rtkCalculateStatusDescription = telemetry.rtkCalculateStatusDescription ?: rtkCalculateStatusDescription,
+        )
+    }
+
+    private fun RecordingServiceState.withRtcmDecodedTelemetry(telemetry: Um980Telemetry): RecordingServiceState =
+        copy(
+            rtcmDecodedAtMillis = android.os.SystemClock.elapsedRealtime(),
+            rtcmLastMessageId = telemetry.rtcmMessageId ?: rtcmLastMessageId,
+            rtcmLastBaseId = telemetry.rtcmBaseId ?: rtcmLastBaseId,
+            receiverRtkStatus = if (receiverRtkStatus == "n/a" || receiverRtkStatus == "No RTCM") {
+                "RTCM decoded"
+            } else {
+                receiverRtkStatus
+            },
+        )
+
+    private fun RecordingServiceState.hasRecentRtcmDecoded(): Boolean =
+        rtcmDecodedAtMillis?.let { android.os.SystemClock.elapsedRealtime() - it < RTCM_STATUS_RECENT_MILLIS } == true
+
+    private fun classifyReceiverRtkStatus(
+        positionType: String?,
+        solutionStatus: String?,
+        calculateStatus: Int?,
+        differentialAgeS: Double?,
+        recentRtcmDecoded: Boolean,
+    ): String {
+        if (differentialAgeS != null && differentialAgeS > RTK_STALE_DIFFERENTIAL_AGE_SECONDS) return "RTK stale"
+        val computedOrDiagnosticStatus = solutionStatus == null || solutionStatus.equals("SOL_COMPUTED", ignoreCase = true)
+        if (computedOrDiagnosticStatus) {
+            when (positionType?.uppercase()) {
+                "NARROW_INT", "INS_RTKFIXED" -> return "RTK fixed"
+                "NARROW_FLOAT", "IONOFREE_FLOAT", "L1_FLOAT", "INS_RTKFLOAT" -> return "RTK float"
+            }
+        }
+        return when (calculateStatus) {
+            0 -> "No RTCM"
+            1 -> "Base obs insufficient"
+            2 -> "RTK stale"
+            4 -> "Rover obs insufficient"
+            5 -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
+            else -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
+        }
+    }
 
     private fun RecordingServiceState.withRtcmReferenceStation(station: Rtcm3ReferenceStation): RecordingServiceState {
         val baseLat = station.latDeg
@@ -1330,6 +1443,12 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_GGA_FIX_QUALITY = "ggaFixQuality"
         const val EXTRA_STATE_BESTNAV_POSITION_TYPE = "bestnavPositionType"
         const val EXTRA_STATE_PPP_STATUS = "pppStatus"
+        const val EXTRA_STATE_RECEIVER_RTK_STATUS = "receiverRtkStatus"
+        const val EXTRA_STATE_RTK_POSITION_TYPE = "rtkPositionType"
+        const val EXTRA_STATE_RTK_CALCULATE_STATUS = "rtkCalculateStatus"
+        const val EXTRA_STATE_RTK_CALCULATE_STATUS_DESCRIPTION = "rtkCalculateStatusDescription"
+        const val EXTRA_STATE_RTCM_LAST_MESSAGE_ID = "rtcmLastMessageId"
+        const val EXTRA_STATE_RTCM_LAST_BASE_ID = "rtcmLastBaseId"
         const val EXTRA_STATE_LAT_LON = "latLon"
         const val EXTRA_STATE_ELLIPSOIDAL_HEIGHT = "ellipsoidalHeight"
         const val EXTRA_STATE_ALTITUDE = "altitude"
@@ -1355,6 +1474,8 @@ class RecordingForegroundService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val READ_BUFFER_BYTES = 16 * 1024
         private const val PROFILE_DRAIN_MILLIS = 2000L
+        private const val RTCM_STATUS_RECENT_MILLIS = 10_000L
+        private const val RTK_STALE_DIFFERENTIAL_AGE_SECONDS = 5.0
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)

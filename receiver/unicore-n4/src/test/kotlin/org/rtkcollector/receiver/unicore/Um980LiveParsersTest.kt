@@ -84,6 +84,26 @@ class Um980LiveParsersTest {
     }
 
     @Test
+    fun `GSV tracker keeps maximum visible satellites across same-constellation signal groups`() {
+        val parser = NmeaGsvParser()
+        val tracker = NmeaGsvInViewTracker()
+        val views = parser.acceptText(
+            "\$GPGSV,3,1,10,03,20,119,39,04,55,062,46,06,52,245,48,07,42,180,47,1*62\r\n" +
+                "\$GPGSV,1,1,02,04,54,062,46,11,36,301,45,9*6B\r\n" +
+                "\$GLGSV,2,1,08,70,37,066,46,86,42,248,48,73,21,138,42,80,37,076,49,1*73\r\n" +
+                "\$GLGSV,2,1,07,70,37,066,43,86,42,248,40,73,21,138,33,80,37,076,39,3*73\r\n" +
+                "\$GBGSV,3,1,12,02,08,110,40,07,19,038,43,10,29,045,43,24,37,084,48,1*74\r\n" +
+                "\$GBGSV,1,1,01,10,29,045,42,B*39\r\n" +
+                "\$GAGSV,3,1,10,07,21,062,38,10,28,315,42,12,47,296,42,19,51,246,44,1*70\r\n" +
+                "\$GAGSV,3,1,09,07,21,062,40,10,28,315,42,12,47,296,39,19,51,246,37,5*7B\r\n",
+        )
+
+        views.forEach(tracker::accept)
+
+        assertEquals(40, tracker.satellitesInView)
+    }
+
+    @Test
     fun `parses GST position error estimates`() {
         val gst = NmeaGstParser().parseLine(
             "\$GNGST,120000.00,0.10,0.03,0.02,45.0,0.012,0.010,0.025*00",

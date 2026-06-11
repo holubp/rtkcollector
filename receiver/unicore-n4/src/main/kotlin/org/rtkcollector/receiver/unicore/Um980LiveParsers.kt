@@ -39,18 +39,33 @@ data class NmeaGstError(
 data class NmeaGsvView(
     val talker: String,
     val satellitesInView: Int?,
+    val signalId: String? = null,
 )
 
 class NmeaGsvInViewTracker {
-    private val inViewByTalker = linkedMapOf<String, Int>()
+    private val inViewBySignal = linkedMapOf<String, Int>()
 
     val satellitesInView: Int?
-        get() = inViewByTalker.values.takeIf { it.isNotEmpty() }?.sum()
+        get() = inViewBySignal.entries
+            .takeIf { it.isNotEmpty() }
+            ?.groupBy(
+                keySelector = { it.key.substringBefore(SIGNAL_KEY_SEPARATOR) },
+                valueTransform = { it.value },
+            )
+            ?.values
+            ?.sumOf { counts -> counts.maxOrNull() ?: 0 }
 
     fun accept(view: NmeaGsvView): Int? {
         val count = view.satellitesInView ?: return satellitesInView
-        inViewByTalker[view.talker] = count
+        inViewBySignal[view.trackerKey] = count
         return satellitesInView
+    }
+
+    private val NmeaGsvView.trackerKey: String
+        get() = if (signalId.isNullOrBlank()) talker else "$talker$SIGNAL_KEY_SEPARATOR$signalId"
+
+    private companion object {
+        const val SIGNAL_KEY_SEPARATOR = "\u0000"
     }
 }
 
@@ -154,9 +169,13 @@ class NmeaGsvParser {
         }
         val fields = line.substringBefore('*').split(',')
         if (fields.size < 4) return null
+        val payloadFieldCount = fields.size - 4
         return NmeaGsvView(
             talker = fields[0].removePrefix("$"),
             satellitesInView = fields[3].toIntOrNull(),
+            signalId = fields.lastOrNull()
+                ?.takeIf { payloadFieldCount > 0 && payloadFieldCount % 4 == 1 }
+                ?.takeIf(String::isNotBlank),
         )
     }
 }

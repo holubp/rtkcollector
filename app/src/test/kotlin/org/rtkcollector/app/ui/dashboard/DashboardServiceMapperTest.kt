@@ -123,7 +123,7 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("PPP converging", state.fix.fixType)
-        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+        assertEquals("n/a", state.fix.pppStatus)
     }
 
     @Test
@@ -146,6 +146,7 @@ class DashboardServiceMapperTest {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
             putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PPP_CONVERGING")
+            putExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS, "PPP_CONVERGING")
             putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 2)
         }
 
@@ -153,6 +154,23 @@ class DashboardServiceMapperTest {
 
         assertEquals("DGPS", state.fix.fixType)
         assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+    }
+
+    @Test
+    fun `explicit service rtk status is shown separately from ppp and rtklib`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "NARROW_FLOAT")
+            putExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS, "PPP_CONVERGING")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_RTK_STATUS, "RTK float")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("RTK float", state.fix.fixType)
+        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+        assertEquals("RTK float", state.fix.rtkStatus)
+        assertEquals("Not configured", state.fix.rtklibStatus)
     }
 
     @Test
@@ -166,6 +184,6 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("PPP", state.fix.fixType)
-        assertEquals("PPP", state.fix.pppStatus)
+        assertEquals("n/a", state.fix.pppStatus)
     }
 }

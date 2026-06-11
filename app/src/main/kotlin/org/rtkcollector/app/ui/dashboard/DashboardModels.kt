@@ -143,6 +143,7 @@ data class FixCardState(
     val differentialAge: String = "n/a",
     val baseline: String = "n/a",
     val pppStatus: String = "n/a",
+    val rtkStatus: String = "n/a",
     val rtklibStatus: String = "Not configured",
 )
 

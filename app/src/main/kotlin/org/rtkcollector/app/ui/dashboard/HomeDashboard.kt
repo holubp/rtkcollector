@@ -588,6 +588,7 @@ private fun FixCard(
         Metric("Baseline", state.fix.baseline)
         DashedSeparator()
         Metric("PPP", state.fix.pppStatus)
+        Metric("RTK", state.fix.rtkStatus)
         Metric("RTKLIB", state.fix.rtklibStatus)
     }
 }
@@ -891,6 +892,7 @@ private fun previewRunningState(): DashboardState =
             differentialAge = "0.8 s",
             baseline = "42.8 km",
             pppStatus = "Converging",
+            rtkStatus = "RTK float",
             rtklibStatus = "Not configured",
         ),
         ntrip = NtripCardState(
@@ -935,6 +937,7 @@ private fun previewReadyMissingState(): DashboardState =
             differentialAge = "n/a",
             baseline = "n/a",
             pppStatus = "n/a",
+            rtkStatus = "n/a",
             rtklibStatus = "Not configured",
         ),
         ntrip = NtripCardState(

@@ -1186,7 +1186,7 @@ class RecordingForegroundService : Service() {
             recentRtcmDecoded = hasRecentRtcmDecoded(),
         )
         return copy(
-            receiverRtkStatus = status.takeUnless { it == "n/a" } ?: receiverRtkStatus,
+            receiverRtkStatus = status,
             rtkPositionType = solution.positionType ?: rtkPositionType,
         )
     }
@@ -1202,7 +1202,7 @@ class RecordingForegroundService : Service() {
             recentRtcmDecoded = hasRecentRtcmDecoded(),
         )
         return copy(
-            receiverRtkStatus = status.takeUnless { it == "n/a" } ?: receiverRtkStatus,
+            receiverRtkStatus = status,
             rtkPositionType = positionType ?: rtkPositionType,
             rtkCalculateStatus = calculateStatus,
             rtkCalculateStatusDescription = telemetry.rtkCalculateStatusDescription ?: rtkCalculateStatusDescription,
@@ -1223,31 +1223,6 @@ class RecordingForegroundService : Service() {
 
     private fun RecordingServiceState.hasRecentRtcmDecoded(): Boolean =
         rtcmDecodedAtMillis?.let { android.os.SystemClock.elapsedRealtime() - it < RTCM_STATUS_RECENT_MILLIS } == true
-
-    private fun classifyReceiverRtkStatus(
-        positionType: String?,
-        solutionStatus: String?,
-        calculateStatus: Int?,
-        differentialAgeS: Double?,
-        recentRtcmDecoded: Boolean,
-    ): String {
-        if (differentialAgeS != null && differentialAgeS > RTK_STALE_DIFFERENTIAL_AGE_SECONDS) return "RTK stale"
-        val computedOrDiagnosticStatus = solutionStatus == null || solutionStatus.equals("SOL_COMPUTED", ignoreCase = true)
-        if (computedOrDiagnosticStatus) {
-            when (positionType?.uppercase()) {
-                "NARROW_INT", "INS_RTKFIXED" -> return "RTK fixed"
-                "NARROW_FLOAT", "IONOFREE_FLOAT", "L1_FLOAT", "INS_RTKFLOAT" -> return "RTK float"
-            }
-        }
-        return when (calculateStatus) {
-            0 -> "No RTCM"
-            1 -> "Base obs insufficient"
-            2 -> "RTK stale"
-            4 -> "Rover obs insufficient"
-            5 -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
-            else -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
-        }
-    }
 
     private fun RecordingServiceState.withRtcmReferenceStation(station: Rtcm3ReferenceStation): RecordingServiceState {
         val baseLat = station.latDeg
@@ -1474,8 +1449,6 @@ class RecordingForegroundService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val READ_BUFFER_BYTES = 16 * 1024
         private const val PROFILE_DRAIN_MILLIS = 2000L
-        private const val RTCM_STATUS_RECENT_MILLIS = 10_000L
-        private const val RTK_STALE_DIFFERENTIAL_AGE_SECONDS = 5.0
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)
@@ -1485,4 +1458,39 @@ class RecordingForegroundService : Service() {
         val displayPath: String,
         val writers: RecordingSessionWriters,
     )
+}
+
+private const val RTCM_STATUS_RECENT_MILLIS = 10_000L
+private const val RTK_STALE_DIFFERENTIAL_AGE_SECONDS = 5.0
+
+internal fun classifyReceiverRtkStatus(
+    positionType: String?,
+    solutionStatus: String?,
+    calculateStatus: Int?,
+    differentialAgeS: Double?,
+    recentRtcmDecoded: Boolean,
+): String {
+    if (differentialAgeS != null && differentialAgeS > RTK_STALE_DIFFERENTIAL_AGE_SECONDS) return "RTK stale"
+    when (calculateStatus) {
+        0 -> return "No RTCM"
+        1 -> return "Base obs insufficient"
+        2 -> return "RTK stale"
+        4 -> return "Rover obs insufficient"
+    }
+    if (solutionStatus.equals("SOL_COMPUTED", ignoreCase = true)) {
+        when (positionType?.uppercase()) {
+            "NARROW_INT", "INS_RTKFIXED" -> return "RTK fixed"
+            "NARROW_FLOAT", "IONOFREE_FLOAT", "L1_FLOAT", "INS_RTKFLOAT" -> return "RTK float"
+        }
+    }
+    if (solutionStatus == null && calculateStatus == 5) {
+        when (positionType?.uppercase()) {
+            "NARROW_INT", "INS_RTKFIXED" -> return "RTK fixed"
+            "NARROW_FLOAT", "IONOFREE_FLOAT", "L1_FLOAT", "INS_RTKFLOAT" -> return "RTK float"
+        }
+    }
+    return when (calculateStatus) {
+        5 -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
+        else -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
+    }
 }

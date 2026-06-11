@@ -104,10 +104,20 @@ logs while avoiding high-rate NMEA chatter:
 
 ```text
 UNLOG COM1
-MODE ROVER
+MODE ROVER SURVEY
 CONFIG MMP ENABLE
+CONFIG RTK TIMEOUT 120
+CONFIG RTK RELIABILITY 3 1
+CONFIG PPP ENABLE E6-HAS
+CONFIG PPP DATUM WGS84
+CONFIG PPP TIMEOUT 120
+CONFIG PPP CONVERGE 15 30
 VERSIONB
-BESTNAVB COM1 0.1
+BESTNAVB COM1 0.05
+ADRNAVB COM1 1
+PPPNAVB COM1 1
+RTKSTATUSB COM1 1
+RTCMSTATUSB COM1 ONCHANGED
 OBSVMCMPB COM1 0.25
 STADOPB COM1 1
 GPSEPHB COM1 300
@@ -158,6 +168,11 @@ uses documented RTCM message command families such as `RTCM1006`, `RTCM1074`,
 `RTCM1084`, `RTCM1094` and `RTCM1124` when those workflows are enabled later.
 User changes to command scripts should remain conservative and source-backed.
 
+The normal recording start path sends runtime UM980 commands only. It does not
+write receiver non-volatile memory. A command profile can be written
+persistently only through the explicit warned action in Menu > Command scripts,
+which sends the current init script followed by `SAVECONFIG`.
+
 If a profile changes receiver baud, RtkCollector opens the USB serial bridge at
 the profile baud, sends user init commands, sends the receiver baud-switch
 command, reconfigures the host serial bridge to the post-profile baud, records
@@ -202,6 +217,21 @@ User flow:
 
 The receiver's internal RTK float/fix solution is separate from any future
 Android-side solution engine.
+
+### UM980 In-Device RTK Monitoring
+
+For UM980/N4 V1 rover use, RtkCollector runs the NTRIP client externally and
+feeds raw RTCM3 bytes to the receiver over COM1. The receiver computes its own
+RTK solution. The dashboard separates:
+
+- main receiver fix from BESTNAV/GGA;
+- in-device PPP status from PPPNAV;
+- in-device RTK status from ADRNAV/RTKSTATUS/RTCMSTATUS;
+- future RTKLIB status, which remains disabled in V1.
+
+The app does not use UM980 internal NTRIP-client commands in V1. RTCM bytes from
+NTRIP are fed unchanged to the receiver input and are recorded separately from
+the authoritative receiver RX stream.
 
 ### Live NTRIP Changes During Recording
 

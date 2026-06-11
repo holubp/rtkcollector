@@ -22,6 +22,13 @@
 The bootstrap driver declares capabilities and placeholders only. It does not
 hard-code operational UM980 commands.
 
+The V1 COM1 binary monitoring profile should include `BESTNAVB`, `ADRNAVB`,
+`PPPNAVB`, `RTKSTATUSB`, `RTCMSTATUSB ONCHANGED`, `OBSVMCMPB` and `STADOPB`.
+Android is the NTRIP client; UM980 internal NTRIP-client commands are not part
+of the V1 profile. Normal recording start commands are runtime commands only:
+writing `SAVECONFIG` requires an explicit warned user action from the command
+profile editor.
+
 ## u-blox M8P
 
 - Internal single-frequency RTK receiver.

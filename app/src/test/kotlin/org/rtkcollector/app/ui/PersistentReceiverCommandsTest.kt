@@ -1,6 +1,7 @@
 package org.rtkcollector.app.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class PersistentReceiverCommandsTest {
@@ -24,5 +25,29 @@ class PersistentReceiverCommandsTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun `persistent receiver commands reject risky commands except final appended saveconfig`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            persistentReceiverCommands(
+                """
+                MODE ROVER SURVEY
+                RESET
+                """.trimIndent(),
+            )
+        }
+    }
+
+    @Test
+    fun `persistent receiver commands reject save variants in script body`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            persistentReceiverCommands(
+                """
+                MODE ROVER SURVEY
+                SAVE
+                """.trimIndent(),
+            )
+        }
     }
 }

@@ -79,12 +79,15 @@ import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
 import org.rtkcollector.app.ui.usb.UsbDeviceChoice
+import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import androidx.core.content.FileProvider
 import java.io.File
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS = 60L * 60L * 1000L
 private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
+private val persistentReceiverWriteInProgress = AtomicBoolean(false)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -307,6 +310,12 @@ fun RtkCollectorApp() {
                     onPrimaryAction = {
                         if (state.isRecording) {
                             context.startService(RecordingForegroundService.stopIntent(context))
+                        } else if (persistentReceiverWriteInProgress.get()) {
+                            Toast.makeText(
+                                context,
+                                "Wait for persistent receiver configuration write to finish before recording.",
+                                Toast.LENGTH_LONG,
+                            ).show()
                         } else {
                             buildDashboardStartIntent(
                                 context = context,
@@ -2021,6 +2030,10 @@ private fun writeCommandProfilePersistentlyToDevice(
         return
     }
     val commands = persistentReceiverCommands(runtimeScript)
+    if (!persistentReceiverWriteInProgress.compareAndSet(false, true)) {
+        Toast.makeText(context, "Persistent receiver configuration write is already in progress.", Toast.LENGTH_LONG).show()
+        return
+    }
     Toast.makeText(context, "Writing persistent receiver configuration...", Toast.LENGTH_SHORT).show()
     Thread {
         val transport = AndroidUsbSerialTransport(
@@ -2028,30 +2041,34 @@ private fun writeCommandProfilePersistentlyToDevice(
             device = device,
             options = UsbSerialOpenOptions(baudRate = usbProfile.profileBaud),
         )
-        runCatching {
-            transport.open()
-            commands.forEach { command ->
-                transport.write("$command\r\n".toByteArray(Charsets.US_ASCII))
-                Thread.sleep(PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS)
+        try {
+            runCatching {
+                transport.open()
+                commands.forEach { command ->
+                    transport.write("$command\r\n".toByteArray(Charsets.US_ASCII))
+                    Thread.sleep(PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS)
+                }
+            }.onSuccess {
+                runOnMain(context) {
+                    Toast.makeText(
+                        context,
+                        "Persistent receiver configuration written for ${commandProfile.name}.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }.onFailure { error ->
+                runOnMain(context) {
+                    Toast.makeText(
+                        context,
+                        "Persistent receiver configuration failed: ${error.message}",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
             }
-        }.onSuccess {
-            runOnMain(context) {
-                Toast.makeText(
-                    context,
-                    "Persistent receiver configuration written for ${commandProfile.name}.",
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }.onFailure { error ->
-            runOnMain(context) {
-                Toast.makeText(
-                    context,
-                    "Persistent receiver configuration failed: ${error.message}",
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
+        } finally {
+            runCatching { transport.close() }
+            persistentReceiverWriteInProgress.set(false)
         }
-        runCatching { transport.close() }
     }.start()
 }
 
@@ -2061,6 +2078,7 @@ internal fun persistentReceiverCommands(runtimeScript: String): List<String> =
         .map(String::trim)
         .filter { it.isNotBlank() && !it.startsWith("#") }
         .filterNot { it.equals("SAVECONFIG", ignoreCase = true) }
+        .onEach(Um980RuntimeCommandValidator::validateRuntimeCommand)
         .toList() + "SAVECONFIG"
 
 private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {

@@ -9,6 +9,8 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
@@ -47,8 +49,12 @@ import org.rtkcollector.app.profile.displayMountpoint
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
-import org.rtkcollector.app.recording.SessionZipExporter
-import org.rtkcollector.app.recording.SessionZipPlan
+import org.rtkcollector.app.sessions.FilesystemSessionBrowser
+import org.rtkcollector.app.sessions.SessionArchiveManager
+import org.rtkcollector.app.sessions.SessionBrowserEntry
+import org.rtkcollector.app.sessions.SessionBrowserState
+import org.rtkcollector.app.sessions.SessionEntryKind
+import org.rtkcollector.app.sessions.sessionBrowserStateOf
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
@@ -67,14 +73,14 @@ import org.rtkcollector.app.ui.profiles.ProfileListScreen
 import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
 import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
-import org.rtkcollector.app.ui.sessions.SessionListItem
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
 import org.rtkcollector.app.ui.usb.UsbDeviceChoice
 import androidx.core.content.FileProvider
 import java.io.File
-import java.nio.file.Files
 import java.nio.file.Paths
+
+private const val TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS = 60L * 60L * 1000L
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,6 +109,7 @@ fun RtkCollectorApp() {
     }
     var showDashboardLayoutDialog by remember { mutableStateOf(false) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
+    var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
     var profileRevision by remember { mutableStateOf(0) }
     val secretStore = remember(context) { NtripSecretStore(context) }
     @Suppress("UNUSED_VARIABLE")
@@ -116,6 +123,34 @@ fun RtkCollectorApp() {
     }
     var state by remember {
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
+    }
+    fun refreshSessions() {
+        sessionBrowserState = buildSessionBrowserState(
+            context = context,
+            dashboardState = state,
+            profileStore = profileStore,
+            settingsSets = settingsSets,
+            selectedSettingsSetId = selectedSettingsSetId,
+        )
+    }
+    fun runSessionTask(label: String, task: () -> Unit) {
+        zipProgressText = "$label..."
+        Thread {
+            runCatching(task)
+                .onSuccess {
+                    runOnMain(context) {
+                        zipProgressText = null
+                        refreshSessions()
+                    }
+                }
+                .onFailure { error ->
+                    runOnMain(context) {
+                        zipProgressText = null
+                        refreshSessions()
+                        Toast.makeText(context, "$label failed: ${error.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+        }.start()
     }
     fun refreshProfileUi(updatedSettingsSets: List<RecordingSettingsSet> = settingsSets) {
         settingsSets = updatedSettingsSets
@@ -224,6 +259,9 @@ fun RtkCollectorApp() {
                         state = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(
                             profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId),
                         )
+                        if (screen == AppScreen.SESSIONS) {
+                            refreshSessions()
+                        }
                     }
                     UsbManager.ACTION_USB_DEVICE_ATTACHED,
                     UsbManager.ACTION_USB_DEVICE_DETACHED,
@@ -343,7 +381,10 @@ fun RtkCollectorApp() {
                         },
                         onRecordingOutputs = { screen = AppScreen.RECORDING_OUTPUTS },
                         onStorage = { screen = AppScreen.STORAGE },
-                        onSessions = { screen = AppScreen.SESSIONS },
+                        onSessions = {
+                            refreshSessions()
+                            screen = AppScreen.SESSIONS
+                        },
                         onBack = { screen = AppScreen.HOME },
                     )
                 AppScreen.NTRIP_MOUNTPOINT -> NtripMountpointScreen(
@@ -750,37 +791,84 @@ fun RtkCollectorApp() {
                     showManagementActions = false,
                 )
                 AppScreen.SESSIONS -> SessionsScreen(
-                    sessions = currentSessions(state),
+                    state = sessionBrowserState,
                     progressText = zipProgressText,
-                    onCreateZip = { session ->
-                        val path = session.sessionId
-                        if (path.startsWith("content://")) {
-                            Toast.makeText(context, "ZIP for SAF sessions is not available yet.", Toast.LENGTH_LONG).show()
+                    onToggle = { id -> sessionBrowserState = sessionBrowserState.toggle(id) },
+                    onSelectCurrent = { sessionBrowserState = sessionBrowserState.selectCurrent() },
+                    onSelectRecordings = { sessionBrowserState = sessionBrowserState.selectRecordings() },
+                    onSelectArchives = { sessionBrowserState = sessionBrowserState.selectArchives() },
+                    onSelectAll = { sessionBrowserState = sessionBrowserState.selectAll() },
+                    onClearSelection = { sessionBrowserState = sessionBrowserState.clearSelection() },
+                    onShareSelected = {
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canShareZip)
+                        if (selected.isEmpty()) {
+                            Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
                         } else {
-                            val source = Paths.get(path)
-                            if (Files.isDirectory(source)) {
-                                val zipPath = source.resolveSibling("${source.fileName}.zip")
-                                zipProgressText = "Preparing ZIP..."
-                                Thread {
-                                    runCatching {
-                                        val plan = SessionZipPlan.fromSessionDirectory(source, zipPath)
-                                        SessionZipExporter.export(plan) { progress ->
+                            zipProgressText = "Preparing ZIP..."
+                            Thread {
+                                runCatching {
+                                    val cacheRoot = context.cacheDir.resolve("session-share-zips").toPath()
+                                    SessionArchiveManager.cleanupTemporaryShareZips(cacheRoot)
+                                    selected.mapIndexed { index, entry ->
+                                        val source = Paths.get(entry.location)
+                                        SessionArchiveManager.createTemporaryShareZip(source, cacheRoot) { progress ->
                                             runOnMain(context) {
-                                                zipProgressText = "ZIP ${progress.filesCompleted}/${progress.totalFiles}"
+                                                zipProgressText = "ZIP ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
                                             }
                                         }
-                                    }.onSuccess { zip ->
-                                        runOnMain(context) {
-                                            zipProgressText = null
-                                            shareZip(context, zip.toFile())
-                                        }
-                                    }.onFailure { error ->
-                                        runOnMain(context) {
-                                            zipProgressText = null
-                                            Toast.makeText(context, "ZIP failed: ${error.message}", Toast.LENGTH_LONG).show()
-                                        }
                                     }
-                                }.start()
+                                }.onSuccess { zips ->
+                                    runOnMain(context) {
+                                        zipProgressText = null
+                                        shareZipFiles(context, zips.map { it.toFile() })
+                                        refreshSessions()
+                                    }
+                                }.onFailure { error ->
+                                    runOnMain(context) {
+                                        zipProgressText = null
+                                        Toast.makeText(context, "Share ZIP failed: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }.start()
+                        }
+                    },
+                    onArchiveSelected = {
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canArchive)
+                        runSessionTask("Archive") {
+                            selected.forEachIndexed { index, entry ->
+                                val source = Paths.get(entry.location)
+                                SessionArchiveManager.archiveSession(source) { progress ->
+                                    runOnMain(context) {
+                                        zipProgressText = "Archive ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    onRestoreSelected = {
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canRestore)
+                        runSessionTask("Restore") {
+                            selected.forEachIndexed { index, entry ->
+                                runOnMain(context) {
+                                    zipProgressText = "Restore ${index + 1}/${selected.size}"
+                                }
+                                SessionArchiveManager.restoreArchive(Paths.get(entry.location))
+                            }
+                        }
+                    },
+                    onDeleteSelected = {
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canDelete)
+                        runSessionTask("Delete") {
+                            selected.forEachIndexed { index, entry ->
+                                runOnMain(context) {
+                                    zipProgressText = "Delete ${index + 1}/${selected.size}"
+                                }
+                                when (entry.kind) {
+                                    SessionEntryKind.ARCHIVE -> FilesystemSessionBrowser.deleteArchive(Paths.get(entry.location))
+                                    SessionEntryKind.CURRENT_STOPPED,
+                                    SessionEntryKind.RECORDING -> FilesystemSessionBrowser.deleteRecording(Paths.get(entry.location))
+                                    SessionEntryKind.CURRENT_ACTIVE -> Unit
+                                }
                             }
                         }
                     },
@@ -944,19 +1032,46 @@ private fun DashboardLayoutDialog(
     )
 }
 
-private fun currentSessions(state: DashboardState): List<SessionListItem> =
-    if (state.files.sessionLocation != "n/a") {
-        listOf(
-            SessionListItem(
-                sessionId = state.files.sessionLocation,
-                title = if (state.isRecording) "Current recording" else "Last known session",
-                subtitle = state.files.sessionLocation,
-                isActive = state.isRecording,
-            ),
+private fun buildSessionBrowserState(
+    context: Context,
+    dashboardState: DashboardState,
+    profileStore: ProfileStores,
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+): SessionBrowserState {
+    val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+    val storageProfile = selectedSet
+        ?.storageProfileRef
+        ?.id
+        ?.let { id -> profileStore.storageProfiles().firstOrNull { it.id == id } }
+    val sessionLocation = dashboardState.files.sessionLocation.takeUnless { it == "n/a" }
+    val appPrivateRoot = context.getExternalFilesDir("sessions") ?: context.filesDir.resolve("sessions")
+    return if (storageProfile == null || storageProfile.kind == "APP_PRIVATE") {
+        FilesystemSessionBrowser.discover(
+            storageRoot = appPrivateRoot.toPath(),
+            currentSessionLocation = sessionLocation,
+            currentSessionActive = dashboardState.isRecording,
         )
     } else {
-        emptyList()
+        sessionLocation
+            ?.let { location ->
+                sessionBrowserStateOf(
+                    listOf(
+                        SessionBrowserEntry(
+                            id = location,
+                            title = if (dashboardState.isRecording) "Current recording" else "Last session",
+                            subtitle = "SAF browsing/export is not available yet: $location",
+                            location = location,
+                            kind = if (dashboardState.isRecording) SessionEntryKind.CURRENT_ACTIVE else SessionEntryKind.CURRENT_STOPPED,
+                            modifiedEpochMillis = System.currentTimeMillis(),
+                            filesystemBacked = false,
+                        ),
+                    ),
+                )
+            }
+            ?: SessionBrowserState()
     }
+}
 
 private fun runOnMain(context: Context, action: () -> Unit) {
     (context as? ComponentActivity)?.runOnUiThread(action) ?: action()
@@ -970,6 +1085,42 @@ private fun shareZip(context: Context, zipFile: File) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Share recording ZIP"))
+    scheduleTemporaryZipCleanup(listOf(zipFile))
+}
+
+private fun shareZipFiles(context: Context, zipFiles: List<File>) {
+    if (zipFiles.isEmpty()) return
+    if (zipFiles.size == 1) {
+        shareZip(context, zipFiles.first())
+        return
+    }
+    val uris = ArrayList(
+        zipFiles.map { zipFile ->
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", zipFile)
+        },
+    )
+    val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        type = "application/zip"
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share recording ZIPs"))
+    scheduleTemporaryZipCleanup(zipFiles)
+}
+
+private fun scheduleTemporaryZipCleanup(zipFiles: List<File>) {
+    Handler(Looper.getMainLooper()).postDelayed(
+        {
+            runCatching {
+                zipFiles.forEach { file ->
+                    if (file.parentFile?.name == "session-share-zips") {
+                        file.delete()
+                    }
+                }
+            }
+        },
+        TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS,
+    )
 }
 
 private fun ProfileStores.profileEditorData(

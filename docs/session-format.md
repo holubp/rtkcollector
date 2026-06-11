@@ -95,6 +95,22 @@ as markers in `receiver-rx.raw`. Future structured exports such as GPX must be
 finalised with best-effort closing syntax; failure to finalise them is a
 sidecar error and does not invalidate raw RX.
 
+## Session Archives
+
+Session archives are storage-management artifacts, not live recording folders.
+The Android app may create temporary share ZIPs in app cache; these are intended
+only for Android send-to workflows and should be removed on a best-effort basis
+through delayed cleanup after sharing and before later share attempts. Sharing
+multiple selected sessions creates one temporary ZIP per session rather than one
+combined multi-session archive.
+
+A permanent archive is a maximum-compression ZIP stored next to the session
+folder in configured filesystem storage. Archiving must verify the ZIP before
+removing the original folder. Restoring must extract the ZIP to a session folder,
+verify that expected session artifacts are present and remove the ZIP only after
+the restore succeeds. Active recording sessions must not be archived, restored
+or deleted.
+
 ## `base-position.json`
 
 Required fields:

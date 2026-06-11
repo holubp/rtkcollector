@@ -32,13 +32,30 @@ It also provides the experimental real-recording controls:
 - live receiver RX, receiver TX, correction input and NTRIP state counters.
 
 The Files card shows the active session location and recorded byte counts. The
-session browser model distinguishes active sessions from completed sessions and
-keeps ZIP sharing disabled while recording unless an explicit partial snapshot
-mode is added. Future Android share actions should copy the session location,
-copy file locations, share selected files through Android send-to apps, or
-create and share a ZIP after recording stops. Start/Stop and Menu are intended
-to stay outside scrollable content so they remain reachable in portrait and
-landscape layouts.
+Sessions menu lists recordings in the configured app-private storage with latest
+sessions first and separates the current session, completed recordings and
+archived recordings. Active recordings cannot be shared, archived, restored or
+deleted from this menu.
+
+Completed recordings can be selected individually, by group or all together.
+Sharing creates one temporary ZIP per selected session, sends those ZIPs through
+the Android share sheet and leaves the original session folders untouched. Old
+temporary share ZIPs are cleaned up on later share attempts, and newly shared
+temporary ZIPs are scheduled for delayed best-effort cleanup because Android
+does not expose a reliable signal that the receiving app has finished reading
+them. Archiving is a different operation: it creates a permanent
+maximum-compression ZIP in session storage, verifies that the ZIP contains
+session artifacts, then removes the original folder. Archived recordings are
+marked in the list. Restore extracts an archive back to a session folder,
+verifies the restored artifacts and removes the archive ZIP only after a
+successful restore. Delete requires confirmation and can remove selected
+completed folders or archive ZIPs.
+
+The first implementation fully supports filesystem-backed app-private session
+browsing. SAF recording still writes valid sessions, but full SAF document-tree
+session browsing, archive and restore are future work. Start/Stop and Menu are
+intended to stay outside scrollable content so they remain reachable in portrait
+and landscape layouts.
 
 This UI intentionally does not implement RTKLIB, show maps, load shapefiles,
 provide GIS editing or collect field features.

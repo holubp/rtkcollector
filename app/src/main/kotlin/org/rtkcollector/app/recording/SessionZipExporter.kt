@@ -2,6 +2,7 @@ package org.rtkcollector.app.recording
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.zip.Deflater
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -43,11 +44,13 @@ data class SessionZipPlan(
 object SessionZipExporter {
     fun export(
         plan: SessionZipPlan,
+        compressionLevel: Int = Deflater.DEFAULT_COMPRESSION,
         onProgress: (SessionZipProgress) -> Unit = {},
     ): Path {
         plan.outputZip.parent?.let(Files::createDirectories)
         onProgress(SessionZipProgress(filesCompleted = 0, totalFiles = plan.files.size))
         ZipOutputStream(Files.newOutputStream(plan.outputZip)).use { zip ->
+            zip.setLevel(compressionLevel)
             plan.files.forEachIndexed { index, file ->
                 val relativeName = plan.sourceDirectory.relativize(file).joinToString("/")
                 zip.putNextEntry(ZipEntry(relativeName))

@@ -322,7 +322,11 @@ class NtripClient(
                 }
 
                 onState(CorrectionStatus(NtripConnectionState.STREAMING))
-                val bytesRead = streamPayload(header.payload, socket.input, onRtcmBytes)
+                val bytesRead = if (header.isChunkedTransferEncoding()) {
+                    streamChunkedPayload(header.payload, socket.input, onRtcmBytes)
+                } else {
+                    streamPayload(header.payload, socket.input, onRtcmBytes)
+                }
                 NtripConnectionResult.Completed(bytesRead)
             } catch (exception: Exception) {
                 failure(
@@ -470,6 +474,75 @@ class NtripClient(
         return bytesRead
     }
 
+    private fun streamChunkedPayload(
+        initialPayload: ByteArray,
+        input: InputStream,
+        onRtcmBytes: (ByteArray) -> Unit,
+    ): Long {
+        require(initialPayload.isEmpty()) { "Chunked NTRIP response unexpectedly included payload bytes with headers." }
+        var bytesRead = 0L
+        while (!cancelled.get()) {
+            val sizeLine = input.readAsciiLine() ?: break
+            val chunkSize = sizeLine
+                .substringBefore(';')
+                .trim()
+                .toIntOrNull(radix = 16)
+                ?: error("Invalid chunk size in NTRIP stream: $sizeLine")
+            if (chunkSize == 0) {
+                input.discardChunkTrailers()
+                break
+            }
+            val chunk = input.readExact(chunkSize)
+            input.expectCrLf()
+            onRtcmBytes(chunk)
+            bytesRead += chunk.size
+        }
+        return bytesRead
+    }
+
+    private fun InputStream.readAsciiLine(): String? {
+        val line = ByteArrayOutputStream()
+        var previous = -1
+        while (true) {
+            val next = read()
+            if (next == -1) {
+                return if (line.size() == 0 && previous == -1) null else line.toString(Charsets.US_ASCII.name())
+            }
+            if (previous == '\r'.code && next == '\n'.code) {
+                val bytes = line.toByteArray()
+                return bytes.copyOf(bytes.size - 1).toString(Charsets.US_ASCII)
+            }
+            line.write(next)
+            previous = next
+        }
+    }
+
+    private fun InputStream.discardChunkTrailers() {
+        while (true) {
+            val line = readAsciiLine() ?: return
+            if (line.isEmpty()) return
+        }
+    }
+
+    private fun InputStream.readExact(byteCount: Int): ByteArray {
+        val output = ByteArray(byteCount)
+        var offset = 0
+        while (offset < byteCount) {
+            val count = read(output, offset, byteCount - offset)
+            if (count == -1) {
+                error("NTRIP chunk ended before $byteCount bytes were read.")
+            }
+            offset += count
+        }
+        return output
+    }
+
+    private fun InputStream.expectCrLf() {
+        val cr = read()
+        val lf = read()
+        require(cr == '\r'.code && lf == '\n'.code) { "NTRIP chunk was not terminated with CR/LF." }
+    }
+
     private fun stoppedBeforeConnection(): NtripConnectionResult.Failure =
         NtripConnectionResult.Failure(
             NtripFailure(
@@ -515,7 +588,15 @@ class NtripClient(
     private data class NtripHeader(
         val text: String,
         val payload: ByteArray,
-    )
+    ) {
+        fun isChunkedTransferEncoding(): Boolean =
+            text.lineSequence().any { line ->
+                line.substringBefore(':').equals("Transfer-Encoding", ignoreCase = true) &&
+                    line.substringAfter(':', "").split(',').any { value ->
+                        value.trim().equals("chunked", ignoreCase = true)
+                    }
+            }
+    }
 
     private companion object {
         val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())

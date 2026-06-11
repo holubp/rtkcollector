@@ -276,6 +276,30 @@ class NtripClientTest {
     }
 
     @Test
+    fun `http chunked stream is decoded before rtcm callback`() {
+        val connector = FakeNtripSocketConnector(
+            FakeNtripSocket(
+                inputBytes = (
+                    "HTTP/1.1 200 OK\r\n" +
+                        "Transfer-Encoding: chunked\r\n" +
+                        "\r\n" +
+                        "3\r\nabc\r\n" +
+                        "4\r\ndefg\r\n" +
+                        "0\r\n\r\n"
+                    ).toByteArray(Charsets.US_ASCII),
+            ),
+        )
+        val streamed = ByteArrayOutputStream()
+        val client = NtripClient(request = defaultRequest(), connector = connector)
+
+        val result = client.connectOnce { chunk -> streamed.write(chunk) }
+
+        assertInstanceOf(NtripConnectionResult.Completed::class.java, result)
+        assertEquals(7, (result as NtripConnectionResult.Completed).bytesRead)
+        assertArrayEquals("abcdefg".toByteArray(Charsets.US_ASCII), streamed.toByteArray())
+    }
+
+    @Test
     fun `optional gga lines are written to socket output after request`() {
         val socket = FakeNtripSocket(inputBytes = "ICY 200 OK\r\n\r\n".toByteArray())
         val connector = FakeNtripSocketConnector(socket)

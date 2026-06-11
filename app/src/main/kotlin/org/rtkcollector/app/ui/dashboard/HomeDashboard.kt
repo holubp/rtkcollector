@@ -298,26 +298,31 @@ private fun SetupStrip(
         SetupTile(
             label = "Settings",
             value = status.settingsSet,
+            modifier = Modifier.widthIn(min = 112.dp, max = 150.dp),
             onClick = onSettingsSet,
         )
         SetupTile(
             label = "Workflow",
             value = status.workflow,
+            modifier = Modifier.widthIn(min = 112.dp, max = 150.dp),
             onClick = onWorkflow,
         )
         SetupTile(
             label = "Mountpoint",
             value = status.mountpoint,
+            modifier = Modifier.widthIn(min = 112.dp, max = 150.dp),
             onClick = onMountpoint,
         )
         SetupTile(
             label = "Receiver",
             value = status.receiver,
+            modifier = Modifier.widthIn(min = 112.dp, max = 150.dp),
             onClick = onReceiver,
         )
         SetupTile(
             label = "Storage",
             value = status.storage,
+            modifier = Modifier.widthIn(min = 112.dp, max = 150.dp),
             onClick = onStorage,
         )
     }

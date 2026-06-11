@@ -1,9 +1,15 @@
 package org.rtkcollector.app.ui.common
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 
 enum class HelpTopic(
     val title: String,
@@ -36,7 +42,18 @@ fun HelpOverlay(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(topic.title) },
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(topic.title, modifier = Modifier.weight(1f))
+                TextButton(onClick = onDismiss) {
+                    Text("X")
+                }
+            }
+        },
         text = { Text(topic.body) },
         confirmButton = {
             TextButton(onClick = onDismiss) {

@@ -55,4 +55,15 @@ class RecordingForegroundServiceRtkStatusTest {
 
         assertEquals("RTK fixed", status)
     }
+
+    @Test
+    fun `rtcm decoded update does not preserve stale fixed status`() {
+        val status = receiverRtkStatusAfterRtcmDecoded(
+            previousStatus = "RTK fixed",
+            lastReceiverRtkEvidenceAtMillis = 1_000L,
+            nowMillis = 20_000L,
+        )
+
+        assertEquals("RTCM decoded", status)
+    }
 }

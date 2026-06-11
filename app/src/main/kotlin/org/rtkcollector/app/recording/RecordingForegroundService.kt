@@ -138,6 +138,7 @@ class RecordingForegroundService : Service() {
             rtkPositionType = null,
             rtkCalculateStatus = null,
             rtkCalculateStatusDescription = null,
+            receiverRtkEvidenceAtMillis = null,
             rtcmDecodedAtMillis = null,
             rtcmLastMessageId = null,
             rtcmLastBaseId = null,
@@ -1178,6 +1179,7 @@ class RecordingForegroundService : Service() {
         )
 
     private fun RecordingServiceState.withReceiverRtkAsciiSolution(solution: Um980AsciiSolution): RecordingServiceState {
+        val nowMillis = android.os.SystemClock.elapsedRealtime()
         val status = classifyReceiverRtkStatus(
             positionType = solution.positionType,
             solutionStatus = solution.solutionStatus,
@@ -1188,10 +1190,12 @@ class RecordingForegroundService : Service() {
         return copy(
             receiverRtkStatus = status,
             rtkPositionType = solution.positionType ?: rtkPositionType,
+            receiverRtkEvidenceAtMillis = nowMillis,
         )
     }
 
     private fun RecordingServiceState.withReceiverRtkTelemetry(telemetry: Um980Telemetry): RecordingServiceState {
+        val nowMillis = android.os.SystemClock.elapsedRealtime()
         val positionType = telemetry.rtkPositionType ?: telemetry.positionType
         val calculateStatus = telemetry.rtkCalculateStatus ?: rtkCalculateStatus
         val status = classifyReceiverRtkStatus(
@@ -1206,20 +1210,23 @@ class RecordingForegroundService : Service() {
             rtkPositionType = positionType ?: rtkPositionType,
             rtkCalculateStatus = calculateStatus,
             rtkCalculateStatusDescription = telemetry.rtkCalculateStatusDescription ?: rtkCalculateStatusDescription,
+            receiverRtkEvidenceAtMillis = nowMillis,
         )
     }
 
-    private fun RecordingServiceState.withRtcmDecodedTelemetry(telemetry: Um980Telemetry): RecordingServiceState =
-        copy(
-            rtcmDecodedAtMillis = android.os.SystemClock.elapsedRealtime(),
+    private fun RecordingServiceState.withRtcmDecodedTelemetry(telemetry: Um980Telemetry): RecordingServiceState {
+        val nowMillis = android.os.SystemClock.elapsedRealtime()
+        return copy(
+            rtcmDecodedAtMillis = nowMillis,
             rtcmLastMessageId = telemetry.rtcmMessageId ?: rtcmLastMessageId,
             rtcmLastBaseId = telemetry.rtcmBaseId ?: rtcmLastBaseId,
-            receiverRtkStatus = if (receiverRtkStatus == "n/a" || receiverRtkStatus == "No RTCM") {
-                "RTCM decoded"
-            } else {
-                receiverRtkStatus
-            },
+            receiverRtkStatus = receiverRtkStatusAfterRtcmDecoded(
+                previousStatus = receiverRtkStatus,
+                lastReceiverRtkEvidenceAtMillis = receiverRtkEvidenceAtMillis,
+                nowMillis = nowMillis,
+            ),
         )
+    }
 
     private fun RecordingServiceState.hasRecentRtcmDecoded(): Boolean =
         rtcmDecodedAtMillis?.let { android.os.SystemClock.elapsedRealtime() - it < RTCM_STATUS_RECENT_MILLIS } == true
@@ -1461,7 +1468,22 @@ class RecordingForegroundService : Service() {
 }
 
 private const val RTCM_STATUS_RECENT_MILLIS = 10_000L
+private const val RTK_EVIDENCE_RECENT_MILLIS = 10_000L
 private const val RTK_STALE_DIFFERENTIAL_AGE_SECONDS = 5.0
+
+internal fun receiverRtkStatusAfterRtcmDecoded(
+    previousStatus: String,
+    lastReceiverRtkEvidenceAtMillis: Long?,
+    nowMillis: Long,
+): String {
+    val hasRecentReceiverRtkEvidence = lastReceiverRtkEvidenceAtMillis
+        ?.let { nowMillis - it < RTK_EVIDENCE_RECENT_MILLIS } == true
+    return if (hasRecentReceiverRtkEvidence && previousStatus != "n/a" && previousStatus != "No RTCM") {
+        previousStatus
+    } else {
+        "RTCM decoded"
+    }
+}
 
 internal fun classifyReceiverRtkStatus(
     positionType: String?,

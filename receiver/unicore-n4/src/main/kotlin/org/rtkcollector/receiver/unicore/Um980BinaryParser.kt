@@ -163,6 +163,13 @@ object Um980BinaryParser {
             rtkCalculateStatusDescription = rtkCalculateStatusNames[calculateStatus] ?: "STATUS_$calculateStatus",
             ionDetected = payload.get(52).toInt() != 0,
             adrNumber = payload.get(54).toInt() and 0xff,
+            gpsSource = payload.getInt(0),
+            bdsSource1 = payload.getInt(8),
+            bdsSource2 = payload.getInt(12),
+            gloSource = payload.getInt(20),
+            galSource1 = payload.getInt(28),
+            galSource2 = payload.getInt(32),
+            qzssSource = payload.getInt(36),
         )
     }
 

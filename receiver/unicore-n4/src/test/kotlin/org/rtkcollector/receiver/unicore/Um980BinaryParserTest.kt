@@ -104,9 +104,11 @@ class Um980BinaryParserTest {
     fun `parses rtkstatusb calculate status and adr number`() {
         val payload = ByteBuffer.allocate(64).order(ByteOrder.LITTLE_ENDIAN).apply {
             putInt(0, 0b11)
-            putInt(8, 0b1)
+            putInt(8, 0b101)
+            putInt(12, 0b1001)
             putInt(20, 0b10)
             putInt(28, 0b100)
+            putInt(32, 0b1100)
             putInt(36, 0b1000)
             putInt(44, 34)
             putInt(48, 5)
@@ -121,6 +123,13 @@ class Um980BinaryParserTest {
         assertEquals("NARROW_FLOAT", telemetry.rtkPositionType)
         assertEquals(5, telemetry.rtkCalculateStatus)
         assertEquals(23, telemetry.adrNumber)
+        assertEquals(0b11, telemetry.gpsSource)
+        assertEquals(0b101, telemetry.bdsSource1)
+        assertEquals(0b1001, telemetry.bdsSource2)
+        assertEquals(0b10, telemetry.gloSource)
+        assertEquals(0b100, telemetry.galSource1)
+        assertEquals(0b1100, telemetry.galSource2)
+        assertEquals(0b1000, telemetry.qzssSource)
     }
 
     @Test

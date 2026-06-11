@@ -18,4 +18,20 @@ class DashboardLayoutModelsTest {
         assertEquals(DashboardLayoutPreference.COMPACT_FIELD, DashboardLayoutPreference.fromStorageId(""))
         assertEquals(DashboardLayoutPreference.COMPACT_FIELD, DashboardLayoutPreference.fromStorageId(null))
     }
+
+    @Test
+    fun `compact dashboard uses two columns on standard phone portrait widths`() {
+        assertEquals(2, compactDashboardCardColumnCount(370))
+        assertEquals(2, compactDashboardCardColumnCount(340))
+        assertEquals(1, compactDashboardCardColumnCount(339))
+        assertEquals(1, compactDashboardCardColumnCount(320))
+    }
+
+    @Test
+    fun `default setup strip excludes settings profile details`() {
+        assertEquals(
+            listOf("Workflow", "Mountpoint", "Receiver", "Storage"),
+            defaultDashboardSetupItems.map { it.label },
+        )
+    }
 }

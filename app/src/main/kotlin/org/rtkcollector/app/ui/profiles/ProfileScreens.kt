@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 private val ActiveProfileBackground = Color(0xFFE8F5E9)
@@ -110,9 +113,12 @@ fun ProfileListScreen(
                     renameText = ""
                 }
             },
-            onDismiss = {
+            onDiscard = {
                 renameTarget = null
                 renameText = ""
+            },
+            onCancel = {
+                renameTarget = null
             },
         )
     }
@@ -237,56 +243,80 @@ private fun ProfileListItem(
             val showCopy = showManagementActions && row.canCopy
             val showRename = showManagementActions && row.canRename
             val showDelete = showManagementActions && row.canDelete
-            if (showUse || showEdit || showCopy || showRename || showDelete) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (showUse || showEdit || showCopy) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            if (showUse) {
-                                Button(onClick = { onSelect(row.id) }, modifier = Modifier.weight(1f)) {
-                                    Text("Use")
-                                }
-                            }
-                            if (showEdit) {
-                                OutlinedButton(
-                                    onClick = { if (row.canEdit) onEdit(row.id) },
-                                    enabled = row.canEdit,
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("Edit")
-                                }
-                            }
-                            if (showCopy) {
-                                TextButton(onClick = { onCopy(row.id) }, modifier = Modifier.weight(1f)) {
-                                    Text("Copy")
-                                }
-                            }
-                        }
-                    }
+            if (row.summary.isNotBlank()) {
+                Text(
+                    text = row.summary,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
-                    if (showRename || showDelete) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            if (showRename) {
-                                TextButton(onClick = onRename, modifier = Modifier.weight(1f)) {
-                                    Text("Rename")
-                                }
-                            }
-                            if (showDelete) {
-                                TextButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
-                                    Text(profileDeleteActionLabel(row))
-                                }
-                            }
-                        }
-                    }
-                }
+            if (showUse || showEdit || showCopy || showRename || showDelete) {
+                CompactProfileActions(
+                    showUse = showUse,
+                    showEdit = showEdit,
+                    editEnabled = row.canEdit,
+                    showCopy = showCopy,
+                    showRename = showRename,
+                    showDelete = showDelete,
+                    deleteLabel = profileDeleteActionLabel(row),
+                    onUse = { onSelect(row.id) },
+                    onEdit = { onEdit(row.id) },
+                    onCopy = { onCopy(row.id) },
+                    onRename = onRename,
+                    onDelete = onDelete,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CompactProfileActions(
+    showUse: Boolean,
+    showEdit: Boolean,
+    editEnabled: Boolean,
+    showCopy: Boolean,
+    showRename: Boolean,
+    showDelete: Boolean,
+    deleteLabel: String,
+    onUse: () -> Unit,
+    onEdit: () -> Unit,
+    onCopy: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (showUse) {
+            Button(onClick = onUse) {
+                Text("Use")
+            }
+        }
+        if (showEdit) {
+            OutlinedButton(onClick = onEdit, enabled = editEnabled) {
+                Text("Edit")
+            }
+        }
+        if (showCopy) {
+            TextButton(onClick = onCopy) {
+                Text("Copy")
+            }
+        }
+        if (showRename) {
+            TextButton(onClick = onRename) {
+                Text("Rename")
+            }
+        }
+        if (showDelete) {
+            TextButton(onClick = onDelete) {
+                Text(deleteLabel)
             }
         }
     }
@@ -298,10 +328,11 @@ private fun ProfileRenameDialog(
     value: String,
     onValueChange: (String) -> Unit,
     onSave: () -> Unit,
-    onDismiss: () -> Unit,
+    onDiscard: () -> Unit,
+    onCancel: () -> Unit,
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = onDiscard,
         title = { Text("Rename profile") },
         text = {
             OutlinedTextField(
@@ -313,7 +344,7 @@ private fun ProfileRenameDialog(
             )
         },
         confirmButton = {
-            TextButton(
+            Button(
                 onClick = onSave,
                 enabled = canSaveProfileRename(row.name, value),
             ) {
@@ -321,8 +352,18 @@ private fun ProfileRenameDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = onDiscard,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text("Discard")
+                }
+                TextButton(onClick = onCancel) {
+                    Text("Cancel")
+                }
             }
         },
     )
@@ -508,12 +549,15 @@ fun ProfileEditorScreen(
     onSave: (Map<String, String>) -> Unit,
     actions: List<ProfileEditorAction> = emptyList(),
 ) {
+    val destructiveActions = actions.filter { it.destructive }
+    val utilityActions = actions.filterNot { it.destructive }
     var values by remember {
         mutableStateOf(data.fields.associate { it.key to it.value })
     }
     var visibleSecrets by remember { mutableStateOf(emptySet<String>()) }
     var expandedOptions by remember { mutableStateOf(emptySet<String>()) }
     var showUnsavedPrompt by remember { mutableStateOf(false) }
+    var pendingDestructiveAction by remember { mutableStateOf<ProfileEditorAction?>(null) }
     val savedFingerprint = remember(data.fields) {
         profileEditorFingerprint(data.fields.associate { it.key to it.value })
     }
@@ -564,6 +608,31 @@ fun ProfileEditorScreen(
             },
         )
     }
+    pendingDestructiveAction?.let { action ->
+        AlertDialog(
+            onDismissRequest = { pendingDestructiveAction = null },
+            title = { Text(action.label) },
+            text = { Text("Confirm ${action.label.lowercase()} for this profile?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDestructiveAction = null
+                        action.onClick()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(action.label)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDestructiveAction = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
     Scaffold(
         topBar = {
             Column {
@@ -575,14 +644,6 @@ fun ProfileEditorScreen(
                         }
                     },
                     actions = {
-                        TextButton(
-                            onClick = onBack,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                        ) {
-                            Text("Discard")
-                        }
                         Button(
                             onClick = saveValues,
                             colors = ButtonDefaults.buttonColors(
@@ -592,9 +653,29 @@ fun ProfileEditorScreen(
                         ) {
                             Text("Save")
                         }
+                        TextButton(
+                            onClick = onBack,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) {
+                            Text("Discard")
+                        }
+                        destructiveActions.forEach { action ->
+                            TextButton(
+                                onClick = {
+                                    pendingDestructiveAction = action
+                                },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                ),
+                            ) {
+                                Text(action.label)
+                            }
+                        }
                     },
                 )
-                if (actions.isNotEmpty()) {
+                if (utilityActions.isNotEmpty()) {
                     Surface(
                         tonalElevation = 1.dp,
                         modifier = Modifier.fillMaxWidth(),
@@ -602,10 +683,10 @@ fun ProfileEditorScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            actions.forEach { action ->
+                            utilityActions.forEach { action ->
                                 TextButton(onClick = action.onClick) {
                                     Text(action.label)
                                 }

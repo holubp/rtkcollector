@@ -23,6 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -32,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import org.rtkcollector.app.ui.common.HelpOverlay
+import org.rtkcollector.app.ui.common.HelpTopic
 import org.rtkcollector.app.ui.common.TidyColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +57,7 @@ fun SettingsHub(
     onSessions: () -> Unit,
     onBack: () -> Unit,
 ) {
+    var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -60,46 +67,53 @@ fun SettingsHub(
                         Text("Back")
                     }
                 },
+                actions = {
+                    TextButton(onClick = { helpTopic = HelpTopic.SETTINGS_GROUPS }) {
+                        Text("?")
+                    }
+                },
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            SettingsSection("Session setup") {
-                SettingsRow("◎", "Settings sets", onSettingsSets)
-                SettingsDivider()
-                SettingsRow("⇄", "Workflow selection", onWorkflowSelection)
-                SettingsDivider()
-                SettingsRow("▤", "Dashboard layout", onDashboardLayout, subtitle = dashboardLayoutLabel)
-                SettingsDivider()
-                SettingsRow("●", "Recording outputs", onRecordingOutputs)
-                SettingsDivider()
-                SettingsRow("▣", "Storage location profiles", onStorage)
-            }
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SettingsSection("Session setup") {
+                    SettingsRow("◎", "Settings sets", onSettingsSets)
+                    SettingsDivider()
+                    SettingsRow("⇄", "Workflow selection", onWorkflowSelection)
+                    SettingsDivider()
+                    SettingsRow("▤", "Dashboard layout", onDashboardLayout, subtitle = dashboardLayoutLabel)
+                    SettingsDivider()
+                    SettingsRow("●", "Recording outputs", onRecordingOutputs)
+                    SettingsDivider()
+                    SettingsRow("▣", "Storage location profiles", onStorage)
+                }
 
-            SettingsSection("Receiver and USB") {
-                SettingsRow("USB", "USB device and baud", onUsbBaud)
-                SettingsDivider()
-                SettingsRow("⌁", "Command scripts", onCommands)
-                SettingsDivider()
-                SettingsRow("RX", "Receiver family/profile", onReceiverProfile)
-            }
+                SettingsSection("Receiver and USB") {
+                    SettingsRow("USB", "USB device and baud", onUsbBaud)
+                    SettingsDivider()
+                    SettingsRow("⌁", "Command scripts", onCommands)
+                    SettingsDivider()
+                    SettingsRow("RX", "Receiver family/profile", onReceiverProfile)
+                }
 
-            SettingsSection("Corrections") {
-                SettingsRow("N", "NTRIP casters", onNtripCaster)
-                SettingsDivider()
-                SettingsRow("M", "NTRIP mountpoints", onNtripMountpoint)
-            }
+                SettingsSection("Corrections") {
+                    SettingsRow("N", "NTRIP casters", onNtripCaster)
+                    SettingsDivider()
+                    SettingsRow("M", "NTRIP mountpoints", onNtripMountpoint)
+                }
 
-            SettingsSection("Sessions") {
-                SettingsRow("↗", "Recent sessions and sharing", onSessions)
+                SettingsSection("Sessions") {
+                    SettingsRow("↗", "Recent sessions and sharing", onSessions)
+                }
             }
+            HelpOverlay(topic = helpTopic, onDismiss = { helpTopic = null })
         }
     }
 }
@@ -119,11 +133,11 @@ private fun SettingsSection(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(vertical = 6.dp),
         ) {
             Text(
                 text = title.uppercase(),
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
@@ -144,16 +158,16 @@ private fun SettingsRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
+            .heightIn(min = 42.dp)
             .clickable(onClick = onClick)
             .semantics { contentDescription = description }
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(width = 34.dp, height = 24.dp)
+                .size(width = 30.dp, height = 22.dp)
                 .clearAndSetSemantics {},
             contentAlignment = Alignment.Center,
         ) {
@@ -163,7 +177,7 @@ private fun SettingsRow(
             ) {
                 Text(
                     text = icon,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -194,7 +208,7 @@ private fun SettingsRow(
 @Composable
 private fun SettingsDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(start = 58.dp, end = 14.dp),
+        modifier = Modifier.padding(start = 52.dp, end = 12.dp),
         color = TidyColors.Divider,
     )
 }

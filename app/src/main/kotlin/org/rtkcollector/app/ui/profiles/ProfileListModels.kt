@@ -8,6 +8,7 @@ data class ProfileListRow(
     val isProtected: Boolean,
     val hasLocalOverrides: Boolean,
     val isSelected: Boolean = false,
+    val summary: String = "",
 ) {
     val displayName: String = if (hasLocalOverrides) "$name + local changes" else name
     val canEdit: Boolean = !isProtected
@@ -29,11 +30,20 @@ data class SettingsSetListState(
                         isProtected = set.isProtected,
                         hasLocalOverrides = set.hasLocalOverrides,
                         isSelected = set.id == selectedId,
+                        summary = settingsSetSummary(set),
                     )
                 },
             )
     }
 }
+
+private fun settingsSetSummary(set: RecordingSettingsSet): String =
+    listOf(
+        set.workflowId,
+        set.commandProfileRef.name,
+        set.ntripMountpointProfileRef?.name ?: "No NTRIP mountpoint",
+        set.storageProfileRef.name,
+    ).joinToString(" · ")
 
 data class EditableProfileField(
     val key: String,
@@ -56,6 +66,7 @@ data class ProfileEditorData(
 data class ProfileEditorAction(
     val label: String,
     val onClick: () -> Unit,
+    val destructive: Boolean = false,
 )
 
 data class EditableProfileOption(

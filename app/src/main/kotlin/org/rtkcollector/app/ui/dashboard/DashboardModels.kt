@@ -96,6 +96,25 @@ data class DashboardStatus(
     val storage: String = "n/a",
 )
 
+internal const val CompactDashboardTwoColumnMinWidthDp = 340
+
+internal fun compactDashboardCardColumnCount(availableWidthDp: Int): Int =
+    if (availableWidthDp >= CompactDashboardTwoColumnMinWidthDp) 2 else 1
+
+internal enum class DashboardSetupItem(val label: String) {
+    WORKFLOW("Workflow"),
+    MOUNTPOINT("Mountpoint"),
+    RECEIVER("Receiver"),
+    STORAGE("Storage"),
+}
+
+internal val defaultDashboardSetupItems: List<DashboardSetupItem> = listOf(
+    DashboardSetupItem.WORKFLOW,
+    DashboardSetupItem.MOUNTPOINT,
+    DashboardSetupItem.RECEIVER,
+    DashboardSetupItem.STORAGE,
+)
+
 data class PositionCardState(
     val latLon: String = "n/a",
     val ellipsoidalHeight: String = "n/a",

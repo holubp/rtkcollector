@@ -64,6 +64,7 @@ import org.rtkcollector.app.ui.profiles.ProfileEditorScreen
 import org.rtkcollector.app.ui.profiles.ProfileListScreen
 import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
+import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
 import org.rtkcollector.app.ui.sessions.SessionListItem
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
@@ -134,6 +135,75 @@ fun RtkCollectorApp() {
         }
         delete()
         refreshProfileUi()
+    }
+    fun deleteSettingsSet(id: String) {
+        val item = settingsSets.firstOrNull { it.id == id } ?: return
+        val updated = if (item.isProtected) {
+            settingsSets.map { set ->
+                if (set.id == id) set.copy(overrides = org.rtkcollector.app.profile.SettingsSetOverrides()) else set
+            }
+        } else {
+            settingsSets.filterNot { it.id == id }
+        }
+        settingsSets = updated
+        profileStore.saveSettingsSets(updated)
+        if (!item.isProtected && selectedSettingsSetId == id) {
+            selectedSettingsSetId = updated.firstOrNull()?.id.orEmpty()
+            if (selectedSettingsSetId.isNotBlank()) {
+                profileStore.saveSelectedSettingsSetId(selectedSettingsSetId)
+            }
+        }
+        refreshProfileUi(updated)
+    }
+    fun deleteProfile(kind: ProfileKind, id: String) {
+        when (kind) {
+            ProfileKind.SETTINGS_SET -> deleteSettingsSet(id)
+            ProfileKind.NTRIP_CASTER -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.ntripCasterProfiles()
+                profileStore.saveNtripCasterProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
+            ProfileKind.NTRIP_MOUNTPOINT -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.ntripMountpointProfiles()
+                profileStore.saveNtripMountpointProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
+            ProfileKind.COMMANDS -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.commandProfiles()
+                profileStore.saveCommandProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
+            ProfileKind.RECORDING_OUTPUTS -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.recordingPolicyProfiles()
+                profileStore.saveRecordingPolicyProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
+            ProfileKind.STORAGE -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.storageProfiles()
+                profileStore.saveStorageProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
+            ProfileKind.USB_BAUD -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.usbBaudProfiles()
+                profileStore.saveUsbBaudProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
+        }
+    }
+    fun profileEditorDeleteAction(target: ProfileEditorTarget): ProfileEditorAction? {
+        val row = when (target.kind) {
+            ProfileKind.SETTINGS_SET -> SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows.firstOrNull { it.id == target.id }
+            ProfileKind.NTRIP_CASTER -> profileStore.ntripCasterProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.NTRIP_MOUNTPOINT -> profileStore.ntripMountpointProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.USB_BAUD -> profileStore.usbBaudProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.COMMANDS -> profileStore.commandProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.RECORDING_OUTPUTS -> profileStore.recordingPolicyProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.STORAGE -> profileStore.storageProfiles().firstOrNull { it.id == target.id }?.profileRow()
+        } ?: return null
+        if (!row.canDelete) return null
+        if (target.kind != ProfileKind.SETTINGS_SET && settingsSets.referenceProfile(target.kind, target.id)) return null
+        return ProfileEditorAction(
+            label = profileDeleteActionLabel(row),
+            onClick = {
+                deleteProfile(target.kind, target.id)
+                screen = target.kind.backScreen()
+            },
+            destructive = true,
+        )
     }
     BackHandler(enabled = screen != AppScreen.HOME) {
         screen = screen.backScreen(profileEditorTarget)
@@ -328,27 +398,7 @@ fun RtkCollectorApp() {
                         }
                     },
                     onRename = { id, name -> renameProfile(ProfileKind.SETTINGS_SET, id, name) },
-                    onDelete = { id ->
-                        val item = settingsSets.firstOrNull { it.id == id }
-                        if (item != null) {
-                            val updated = if (item.isProtected) {
-                                settingsSets.map { set ->
-                                    if (set.id == id) set.copy(overrides = org.rtkcollector.app.profile.SettingsSetOverrides()) else set
-                                }
-                            } else {
-                                settingsSets.filterNot { it.id == id }
-                            }
-                            settingsSets = updated
-                            profileStore.saveSettingsSets(updated)
-                            if (!item.isProtected && selectedSettingsSetId == id) {
-                                selectedSettingsSetId = updated.firstOrNull()?.id.orEmpty()
-                                if (selectedSettingsSetId.isNotBlank()) {
-                                    profileStore.saveSelectedSettingsSetId(selectedSettingsSetId)
-                                }
-                            }
-                            refreshProfileUi(updated)
-                        }
-                    },
+                    onDelete = { id -> deleteProfile(ProfileKind.SETTINGS_SET, id) },
                     onAdd = {
                         val newSet = RecordingSettingsSet.builtInRoverNtrip().copySet(
                             id = profileStore.duplicateId("settings"),
@@ -384,12 +434,7 @@ fun RtkCollectorApp() {
                         }
                     },
                     onRename = { id, name -> renameProfile(ProfileKind.NTRIP_CASTER, id, name) },
-                    onDelete = { id ->
-                        deleteProfileIfUnused(ProfileKind.NTRIP_CASTER, id) {
-                            val profiles = profileStore.ntripCasterProfiles()
-                            profileStore.saveNtripCasterProfiles(profiles.filterNot { it.id == id && !it.isProtected })
-                        }
-                    },
+                    onDelete = { id -> deleteProfile(ProfileKind.NTRIP_CASTER, id) },
                     onAdd = {
                         val profile = NtripCasterProfile(
                             id = profileStore.duplicateId("caster"),
@@ -424,12 +469,7 @@ fun RtkCollectorApp() {
                         }
                     },
                     onRename = { id, name -> renameProfile(ProfileKind.NTRIP_MOUNTPOINT, id, name) },
-                    onDelete = { id ->
-                        deleteProfileIfUnused(ProfileKind.NTRIP_MOUNTPOINT, id) {
-                            val profiles = profileStore.ntripMountpointProfiles()
-                            profileStore.saveNtripMountpointProfiles(profiles.filterNot { it.id == id && !it.isProtected })
-                        }
-                    },
+                    onDelete = { id -> deleteProfile(ProfileKind.NTRIP_MOUNTPOINT, id) },
                     onAdd = {
                         val casterId = profileStore.ntripCasterProfiles().firstOrNull()?.id ?: "ntrip-caster-default"
                         val profile = NtripMountpointProfile(
@@ -466,12 +506,7 @@ fun RtkCollectorApp() {
                         }
                     },
                     onRename = { id, name -> renameProfile(ProfileKind.COMMANDS, id, name) },
-                    onDelete = { id ->
-                        deleteProfileIfUnused(ProfileKind.COMMANDS, id) {
-                            val profiles = profileStore.commandProfiles()
-                            profileStore.saveCommandProfiles(profiles.filterNot { it.id == id && !it.isProtected })
-                        }
-                    },
+                    onDelete = { id -> deleteProfile(ProfileKind.COMMANDS, id) },
                     onAdd = {
                         val profile = CommandProfile(
                             id = profileStore.duplicateId("commands"),
@@ -507,12 +542,7 @@ fun RtkCollectorApp() {
                         }
                     },
                     onRename = { id, name -> renameProfile(ProfileKind.RECORDING_OUTPUTS, id, name) },
-                    onDelete = { id ->
-                        deleteProfileIfUnused(ProfileKind.RECORDING_OUTPUTS, id) {
-                            val profiles = profileStore.recordingPolicyProfiles()
-                            profileStore.saveRecordingPolicyProfiles(profiles.filterNot { it.id == id && !it.isProtected })
-                        }
-                    },
+                    onDelete = { id -> deleteProfile(ProfileKind.RECORDING_OUTPUTS, id) },
                     onAdd = {
                         val profile = RecordingPolicyProfile(
                             id = profileStore.duplicateId("recording"),
@@ -547,12 +577,7 @@ fun RtkCollectorApp() {
                         }
                     },
                     onRename = { id, name -> renameProfile(ProfileKind.STORAGE, id, name) },
-                    onDelete = { id ->
-                        deleteProfileIfUnused(ProfileKind.STORAGE, id) {
-                            val profiles = profileStore.storageProfiles()
-                            profileStore.saveStorageProfiles(profiles.filterNot { it.id == id && !it.isProtected })
-                        }
-                    },
+                    onDelete = { id -> deleteProfile(ProfileKind.STORAGE, id) },
                     onAdd = {
                         val profile = StorageProfile(
                             id = profileStore.duplicateId("storage"),
@@ -585,12 +610,7 @@ fun RtkCollectorApp() {
                         }
                     },
                     onRename = { id, name -> renameProfile(ProfileKind.USB_BAUD, id, name) },
-                    onDelete = { id ->
-                        deleteProfileIfUnused(ProfileKind.USB_BAUD, id) {
-                            val profiles = profileStore.usbBaudProfiles()
-                            profileStore.saveUsbBaudProfiles(profiles.filterNot { it.id == id && !it.isProtected })
-                        }
-                    },
+                    onDelete = { id -> deleteProfile(ProfileKind.USB_BAUD, id) },
                     onAdd = {
                         val profile = UsbBaudProfile(
                             id = profileStore.duplicateId("baud"),
@@ -771,18 +791,25 @@ fun RtkCollectorApp() {
                         )
                         ProfileEditorScreen(
                             data = data,
-                            actions = if (target.kind == ProfileKind.USB_BAUD) {
-                                listOf(
-                                    ProfileEditorAction("Refresh USB") {
-                                        profileRevision++
-                                    },
-                                    ProfileEditorAction("Request USB permission") {
-                                        requestUsbPermissionForProfile(context, target.id)
-                                        profileRevision++
-                                    },
-                                )
-                            } else {
-                                emptyList()
+                            actions = buildList {
+                                if (target.kind == ProfileKind.USB_BAUD) {
+                                    add(
+                                        ProfileEditorAction(label = "Refresh USB", onClick = {
+                                            profileRevision++
+                                        }),
+                                    )
+                                    add(
+                                        ProfileEditorAction(label = "Request USB permission", onClick = {
+                                            requestUsbPermissionForProfile(context, target.id)
+                                            profileRevision++
+                                        }),
+                                    )
+                                }
+                                profileEditorDeleteAction(target)?.let { deleteAction ->
+                                    add(
+                                        deleteAction,
+                                    )
+                                }
                             },
                             onBack = { screen = target.kind.backScreen() },
                             onSave = { values ->
@@ -1898,22 +1925,77 @@ private fun RecordingSettingsSet?.applyWorkflowPolicy(currentWorkflowId: String?
     }
 
 private fun CommandProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = listOfNotNull(
+            receiverFamily.takeIf(String::isNotBlank),
+            "init + shutdown scripts",
+        ).joinToString(" · "),
+    )
 
 private fun UsbBaudProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = listOfNotNull(
+            "baud $profileBaud",
+            usbProductName?.takeIf(String::isNotBlank) ?: usbDeviceName?.takeIf(String::isNotBlank),
+        ).joinToString(" · "),
+    )
 
 private fun NtripCasterProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = "$host:$port · $protocolPolicy",
+    )
 
 private fun NtripMountpointProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = listOf(casterProfileId, mountpoint.ifBlank { "mountpoint not set" }).joinToString(" · "),
+    )
 
 private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = buildList {
+            if (recordTxToReceiver) add("TX")
+            if (recordNtripCorrectionInput) add("corrections")
+            if (exportNmea) add("NMEA")
+            if (exportJsonSolution) add("JSON")
+            if (exportGpx) add("GPX")
+            if (recordRemoteBaseRaw) add("remote base raw")
+        }.ifEmpty { listOf("receiver RX only") }.joinToString(" · "),
+    )
 
 private fun StorageProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
-    ProfileListRow(id = id, name = name, isProtected = isProtected, hasLocalOverrides = false, isSelected = isSelected)
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = if (kind == "SAF") "SAF folder" else "App-private storage",
+    )
 
 private fun dashboardSelectorRows(
     selector: DashboardSelector,

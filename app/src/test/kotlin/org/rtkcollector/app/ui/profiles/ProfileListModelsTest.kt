@@ -24,6 +24,7 @@ class ProfileListModelsTest {
         assertFalse(row.canDelete)
         assertFalse(row.isSelected)
         assertEquals("Built-in", row.displayName)
+        assertEquals("", row.summary)
     }
 
     @Test
@@ -40,6 +41,8 @@ class ProfileListModelsTest {
         )
 
         assertEquals("UM980 rover + NTRIP + local changes", state.rows.single().displayName)
+        assertTrue(state.rows.single().summary.contains("rover-ntrip"))
+        assertTrue(state.rows.single().summary.contains("TUBO00CZE0"))
         assertTrue(state.rows.single().isSelected)
         assertTrue(state.rows.single().canDelete)
     }
@@ -105,5 +108,12 @@ class ProfileListModelsTest {
 
         assertEquals("UM980 binary multi-Hz", selector.optionItems.first().label)
         assertEquals(listOf("TUBO00CZE0", "GOPE00CZE0"), list.readOnlyList)
+    }
+
+    @Test
+    fun `profile editor actions are non destructive by default`() {
+        val action = ProfileEditorAction("Refresh") {}
+
+        assertFalse(action.destructive)
     }
 }

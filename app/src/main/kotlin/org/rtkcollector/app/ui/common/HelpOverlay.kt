@@ -31,6 +31,10 @@ enum class HelpTopic(
         title = "NTRIP URL",
         body = "Caster host, port and mountpoint without password or token.",
     ),
+    SETTINGS_GROUPS(
+        title = "Settings",
+        body = "Settings are grouped by session setup, receiver and USB, corrections, and sessions. Dashboard tiles select active profiles; detailed editing stays here.",
+    ),
 }
 
 @Composable
@@ -55,10 +59,6 @@ fun HelpOverlay(
             }
         },
         text = { Text(topic.body) },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        },
+        confirmButton = {},
     )
 }

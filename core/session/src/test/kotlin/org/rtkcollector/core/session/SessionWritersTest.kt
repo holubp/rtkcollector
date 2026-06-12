@@ -178,4 +178,17 @@ class SessionWritersTest {
         )
         assertFalse(Files.exists(tempDir.resolve("session.json.tmp")))
     }
+
+    @Test
+    fun `production session writers avoid Android-incompatible text file APIs`() {
+        val source = Files.readAllLines(
+            Path.of("src/main/kotlin/org/rtkcollector/core/session/SessionWriters.kt"),
+        ).joinToString("\n")
+
+        assertFalse(source.contains("Files.writeString"))
+        assertFalse(source.contains("Files.readString"))
+        assertFalse(source.contains(".writeText("))
+        assertFalse(source.contains(".readText("))
+        assertTrue(source.contains("StandardOpenOption.WRITE"))
+    }
 }

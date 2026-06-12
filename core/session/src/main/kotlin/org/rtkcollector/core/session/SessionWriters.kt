@@ -65,10 +65,9 @@ class SessionWriters private constructor(
     }
 
     fun writeBasePositionJson(json: String) {
-        Files.writeString(
+        writeUtf8Text(
             sessionDirectory.resolve(SessionArtifactFile.BASE_POSITION_JSON.fileName),
             json.trimEnd() + "\n",
-            StandardCharsets.UTF_8,
             StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
         )
@@ -132,10 +131,9 @@ class SessionWriters private constructor(
     private fun writeAtomicText(fileName: String, text: String) {
         val target = sessionDirectory.resolve(fileName)
         val temporary = sessionDirectory.resolve("$fileName.tmp")
-        Files.writeString(
+        writeUtf8Text(
             temporary,
             text,
-            StandardCharsets.UTF_8,
             StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
         )
@@ -153,6 +151,13 @@ class SessionWriters private constructor(
                 StandardCopyOption.REPLACE_EXISTING,
             )
         }
+    }
+}
+
+private fun writeUtf8Text(path: Path, text: String, vararg options: StandardOpenOption) {
+    Files.newOutputStream(path, StandardOpenOption.WRITE, *options).use { output ->
+        output.write(text.toByteArray(StandardCharsets.UTF_8))
+        output.flush()
     }
 }
 

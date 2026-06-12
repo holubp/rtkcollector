@@ -171,9 +171,9 @@ class RecordingForegroundService : Service() {
                     usbProfileSelected = !intent.getStringExtra(EXTRA_USB_BAUD_PROFILE_ID).isNullOrBlank(),
                     usbDeviceConnected = true,
                     usbPermissionGranted = true,
-                    serialDriverAvailable = true,
+                    serialDriverAvailable = AndroidUsbSerialTransport.hasUsableSerialEndpoint(usbDevice),
                     serialOpenSucceeded = true,
-                    storageWritable = true,
+                    storageWritable = isStorageWritableForStart(intent),
                     ntripMountpointConfigured = !intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).isNullOrBlank(),
                 ),
             )
@@ -185,7 +185,23 @@ class RecordingForegroundService : Service() {
                 device = usbDevice,
                 options = UsbSerialOpenOptions(profileBaud),
             )
-            usbTransport.open()
+            runCatching { usbTransport.open() }
+                .onFailure {
+                    runCatching { usbTransport.close() }
+                    val openFailure = RecordingStartPreflight.validate(
+                        RecordingStartPreflight.Input(
+                            workflowUsesNtrip = workflowUsesNtrip,
+                            usbProfileSelected = true,
+                            usbDeviceConnected = true,
+                            usbPermissionGranted = true,
+                            serialDriverAvailable = true,
+                            serialOpenSucceeded = false,
+                            storageWritable = true,
+                            ntripMountpointConfigured = true,
+                        ),
+                    )
+                    error(openFailure.message)
+                }
             transport = usbTransport
 
             val openedSession = openSessionWriters(intent)
@@ -868,6 +884,17 @@ class RecordingForegroundService : Service() {
         val directory = root.resolve(sessionName)
         return directory.toPath()
     }
+
+    private fun isStorageWritableForStart(intent: Intent): Boolean =
+        if (intent.getStringExtra(EXTRA_STORAGE_KIND) == "SAF_TREE") {
+            val treeUriText = intent.getStringExtra(EXTRA_STORAGE_TREE_URI)?.takeIf { it.isNotBlank() }
+            treeUriText != null && hasPersistedSafWritePermission(treeUriText)
+        } else {
+            runCatching {
+                val root = getExternalFilesDir("sessions") ?: filesDir.resolve("sessions")
+                root.exists() || root.mkdirs()
+            }.getOrDefault(false)
+        }
 
     private fun hasPersistedSafWritePermission(treeUri: String): Boolean =
         contentResolver.persistedUriPermissions.any { permission ->

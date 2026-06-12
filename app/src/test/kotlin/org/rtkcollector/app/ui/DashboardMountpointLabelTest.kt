@@ -7,6 +7,7 @@ import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.SettingsSetOverrides
+import org.rtkcollector.app.profile.WorkflowApplicationPolicy
 
 class DashboardMountpointLabelTest {
     @Test
@@ -56,5 +57,31 @@ class DashboardMountpointLabelTest {
         val label = selectedMountpointLabelFromProfileId("a", emptyList())
 
         assertEquals("n/a", label)
+    }
+
+    @Test
+    fun `unknown imported workflow is rejected`() {
+        assertEquals(null, restoredWorkflowIdOrNull("typo-rover"))
+    }
+
+    @Test
+    fun `known imported workflow is restored`() {
+        assertEquals("rover-ntrip", restoredWorkflowIdOrNull("rover-ntrip"))
+    }
+
+    @Test
+    fun `ntrip workflow detection is explicit`() {
+        assertEquals(true, "rover-ntrip".workflowUsesNtrip())
+        assertEquals(false, "nontrip-debug".workflowUsesNtrip())
+    }
+
+    @Test
+    fun `unknown workflow in imported settings set is normalised to user selection`() {
+        val imported = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "typo-rover")
+
+        val restored = sanitizedImportedSettingsSets(listOf(imported)).single()
+
+        assertEquals("plain-rover", restored.workflowId)
+        assertEquals(WorkflowApplicationPolicy.LET_USER_SELECT, restored.workflowApplicationPolicy)
     }
 }

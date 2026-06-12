@@ -1249,17 +1249,18 @@ private fun importSettingsBackup(context: Context, uri: Uri) {
         ?: error("Settings backup could not be read.")
     val backup = SettingsBackupFile.fromJson(JSONObject(text))
     val profileStore = ProfileStores(context)
+    val importedSettingsSets = sanitizedImportedSettingsSets(backup.settingsSets)
     profileStore.saveCommandProfiles(backup.commandProfiles)
     profileStore.saveUsbBaudProfiles(backup.usbBaudProfiles)
     profileStore.saveNtripCasterProfiles(backup.ntripCasterProfiles)
     profileStore.saveNtripMountpointProfiles(backup.ntripMountpointProfiles)
     profileStore.saveRecordingPolicyProfiles(backup.recordingPolicyProfiles)
     profileStore.saveStorageProfiles(backup.storageProfiles)
-    profileStore.saveSettingsSets(backup.settingsSets)
+    profileStore.saveSettingsSets(importedSettingsSets)
     backup.selectedSettingsSetId
-        ?.takeIf { id -> backup.settingsSets.any { it.id == id } }
+        ?.takeIf { id -> importedSettingsSets.any { it.id == id } }
         ?.let(profileStore::saveSelectedSettingsSetId)
-    profileStore.saveSelectedWorkflowId(backup.selectedWorkflowId)
+    profileStore.saveSelectedWorkflowId(restoredWorkflowIdOrNull(backup.selectedWorkflowId))
     profileStore.saveLastActiveNtripMountpointProfileId(
         backup.lastActiveNtripMountpointProfileId
             ?.takeIf { id -> backup.ntripMountpointProfiles.any { it.id == id } },
@@ -1828,11 +1829,16 @@ private val SELECTABLE_BAUD_RATES = listOf(
     "921600",
 )
 
+private const val WORKFLOW_PLAIN_ROVER = "plain-rover"
+private const val WORKFLOW_ROVER_NTRIP = "rover-ntrip"
+private const val WORKFLOW_BASE_CALIBRATION = "base-calibration"
+private const val WORKFLOW_FIXED_BASE = "fixed-base"
+
 private val WORKFLOW_MODE_OPTIONS = listOf(
-    EditableProfileOption("plain-rover", "Plain rover"),
-    EditableProfileOption("rover-ntrip", "Rover with NTRIP"),
-    EditableProfileOption("base-calibration", "Temporary base recording"),
-    EditableProfileOption("fixed-base", "Fixed base"),
+    EditableProfileOption(WORKFLOW_PLAIN_ROVER, "Plain rover"),
+    EditableProfileOption(WORKFLOW_ROVER_NTRIP, "Rover with NTRIP"),
+    EditableProfileOption(WORKFLOW_BASE_CALIBRATION, "Temporary base recording"),
+    EditableProfileOption(WORKFLOW_FIXED_BASE, "Fixed base"),
 )
 
 private val WORKFLOW_APPLICATION_POLICY_OPTIONS = listOf(
@@ -2414,19 +2420,34 @@ private inline fun <reified T> List<T>.findByReference(id: String, label: String
         }
     } ?: error("Missing $label '$id'.")
 
-private fun String.workflowUsesNtrip(): Boolean =
-    contains("ntrip", ignoreCase = true)
+internal fun String.workflowUsesNtrip(): Boolean =
+    this == WORKFLOW_ROVER_NTRIP
 
 private fun String?.workflowLabel(): String =
     this?.workflowName() ?: "Select workflow"
 
 private fun String.workflowName(): String =
     when (this) {
-        "plain-rover" -> "Plain rover recording"
-        "rover-ntrip" -> "Rover + NTRIP to receiver"
-        "base-calibration" -> "Temporary base preparation"
-        "fixed-base" -> "Fixed base operation"
+        WORKFLOW_PLAIN_ROVER -> "Plain rover recording"
+        WORKFLOW_ROVER_NTRIP -> "Rover + NTRIP to receiver"
+        WORKFLOW_BASE_CALIBRATION -> "Temporary base preparation"
+        WORKFLOW_FIXED_BASE -> "Fixed base operation"
         else -> replace('-', ' ').replaceFirstChar { it.titlecase() }
+    }
+
+internal fun restoredWorkflowIdOrNull(workflowId: String?): String? =
+    workflowId?.takeIf { id -> WORKFLOW_MODE_OPTIONS.any { it.value == id } }
+
+internal fun sanitizedImportedSettingsSets(settingsSets: List<RecordingSettingsSet>): List<RecordingSettingsSet> =
+    settingsSets.map { settingsSet ->
+        if (restoredWorkflowIdOrNull(settingsSet.workflowId) != null) {
+            settingsSet
+        } else {
+            settingsSet.copy(
+                workflowId = WORKFLOW_PLAIN_ROVER,
+                workflowApplicationPolicy = WorkflowApplicationPolicy.LET_USER_SELECT,
+            )
+        }
     }
 
 private fun RecordingSettingsSet?.applyWorkflowPolicy(currentWorkflowId: String?): String? =

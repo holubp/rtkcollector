@@ -131,12 +131,15 @@ class AndroidUsbSerialTransport(
         val outEndpoint: UsbEndpoint?,
     )
 
-    private companion object {
-        const val FTDI_VENDOR_ID = 0x0403
-        const val MAX_WRITE_CHUNK = 4096
-        val FTDI_FRAC_CODE = intArrayOf(0, 3, 2, 4, 1, 5, 6, 7)
+    companion object {
+        private const val FTDI_VENDOR_ID = 0x0403
+        private const val MAX_WRITE_CHUNK = 4096
+        private val FTDI_FRAC_CODE = intArrayOf(0, 3, 2, 4, 1, 5, 6, 7)
 
-        fun selectEndpoint(device: UsbDevice): SelectedEndpoint? {
+        fun hasUsableSerialEndpoint(device: UsbDevice): Boolean =
+            selectEndpoint(device) != null
+
+        private fun selectEndpoint(device: UsbDevice): SelectedEndpoint? {
             var selected: SelectedEndpoint? = null
             var bestScore = Int.MIN_VALUE
             for (interfaceIndex in 0 until device.interfaceCount) {
@@ -175,7 +178,7 @@ class AndroidUsbSerialTransport(
             return selected
         }
 
-        fun stripFtdiStatus(bytes: ByteArray, maxPacketSize: Int): ByteArray {
+        private fun stripFtdiStatus(bytes: ByteArray, maxPacketSize: Int): ByteArray {
             val packetSize = maxPacketSize.coerceAtLeast(64)
             val payload = ArrayList<Byte>(bytes.size)
             var offset = 0
@@ -191,7 +194,7 @@ class AndroidUsbSerialTransport(
             return payload.toByteArray()
         }
 
-        fun ftdiBaudDivisor(baudRate: Int): Int {
+        private fun ftdiBaudDivisor(baudRate: Int): Int {
             require(baudRate > 0) { "baudRate must be positive" }
             val divisor3 = ((24_000_000L + baudRate / 2L) / baudRate).coerceAtLeast(1).toInt()
             var divisor = (divisor3 shr 3) or (FTDI_FRAC_CODE[divisor3 and 7] shl 14)

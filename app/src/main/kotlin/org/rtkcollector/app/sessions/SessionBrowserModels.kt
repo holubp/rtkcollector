@@ -124,3 +124,11 @@ fun sessionBrowserStateOf(entries: List<SessionBrowserEntry>, selectedIds: Set<S
         state.copy(selectedIds = selectedIds intersect state.allEntries.map { it.id }.toSet())
     }
 }
+
+fun sessionPathCopyText(
+    entry: SessionBrowserEntry,
+    selectionMode: Boolean,
+): String? {
+    if (selectionMode) return null
+    return entry.location.takeIf { it.isNotBlank() }
+}

@@ -142,4 +142,33 @@ class DashboardStateTest {
     fun `position display leaves missing value single line`() {
         assertEquals(listOf("n/a"), PositionCardState().latLonLinesForNarrowLayout())
     }
+
+    @Test
+    fun `error clipboard text includes category and full message`() {
+        val state = DashboardState.planned(
+            workflow = "Rover + NTRIP",
+            mountpoint = "TUBO00CZE0",
+            receiver = "UM980",
+            storage = "App-private",
+            lastError = "No static method writeString(Ljava/nio/file/Path;Ljava/lang/CharSequence;)",
+            errorCategory = "SERVICE_LIFECYCLE",
+        )
+
+        assertEquals(
+            "SERVICE_LIFECYCLE: No static method writeString(Ljava/nio/file/Path;Ljava/lang/CharSequence;)",
+            state.errorClipboardText(),
+        )
+    }
+
+    @Test
+    fun `error clipboard text is null without an error`() {
+        val state = DashboardState.planned(
+            workflow = "Plain rover",
+            mountpoint = "n/a",
+            receiver = "UM980",
+            storage = "App-private",
+        )
+
+        assertEquals(null, state.errorClipboardText())
+    }
 }

@@ -1,5 +1,8 @@
 package org.rtkcollector.app.ui.dashboard
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -40,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -85,6 +89,15 @@ fun HomeDashboard(
     onMark: () -> Unit,
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
+    val context = LocalContext.current
+    val copyErrorToClipboard = {
+        state.errorClipboardText()?.let { text ->
+            context.getSystemService(ClipboardManager::class.java)
+                .setPrimaryClip(ClipData.newPlainText("RtkCollector error", text))
+            Toast.makeText(context, "Error copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
+        Unit
+    }
 
     Scaffold(
         topBar = {
@@ -140,6 +153,7 @@ fun HomeDashboard(
                         onReceiver = onReceiver,
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
+                        onCopyError = copyErrorToClipboard,
                     )
                 } else {
                     CompactDashboard(
@@ -151,6 +165,7 @@ fun HomeDashboard(
                         onReceiver = onReceiver,
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
+                        onCopyError = copyErrorToClipboard,
                     )
                 }
             }
@@ -277,6 +292,7 @@ private fun CompactDashboard(
     onReceiver: () -> Unit,
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
+    onCopyError: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -292,7 +308,7 @@ private fun CompactDashboard(
             onReceiver = onReceiver,
             onStorage = onStorage,
         )
-        ErrorStrip(state)
+        ErrorStrip(state = state, onCopy = onCopyError)
         DashboardCards(
             state = state,
             onSettingsSet = onSettingsSet,
@@ -311,6 +327,7 @@ private fun RailDashboard(
     onReceiver: () -> Unit,
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
+    onCopyError: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -342,7 +359,7 @@ private fun RailDashboard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                ErrorStrip(state)
+                ErrorStrip(state = state, onCopy = onCopyError)
                 defaultDashboardSetupItems.forEach { item ->
                     SetupRailItem(
                         label = item.label,
@@ -369,17 +386,22 @@ private fun RailDashboard(
 }
 
 @Composable
-private fun ErrorStrip(state: DashboardState) {
-    val message = state.lastError?.takeIf { it.isNotBlank() } ?: return
+private fun ErrorStrip(
+    state: DashboardState,
+    onCopy: () -> Unit,
+) {
+    val text = state.errorClipboardText() ?: return
     Surface(
         color = TidyColors.MissingBackground,
         contentColor = TidyColors.MissingText,
         shape = MaterialTheme.shapes.small,
         border = BorderStroke(1.dp, TidyColors.MissingText),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onCopy),
     ) {
         Text(
-            text = "${state.errorCategory}: $message",
+            text = text,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelMedium,
             maxLines = 2,

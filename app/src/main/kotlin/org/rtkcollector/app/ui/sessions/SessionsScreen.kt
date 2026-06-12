@@ -1,5 +1,6 @@
 package org.rtkcollector.app.ui.sessions
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import org.rtkcollector.app.sessions.SessionBrowserEntry
 import org.rtkcollector.app.sessions.SessionBrowserGroupKind
 import org.rtkcollector.app.sessions.SessionBrowserState
+import org.rtkcollector.app.sessions.sessionPathCopyText
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -47,10 +49,12 @@ fun SessionsScreen(
     onArchiveSelected: () -> Unit,
     onRestoreSelected: () -> Unit,
     onDeleteSelected: () -> Unit,
+    onCopyPath: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     var confirmation by remember { mutableStateOf<ConfirmationAction?>(null) }
     val selected = state.selectedEntries
+    val selectionMode = state.selectedIds.isNotEmpty()
     val canShare = selected.any(SessionBrowserEntry::canShareZip)
     val canArchive = selected.any(SessionBrowserEntry::canArchive)
     val canRestore = selected.any(SessionBrowserEntry::canRestore)
@@ -121,7 +125,9 @@ fun SessionsScreen(
                     SessionRow(
                         entry = entry,
                         selected = entry.id in state.selectedIds,
+                        selectionMode = selectionMode,
                         onToggle = { onToggle(entry.id) },
+                        onCopyPath = { path -> onCopyPath(path) },
                     )
                 }
             }
@@ -160,9 +166,18 @@ fun SessionsScreen(
 private fun SessionRow(
     entry: SessionBrowserEntry,
     selected: Boolean,
+    selectionMode: Boolean,
     onToggle: () -> Unit,
+    onCopyPath: (String) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val pathToCopy = sessionPathCopyText(entry, selectionMode)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = pathToCopy != null) {
+                pathToCopy?.let(onCopyPath)
+            },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

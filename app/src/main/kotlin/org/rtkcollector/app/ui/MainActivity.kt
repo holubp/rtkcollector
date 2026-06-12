@@ -1,6 +1,8 @@
 package org.rtkcollector.app.ui
 
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -31,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,12 +54,15 @@ import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.SettingsBackupFile
+import org.rtkcollector.app.profile.SettingsImportValidationResult
 import org.rtkcollector.app.profile.SettingsSetExportOptions
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
 import org.rtkcollector.app.profile.displayMountpoint
+import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
+import org.rtkcollector.app.profile.validateSettingsImportJson
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
@@ -86,6 +92,8 @@ import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
 import org.rtkcollector.app.ui.profiles.persistentReceiverWriteAction
 import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
+import org.rtkcollector.app.ui.imports.SettingsImportScreen
+import org.rtkcollector.app.ui.imports.settingsImportUriFromIntent
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
 import org.rtkcollector.app.ui.usb.UsbDeviceChoice
@@ -93,7 +101,8 @@ import org.rtkcollector.app.ui.usb.UsbStartAccessAction
 import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import androidx.core.content.FileProvider
-import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
@@ -103,16 +112,39 @@ private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
 private val persistentReceiverWriteInProgress = AtomicBoolean(false)
 
 class MainActivity : ComponentActivity() {
+    private var latestImportIntent by mutableStateOf<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        latestImportIntent = intent
         setContent {
-            RtkCollectorApp()
+            RtkCollectorApp(
+                externalIntent = latestImportIntent,
+                onExternalIntentConsumed = {
+                    latestImportIntent = null
+                    setIntent(Intent(Intent.ACTION_MAIN))
+                },
+            )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        latestImportIntent = intent
     }
 }
 
+private data class PendingSettingsImport(
+    val source: String,
+    val result: SettingsImportValidationResult,
+)
+
 @Composable
-fun RtkCollectorApp() {
+fun RtkCollectorApp(
+    externalIntent: Intent? = null,
+    onExternalIntentConsumed: () -> Unit = {},
+) {
     var screen by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf(AppScreen.HOME) }
     val context = LocalContext.current
     val profileStore = remember(context) { ProfileStores(context) }
@@ -131,6 +163,8 @@ fun RtkCollectorApp() {
     var showSettingsExportDialog by remember { mutableStateOf(false) }
     var includePlaintextPasswordsInBackup by remember { mutableStateOf(false) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
+    var pendingSettingsImport by remember { mutableStateOf<PendingSettingsImport?>(null) }
+    var settingsImportRequestId by remember { mutableStateOf(0) }
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
     var profileRevision by remember { mutableStateOf(0) }
     val secretStore = remember(context) { NtripSecretStore(context) }
@@ -145,6 +179,32 @@ fun RtkCollectorApp() {
     }
     var state by remember {
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
+    }
+    LaunchedEffect(externalIntent) {
+        if (externalIntent != null) {
+            settingsImportUriFromIntent(externalIntent)?.let { uri ->
+                val requestId = settingsImportRequestId + 1
+                settingsImportRequestId = requestId
+                pendingSettingsImport = PendingSettingsImport(
+                    source = uri.toString(),
+                    result = SettingsImportValidationResult.Loading,
+                )
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        validateSettingsImportJson(readSettingsImportText(context.contentResolver, uri))
+                    }.getOrElse { error ->
+                        SettingsImportValidationResult.Invalid(error.message ?: "Settings backup could not be read.")
+                    }
+                }
+                if (settingsImportRequestId == requestId) {
+                    pendingSettingsImport = PendingSettingsImport(
+                        source = uri.toString(),
+                        result = result,
+                    )
+                }
+            }
+            onExternalIntentConsumed()
+        }
     }
     fun refreshSessions() {
         sessionBrowserState = buildSessionBrowserState(
@@ -342,6 +402,55 @@ fun RtkCollectorApp() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
         ) {
+            pendingSettingsImport?.let { pendingImport ->
+                SettingsImportScreen(
+                    source = pendingImport.source,
+                    result = pendingImport.result,
+                    recordingActive = state.isRecording,
+                    onImport = {
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before importing settings.", Toast.LENGTH_LONG).show()
+                        } else {
+                            val valid = pendingImport.result as? SettingsImportValidationResult.Valid
+                            if (valid != null) {
+                                runCatching {
+                                    importSettingsBackup(context, valid.backup)
+                                }.onSuccess {
+                                    val updatedSettingsSets = profileStore.settingsSets()
+                                    val updatedSelectedSettingsSetId = profileStore.selectedSettingsSetId()
+                                    val updatedSelectedWorkflowId = profileStore.selectedWorkflowId()
+                                    settingsSets = updatedSettingsSets
+                                    selectedSettingsSetId = updatedSelectedSettingsSetId
+                                    selectedWorkflowId = updatedSelectedWorkflowId
+                                    state = state.withPlannedConfiguration(
+                                        profileStore.plannedDashboardState(
+                                            updatedSettingsSets,
+                                            updatedSelectedSettingsSetId,
+                                            updatedSelectedWorkflowId,
+                                        ),
+                                    )
+                                    profileRevision++
+                                    pendingSettingsImport = null
+                                    screen = AppScreen.HOME
+                                    Toast.makeText(context, "Settings backup imported.", Toast.LENGTH_LONG).show()
+                                }.onFailure { error ->
+                                    pendingSettingsImport = pendingImport.copy(
+                                        result = SettingsImportValidationResult.Invalid(
+                                            error.message ?: "Settings backup could not be imported.",
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    onCancel = {
+                        settingsImportRequestId++
+                        pendingSettingsImport = null
+                        screen = AppScreen.HOME
+                    },
+                )
+                return@Surface
+            }
             when (screen) {
                 AppScreen.HOME -> HomeDashboard(
                     state = state,
@@ -932,6 +1041,11 @@ fun RtkCollectorApp() {
                             }
                         }
                     },
+                    onCopyPath = { path ->
+                        context.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(ClipData.newPlainText("RtkCollector session path", path))
+                        Toast.makeText(context, "Session path copied", Toast.LENGTH_SHORT).show()
+                    },
                     onBack = { screen = AppScreen.SETTINGS },
                 )
                 AppScreen.PROFILE_EDITOR -> {
@@ -1254,11 +1368,16 @@ private fun shareSettingsBackup(context: Context, includePlaintextPasswords: Boo
 }
 
 private fun importSettingsBackup(context: Context, uri: Uri) {
-    val text = context.contentResolver.openInputStream(uri)
-        ?.bufferedReader(Charsets.UTF_8)
-        ?.use { it.readText() }
-        ?: error("Settings backup could not be read.")
-    val backup = SettingsBackupFile.fromJson(JSONObject(text))
+    val result = validateSettingsImportJson(readSettingsImportText(context.contentResolver, uri))
+    val backup = when (result) {
+        SettingsImportValidationResult.Loading -> error("Settings backup is still being read.")
+        is SettingsImportValidationResult.Valid -> result.backup
+        is SettingsImportValidationResult.Invalid -> error(result.message)
+    }
+    importSettingsBackup(context, backup)
+}
+
+private fun importSettingsBackup(context: Context, backup: SettingsBackupFile) {
     val profileStore = ProfileStores(context)
     val importedSettingsSets = sanitizedImportedSettingsSets(backup.settingsSets)
     profileStore.saveCommandProfiles(backup.commandProfiles)

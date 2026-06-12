@@ -96,6 +96,11 @@ data class DashboardState(
     }
 }
 
+fun DashboardState.errorClipboardText(): String? {
+    val message = lastError?.takeIf { it.isNotBlank() } ?: return null
+    return "$errorCategory: $message"
+}
+
 private fun String.isMissingOrBogusMountpoint(): Boolean {
     val value = trim()
     return value.isBlank() ||

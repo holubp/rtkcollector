@@ -42,6 +42,25 @@ class SessionBrowserModelsTest {
         assertFalse(state.toggle("saf").selectedIds.contains("saf"))
     }
 
+    @Test
+    fun `session path copy text returns location outside selection mode`() {
+        val entry = entry("session-1", SessionEntryKind.RECORDING, 10)
+            .copy(location = "/storage/emulated/0/Android/data/org.rtkcollector.app/files/sessions/session-1")
+
+        assertEquals(
+            "/storage/emulated/0/Android/data/org.rtkcollector.app/files/sessions/session-1",
+            sessionPathCopyText(entry, selectionMode = false),
+        )
+    }
+
+    @Test
+    fun `session path copy text is disabled in selection mode`() {
+        val entry = entry("session-1", SessionEntryKind.RECORDING, 10)
+            .copy(location = "/storage/emulated/0/Android/data/org.rtkcollector.app/files/sessions/session-1")
+
+        assertEquals(null, sessionPathCopyText(entry, selectionMode = true))
+    }
+
     private fun entry(id: String, kind: SessionEntryKind, modified: Long): SessionBrowserEntry =
         SessionBrowserEntry(
             id = id,

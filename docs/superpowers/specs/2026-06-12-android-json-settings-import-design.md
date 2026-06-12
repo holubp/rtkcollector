@@ -42,6 +42,12 @@ extract only a single URI from:
 
 - `intent.data` for `ACTION_VIEW`.
 - `Intent.EXTRA_STREAM` for `ACTION_SEND`.
+- `intent.clipData` as a fallback for vendor/share apps that omit
+  `Intent.EXTRA_STREAM`.
+
+Only `content://` and `file://` URIs should be accepted by the importer reader.
+The broad `text/plain` MIME filter is intentional for apps that mislabel JSON
+shares; in-app validation must reject unrelated text files.
 
 `ACTION_SEND_MULTIPLE` is out of scope for the first pass. If received, it may be
 ignored or rejected with a clear unsupported-import message.
@@ -51,6 +57,7 @@ ignored or rejected with a clear unsupported-import message.
 The app should model external JSON import as explicit UI state:
 
 - `None`: no pending external import.
+- `Loading`: URI accepted and being read/validated off the UI thread.
 - `Ready`: URI read and parsed as a structurally valid RtkCollector settings
   backup, with an import summary.
 - `Error`: URI read or validation failed, with a user-visible error message.
@@ -103,10 +110,15 @@ Required checks:
   - `settingsSets`
 - Profile objects must parse through existing model `fromJson` functions.
 - Settings sets must pass existing `RecordingSettingsSet.validate` rules.
-- Optional selected IDs may be absent or null. If present, they should only be
-  restored when they point to an imported object that exists.
+- Imported profile IDs must be unique within each profile list.
+- NTRIP mountpoint profiles must reference imported caster profiles.
+- Settings set profile references must point to imported profiles.
+- Optional selected IDs may be absent or null. If present, they must point to an
+  imported object that exists.
 - Plaintext password entries, when present, must be a JSON object mapping secret
   IDs to strings. Non-string password values should reject the import.
+- Plaintext password secret IDs must correspond to imported NTRIP caster secret
+  IDs or settings-set NTRIP caster override secret IDs.
 
 The validation result should be structured enough for tests:
 
@@ -128,8 +140,9 @@ Security rules:
   partially interpret them.
 - The app should not log plaintext passwords.
 - The app should not show plaintext passwords in the confirmation summary.
-- The app should not persist imported plaintext passwords until the user taps
-  `Import`.
+- Plaintext passwords from an external backup must remain in memory only during
+  preview/confirmation. They must be written to the NTRIP secret store only
+  after the user taps `Import`.
 - The app should cap the amount of text read from an external URI before parsing.
   A reasonable first limit is 2 MiB; larger files should fail with a clear
   `Settings backup is too large` message.
@@ -142,7 +155,8 @@ Security rules:
 1. Android sends `ACTION_VIEW` or `ACTION_SEND` JSON intent to `.ui.MainActivity`.
 2. `MainActivity.onCreate` or `onNewIntent` stores the latest intent.
 3. Compose state observes the pending intent and calls a small importer reader.
-4. The reader extracts a URI and reads at most the configured byte limit.
+4. The reader extracts a URI and reads at most the configured byte limit on a
+   background dispatcher.
 5. The parser validates the JSON as `SettingsBackupFile`.
 6. The UI shows either a confirmation summary or a validation error.
 7. User taps `Import`.
@@ -154,6 +168,7 @@ Security rules:
 - `SettingsImportIntentReader`
   - Pure or Android-light helper for extracting a single URI from `Intent`.
   - Tests cover `ACTION_VIEW`, `ACTION_SEND`, unrelated actions and missing URI.
+  - Tests cover `ClipData` fallback for vendor/share apps.
 
 - `SettingsImportValidator`
   - Reads/parses a JSON string into a validated pending import model.
@@ -196,6 +211,10 @@ Minimum tests:
 - Unsupported format version produces an error result.
 - Plaintext password values that are not strings reject the import.
 - Oversized input rejects before parsing.
+- Duplicate profile IDs reject the import.
+- Broken NTRIP caster/profile references reject the import.
+- Plaintext password secret IDs that are not referenced by imported NTRIP
+  casters/settings overrides reject the import.
 - Confirmed import uses the existing import application path; cancelled import
   makes no changes.
 

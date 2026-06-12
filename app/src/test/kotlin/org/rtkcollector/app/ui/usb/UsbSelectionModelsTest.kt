@@ -49,4 +49,48 @@ class UsbSelectionModelsTest {
 
         assertEquals(choice, decoded)
     }
+
+    @Test
+    fun `start with no connected receiver reports no device`() {
+        val result = UsbStartAccessDecision.evaluate(
+            deviceConnected = false,
+            permissionReportedGranted = false,
+        )
+
+        assertEquals(UsbStartAccessAction.NO_DEVICE, result.action)
+        assertEquals("Selected USB receiver is not connected.", result.message)
+    }
+
+    @Test
+    fun `start with missing permission requests permission and tells user to press start again`() {
+        val result = UsbStartAccessDecision.evaluate(
+            deviceConnected = true,
+            permissionReportedGranted = false,
+        )
+
+        assertEquals(UsbStartAccessAction.REQUEST_PERMISSION, result.action)
+        assertEquals(
+            "USB permission requested. Approve the Android permission dialog, then press Start again.",
+            result.message,
+        )
+    }
+
+    @Test
+    fun `start with reported permission verifies access`() {
+        val result = UsbStartAccessDecision.evaluate(
+            deviceConnected = true,
+            permissionReportedGranted = true,
+        )
+
+        assertEquals(UsbStartAccessAction.VERIFY_AND_START, result.action)
+        assertEquals("USB permission reported granted; access will be verified on Start.", result.message)
+    }
+
+    @Test
+    fun `open failure message names stale permission and busy receiver cases`() {
+        assertEquals(
+            "Android reports USB permission, but the receiver could not be opened. Reconnect the receiver, close other serial apps, then retry USB access.",
+            UsbStartAccessDecision.openFailureMessage(),
+        )
+    }
 }

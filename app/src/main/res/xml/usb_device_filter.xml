@@ -4,4 +4,33 @@
     <usb-device
         vendor-id="1027"
         product-id="24597" />
+
+    <!-- Common FTDI USB serial bridge IDs used by GNSS receiver carrier boards. -->
+    <usb-device
+        vendor-id="1027"
+        product-id="24577" />
+    <usb-device
+        vendor-id="1027"
+        product-id="24592" />
+    <usb-device
+        vendor-id="1027"
+        product-id="24593" />
+    <usb-device
+        vendor-id="1027"
+        product-id="24596" />
+
+    <!-- Common Silicon Labs CP210x USB serial bridge. -->
+    <usb-device
+        vendor-id="4292"
+        product-id="60000" />
+
+    <!-- Common WCH CH340/CH341 USB serial bridge. -->
+    <usb-device
+        vendor-id="6790"
+        product-id="29987" />
+
+    <!-- Common Prolific PL2303 USB serial bridge. -->
+    <usb-device
+        vendor-id="1659"
+        product-id="8963" />
 </resources>

@@ -89,6 +89,8 @@ import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
 import org.rtkcollector.app.ui.usb.UsbDeviceChoice
+import org.rtkcollector.app.ui.usb.UsbStartAccessAction
+import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import androidx.core.content.FileProvider
 import org.json.JSONObject
@@ -1995,9 +1997,21 @@ private fun buildDashboardStartIntent(
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         return null
     }
-    if (!usbManager.hasPermission(usbDevice)) {
-        Toast.makeText(context, "Cannot start: USB permission is not granted.", Toast.LENGTH_LONG).show()
-        return null
+    val usbAccess = UsbStartAccessDecision.evaluate(
+        deviceConnected = true,
+        permissionReportedGranted = usbManager.hasPermission(usbDevice),
+    )
+    when (usbAccess.action) {
+        UsbStartAccessAction.NO_DEVICE -> {
+            Toast.makeText(context, usbAccess.message, Toast.LENGTH_LONG).show()
+            return null
+        }
+        UsbStartAccessAction.REQUEST_PERMISSION -> {
+            requestUsbPermissionForDevice(context, usbDevice)
+            Toast.makeText(context, usbAccess.message, Toast.LENGTH_LONG).show()
+            return null
+        }
+        UsbStartAccessAction.VERIFY_AND_START -> Unit
     }
     try {
         activeConfig.validateForStart()
@@ -2146,6 +2160,15 @@ private fun requestUsbPermissionForProfile(context: Context, usbProfileId: Strin
         Toast.makeText(context, "USB permission is already granted.", Toast.LENGTH_SHORT).show()
         return
     }
+    requestUsbPermissionForDevice(context, device)
+    Toast.makeText(
+        context,
+        "USB permission requested. Approve the Android permission dialog, then press Start again.",
+        Toast.LENGTH_LONG,
+    ).show()
+}
+
+private fun requestUsbPermissionForDevice(context: Context, device: UsbDevice) {
     val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     } else {
@@ -2157,6 +2180,7 @@ private fun requestUsbPermissionForProfile(context: Context, usbProfileId: Strin
         Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
         flags,
     )
+    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
     usbManager.requestPermission(device, permissionIntent)
 }
 

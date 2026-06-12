@@ -87,6 +87,7 @@ class RecordingForegroundService : Service() {
     private var activeUsbVid: Int? = null
     private var activeUsbPid: Int? = null
     private var ntripController: NtripRuntimeController? = null
+    private var activeWorkflowUsesNtrip: Boolean = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
@@ -130,8 +131,9 @@ class RecordingForegroundService : Service() {
         }
         stopping.set(false)
         shutdownSent.set(false)
-            state = state.copy(
-                lifecycle = RecordingLifecycleState.STARTING,
+        activeWorkflowUsesNtrip = false
+        state = state.copy(
+            lifecycle = RecordingLifecycleState.STARTING,
             errorCategory = RecordingErrorCategory.NONE,
             errorSeverity = RecordingErrorSeverity.NONE,
             lastError = null,
@@ -162,9 +164,10 @@ class RecordingForegroundService : Service() {
 
             val serialBaud = validateBaud(intent.getIntExtra(EXTRA_SERIAL_BAUD, 230400), "serial baud")
             val profileBaud = validateBaud(intent.getIntExtra(EXTRA_PROFILE_BAUD, serialBaud), "profile baud")
+            val workflowUsesNtrip = intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)
             val preflight = RecordingStartPreflight.validate(
                 RecordingStartPreflight.Input(
-                    workflowUsesNtrip = intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false),
+                    workflowUsesNtrip = workflowUsesNtrip,
                     usbProfileSelected = !intent.getStringExtra(EXTRA_USB_BAUD_PROFILE_ID).isNullOrBlank(),
                     usbDeviceConnected = true,
                     usbPermissionGranted = true,
@@ -300,6 +303,7 @@ class RecordingForegroundService : Service() {
             ntripRateWindowStartedAtMillis = System.currentTimeMillis()
             ntripRateWindowCorrectionBytes = 0L
             ntripRateWindowTxBytes = 0L
+            activeWorkflowUsesNtrip = workflowUsesNtrip
             broadcastState()
 
             captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
@@ -523,11 +527,15 @@ class RecordingForegroundService : Service() {
     }
 
     private fun updateNtrip(intent: Intent) {
-        if (!running.get()) {
+        val policy = NtripUpdatePolicy.validateUpdate(
+            activeRecordingRunning = running.get(),
+            activeWorkflowUsesNtrip = activeWorkflowUsesNtrip,
+        )
+        if (!policy.allowed) {
             state = state.copy(
-                lastError = "Cannot update NTRIP: no active recording.",
-                errorCategory = RecordingErrorCategory.NTRIP,
-                errorSeverity = RecordingErrorSeverity.DEGRADED,
+                lastError = policy.message,
+                errorCategory = policy.category,
+                errorSeverity = policy.severity,
             )
             broadcastState()
             return
@@ -661,6 +669,7 @@ class RecordingForegroundService : Service() {
         activeUsbVid = null
         activeUsbPid = null
         ntripController = null
+        activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
         releaseWakeLock()
         state = state.copy(

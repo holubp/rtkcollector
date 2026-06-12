@@ -28,6 +28,12 @@ category such as USB, storage or NTRIP. A failed USB open, missing Android USB
 permission, missing serial driver or unwritable storage target must not appear
 to the user as a silent empty recording.
 
+USB permission and access are separate gates. The UI may request Android USB
+permission, but the foreground service must verify actual USB open/claim access
+before session writers are opened. If Start requests permission, the user must
+approve the Android dialog and press Start again; V1 does not auto-start
+recording from the permission callback.
+
 ## Limits
 
 Android cannot guarantee survival after:

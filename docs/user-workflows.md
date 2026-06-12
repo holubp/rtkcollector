@@ -98,6 +98,12 @@ Recommended first test flow:
 6. Stop recording and check the session folder path shown by the UI.
 7. Repeat with NTRIP only after passive capture is stable.
 
+If a receiver is connected but Android USB permission is missing, pressing Start
+requests permission and does not create a recording session. Approve the Android
+permission dialog, then press Start again. If Android reports permission granted
+but the receiver cannot be opened, reconnect the receiver, close other serial
+apps and retry USB access.
+
 The default editable UM980 command profile is `UM980 binary multi-Hz`. It sends
 binary receiver-solution, raw-observation, DOP, ephemeris and ionosphere/time
 logs while avoiding high-rate NMEA chatter:

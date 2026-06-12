@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import org.rtkcollector.app.ui.MainActivity
+import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.core.capture.AdvisoryConsumer
@@ -188,19 +189,7 @@ class RecordingForegroundService : Service() {
             runCatching { usbTransport.open() }
                 .onFailure {
                     runCatching { usbTransport.close() }
-                    val openFailure = RecordingStartPreflight.validate(
-                        RecordingStartPreflight.Input(
-                            workflowUsesNtrip = workflowUsesNtrip,
-                            usbProfileSelected = true,
-                            usbDeviceConnected = true,
-                            usbPermissionGranted = true,
-                            serialDriverAvailable = true,
-                            serialOpenSucceeded = false,
-                            storageWritable = true,
-                            ntripMountpointConfigured = true,
-                        ),
-                    )
-                    error(openFailure.message)
+                    error(UsbStartAccessDecision.openFailureMessage())
                 }
             transport = usbTransport
 

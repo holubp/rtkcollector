@@ -301,9 +301,18 @@ fun RtkCollectorApp() {
                         }
                     }
                     UsbManager.ACTION_USB_DEVICE_ATTACHED,
-                    UsbManager.ACTION_USB_DEVICE_DETACHED,
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        profileRevision++
+                    }
                     ACTION_USB_PERMISSION -> {
                         profileRevision++
+                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        val message = if (granted) {
+                            UsbStartAccessDecision.permissionGrantedMessage()
+                        } else {
+                            UsbStartAccessDecision.permissionDeniedMessage()
+                        }
+                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                     }
                 }
             }

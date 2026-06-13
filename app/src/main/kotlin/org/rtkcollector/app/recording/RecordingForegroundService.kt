@@ -115,6 +115,7 @@ class RecordingForegroundService : Service() {
             }
             ACTION_UPDATE_NTRIP -> updateNtrip(intent)
             ACTION_DISABLE_NTRIP -> disableNtrip()
+            ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG -> writePersistentReceiverConfig(intent)
         }
         return START_NOT_STICKY
     }
@@ -595,6 +596,77 @@ class RecordingForegroundService : Service() {
         runCatching { writers?.appendEventJson("""{"type":"ntrip-disabled","reason":"user"}""") }
         state = state.copy(ntripState = "DISABLED", correctionsActive = false)
         broadcastState()
+    }
+
+    private fun writePersistentReceiverConfig(intent: Intent) {
+        if (!running.get()) {
+            state = state.copy(
+                lastError = "Cannot write receiver configuration: recording service is not connected.",
+                errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return
+        }
+        val captureRuntime = runtime
+        val usbTransport = transport
+        if (captureRuntime == null || usbTransport == null) {
+            state = state.copy(
+                lastError = "Cannot write receiver configuration: active receiver connection is unavailable.",
+                errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return
+        }
+        val commands = intent.getStringArrayListExtra(EXTRA_PERSISTENT_COMMANDS)
+            .orEmpty()
+            .map(String::trim)
+            .filter(String::isNotBlank)
+        if (commands.isEmpty()) {
+            state = state.copy(
+                lastError = "Cannot write receiver configuration: no commands were provided.",
+                errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return
+        }
+        val label = intent.getStringExtra(EXTRA_PERSISTENT_WRITE_LABEL)?.takeIf(String::isNotBlank)
+            ?: "persistent receiver configuration"
+        runCatching {
+            writers?.appendEventJson(
+                """{"type":"persistent-receiver-write-started","label":"${label.jsonEscape()}","commandCount":${commands.size}}""",
+            )
+            synchronized(txLock) {
+                commands.forEach { command ->
+                    captureRuntime.sendToReceiver("$command\r\n".toByteArray(Charsets.US_ASCII))
+                    Thread.sleep(100L)
+                }
+            }
+            writers?.appendEventJson(
+                """{"type":"persistent-receiver-write-succeeded","label":"${label.jsonEscape()}"}""",
+            )
+            state = state.copy(
+                lastError = null,
+                errorCategory = RecordingErrorCategory.NONE,
+                errorSeverity = RecordingErrorSeverity.NONE,
+            )
+            broadcastState()
+        }.onFailure { error ->
+            val message = error.message ?: error.javaClass.simpleName
+            runCatching {
+                writers?.appendEventJson(
+                    """{"type":"persistent-receiver-write-failed","label":"${label.jsonEscape()}","message":"${message.jsonEscape()}"}""",
+                )
+            }
+            state = state.copy(
+                lastError = "Persistent receiver configuration failed: $message",
+                errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+        }
     }
 
     private fun stopRecording(sendShutdown: Boolean) {
@@ -1422,6 +1494,8 @@ class RecordingForegroundService : Service() {
         const val ACTION_QUERY = "org.rtkcollector.app.recording.QUERY"
         const val ACTION_UPDATE_NTRIP = "org.rtkcollector.app.recording.UPDATE_NTRIP"
         const val ACTION_DISABLE_NTRIP = "org.rtkcollector.app.recording.DISABLE_NTRIP"
+        const val ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG =
+            "org.rtkcollector.app.recording.WRITE_PERSISTENT_RECEIVER_CONFIG"
         const val ACTION_STATE = "org.rtkcollector.app.recording.STATE"
 
         const val EXTRA_USB_DEVICE = "usbDevice"
@@ -1431,6 +1505,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BAUD_SWITCH_COMMANDS = "baudSwitchCommands"
         const val EXTRA_MODE_COMMANDS = "modeCommands"
         const val EXTRA_SHUTDOWN_COMMANDS = "shutdownCommands"
+        const val EXTRA_PERSISTENT_COMMANDS = "persistentCommands"
+        const val EXTRA_PERSISTENT_WRITE_LABEL = "persistentWriteLabel"
+        const val EXTRA_PERSISTENT_TARGET_BAUD = "persistentTargetBaud"
         const val EXTRA_NTRIP_ENABLED = "ntripEnabled"
         const val EXTRA_NTRIP_HOST = "ntripHost"
         const val EXTRA_NTRIP_PORT = "ntripPort"

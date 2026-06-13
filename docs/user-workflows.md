@@ -175,16 +175,20 @@ uses documented RTCM message command families such as `RTCM1006`, `RTCM1074`,
 User changes to command scripts should remain conservative and source-backed.
 
 The normal recording start path sends runtime UM980 commands only. It does not
-write receiver non-volatile memory. A command profile can be written
-persistently only through the explicit warned action in Menu > Command scripts,
-which sends the current init script followed by `SAVECONFIG`.
+write receiver non-volatile memory. Persistent writes are explicit warned
+maintenance actions:
 
-If a profile changes receiver baud, RtkCollector opens the USB serial bridge at
-the profile baud, sends user init commands, sends the receiver baud-switch
-command, reconfigures the host serial bridge to the post-profile baud, records
-transitional receiver output through the normal RX path, and only then sends
-UM980 mode/log commands. Mode commands are intentionally separate from the baud
-switch so post-switch commands are not transmitted at the old baud.
+- Menu > Command scripts > Edit > Write init config persistently to device:
+  sends the visible Init script and then `SAVECONFIG`.
+- Menu > USB device and baud > Edit > Write target baud persistently to device:
+  sends `CONFIG COM1 <target baud>` and then `SAVECONFIG`.
+
+If recording is active, persistent writes use the foreground recording service's
+existing receiver connection and are recorded in `tx-to-receiver.raw`. If
+recording is not active, RtkCollector opens the selected USB receiver at the
+USB/baud profile's initial receiver baud, verifies communication with the
+receiver, and only then sends persistent commands. Normal recording startup and
+shutdown never append `SAVECONFIG` automatically.
 
 ## Plain Rover Recording
 

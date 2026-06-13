@@ -83,6 +83,7 @@ data class RecordingOutputOverride(
     val exportJsonSolution: Boolean? = null,
     val exportGpx: Boolean? = null,
     val recordRemoteBaseRaw: Boolean? = null,
+    val enableMockLocation: Boolean? = null,
 )
 
 data class StorageProfileOverride(
@@ -291,7 +292,8 @@ private fun SettingsSetOverrides.toJson(): JSONObject {
                 .putNullable("exportNmea", it.exportNmea)
                 .putNullable("exportJsonSolution", it.exportJsonSolution)
                 .putNullable("exportGpx", it.exportGpx)
-                .putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw),
+                .putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw)
+                .putNullable("enableMockLocation", it.enableMockLocation),
         )
     }
     storage?.let {
@@ -369,6 +371,7 @@ private object SettingsSetOverridesJson {
                     exportJsonSolution = it.optBooleanOrNull("exportJsonSolution"),
                     exportGpx = it.optBooleanOrNull("exportGpx"),
                     recordRemoteBaseRaw = it.optBooleanOrNull("recordRemoteBaseRaw"),
+                    enableMockLocation = it.optBooleanOrNull("enableMockLocation"),
                 )
             }
         },

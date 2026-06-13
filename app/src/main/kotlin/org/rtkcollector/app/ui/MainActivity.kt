@@ -1651,6 +1651,7 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("exportNmea", "Export derived NMEA", profile.exportNmea.toString(), boolean = true),
                     EditableProfileField("exportJsonSolution", "Export JSON solution", profile.exportJsonSolution.toString(), boolean = true),
                     EditableProfileField("exportGpx", "Export GPX", profile.exportGpx.toString(), boolean = true),
+                    EditableProfileField("enableMockLocation", "Publish Android mock location while recording", profile.enableMockLocation.toString(), boolean = true),
                     EditableProfileField("recordRemoteBaseRaw", "Record remote base raw", profile.recordRemoteBaseRaw.toString(), boolean = true),
                 ),
             )
@@ -1795,6 +1796,7 @@ private fun ProfileStores.saveProfileEditorData(
                         exportJsonSolution = values.optional("exportJsonSolution").toBooleanStrictOrFalse(),
                         exportGpx = values.optional("exportGpx").toBooleanStrictOrFalse(),
                         recordRemoteBaseRaw = values.optional("recordRemoteBaseRaw").toBooleanStrictOrFalse(),
+                        enableMockLocation = values.optional("enableMockLocation").toBooleanStrictOrFalse(),
                     )
                 } else {
                     profile

@@ -106,6 +106,7 @@ data class ActiveRecordingConfig(
                 exportGpx = recordingOverride?.exportGpx ?: recordingPolicyProfile.exportGpx,
                 recordRemoteBaseRaw = workflowUsesNtrip &&
                     (recordingOverride?.recordRemoteBaseRaw ?: recordingPolicyProfile.recordRemoteBaseRaw),
+                enableMockLocation = recordingOverride?.enableMockLocation ?: recordingPolicyProfile.enableMockLocation,
             )
 
             val storage = ActiveStorageConfig(
@@ -159,6 +160,7 @@ data class ActiveRecordingOutputConfig(
     val exportJsonSolution: Boolean,
     val exportGpx: Boolean,
     val recordRemoteBaseRaw: Boolean,
+    val enableMockLocation: Boolean,
     val expectedSessionArtifacts: Set<SessionArtifact> = buildSessionArtifacts(
         recordTxToReceiver,
         recordNtripCorrectionInput,

@@ -193,6 +193,7 @@ data class RecordingPolicyProfile(
     val exportJsonSolution: Boolean = true,
     val exportGpx: Boolean = false,
     val recordRemoteBaseRaw: Boolean = false,
+    val enableMockLocation: Boolean = false,
     val isProtected: Boolean = false,
 ) {
     fun validate() {
@@ -215,6 +216,7 @@ data class RecordingPolicyProfile(
         .put("exportJsonSolution", exportJsonSolution)
         .put("exportGpx", exportGpx)
         .put("recordRemoteBaseRaw", recordRemoteBaseRaw)
+        .put("enableMockLocation", enableMockLocation)
 
     companion object {
         fun fromJson(json: JSONObject): RecordingPolicyProfile = RecordingPolicyProfile(
@@ -228,6 +230,7 @@ data class RecordingPolicyProfile(
             exportJsonSolution = json.optBoolean("exportJsonSolution", true),
             exportGpx = json.optBoolean("exportGpx", false),
             recordRemoteBaseRaw = json.optBoolean("recordRemoteBaseRaw", false),
+            enableMockLocation = json.optBoolean("enableMockLocation", false),
         ).also(RecordingPolicyProfile::validate)
     }
 }

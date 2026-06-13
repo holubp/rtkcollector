@@ -236,7 +236,7 @@ class PersistentReceiverWritePolicyTest {
     @Test
     fun `active recording uses service path`() {
         assertEquals(
-            PersistentReceiverWriteRoute.ACTIVE_RECORDING_SERVICE,
+            PersistentReceiverWriteRoute.ActiveRecordingService,
             persistentReceiverWriteRoute(
                 recordingActive = true,
                 usbProfileAvailable = true,
@@ -247,9 +247,22 @@ class PersistentReceiverWritePolicyTest {
     }
 
     @Test
+    fun `active recording always uses service path before idle checks`() {
+        assertEquals(
+            PersistentReceiverWriteRoute.ActiveRecordingService,
+            persistentReceiverWriteRoute(
+                recordingActive = true,
+                usbProfileAvailable = false,
+                receiverConnected = false,
+                usbPermissionGranted = false,
+            ),
+        )
+    }
+
+    @Test
     fun `idle with selected connected permitted usb uses maintenance path`() {
         assertEquals(
-            PersistentReceiverWriteRoute.IDLE_MAINTENANCE_CONNECTION,
+            PersistentReceiverWriteRoute.IdleMaintenanceConnection,
             persistentReceiverWriteRoute(
                 recordingActive = false,
                 usbProfileAvailable = true,
@@ -262,7 +275,10 @@ class PersistentReceiverWritePolicyTest {
     @Test
     fun `idle without usb profile is rejected`() {
         assertEquals(
-            PersistentReceiverWriteRoute.Rejected("USB/baud profile is not available."),
+            PersistentReceiverWriteRoute.Rejected(
+                reason = PersistentReceiverWriteRejectionReason.USB_PROFILE_MISSING,
+                message = "USB/baud profile is not available.",
+            ),
             persistentReceiverWriteRoute(
                 recordingActive = false,
                 usbProfileAvailable = false,
@@ -275,7 +291,10 @@ class PersistentReceiverWritePolicyTest {
     @Test
     fun `idle without connected receiver is rejected`() {
         assertEquals(
-            PersistentReceiverWriteRoute.Rejected("Selected USB receiver is not connected."),
+            PersistentReceiverWriteRoute.Rejected(
+                reason = PersistentReceiverWriteRejectionReason.RECEIVER_DISCONNECTED,
+                message = "Selected USB receiver is not connected.",
+            ),
             persistentReceiverWriteRoute(
                 recordingActive = false,
                 usbProfileAvailable = true,
@@ -288,7 +307,10 @@ class PersistentReceiverWritePolicyTest {
     @Test
     fun `idle without usb permission is rejected`() {
         assertEquals(
-            PersistentReceiverWriteRoute.Rejected("USB permission is required before writing receiver configuration."),
+            PersistentReceiverWriteRoute.Rejected(
+                reason = PersistentReceiverWriteRejectionReason.USB_PERMISSION_MISSING,
+                message = "USB permission is required before writing receiver configuration.",
+            ),
             persistentReceiverWriteRoute(
                 recordingActive = false,
                 usbProfileAvailable = true,
@@ -318,9 +340,18 @@ Create `app/src/main/kotlin/org/rtkcollector/app/receiver/PersistentReceiverWrit
 package org.rtkcollector.app.receiver
 
 sealed class PersistentReceiverWriteRoute {
-    data object ACTIVE_RECORDING_SERVICE : PersistentReceiverWriteRoute()
-    data object IDLE_MAINTENANCE_CONNECTION : PersistentReceiverWriteRoute()
-    data class Rejected(val message: String) : PersistentReceiverWriteRoute()
+    data object ActiveRecordingService : PersistentReceiverWriteRoute()
+    data object IdleMaintenanceConnection : PersistentReceiverWriteRoute()
+    data class Rejected(
+        val reason: PersistentReceiverWriteRejectionReason,
+        val message: String,
+    ) : PersistentReceiverWriteRoute()
+}
+
+enum class PersistentReceiverWriteRejectionReason {
+    USB_PROFILE_MISSING,
+    RECEIVER_DISCONNECTED,
+    USB_PERMISSION_MISSING,
 }
 
 fun persistentReceiverWriteRoute(
@@ -329,13 +360,26 @@ fun persistentReceiverWriteRoute(
     receiverConnected: Boolean,
     usbPermissionGranted: Boolean,
 ): PersistentReceiverWriteRoute {
-    if (recordingActive) return PersistentReceiverWriteRoute.ACTIVE_RECORDING_SERVICE
-    if (!usbProfileAvailable) return PersistentReceiverWriteRoute.Rejected("USB/baud profile is not available.")
-    if (!receiverConnected) return PersistentReceiverWriteRoute.Rejected("Selected USB receiver is not connected.")
-    if (!usbPermissionGranted) {
-        return PersistentReceiverWriteRoute.Rejected("USB permission is required before writing receiver configuration.")
+    if (recordingActive) return PersistentReceiverWriteRoute.ActiveRecordingService
+    if (!usbProfileAvailable) {
+        return PersistentReceiverWriteRoute.Rejected(
+            reason = PersistentReceiverWriteRejectionReason.USB_PROFILE_MISSING,
+            message = "USB/baud profile is not available.",
+        )
     }
-    return PersistentReceiverWriteRoute.IDLE_MAINTENANCE_CONNECTION
+    if (!receiverConnected) {
+        return PersistentReceiverWriteRoute.Rejected(
+            reason = PersistentReceiverWriteRejectionReason.RECEIVER_DISCONNECTED,
+            message = "Selected USB receiver is not connected.",
+        )
+    }
+    if (!usbPermissionGranted) {
+        return PersistentReceiverWriteRoute.Rejected(
+            reason = PersistentReceiverWriteRejectionReason.USB_PERMISSION_MISSING,
+            message = "USB permission is required before writing receiver configuration.",
+        )
+    }
+    return PersistentReceiverWriteRoute.IdleMaintenanceConnection
 }
 ```
 
@@ -724,7 +768,7 @@ when (
         usbPermissionGranted = true,
     )
 ) {
-    PersistentReceiverWriteRoute.ACTIVE_RECORDING_SERVICE -> {
+    PersistentReceiverWriteRoute.ActiveRecordingService -> {
         context.startService(
             persistentReceiverServiceIntent(
                 context = context,
@@ -739,7 +783,7 @@ when (
         ).show()
         return
     }
-    PersistentReceiverWriteRoute.IDLE_MAINTENANCE_CONNECTION -> Unit
+    PersistentReceiverWriteRoute.IdleMaintenanceConnection -> Unit
     is PersistentReceiverWriteRoute.Rejected -> Unit
 }
 ```
@@ -930,8 +974,8 @@ private fun writePersistentCommandsViaMaintenanceConnection(
             usbPermissionGranted = device?.let(usbManager::hasPermission) == true,
         )
     ) {
-        PersistentReceiverWriteRoute.ACTIVE_RECORDING_SERVICE -> error("Maintenance writer cannot use active service route.")
-        PersistentReceiverWriteRoute.IDLE_MAINTENANCE_CONNECTION -> Unit
+        PersistentReceiverWriteRoute.ActiveRecordingService -> error("Maintenance writer cannot use active service route.")
+        PersistentReceiverWriteRoute.IdleMaintenanceConnection -> Unit
         is PersistentReceiverWriteRoute.Rejected -> {
             Toast.makeText(context, route.message, Toast.LENGTH_LONG).show()
             return

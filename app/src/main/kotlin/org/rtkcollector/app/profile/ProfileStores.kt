@@ -2,6 +2,7 @@ package org.rtkcollector.app.profile
 
 import android.content.Context
 import org.json.JSONArray
+import org.rtkcollector.receiver.ublox.UbloxM8tProfiles
 
 class ProfileStores(context: Context) {
     private val preferences = context.getSharedPreferences("profile-manager", Context.MODE_PRIVATE)
@@ -171,6 +172,24 @@ class ProfileStores(context: Context) {
                 name = "UM980 ASCII PPP/NMEA",
                 runtimeScript = UM980_ASCII_PPP_NMEA_SCRIPT,
             ),
+            CommandProfile(
+                id = "ublox-m8t-raw-1hz-safe",
+                name = "u-blox M8T raw 1 Hz safe",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = UBLOX_M8T_RAW_1HZ_SCRIPT,
+            ),
+            CommandProfile(
+                id = "ublox-m8t-raw-5hz-rtklib-ex",
+                name = "u-blox M8T raw 5 Hz RTKLIB-EX",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = UBLOX_M8T_RAW_5HZ_RTKLIB_EX_SCRIPT,
+            ),
+            CommandProfile(
+                id = "ublox-m8t-raw-status-mock",
+                name = "u-blox M8T raw + status/mock",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = UBLOX_M8T_RAW_STATUS_MOCK_SCRIPT,
+            ),
         )
 
     private fun defaultUsbBaudProfiles(): List<UsbBaudProfile> =
@@ -218,6 +237,9 @@ class ProfileStores(context: Context) {
         const val OLD_UM980_COMMAND_PROFILE_ID = "um980-default-commands"
         const val UM980_BINARY_MULTI_HZ_PROFILE_ID = "um980-binary-multihz"
         const val UM980_ASCII_PPP_NMEA_PROFILE_ID = "um980-ascii-ppp-nmea"
+        const val UBLOX_M8T_RAW_1HZ_PROFILE_ID = "ublox-m8t-raw-1hz-safe"
+        const val UBLOX_M8T_RAW_5HZ_RTKLIB_EX_PROFILE_ID = "ublox-m8t-raw-5hz-rtklib-ex"
+        const val UBLOX_M8T_RAW_STATUS_MOCK_PROFILE_ID = "ublox-m8t-raw-status-mock"
         const val OLD_NTRIP_MOUNTPOINT_PROFILE_ID = "ntrip-mountpoint-default"
         const val DEFAULT_RECORDING_POLICY_ID = "default-record-everything"
         const val DEFAULT_STORAGE_PROFILE_ID = "app-private"
@@ -280,5 +302,9 @@ class ProfileStores(context: Context) {
             TROPINFOA ONCHANGED
             GPSIONB ONCHANGED
         """.trimIndent()
+
+        val UBLOX_M8T_RAW_1HZ_SCRIPT: String = UbloxM8tProfiles.raw1HzSafe
+        val UBLOX_M8T_RAW_5HZ_RTKLIB_EX_SCRIPT: String = UbloxM8tProfiles.raw5HzRtklibEx
+        val UBLOX_M8T_RAW_STATUS_MOCK_SCRIPT: String = UbloxM8tProfiles.rawStatusMock
     }
 }

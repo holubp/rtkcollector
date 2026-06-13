@@ -65,6 +65,7 @@ import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
 import org.rtkcollector.app.receiver.PersistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
+import org.rtkcollector.app.receiver.persistentBaudCommands
 import org.rtkcollector.app.receiver.persistentReceiverCommands
 import org.rtkcollector.app.receiver.persistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.um980VersionProbeBytes
@@ -95,6 +96,7 @@ import org.rtkcollector.app.ui.profiles.ProfileEditorScreen
 import org.rtkcollector.app.ui.profiles.ProfileListScreen
 import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
+import org.rtkcollector.app.ui.profiles.persistentBaudWriteAction
 import org.rtkcollector.app.ui.profiles.persistentReceiverWriteAction
 import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
 import org.rtkcollector.app.ui.imports.SettingsImportScreen
@@ -1079,6 +1081,25 @@ fun RtkCollectorApp(
                                             profileRevision++
                                         }),
                                     )
+                                    val usbProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == target.id }
+                                    if (usbProfile != null) {
+                                        add(
+                                            persistentBaudWriteAction(
+                                                initialBaud = usbProfile.profileBaud,
+                                                targetBaud = usbProfile.serialBaud,
+                                                usbDeviceLabel = usbProfile.usbProductName
+                                                    ?: usbProfile.usbDeviceName
+                                                    ?: "selected USB receiver",
+                                                onClick = {
+                                                    writeUsbBaudPersistentlyToDevice(
+                                                        context = context,
+                                                        usbProfileId = target.id,
+                                                        isRecording = state.isRecording,
+                                                    )
+                                                },
+                                            ),
+                                        )
+                                    }
                                 }
                                 if (target.kind == ProfileKind.COMMANDS) {
                                     add(
@@ -2380,15 +2401,67 @@ private fun writeCommandProfilePersistentlyToDevice(
         Toast.makeText(context, "USB/baud profile is not available.", Toast.LENGTH_LONG).show()
         return
     }
-    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-    val device = usbManager.selectUsbDevice(usbProfile)
-    if (device == null) {
-        Toast.makeText(context, "Selected USB receiver is not connected.", Toast.LENGTH_LONG).show()
+    writePersistentCommandsViaMaintenanceConnection(
+        context = context,
+        usbProfile = usbProfile,
+        commandProfileName = commandProfile.name,
+        commands = commands,
+    )
+}
+
+private fun writeUsbBaudPersistentlyToDevice(
+    context: Context,
+    usbProfileId: String,
+    isRecording: Boolean,
+) {
+    val profileStore = ProfileStores(context)
+    val usbProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == usbProfileId }
+    if (usbProfile == null) {
+        Toast.makeText(context, "USB/baud profile is not available.", Toast.LENGTH_LONG).show()
         return
     }
-    if (!usbManager.hasPermission(device)) {
-        Toast.makeText(context, "USB permission is required before writing receiver configuration.", Toast.LENGTH_LONG).show()
+    val commands = persistentBaudCommands(usbProfile.serialBaud)
+    if (isRecording) {
+        context.startService(
+            persistentReceiverServiceIntent(
+                context = context,
+                label = "USB target baud persistent write",
+                commands = commands,
+            ),
+        )
+        Toast.makeText(context, "Writing receiver target baud through active recording connection...", Toast.LENGTH_SHORT).show()
         return
+    }
+    writePersistentCommandsViaMaintenanceConnection(
+        context = context,
+        usbProfile = usbProfile,
+        commandProfileName = "USB target baud ${usbProfile.serialBaud}",
+        commands = commands,
+    )
+}
+
+private fun writePersistentCommandsViaMaintenanceConnection(
+    context: Context,
+    usbProfile: UsbBaudProfile,
+    commandProfileName: String,
+    commands: List<String>,
+) {
+    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    val device = usbManager.selectUsbDevice(usbProfile)
+    when (
+        val route = persistentReceiverWriteRoute(
+            recordingActive = false,
+            usbProfileAvailable = true,
+            receiverConnected = device != null,
+            usbPermissionGranted = device?.let(usbManager::hasPermission) == true,
+        )
+    ) {
+        PersistentReceiverWriteRoute.ActiveRecordingService -> error("Maintenance writer cannot use active service route.")
+        PersistentReceiverWriteRoute.IdleMaintenanceConnection -> Unit
+        is PersistentReceiverWriteRoute.Rejected -> {
+            Toast.makeText(context, route.message, Toast.LENGTH_LONG).show()
+            return
+        }
     }
     if (!persistentReceiverWriteInProgress.compareAndSet(false, true)) {
         Toast.makeText(context, "Persistent receiver configuration write is already in progress.", Toast.LENGTH_LONG).show()
@@ -2398,7 +2471,7 @@ private fun writeCommandProfilePersistentlyToDevice(
     Thread {
         val transport = AndroidUsbSerialTransport(
             usbManager = usbManager,
-            device = device,
+            device = requireNotNull(device),
             options = UsbSerialOpenOptions(baudRate = usbProfile.profileBaud),
         )
         try {
@@ -2413,7 +2486,7 @@ private fun writeCommandProfilePersistentlyToDevice(
                 runOnMain(context) {
                     Toast.makeText(
                         context,
-                        "Persistent receiver configuration written for ${commandProfile.name}.",
+                        "Persistent receiver configuration written for $commandProfileName.",
                         Toast.LENGTH_LONG,
                     ).show()
                 }

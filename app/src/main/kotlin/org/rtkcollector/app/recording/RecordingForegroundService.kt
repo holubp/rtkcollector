@@ -62,6 +62,14 @@ import org.rtkcollector.receiver.unicore.Um980NmeaExporter
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980StreamParser
 import org.rtkcollector.receiver.unicore.Um980Telemetry
+import org.rtkcollector.receiver.api.ReceiverCommand
+import org.rtkcollector.receiver.ublox.UbloxMessageFrequencyTracker
+import org.rtkcollector.receiver.ublox.UbloxMessageKind
+import org.rtkcollector.receiver.ublox.UbloxNavPvtParser
+import org.rtkcollector.receiver.ublox.UbloxScriptCompiler
+import org.rtkcollector.receiver.ublox.UbloxStreamParser
+import org.rtkcollector.core.solution.BestSolutionSelector
+import org.rtkcollector.core.solution.SolutionCandidate
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
@@ -98,6 +106,10 @@ class RecordingForegroundService : Service() {
     private var ntripRateWindowStartedAtMillis: Long = 0L
     private var ntripRateWindowCorrectionBytes: Long = 0L
     private var ntripRateWindowTxBytes: Long = 0L
+    private var activeReceiverFamily: String = ""
+    private var ubloxStreamParser = UbloxStreamParser()
+    private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+    private val solutionCandidates = mutableMapOf<String, SolutionCandidate>()
 
     override fun onCreate() {
         super.onCreate()
@@ -152,6 +164,10 @@ class RecordingForegroundService : Service() {
             rtcmLastBaseId = null,
             um980Frequency = DEFAULT_UM980_FREQUENCY_DISPLAY,
             um980Mode = "n/a",
+            bestSolutionSource = "n/a",
+            bestSolutionFix = "n/a",
+            bestSolutionAgeMs = null,
+            ubloxFrequency = DEFAULT_UBLOX_FREQUENCY_DISPLAY,
         )
         broadcastState()
 
@@ -266,6 +282,10 @@ class RecordingForegroundService : Service() {
             captureRuntime.open()
             runtime = captureRuntime
 
+            activeReceiverFamily = receiverFamilyFromDriverId(intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID))
+            solutionCandidates.clear()
+            ubloxStreamParser = UbloxStreamParser()
+            ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
             val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
@@ -790,15 +810,15 @@ class RecordingForegroundService : Service() {
     }
 
     private fun sendCommandLines(captureRuntime: CaptureRuntime, commands: List<String>) {
-        commands.asSequence()
-            .map(String::trim)
-            .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .forEach { command ->
-                synchronized(txLock) {
-                    captureRuntime.sendToReceiver("$command\r\n".toByteArray(Charsets.US_ASCII))
-                    Thread.sleep(100)
-                }
+        if (commands.isEmpty()) return
+        val script = commands.joinToString("\n")
+        val compiled = compileReceiverCommands(activeReceiverFamily, script)
+        compiled.forEach { command ->
+            synchronized(txLock) {
+                captureRuntime.sendToReceiver(command.payload)
+                Thread.sleep(100)
             }
+        }
     }
 
     private fun executeBaudTransition(
@@ -817,12 +837,18 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun List<String>.validatedCommands(): List<String> =
-        asSequence()
+    private fun List<String>.validatedCommands(): List<String> {
+        val isUblox = activeReceiverFamily.startsWith("ublox", ignoreCase = true)
+        return asSequence()
             .map(String::trim)
             .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .onEach(Um980RuntimeCommandValidator::validateRuntimeCommand)
+            .onEach { command ->
+                if (!isUblox) {
+                    Um980RuntimeCommandValidator.validateRuntimeCommand(command)
+                }
+            }
             .toList()
+    }
 
     private fun validateBaud(value: Int, label: String): Int {
         require(value in 9600..921600) { "$label must be between 9600 and 921600." }
@@ -1100,6 +1126,10 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_CORRECTIONS_ACTIVE, state.correctionsActive)
                 putExtra(EXTRA_STATE_UM980_FREQUENCY, state.um980Frequency)
                 putExtra(EXTRA_STATE_UM980_MODE, state.um980Mode)
+                putExtra(EXTRA_STATE_BEST_SOLUTION_SOURCE, state.bestSolutionSource)
+                putExtra(EXTRA_STATE_BEST_SOLUTION_FIX, state.bestSolutionFix)
+                putExtra(EXTRA_STATE_MOCK_LOCATION_STATE, state.mockLocationState)
+                putExtra(EXTRA_STATE_UBLOX_FREQUENCY, state.ubloxFrequency)
             },
         )
     }
@@ -1111,6 +1141,77 @@ class RecordingForegroundService : Service() {
             509 -> frequencyTracker.record(Um980MessageKind.RTKSTATUS, System.currentTimeMillis())
             1026 -> frequencyTracker.record(Um980MessageKind.PPPNAV, System.currentTimeMillis())
             2118 -> frequencyTracker.record(Um980MessageKind.BESTNAV, System.currentTimeMillis())
+        }
+    }
+
+    private fun parseUbloxAdvisory(bytes: ByteArray, nowMillis: Long) {
+        ubloxStreamParser.accept(bytes).forEach { record ->
+            if (record.kind == "ubx") {
+                when {
+                    record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x07.toByte() -> {
+                        ubloxFrequencyTracker.record(UbloxMessageKind.NAV_PVT, nowMillis)
+                        UbloxNavPvtParser.parse(record.bytes, nowMillis)?.toSolutionCandidate()?.let {
+                            solutionCandidates[it.sourceId] = it
+                        }
+                    }
+                    record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x15.toByte() ->
+                        ubloxFrequencyTracker.record(UbloxMessageKind.RAWX, nowMillis)
+                    record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x13.toByte() ->
+                        ubloxFrequencyTracker.record(UbloxMessageKind.SFRBX, nowMillis)
+                    record.bytes.getOrNull(2) == 0x0D.toByte() && record.bytes.getOrNull(3) == 0x03.toByte() ->
+                        ubloxFrequencyTracker.record(UbloxMessageKind.TM2, nowMillis)
+                }
+            }
+        }
+        updateBestSolution(nowMillis)
+    }
+
+    private fun updateBestSolution(nowMillis: Long) {
+        val best = BestSolutionSelector.select(solutionCandidates.values, nowMillis)
+        state = state.copy(
+            bestSolutionSource = best?.sourceId ?: "n/a",
+            bestSolutionFix = best?.fixClass?.name ?: "n/a",
+            bestSolutionAgeMs = best?.ageMillis,
+            latDeg = best?.latDeg ?: state.latDeg,
+            lonDeg = best?.lonDeg ?: state.lonDeg,
+            latLon = best?.let { latLonDisplay(it.latDeg, it.lonDeg) } ?: state.latLon,
+            ellipsoidalHeight = best?.ellipsoidalHeightM?.let(::metersDisplay) ?: state.ellipsoidalHeight,
+            altitude = best?.mslAltitudeM?.let(::metersDisplay) ?: state.altitude,
+            horizontalAccuracy = best?.horizontalAccuracyM?.let(::metersDisplay) ?: state.horizontalAccuracy,
+            verticalAccuracy = best?.verticalAccuracyM?.let(::metersDisplay) ?: state.verticalAccuracy,
+            satellitesUsed = best?.satellitesUsed ?: state.satellitesUsed,
+            ubloxFrequency = ubloxFrequencyTracker.display(nowMillis),
+        )
+    }
+
+    private fun compileReceiverCommands(receiverFamily: String, script: String): List<ReceiverCommand> =
+        if (receiverFamily.startsWith("ublox", ignoreCase = true)) {
+            try {
+                UbloxScriptCompiler.compile(script)
+            } catch (e: IllegalArgumentException) {
+                state = state.copy(
+                    lastError = e.message,
+                    errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                    errorSeverity = RecordingErrorSeverity.FATAL,
+                )
+                broadcastState()
+                throw e
+            }
+        } else {
+            script.lineSequence()
+                .map(String::trim)
+                .filter { it.isNotEmpty() && !it.startsWith("#") }
+                .map { ReceiverCommand(label = it.take(40), payload = "$it\r\n".encodeToByteArray()) }
+                .toList()
+        }
+
+    private fun receiverFamilyFromDriverId(driverId: String?): String {
+        if (driverId.isNullOrBlank()) return ""
+        val normalized = driverId.lowercase()
+        return when {
+            normalized.startsWith("ublox") -> "ublox"
+            normalized.startsWith("um980") || normalized.startsWith("unicore") -> "um980"
+            else -> normalized.substringBefore('-')
         }
     }
 
@@ -1284,6 +1385,11 @@ class RecordingForegroundService : Service() {
                             }
                         }
                         state = state.copy(um980Frequency = frequencyTracker.display(System.currentTimeMillis()))
+                    }
+                },
+                AdvisoryConsumer("ublox-mixed-stream") { bytes ->
+                    if (activeReceiverFamily.startsWith("ublox", ignoreCase = true)) {
+                        parseUbloxAdvisory(bytes, System.currentTimeMillis())
                     }
                 },
                 AdvisoryConsumer("rtcm3-extractor") { bytes ->
@@ -1623,6 +1729,10 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_CORRECTIONS_ACTIVE = "correctionsActive"
         const val EXTRA_STATE_UM980_FREQUENCY = "um980Frequency"
         const val EXTRA_STATE_UM980_MODE = "um980Mode"
+        const val EXTRA_STATE_BEST_SOLUTION_SOURCE = "bestSolutionSource"
+        const val EXTRA_STATE_BEST_SOLUTION_FIX = "bestSolutionFix"
+        const val EXTRA_STATE_MOCK_LOCATION_STATE = "mockLocationState"
+        const val EXTRA_STATE_UBLOX_FREQUENCY = "ubloxFrequency"
 
         private const val CHANNEL_ID = "rtkcollector-recording"
         private const val NOTIFICATION_ID = 101
@@ -1630,6 +1740,8 @@ class RecordingForegroundService : Service() {
         private const val PROFILE_DRAIN_MILLIS = 2000L
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =
             "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
+        private const val DEFAULT_UBLOX_FREQUENCY_DISPLAY =
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz"
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)

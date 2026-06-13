@@ -40,6 +40,12 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         receiverFrequency = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
             ?: "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz",
         receiverMode = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_MODE) ?: "n/a",
+        bestSolution = run {
+            val source = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_SOURCE) ?: "n/a"
+            val fixClass = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_FIX) ?: "n/a"
+            "$fixClass from $source"
+        },
+        mockLocation = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE) ?: "Disabled",
     )
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",

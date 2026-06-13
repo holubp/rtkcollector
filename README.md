@@ -36,6 +36,9 @@ python3 tools/generate_brand_assets.py
 Generated launcher and badge assets are checked in so Android Studio and CI
 builds do not depend on local image tooling.
 
+Experimental u-blox M8T support configures UBX raw/timing output and can feed
+receiver-derived positions into Android mock location while recording.
+
 ## Core Goals
 
 - Keep the raw receiver capture path authoritative and byte-exact.

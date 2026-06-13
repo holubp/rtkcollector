@@ -23,8 +23,9 @@ It also provides the experimental real-recording controls:
   remembered USB identity;
 - NTRIP caster and mountpoint profiles, including typed mountpoint entry and
   stored Keystore-backed passwords;
-- recording policies for derived NMEA/JSONL exports, NTRIP correction input and
-  optional remote-base raw observations where a source supports them;
+- recording policies for derived NMEA/JSONL exports, NTRIP correction input,
+  optional remote-base raw observations where a source supports them, and an
+  optional Android mock-location publisher (described below);
 - storage profiles, with app-private storage as the default and Android SAF
   folder selection for user-visible session folders;
 - manual fixed-base coordinates or pasted/imported `base-position.json`;
@@ -36,6 +37,12 @@ Sessions menu lists recordings in the configured app-private storage with latest
 sessions first and separates the current session, completed recordings and
 archived recordings. Active recordings cannot be shared, archived, restored or
 deleted from this menu.
+
+Android mock-location output is a recording-scoped option. When enabled, the
+foreground recording service publishes the current best fresh RtkCollector
+solution to Android's mock GPS provider. The app must be selected as the mock
+location app in Android Developer options. Mock-provider failure degrades only
+mock output; raw receiver recording continues.
 
 Completed recordings can be selected individually, by group or all together.
 Sharing creates one temporary ZIP per selected session, sends those ZIPs through

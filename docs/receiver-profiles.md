@@ -49,3 +49,8 @@ profile editor.
 - Should not be treated as an internal RTK float/fix rover like M8P.
 - Should not be treated as a receiver PPP solution source.
 - Useful for static/base recording and post-processing workflows.
+
+V1 practical support starts with M8T raw/timing recording. Built-in profiles
+enable UBX `RXM-RAWX`, `RXM-SFRBX`, `TIM-TM2` and, where selected, `NAV-PVT`
+for live dashboard and mock-location output. M8T is not treated as an internal
+RTK float/fix rover.

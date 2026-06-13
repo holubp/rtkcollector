@@ -53,3 +53,20 @@ class FakeMockLocationSink : MockLocationSink {
         locations += update
     }
 }
+
+class AndroidMockLocationSink(
+    private val locationManager: android.location.LocationManager,
+    private val providerName: String = android.location.LocationManager.GPS_PROVIDER,
+) : MockLocationSink {
+    override fun publish(update: MockLocationUpdate) {
+        val location = android.location.Location(providerName).apply {
+            latitude = update.latDeg
+            longitude = update.lonDeg
+            update.altitudeM?.let { altitude = it }
+            update.horizontalAccuracyM?.let { accuracy = it }
+            time = update.timeMillis
+            elapsedRealtimeNanos = android.os.SystemClock.elapsedRealtimeNanos()
+        }
+        locationManager.setTestProviderLocation(providerName, location)
+    }
+}

@@ -13,6 +13,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import org.rtkcollector.app.mocklocation.AndroidMockLocationSink
+import org.rtkcollector.app.mocklocation.MockLocationPublishResult
+import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.app.usb.AndroidUsbSerialTransport
@@ -110,6 +113,7 @@ class RecordingForegroundService : Service() {
     private var ubloxStreamParser = UbloxStreamParser()
     private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
     private val solutionCandidates = mutableMapOf<String, SolutionCandidate>()
+    private var mockLocationPublisher: MockLocationPublisher? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -286,6 +290,8 @@ class RecordingForegroundService : Service() {
             solutionCandidates.clear()
             ubloxStreamParser = UbloxStreamParser()
             ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+            val enableMockLocation = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
+            configureMockLocation(enableMockLocation)
             val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
@@ -792,6 +798,7 @@ class RecordingForegroundService : Service() {
         ntripController = null
         activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
+        mockLocationPublisher = null
         releaseWakeLock()
         state = state.copy(
             running = false,
@@ -1182,6 +1189,29 @@ class RecordingForegroundService : Service() {
             satellitesUsed = best?.satellitesUsed ?: state.satellitesUsed,
             ubloxFrequency = ubloxFrequencyTracker.display(nowMillis),
         )
+        val publishResult = mockLocationPublisher?.publish(best, enabled = mockLocationPublisher != null)
+            ?: MockLocationPublishResult.DISABLED
+        state = state.copy(mockLocationState = publishResult.name)
+        if (publishResult == MockLocationPublishResult.FAILED) {
+            state = state.copy(
+                lastError = "Android mock-location update failed. Check Developer options mock-location app setting.",
+                errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+        }
+    }
+
+    private fun configureMockLocation(enabled: Boolean) {
+        mockLocationPublisher = if (enabled) {
+            val manager = getSystemService(android.location.LocationManager::class.java)
+            if (manager == null) {
+                null
+            } else {
+                MockLocationPublisher(AndroidMockLocationSink(manager))
+            }
+        } else {
+            null
+        }
     }
 
     private fun compileReceiverCommands(receiverFamily: String, script: String): List<ReceiverCommand> =
@@ -1666,6 +1696,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_EXPORT_NMEA = "exportNmea"
         const val EXTRA_EXPORT_JSON_SOLUTION = "exportJsonSolution"
         const val EXTRA_RECORD_REMOTE_BASE_RAW = "recordRemoteBaseRaw"
+        const val EXTRA_ENABLE_MOCK_LOCATION = "enableMockLocation"
         const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
         const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"

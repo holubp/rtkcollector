@@ -1,4 +1,4 @@
-package org.rtkcollector.app.ui
+package org.rtkcollector.app.receiver
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -48,6 +48,21 @@ class PersistentReceiverCommandsTest {
                 SAVE
                 """.trimIndent(),
             )
+        }
+    }
+
+    @Test
+    fun `persistent baud commands configure com1 target then saveconfig`() {
+        assertEquals(
+            listOf("CONFIG COM1 460800", "SAVECONFIG"),
+            persistentBaudCommands(460800),
+        )
+    }
+
+    @Test
+    fun `persistent baud commands reject unsupported baud`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            persistentBaudCommands(123456)
         }
     }
 }

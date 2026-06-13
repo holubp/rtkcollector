@@ -63,6 +63,7 @@ import org.rtkcollector.app.profile.displayMountpoint
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
+import org.rtkcollector.app.receiver.persistentReceiverCommands
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
@@ -2393,15 +2394,6 @@ private fun writeCommandProfilePersistentlyToDevice(
         }
     }.start()
 }
-
-internal fun persistentReceiverCommands(runtimeScript: String): List<String> =
-    runtimeScript
-        .lineSequence()
-        .map(String::trim)
-        .filter { it.isNotBlank() && !it.startsWith("#") }
-        .filterNot { it.equals("SAVECONFIG", ignoreCase = true) }
-        .onEach(Um980RuntimeCommandValidator::validateRuntimeCommand)
-        .toList() + "SAVECONFIG"
 
 private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {
     val sets = settingsSets()

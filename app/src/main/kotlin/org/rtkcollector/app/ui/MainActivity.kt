@@ -64,8 +64,10 @@ import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
 import org.rtkcollector.app.receiver.PersistentReceiverWriteRoute
+import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
 import org.rtkcollector.app.receiver.persistentReceiverCommands
 import org.rtkcollector.app.receiver.persistentReceiverWriteRoute
+import org.rtkcollector.app.receiver.um980VersionProbeBytes
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
@@ -2402,6 +2404,7 @@ private fun writeCommandProfilePersistentlyToDevice(
         try {
             runCatching {
                 transport.open()
+                verifyMaintenanceReceiverConnection(transport)
                 commands.forEach { command ->
                     transport.write("$command\r\n".toByteArray(Charsets.US_ASCII))
                     Thread.sleep(PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS)
@@ -2428,6 +2431,17 @@ private fun writeCommandProfilePersistentlyToDevice(
             persistentReceiverWriteInProgress.set(false)
         }
     }.start()
+}
+
+private fun verifyMaintenanceReceiverConnection(transport: AndroidUsbSerialTransport) {
+    val initialBytes = transport.readAvailable(4096)
+    if (isPlausibleUm980MaintenanceResponse(initialBytes)) return
+    transport.write(um980VersionProbeBytes())
+    Thread.sleep(300)
+    val response = transport.readAvailable(4096)
+    require(isPlausibleUm980MaintenanceResponse(response)) {
+        "Receiver did not respond at the selected initial baud."
+    }
 }
 
 private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {

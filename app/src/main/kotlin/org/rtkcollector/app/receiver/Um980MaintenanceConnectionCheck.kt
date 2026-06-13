@@ -8,7 +8,5 @@ fun isPlausibleUm980MaintenanceResponse(bytes: ByteArray): Boolean {
     val ascii = bytes.toString(Charsets.US_ASCII)
     return ascii.contains("UM980", ignoreCase = true) ||
         ascii.contains("Unicore", ignoreCase = true) ||
-        ascii.contains("#VERSION", ignoreCase = true) ||
-        ascii.startsWith("\$GN") ||
-        ascii.startsWith("\$GP")
+        ascii.contains("#VERSION", ignoreCase = true)
 }

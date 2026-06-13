@@ -92,6 +92,7 @@ class RecordingForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
+    private val persistentWriteInProgress = AtomicBoolean(false)
     private val runtimeLock = Any()
     private val txLock = Any()
     private var ntripRateWindowStartedAtMillis: Long = 0L
@@ -634,6 +635,29 @@ class RecordingForegroundService : Service() {
         }
         val label = intent.getStringExtra(EXTRA_PERSISTENT_WRITE_LABEL)?.takeIf(String::isNotBlank)
             ?: "persistent receiver configuration"
+        if (!persistentWriteInProgress.compareAndSet(false, true)) {
+            state = state.copy(
+                lastError = "Persistent receiver configuration write is already in progress.",
+                errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return
+        }
+        Thread({
+            try {
+                writePersistentReceiverConfigAsync(captureRuntime, commands, label)
+            } finally {
+                persistentWriteInProgress.set(false)
+            }
+        }, "rtkcollector-persistent-receiver-write").start()
+    }
+
+    private fun writePersistentReceiverConfigAsync(
+        captureRuntime: CaptureRuntime,
+        commands: List<String>,
+        label: String,
+    ) {
         runCatching {
             writers?.appendEventJson(
                 """{"type":"persistent-receiver-write-started","label":"${label.jsonEscape()}","commandCount":${commands.size}}""",

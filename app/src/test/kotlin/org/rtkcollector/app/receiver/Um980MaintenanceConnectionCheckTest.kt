@@ -19,8 +19,8 @@ class Um980MaintenanceConnectionCheckTest {
     }
 
     @Test
-    fun `classifies nmea streaming as live`() {
-        assertTrue(
+    fun `generic nmea streaming does not authorize um980 persistent writes`() {
+        assertFalse(
             isPlausibleUm980MaintenanceResponse(
                 "\$GNGGA,123519,5000.0,N,01400.0,E,1,12,0.9,287.0,M,0.0,M,,*00\r\n"
                     .toByteArray(Charsets.US_ASCII),

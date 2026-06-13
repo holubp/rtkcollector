@@ -41,10 +41,12 @@ fun persistentBaudWriteAction(
     targetBaud: Int,
     usbDeviceLabel: String,
     onClick: () -> Unit = {},
+    onClickWithValues: ((Map<String, String>) -> Unit)? = null,
 ): ProfileEditorAction =
     ProfileEditorAction(
         label = "Write target baud persistently to device",
         onClick = onClick,
+        onClickWithValues = onClickWithValues,
         warningTitle = "Write receiver baud persistently?",
         warningBody = "This opens the selected UM980 receiver at initial baud $initialBaud, " +
             "writes target baud $targetBaud for $usbDeviceLabel, then sends SAVECONFIG. " +

@@ -1090,10 +1090,11 @@ fun RtkCollectorApp(
                                                 usbDeviceLabel = usbProfile.usbProductName
                                                     ?: usbProfile.usbDeviceName
                                                     ?: "selected USB receiver",
-                                                onClick = {
+                                                onClickWithValues = { values ->
                                                     writeUsbBaudPersistentlyToDevice(
                                                         context = context,
                                                         usbProfileId = target.id,
+                                                        values = values,
                                                         isRecording = state.isRecording,
                                                     )
                                                 },
@@ -2412,12 +2413,22 @@ private fun writeCommandProfilePersistentlyToDevice(
 private fun writeUsbBaudPersistentlyToDevice(
     context: Context,
     usbProfileId: String,
+    values: Map<String, String>,
     isRecording: Boolean,
 ) {
     val profileStore = ProfileStores(context)
-    val usbProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == usbProfileId }
-    if (usbProfile == null) {
+    val savedProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == usbProfileId }
+    if (savedProfile == null) {
         Toast.makeText(context, "USB/baud profile is not available.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val usbProfile = try {
+        savedProfile.copy(
+            profileBaud = values["profileBaud"]?.toIntOrNull() ?: savedProfile.profileBaud,
+            serialBaud = values["serialBaud"]?.toIntOrNull() ?: savedProfile.serialBaud,
+        ).also(UsbBaudProfile::validate)
+    } catch (error: IllegalArgumentException) {
+        Toast.makeText(context, "Cannot write receiver baud: ${error.message}", Toast.LENGTH_LONG).show()
         return
     }
     val commands = persistentBaudCommands(usbProfile.serialBaud)

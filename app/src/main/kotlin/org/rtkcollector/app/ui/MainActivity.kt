@@ -155,8 +155,11 @@ fun RtkCollectorApp(
     var screen by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf(AppScreen.HOME) }
     val context = LocalContext.current
     val profileStore = remember(context) { ProfileStores(context) }
-    var settingsSets by remember { mutableStateOf(profileStore.settingsSets()) }
-    var selectedSettingsSetId by remember { mutableStateOf(profileStore.selectedSettingsSetId()) }
+    val initialSelectedSettingsSetId = remember(profileStore) { profileStore.selectedSettingsSetId() }
+    var settingsSets by remember {
+        mutableStateOf(profileStore.settingsSetsWithRememberedMountpoint(initialSelectedSettingsSetId))
+    }
+    var selectedSettingsSetId by remember { mutableStateOf(initialSelectedSettingsSetId) }
     var profileEditorTarget by rememberSaveable(stateSaver = ProfileEditorTargetSaver) {
         mutableStateOf<ProfileEditorTarget?>(null)
     }
@@ -252,8 +255,9 @@ fun RtkCollectorApp(
             runCatching {
                 importSettingsBackup(context, uri)
             }.onSuccess {
-                settingsSets = profileStore.settingsSets()
-                selectedSettingsSetId = profileStore.selectedSettingsSetId()
+                val updatedSelectedSettingsSetId = profileStore.selectedSettingsSetId()
+                settingsSets = profileStore.settingsSetsWithRememberedMountpoint(updatedSelectedSettingsSetId)
+                selectedSettingsSetId = updatedSelectedSettingsSetId
                 selectedWorkflowId = profileStore.selectedWorkflowId()
                 refreshProfileUi(settingsSets)
                 Toast.makeText(context, "Settings backup imported.", Toast.LENGTH_LONG).show()
@@ -423,8 +427,9 @@ fun RtkCollectorApp(
                                 runCatching {
                                     importSettingsBackup(context, valid.backup)
                                 }.onSuccess {
-                                    val updatedSettingsSets = profileStore.settingsSets()
                                     val updatedSelectedSettingsSetId = profileStore.selectedSettingsSetId()
+                                    val updatedSettingsSets =
+                                        profileStore.settingsSetsWithRememberedMountpoint(updatedSelectedSettingsSetId)
                                     val updatedSelectedWorkflowId = profileStore.selectedWorkflowId()
                                     settingsSets = updatedSettingsSets
                                     selectedSettingsSetId = updatedSelectedSettingsSetId
@@ -599,7 +604,7 @@ fun RtkCollectorApp(
                     onSelect = { id ->
                         selectedSettingsSetId = id
                         profileStore.saveSelectedSettingsSetId(id)
-                        settingsSets = profileStore.settingsSets()
+                        settingsSets = profileStore.settingsSetsWithRememberedMountpoint(id)
                         val selected = settingsSets.firstOrNull { it.id == id }
                         selectedWorkflowId = selected.applyWorkflowPolicy(selectedWorkflowId)
                         profileStore.saveSelectedWorkflowId(selectedWorkflowId)
@@ -858,7 +863,7 @@ fun RtkCollectorApp(
                         } else {
                             selectedSettingsSetId = id
                             profileStore.saveSelectedSettingsSetId(id)
-                            settingsSets = profileStore.settingsSets()
+                            settingsSets = profileStore.settingsSetsWithRememberedMountpoint(id)
                             val selectedSet = settingsSets.firstOrNull { it.id == id }
                             selectedWorkflowId = selectedSet.applyWorkflowPolicy(selectedWorkflowId)
                             profileStore.saveSelectedWorkflowId(selectedWorkflowId)
@@ -1158,7 +1163,7 @@ fun RtkCollectorApp(
                             DashboardSelector.SETTINGS_SET -> {
                                 selectedSettingsSetId = id
                                 profileStore.saveSelectedSettingsSetId(id)
-                                settingsSets = profileStore.settingsSets()
+                                settingsSets = profileStore.settingsSetsWithRememberedMountpoint(id)
                                 val selectedSet = settingsSets.firstOrNull { it.id == id }
                                 selectedWorkflowId = selectedSet.applyWorkflowPolicy(selectedWorkflowId)
                                 profileStore.saveSelectedWorkflowId(selectedWorkflowId)
@@ -2583,8 +2588,6 @@ private fun ProfileStores.plannedDashboardState(
     val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
     val mountpointProfiles = ntripMountpointProfiles()
     val mountpoint = selected.selectedMountpointLabel(mountpointProfiles)
-        .takeUnless { it.isMissingMountpointValue() }
-        ?: selectedMountpointLabelFromProfileId(lastActiveNtripMountpointProfileId(), mountpointProfiles)
     return DashboardState.planned(
         workflow = selectedWorkflowId.workflowLabel(),
         mountpoint = mountpoint,
@@ -2599,6 +2602,38 @@ private fun ProfileStores.plannedDashboardState(
             storageLocationProfile = selectedStorageLabel(selectedSettingsSetId),
         ),
     )
+}
+
+private fun ProfileStores.settingsSetsWithRememberedMountpoint(
+    selectedSettingsSetId: String,
+): List<RecordingSettingsSet> {
+    val settingsSets = settingsSets()
+    val rememberedProfile = lastActiveNtripMountpointProfileId()
+        ?.let { id -> ntripMountpointProfiles().firstOrNull { it.id == id } }
+    val updated = settingsSets.withRememberedMountpointProfile(selectedSettingsSetId, rememberedProfile)
+    if (updated != settingsSets) {
+        saveSettingsSets(updated)
+    }
+    return updated
+}
+
+internal fun List<RecordingSettingsSet>.withRememberedMountpointProfile(
+    selectedSettingsSetId: String,
+    rememberedProfile: NtripMountpointProfile?,
+): List<RecordingSettingsSet> {
+    if (rememberedProfile == null) return this
+    return map { settingsSet ->
+        if (settingsSet.id != selectedSettingsSetId ||
+            settingsSet.ntripMountpointProfileRef != null ||
+            settingsSet.overrides.ntripMountpoint != null
+        ) {
+            settingsSet
+        } else {
+            settingsSet.copy(
+                ntripMountpointProfileRef = ProfileReference(rememberedProfile.id, rememberedProfile.name),
+            )
+        }
+    }
 }
 
 internal fun RecordingSettingsSet?.selectedMountpointLabel(

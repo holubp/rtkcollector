@@ -100,7 +100,7 @@ class DashboardStateTest {
     }
 
     @Test
-    fun `stopped service state preserves last real mountpoint when planned mountpoint is missing`() {
+    fun `stopped service state does not preserve stale mountpoint when planned mountpoint is missing`() {
         val serviceState = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
@@ -117,7 +117,7 @@ class DashboardStateTest {
 
         val merged = serviceState.withPlannedConfiguration(planned)
 
-        assertEquals("TUBO00CZE0", merged.status.mountpoint)
+        assertEquals("n/a", merged.status.mountpoint)
     }
 
     @Test

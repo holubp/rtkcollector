@@ -38,11 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -857,14 +852,7 @@ private fun ScriptTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier
-            .fillMaxWidth()
-            .onKeyEvent { event ->
-                event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionLeft ||
-                        event.key == Key.DirectionRight ||
-                        event.key == Key.DirectionUp ||
-                        event.key == Key.DirectionDown)
-            },
+            .fillMaxWidth(),
         minLines = 4,
         readOnly = readOnly,
         singleLine = false,

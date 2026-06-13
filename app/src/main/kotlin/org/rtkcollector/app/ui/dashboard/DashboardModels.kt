@@ -18,13 +18,8 @@ data class DashboardState(
         if (isRecording) {
             this
         } else {
-            val plannedStatus = planned.status
             copy(
-                status = plannedStatus.copy(
-                    mountpoint = plannedStatus.mountpoint.takeUnless { it.isMissingOrBogusMountpoint() }
-                        ?: status.mountpoint.takeUnless { it.isMissingOrBogusMountpoint() }
-                        ?: plannedStatus.mountpoint,
-                ),
+                status = planned.status,
                 profiles = planned.profiles,
             )
         }

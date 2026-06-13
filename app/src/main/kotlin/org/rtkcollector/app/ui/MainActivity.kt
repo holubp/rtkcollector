@@ -63,7 +63,9 @@ import org.rtkcollector.app.profile.displayMountpoint
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
+import org.rtkcollector.app.receiver.PersistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.persistentReceiverCommands
+import org.rtkcollector.app.receiver.persistentReceiverWriteRoute
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
@@ -2259,6 +2261,17 @@ private fun buildNtripUpdateIntent(
     }
 }
 
+private fun persistentReceiverServiceIntent(
+    context: Context,
+    label: String,
+    commands: List<String>,
+): Intent =
+    Intent(context, RecordingForegroundService::class.java).apply {
+        action = RecordingForegroundService.ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG
+        putExtra(RecordingForegroundService.EXTRA_PERSISTENT_WRITE_LABEL, label)
+        putStringArrayListExtra(RecordingForegroundService.EXTRA_PERSISTENT_COMMANDS, ArrayList(commands))
+    }
+
 private fun requestSelectedUsbPermission(context: Context, selectedSettingsSetId: String) {
     val profileStore = ProfileStores(context)
     val settingsSet = profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
@@ -2321,15 +2334,38 @@ private fun writeCommandProfilePersistentlyToDevice(
     runtimeScript: String,
     isRecording: Boolean,
 ) {
-    if (isRecording) {
-        Toast.makeText(context, "Stop recording before writing receiver configuration persistently.", Toast.LENGTH_LONG).show()
-        return
-    }
     val profileStore = ProfileStores(context)
     val commandProfile = profileStore.commandProfiles().firstOrNull { it.id == commandProfileId }
     if (commandProfile == null) {
         Toast.makeText(context, "Command profile is not available.", Toast.LENGTH_LONG).show()
         return
+    }
+    val commands = persistentReceiverCommands(runtimeScript)
+    when (
+        persistentReceiverWriteRoute(
+            recordingActive = isRecording,
+            usbProfileAvailable = true,
+            receiverConnected = true,
+            usbPermissionGranted = true,
+        )
+    ) {
+        PersistentReceiverWriteRoute.ActiveRecordingService -> {
+            context.startService(
+                persistentReceiverServiceIntent(
+                    context = context,
+                    label = "Command profile persistent write",
+                    commands = commands,
+                ),
+            )
+            Toast.makeText(
+                context,
+                "Writing receiver configuration through active recording connection...",
+                Toast.LENGTH_SHORT,
+            ).show()
+            return
+        }
+        PersistentReceiverWriteRoute.IdleMaintenanceConnection -> Unit
+        is PersistentReceiverWriteRoute.Rejected -> Unit
     }
     val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
         ?: profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
@@ -2352,7 +2388,6 @@ private fun writeCommandProfilePersistentlyToDevice(
         Toast.makeText(context, "USB permission is required before writing receiver configuration.", Toast.LENGTH_LONG).show()
         return
     }
-    val commands = persistentReceiverCommands(runtimeScript)
     if (!persistentReceiverWriteInProgress.compareAndSet(false, true)) {
         Toast.makeText(context, "Persistent receiver configuration write is already in progress.", Toast.LENGTH_LONG).show()
         return

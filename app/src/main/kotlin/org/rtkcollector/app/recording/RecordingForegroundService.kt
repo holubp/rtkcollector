@@ -821,7 +821,7 @@ class RecordingForegroundService : Service() {
         ntripController = null
         activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
-        mockLocationPublisher = null
+        teardownMockLocation()
         solutionCandidates.clear()
         lastMockPublishedAt = null
         previousMockResult = null
@@ -1285,15 +1285,68 @@ class RecordingForegroundService : Service() {
     }
 
     private fun configureMockLocation(enabled: Boolean) {
-        mockLocationPublisher = if (enabled) {
-            val manager = getSystemService(android.location.LocationManager::class.java)
-            if (manager == null) {
-                null
-            } else {
-                MockLocationPublisher(AndroidMockLocationSink(manager))
-            }
-        } else {
-            null
+        if (!enabled) {
+            teardownMockLocation()
+            return
+        }
+        val manager = getSystemService(android.location.LocationManager::class.java)
+        if (manager == null) {
+            mockLocationPublisher = null
+            state = state.copy(
+                mockLocationState =
+                    org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED.name,
+            )
+            return
+        }
+        val outcome = runCatching {
+            manager.addTestProvider(
+                android.location.LocationManager.GPS_PROVIDER,
+                /* requiresNetwork = */ false,
+                /* requiresSatellite = */ false,
+                /* requiresCell = */ false,
+                /* hasMonetaryCost = */ false,
+                /* supportsAltitude = */ true,
+                /* supportsSpeed = */ true,
+                /* supportsBearing = */ true,
+                android.location.provider.ProviderProperties.POWER_USAGE_LOW,
+                android.location.provider.ProviderProperties.ACCURACY_FINE,
+            )
+            manager.setTestProviderEnabled(
+                android.location.LocationManager.GPS_PROVIDER,
+                true,
+            )
+        }
+        if (outcome.isFailure) {
+            mockLocationPublisher = null
+            previousMockResult =
+                org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED
+            state = state.copy(
+                mockLocationState = previousMockResult!!.name,
+                lastError = "RtkCollector is not the selected mock location app. " +
+                    "Enable it in Developer Options.",
+                errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            return
+        }
+        mockLocationPublisher = org.rtkcollector.app.mocklocation.MockLocationPublisher(
+            org.rtkcollector.app.mocklocation.AndroidMockLocationSink(
+                manager,
+                android.location.LocationManager.GPS_PROVIDER,
+            ),
+        )
+    }
+
+    private fun teardownMockLocation() {
+        if (mockLocationPublisher == null) return
+        mockLocationPublisher = null
+        runCatching {
+            val manager = getSystemService(android.location.LocationManager::class.java) ?: return
+            manager.setTestProviderEnabled(
+                android.location.LocationManager.GPS_PROVIDER,
+                false,
+            )
+            manager.removeTestProvider(android.location.LocationManager.GPS_PROVIDER)
         }
     }
 

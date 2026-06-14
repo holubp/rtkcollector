@@ -70,7 +70,10 @@ data class ActiveRecordingConfig(
 
             val profileBaud = localProfileBaud ?: baudOverride?.profileBaud ?: usbBaudProfile.profileBaud
             val serialBaud = localSerialBaud ?: baudOverride?.serialBaud ?: usbBaudProfile.serialBaud
-            val baudSwitchCommands = if (profileBaud == serialBaud) {
+            val baudSwitchCommands = if (
+                profileBaud == serialBaud ||
+                commandProfile.receiverFamily.startsWith("ublox", ignoreCase = true)
+            ) {
                 emptyList()
             } else {
                 listOf("CONFIG COM1 $serialBaud")

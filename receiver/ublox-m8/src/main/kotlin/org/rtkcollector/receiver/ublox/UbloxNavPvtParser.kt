@@ -31,8 +31,11 @@ object UbloxNavPvtParser {
 
     private fun fixClass(fixType: Int, flags: Int): FixClass {
         val differential = flags and 0x02 != 0
+        val carrSoln = (flags ushr 6) and 0x03
         return when {
             fixType < 2 -> FixClass.NONE
+            carrSoln == 2 -> FixClass.RTK_FIXED
+            carrSoln == 1 -> FixClass.RTK_FLOAT
             differential -> FixClass.DGPS
             fixType >= 3 -> FixClass.SINGLE
             else -> FixClass.NONE

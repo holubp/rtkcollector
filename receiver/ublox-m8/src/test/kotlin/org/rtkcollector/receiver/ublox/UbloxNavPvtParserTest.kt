@@ -37,4 +37,24 @@ class UbloxNavPvtParserTest {
         assertEquals(1.2, telemetry.verticalAccuracyM!!, 0.001)
         assertEquals(14, telemetry.satellitesUsed)
     }
+
+    @Test
+    fun `nav pvt with carrSoln 1 reports rtk float`() {
+        assertEquals(FixClass.RTK_FLOAT, parseFixClass(fixType = 0x03, flags = 0x40))
+    }
+
+    @Test
+    fun `nav pvt with carrSoln 2 reports rtk fixed`() {
+        assertEquals(FixClass.RTK_FIXED, parseFixClass(fixType = 0x03, flags = 0x80))
+    }
+
+    private fun parseFixClass(fixType: Int, flags: Int): FixClass {
+        val payload = ByteArray(92)
+        ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put(20, fixType.toByte())
+            put(21, flags.toByte())
+        }
+        val frame = UbloxFrame.build(0x01, 0x07, payload)
+        return UbloxNavPvtParser.parse(frame, nowMillis = 0L)!!.fixClass!!
+    }
 }

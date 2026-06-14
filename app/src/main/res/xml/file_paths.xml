@@ -7,6 +7,9 @@
         name="session_share_zips"
         path="session-share-zips/" />
     <cache-path
+        name="session_share_nmea"
+        path="session-share-nmea/" />
+    <cache-path
         name="settings_backups"
         path="settings-backups/" />
 </paths>

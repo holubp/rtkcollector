@@ -83,6 +83,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 class RecordingForegroundService : Service() {
+    private enum class CompilePhase { START, STOP }
     private val running = AtomicBoolean(false)
     private val stopping = AtomicBoolean(false)
     private val shutdownSent = AtomicBoolean(false)
@@ -755,7 +756,7 @@ class RecordingForegroundService : Service() {
             runCatching {
                 runtime?.let { captureRuntime ->
                     synchronized(txLock) {
-                        sendCommandLines(captureRuntime, shutdownCommands)
+                        sendCommandLines(captureRuntime, shutdownCommands, CompilePhase.STOP)
                     }
                 }
             }.onFailure { error ->
@@ -848,10 +849,14 @@ class RecordingForegroundService : Service() {
         stopSelf()
     }
 
-    private fun sendCommandLines(captureRuntime: CaptureRuntime, commands: List<String>) {
+    private fun sendCommandLines(
+        captureRuntime: CaptureRuntime,
+        commands: List<String>,
+        phase: CompilePhase = CompilePhase.START,
+    ) {
         if (commands.isEmpty()) return
         val script = commands.joinToString("\n")
-        val compiled = compileReceiverCommands(activeReceiverFamily, script)
+        val compiled = compileReceiverCommands(phase, activeReceiverFamily, script)
         compiled.forEach { command ->
             synchronized(txLock) {
                 captureRuntime.sendToReceiver(command.payload)
@@ -1350,26 +1355,43 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun compileReceiverCommands(receiverFamily: String, script: String): List<ReceiverCommand> =
-        if (receiverFamily.startsWith("ublox", ignoreCase = true)) {
-            try {
-                UbloxScriptCompiler.compile(script)
-            } catch (e: IllegalArgumentException) {
-                state = state.copy(
-                    lastError = e.message,
-                    errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
-                    errorSeverity = RecordingErrorSeverity.FATAL,
-                )
-                broadcastState()
-                throw e
+    private fun compileReceiverCommands(
+        phase: CompilePhase,
+        receiverFamily: String,
+        script: String,
+    ): List<org.rtkcollector.receiver.api.ReceiverCommand> {
+        return try {
+            if (receiverFamily.startsWith("ublox", ignoreCase = true)) {
+                org.rtkcollector.receiver.ublox.UbloxScriptCompiler.compile(script)
+            } else {
+                script.lineSequence()
+                    .map(String::trim)
+                    .filter { it.isNotBlank() }
+                    .map {
+                        org.rtkcollector.receiver.api.ReceiverCommand(
+                            label = it.take(40),
+                            payload = "$it\r\n".toByteArray(Charsets.US_ASCII),
+                        )
+                    }
+                    .toList()
             }
-        } else {
-            script.lineSequence()
-                .map(String::trim)
-                .filter { it.isNotEmpty() && !it.startsWith("#") }
-                .map { ReceiverCommand(label = it.take(40), payload = "$it\r\n".encodeToByteArray()) }
-                .toList()
+        } catch (error: Exception) {
+            val severity = when (phase) {
+                CompilePhase.START -> RecordingErrorSeverity.FATAL
+                CompilePhase.STOP -> RecordingErrorSeverity.DEGRADED
+            }
+            state = state.copy(
+                lastError = error.message ?: error.javaClass.simpleName,
+                errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                errorSeverity = severity,
+            )
+            broadcastState()
+            if (phase == CompilePhase.START) {
+                throw error
+            }
+            emptyList()
         }
+    }
 
     private fun receiverFamilyFromDriverId(driverId: String?): String {
         if (driverId.isNullOrBlank()) return ""

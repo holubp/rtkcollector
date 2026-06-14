@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -790,7 +791,7 @@ private fun DashboardCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth().height(cardHeight),
+        modifier = modifier.fillMaxWidth().heightIn(min = cardHeight),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(
@@ -871,7 +872,7 @@ private fun Metric(label: String, value: String) {
     TidyMetricRow(
         label = label,
         value = value,
-        modifier = Modifier.height(DashboardMetricRowHeight),
+        modifier = Modifier.heightIn(min = DashboardMetricRowHeight),
     )
 }
 
@@ -885,7 +886,7 @@ private fun ClickableMetric(
         label = label,
         value = value,
         modifier = Modifier
-            .height(DashboardMetricRowHeight)
+            .heightIn(min = DashboardMetricRowHeight)
             .semantics {
                 role = Role.Button
                 contentDescription = "$label: $value"

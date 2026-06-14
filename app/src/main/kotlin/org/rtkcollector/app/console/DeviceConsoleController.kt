@@ -56,7 +56,7 @@ class DeviceConsoleController(
     fun send(text: String, lineEnding: DeviceConsoleLineEnding): Result<Unit> =
         runCatching {
             val opened = transport ?: error("Device console is not connected.")
-            opened.write(text.encodeToByteArray() + lineEnding.bytes)
+            opened.write(DeviceConsoleCommandEncoder.encode(text, lineEnding))
         }.onFailure { error ->
             update { it.copy(lastError = error.message ?: "Device console send failed.") }
         }

@@ -22,6 +22,18 @@ class DeviceConsoleModelsTest {
     }
 
     @Test
+    fun `command encoder applies selected ending to each line`() {
+        val encoded = DeviceConsoleCommandEncoder.encode("VERSION\nLOG COM1", DeviceConsoleLineEnding.CRLF)
+        assertEquals("VERSION\r\nLOG COM1\r\n", encoded.decodeToString())
+    }
+
+    @Test
+    fun `command encoder preserves text when no line ending is selected`() {
+        val encoded = DeviceConsoleCommandEncoder.encode("VERSION\n", DeviceConsoleLineEnding.NONE)
+        assertEquals("VERSION\n", encoded.decodeToString())
+    }
+
+    @Test
     fun `rolling buffer keeps newest content`() {
         val buffer = DeviceConsoleRollingBuffer(maxChars = 8)
             .append("abc")

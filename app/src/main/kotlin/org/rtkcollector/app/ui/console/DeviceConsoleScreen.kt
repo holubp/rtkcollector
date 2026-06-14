@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -152,7 +153,12 @@ fun DeviceConsoleScreen(
                     .heightIn(min = 100.dp),
                 minLines = 3,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+            ) {
                 Button(onClick = onSend, enabled = state.connected && inputText.isNotBlank()) { Text("Send") }
                 TextButton(onClick = onClearInput) { Text("Clear input") }
                 TextButton(onClick = onPauseToggle) { Text(if (state.paused) "Resume output" else "Pause output") }

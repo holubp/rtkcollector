@@ -59,6 +59,18 @@ object DeviceConsoleOutputFormatter {
         }
 }
 
+object DeviceConsoleCommandEncoder {
+    fun encode(text: String, lineEnding: DeviceConsoleLineEnding): ByteArray {
+        if (lineEnding == DeviceConsoleLineEnding.NONE) return text.encodeToByteArray()
+        val ending = lineEnding.bytes.decodeToString()
+        val normalized = text.replace("\r\n", "\n").replace('\r', '\n')
+        val lines = normalized.split('\n').let { parts ->
+            if (parts.lastOrNull()?.isEmpty() == true) parts.dropLast(1) else parts
+        }
+        return (lines.joinToString(ending) + ending).encodeToByteArray()
+    }
+}
+
 enum class DeviceConsoleConnectionStatus {
     DISCONNECTED,
     CONNECTING,

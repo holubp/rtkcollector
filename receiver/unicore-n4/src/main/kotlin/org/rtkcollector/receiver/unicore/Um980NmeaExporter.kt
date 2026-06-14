@@ -47,11 +47,12 @@ object Um980NmeaExporter {
     fun rmc(telemetry: Um980Telemetry): String? {
         val lat = telemetry.latDeg ?: return null
         val lon = telemetry.lonDeg ?: return null
+        val time = nmeaTime(telemetry.utcTime) ?: return null
         val instant = instant(telemetry.utcTime) ?: return null
         val dateTime = instant.atOffset(ZoneOffset.UTC)
         val body = listOf(
             "GPRMC",
-            "%02d%02d%05.2f".format(Locale.US, dateTime.hour, dateTime.minute, dateTime.second.toDouble()),
+            time,
             if (telemetry.solutionStatus == "SOL_COMPUTED") "A" else "V",
             nmeaLatitude(lat),
             if (lat >= 0.0) "N" else "S",
@@ -100,7 +101,10 @@ object Um980NmeaExporter {
     private fun nmeaTime(utcTime: String?): String? =
         instant(utcTime)
             ?.atOffset(ZoneOffset.UTC)
-            ?.let { "%02d%02d%05.2f".format(Locale.US, it.hour, it.minute, it.second.toDouble()) }
+            ?.let {
+                val millis = it.nano / NANOS_PER_MILLISECOND
+                "%02d%02d%02d.%03d".format(Locale.US, it.hour, it.minute, it.second, millis)
+            }
 
     private fun instant(utcTime: String?): Instant? =
         utcTime?.let { runCatching { Instant.parse(it) }.getOrNull() }
@@ -126,4 +130,5 @@ object Um980NmeaExporter {
 
     private const val MPS_TO_KNOTS = 1.94384449
     private const val MPS_TO_KMH = 3.6
+    private const val NANOS_PER_MILLISECOND = 1_000_000
 }

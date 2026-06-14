@@ -148,6 +148,9 @@ Prefer the strongest feasible verification for the touched code:
   exact receiver/USB/baud assumptions.
 - UM980 live parsers must be byte-level for mixed NMEA, UM980 ASCII and UM980
   binary streams. Do not feed arbitrary binary bytes into line-oriented parsers.
+- Derived `receiver-solution.nmea` exports must preserve sub-second UTC from
+  structured/binary receiver telemetry and must not copy binary/noise fragments
+  that merely look like dollar-prefixed lines.
 - UM980 profile-to-runtime baud changes must keep receiver baud-switch commands
   separate from post-switch mode/log commands: send init, send the baud switch,
   reconfigure the host serial bridge without purging RX/TX, drain through the

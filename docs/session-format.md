@@ -90,6 +90,9 @@ disabled by recording policy; parser/export failure must not stop raw
 recording. Direct NMEA sharing uses `receiver-solution.nmea` as its source and
 creates a temporary `.nmea` copy for Android send-to workflows; it must not
 regenerate, reinterpret or modify the authoritative `receiver-rx.raw` stream.
+When derived NMEA is generated from binary or structured receiver telemetry, UTC
+fields should preserve sub-second precision available in the source solution,
+and binary/noise fragments must not be copied into the NMEA sidecar.
 
 `storageKind` records whether the session used app-private storage or a SAF
 tree. For SAF sessions, the UI-displayed session location may be a document URI

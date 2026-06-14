@@ -49,6 +49,7 @@ import org.rtkcollector.core.session.SessionWriterIssueSeverity
 import org.rtkcollector.core.session.SessionMetadata
 import org.rtkcollector.core.session.SessionMode
 import org.rtkcollector.core.session.exportSessionMetadata
+import org.rtkcollector.receiver.unicore.NmeaSentenceExtractor
 import org.rtkcollector.receiver.unicore.NmeaGgaFix
 import org.rtkcollector.receiver.unicore.NmeaGgaParser
 import org.rtkcollector.receiver.unicore.NmeaGsaParser
@@ -1270,7 +1271,7 @@ class RecordingForegroundService : Service() {
         val gstParser = NmeaGstParser()
         val gsvParser = NmeaGsvParser()
         val gsvTracker = NmeaGsvInViewTracker()
-        val nmeaExporter = NmeaSentenceExporter()
+        val nmeaExporter = NmeaSentenceExtractor()
         val solutionParser = Um980AsciiSolutionParser()
         val streamParser = Um980StreamParser()
         val frequencyTracker = Um980MessageFrequencyTracker()
@@ -1632,28 +1633,6 @@ class RecordingForegroundService : Service() {
         override fun recordEvent(event: CaptureEvent) {
             val json = """{"timestamp":"${event.timestamp}","type":"${event.type}","message":"${event.message.replace("\"", "\\\"")}"}"""
             writers.appendEventJson(json)
-        }
-    }
-
-    private class NmeaSentenceExporter {
-        private val lineBuffer = StringBuilder()
-
-        fun accept(bytes: ByteArray): List<String> {
-            val sentences = mutableListOf<String>()
-            bytes.toString(Charsets.US_ASCII).forEach { character ->
-                when (character) {
-                    '\n' -> {
-                        val line = lineBuffer.toString().trim()
-                        if (line.startsWith("$") && line.length >= 6) {
-                            sentences += "$line\r\n"
-                        }
-                        lineBuffer.clear()
-                    }
-                    '\r' -> Unit
-                    else -> lineBuffer.append(character)
-                }
-            }
-            return sentences
         }
     }
 

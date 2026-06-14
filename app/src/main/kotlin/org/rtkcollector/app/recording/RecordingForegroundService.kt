@@ -109,10 +109,20 @@ class RecordingForegroundService : Service() {
     private var ntripRateWindowStartedAtMillis: Long = 0L
     private var ntripRateWindowCorrectionBytes: Long = 0L
     private var ntripRateWindowTxBytes: Long = 0L
+    @Volatile
     private var activeReceiverFamily: String = ""
+    private val bestSolutionExecutor: java.util.concurrent.ScheduledExecutorService =
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "rtkcollector-best").apply { isDaemon = true }
+        }
+    private var bestSolutionTicker: java.util.concurrent.ScheduledFuture<*>? = null
+    private var lastMockPublishedAt: Long? = null
+    private var previousMockResult: org.rtkcollector.app.mocklocation.MockLocationPublishResult? = null
+    private var mockLocationRequested: Boolean = false
     private var ubloxStreamParser = UbloxStreamParser()
     private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
-    private val solutionCandidates = mutableMapOf<String, SolutionCandidate>()
+    private val solutionCandidates =
+        java.util.concurrent.ConcurrentHashMap<String, org.rtkcollector.core.solution.SolutionCandidate>()
     private var mockLocationPublisher: MockLocationPublisher? = null
 
     override fun onCreate() {
@@ -141,6 +151,9 @@ class RecordingForegroundService : Service() {
 
     override fun onDestroy() {
         stopRecording(sendShutdown = false)
+        bestSolutionTicker?.cancel(false)
+        bestSolutionTicker = null
+        bestSolutionExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -291,6 +304,7 @@ class RecordingForegroundService : Service() {
             ubloxStreamParser = UbloxStreamParser()
             ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
             val enableMockLocation = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
+            mockLocationRequested = enableMockLocation
             configureMockLocation(enableMockLocation)
             val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
@@ -338,6 +352,13 @@ class RecordingForegroundService : Service() {
             ntripRateWindowTxBytes = 0L
             activeWorkflowUsesNtrip = workflowUsesNtrip
             broadcastState()
+
+            lastMockPublishedAt = null
+            previousMockResult = null
+            bestSolutionTicker = bestSolutionExecutor.scheduleAtFixedRate(
+                { runBestSolutionTick() },
+                1, 1, java.util.concurrent.TimeUnit.SECONDS,
+            )
 
             captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
             maybeStartNtrip(intent, recorder)
@@ -746,6 +767,8 @@ class RecordingForegroundService : Service() {
                 broadcastState()
             }
         }
+        bestSolutionTicker?.cancel(false)
+        bestSolutionTicker = null
         runCatching { ntripController?.stop() }
         runCatching { captureThread?.join(1500) }
         runCatching { advisoryFanout?.close() }
@@ -800,6 +823,9 @@ class RecordingForegroundService : Service() {
         shutdownCommands = emptyList()
         mockLocationPublisher = null
         solutionCandidates.clear()
+        lastMockPublishedAt = null
+        previousMockResult = null
+        mockLocationRequested = false
         releaseWakeLock()
         state = state.copy(
             running = false,
@@ -1176,15 +1202,76 @@ class RecordingForegroundService : Service() {
                 }
             }
         }
-        updateBestSolution(nowMillis)
     }
 
-    private fun updateBestSolution(nowMillis: Long) {
-        val best = BestSolutionSelector.select(solutionCandidates.values, nowMillis)
+    private fun runBestSolutionTick() {
+        runCatching {
+            val now = System.currentTimeMillis()
+            val ageLimit = org.rtkcollector.core.solution.BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS
+            // Evict stale entries proactively so the map stays bounded.
+            solutionCandidates.entries.removeIf { entry ->
+                now - entry.value.updatedAtMillis > ageLimit
+            }
+            val tickInput = BestSolutionTickInput(
+                candidates = solutionCandidates.values,
+                nowMillis = now,
+                mockEnabled = mockLocationRequested,
+                mockProviderAvailable = mockLocationPublisher != null,
+                lastMockPublishedAt = lastMockPublishedAt,
+                previousMockResult = previousMockResult,
+            )
+            val tick = BestSolutionTickLogic.compute(tickInput)
+
+            val best = (tick.publishAction as? PublishAction.Publish)?.snapshot
+            // Update derived dashboard fields up front so the UI sees them
+            // even if the publish attempt below fails.
+            applyTickStateDelta(tick.stateDelta, best, now)
+
+            when (val action = tick.publishAction) {
+                PublishAction.None -> {
+                    lastMockPublishedAt = tick.newLastMockPublishedAt
+                    previousMockResult = tick.newPreviousMockResult
+                }
+                is PublishAction.Publish -> {
+                    val publisher = mockLocationPublisher
+                    if (publisher == null) {
+                        previousMockResult = org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED
+                        state = state.copy(mockLocationState = previousMockResult!!.name)
+                    } else {
+                        val published = publisher.publish(action.snapshot, enabled = true)
+                        val applied = BestSolutionTickLogic.applyPublishResult(
+                            previous = tick,
+                            publishedResult = published,
+                            publishedAtMillis = action.snapshot.updatedAtMillis,
+                        )
+                        lastMockPublishedAt = applied.newLastMockPublishedAt
+                        previousMockResult = published
+                        state = state.copy(mockLocationState = published.name)
+                        if (applied.setLastError) {
+                            state = state.copy(
+                                lastError = "Android mock-location update failed. " +
+                                    "Check Developer options mock-location app setting.",
+                                errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+                                errorSeverity = RecordingErrorSeverity.DEGRADED,
+                            )
+                        }
+                    }
+                }
+            }
+            broadcastState()
+        }
+    }
+
+    private fun applyTickStateDelta(
+        delta: BestSolutionStateDelta,
+        best: org.rtkcollector.core.solution.BestSolutionSnapshot?,
+        nowMillis: Long,
+    ) {
         state = state.copy(
-            bestSolutionSource = best?.sourceId ?: "n/a",
-            bestSolutionFix = best?.fixClass?.name ?: "n/a",
-            bestSolutionAgeMs = best?.ageMillis,
+            bestSolutionSource = delta.bestSolutionSource,
+            bestSolutionFix = delta.bestSolutionFix,
+            bestSolutionAgeMs = delta.bestSolutionAgeMs,
+            mockLocationState = delta.mockResult.name,
             latDeg = best?.latDeg ?: state.latDeg,
             lonDeg = best?.lonDeg ?: state.lonDeg,
             latLon = best?.let { latLonDisplay(it.latDeg, it.lonDeg) } ?: state.latLon,
@@ -1195,17 +1282,6 @@ class RecordingForegroundService : Service() {
             satellitesUsed = best?.satellitesUsed ?: state.satellitesUsed,
             ubloxFrequency = ubloxFrequencyTracker.display(nowMillis),
         )
-        val publishResult = mockLocationPublisher?.publish(best, enabled = mockLocationPublisher != null)
-            ?: MockLocationPublishResult.DISABLED
-        state = state.copy(mockLocationState = publishResult.name)
-        if (publishResult == MockLocationPublishResult.FAILED) {
-            state = state.copy(
-                lastError = "Android mock-location update failed. Check Developer options mock-location app setting.",
-                errorCategory = RecordingErrorCategory.PARSER_EXPORT,
-                errorSeverity = RecordingErrorSeverity.DEGRADED,
-            )
-        }
-        broadcastState()
     }
 
     private fun configureMockLocation(enabled: Boolean) {

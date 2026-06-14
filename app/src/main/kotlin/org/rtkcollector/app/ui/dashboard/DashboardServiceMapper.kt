@@ -37,8 +37,15 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         baseline = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASELINE) ?: "n/a",
         pppStatus = displayPppStatus(pppStatus),
         rtkStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_RTK_STATUS) ?: "n/a",
-        receiverFrequency = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
-            ?: "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz",
+        receiverFrequency = run {
+            val ublox = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY)
+            if (ublox != null && ublox.any(Char::isDigit)) {
+                ublox
+            } else {
+                intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
+                    ?: "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
+            }
+        },
         receiverMode = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_MODE) ?: "n/a",
         bestSolution = run {
             val source = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_SOURCE) ?: "n/a"

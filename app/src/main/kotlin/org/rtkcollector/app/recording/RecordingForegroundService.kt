@@ -799,6 +799,7 @@ class RecordingForegroundService : Service() {
         activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
         mockLocationPublisher = null
+        solutionCandidates.clear()
         releaseWakeLock()
         state = state.copy(
             running = false,
@@ -809,6 +810,11 @@ class RecordingForegroundService : Service() {
             },
             rawRecordingActive = false,
             correctionsActive = false,
+            bestSolutionSource = "n/a",
+            bestSolutionFix = "n/a",
+            bestSolutionAgeMs = null,
+            mockLocationState = "Disabled",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
         )
         stopping.set(false)
         broadcastState()
@@ -1199,6 +1205,7 @@ class RecordingForegroundService : Service() {
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
             )
         }
+        broadcastState()
     }
 
     private fun configureMockLocation(enabled: Boolean) {

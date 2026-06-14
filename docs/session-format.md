@@ -87,7 +87,9 @@ is `correction-input.raw`; the `.rtcm3` mirror is best-effort where storage
 permits. `receiver-solution.nmea` and
 solution JSONL files are advisory exports derived from the RX stream and may be
 disabled by recording policy; parser/export failure must not stop raw
-recording.
+recording. Direct NMEA sharing uses `receiver-solution.nmea` as its source and
+creates a temporary `.nmea` copy for Android send-to workflows; it must not
+regenerate, reinterpret or modify the authoritative `receiver-rx.raw` stream.
 
 `storageKind` records whether the session used app-private storage or a SAF
 tree. For SAF sessions, the UI-displayed session location may be a document URI
@@ -107,7 +109,9 @@ The Android app may create temporary share ZIPs in app cache; these are intended
 only for Android send-to workflows and should be removed on a best-effort basis
 through delayed cleanup after sharing and before later share attempts. Sharing
 multiple selected sessions creates one temporary ZIP per session rather than one
-combined multi-session archive.
+combined multi-session archive. Direct NMEA shares are also temporary cache
+artifacts, not session archives, and are recreated from `receiver-solution.nmea`
+only when the user explicitly requests NMEA sharing.
 
 A permanent archive is a maximum-compression ZIP stored next to the session
 folder in configured filesystem storage. Archiving must verify the ZIP before

@@ -38,12 +38,17 @@ archived recordings. Active recordings cannot be shared, archived, restored or
 deleted from this menu.
 
 Completed recordings can be selected individually, by group or all together.
-Sharing creates one temporary ZIP per selected session, sends those ZIPs through
-the Android share sheet and leaves the original session folders untouched. Old
-temporary share ZIPs are cleaned up on later share attempts, and newly shared
-temporary ZIPs are scheduled for delayed best-effort cleanup because Android
-does not expose a reliable signal that the receiving app has finished reading
-them. Archiving is a different operation: it creates a permanent
+Sharing the full recording creates one temporary ZIP per selected session,
+sends those ZIPs through the Android share sheet and leaves the original session
+folders untouched. Users can also share the derived NMEA solution export
+directly when `receiver-solution.nmea` exists for the selected session. Direct
+NMEA sharing creates temporary `.nmea` files in app cache with names matching
+the session ZIP naming pattern, sends those files through the Android share
+sheet and does not modify the session folder. Old temporary share ZIPs and NMEA
+files are cleaned up on later share attempts, and newly shared temporary files
+are scheduled for delayed best-effort cleanup because Android does not expose a
+reliable signal that the receiving app has finished reading them. Archiving is
+a different operation: it creates a permanent
 maximum-compression ZIP in session storage, verifies that the ZIP contains
 session artifacts, then removes the original folder. Archived recordings are
 marked in the list. Restore extracts an archive back to a session folder,

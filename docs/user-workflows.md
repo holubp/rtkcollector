@@ -169,7 +169,7 @@ GPSIONB ONCHANGED
 ```
 
 Both profiles are defaults, not immutable firmware recipes: users can copy,
-edit, rename or remove them from Menu > Command scripts. Fixed-base RTCM output
+edit, rename or remove them from Menu > Init/shutdown scripts. Fixed-base RTCM output
 uses documented RTCM message command families such as `RTCM1006`, `RTCM1074`,
 `RTCM1084`, `RTCM1094` and `RTCM1124` when those workflows are enabled later.
 User changes to command scripts should remain conservative and source-backed.
@@ -178,7 +178,7 @@ The normal recording start path sends runtime UM980 commands only. It does not
 write receiver non-volatile memory. Persistent writes are explicit warned
 maintenance actions:
 
-- Menu > Command scripts > Edit > Write init config persistently to device:
+- Menu > Init/shutdown scripts > Edit > Write init config persistently to device:
   sends the visible Init script, then `SAVECONFIG`, and requires the receiver's
   `response: OK` acknowledgement.
 - Menu > USB device and baud > Edit > Write target baud persistently to device:
@@ -193,6 +193,26 @@ recording is not active, RtkCollector opens the selected USB receiver at the
 USB/baud profile's initial receiver baud, verifies communication with the
 receiver, and only then sends persistent commands. Normal recording startup and
 shutdown never append `SAVECONFIG` automatically.
+
+## Device Console
+
+The Device console is an idle-only manual receiver console. It is available
+from Menu > Device console and is disabled while recording is active.
+
+Use it for short diagnostics or maintenance commands:
+
+1. Stop recording.
+2. Open Menu > Device console.
+3. Select the USB/baud profile.
+4. Tap Connect.
+5. Select the line ending, normally CRLF.
+6. Type an ASCII receiver command and tap Send.
+7. Optionally select an init/shutdown script and tap Send init.
+8. Tap Disconnect or leave the screen to close the USB connection.
+
+Console output is temporary. It is not saved into session folders and does not
+modify receiver recording artifacts. Non-printable bytes are shown as compact
+hex markers so mixed binary/text receiver streams do not break the display.
 
 ## Plain Rover Recording
 

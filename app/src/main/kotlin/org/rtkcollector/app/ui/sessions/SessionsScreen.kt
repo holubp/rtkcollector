@@ -46,6 +46,7 @@ fun SessionsScreen(
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
     onShareSelected: () -> Unit,
+    onShareNmeaSelected: () -> Unit,
     onArchiveSelected: () -> Unit,
     onRestoreSelected: () -> Unit,
     onDeleteSelected: () -> Unit,
@@ -56,6 +57,7 @@ fun SessionsScreen(
     val selected = state.selectedEntries
     val selectionMode = state.selectedIds.isNotEmpty()
     val canShare = selected.any(SessionBrowserEntry::canShareZip)
+    val canShareNmea = selected.any(SessionBrowserEntry::canShareZip)
     val canArchive = selected.any(SessionBrowserEntry::canArchive)
     val canRestore = selected.any(SessionBrowserEntry::canRestore)
     val canDelete = selected.any(SessionBrowserEntry::canDelete)
@@ -89,7 +91,7 @@ fun SessionsScreen(
             OutlinedButton(onClick = onSelectCurrent) { Text("Select current") }
             OutlinedButton(onClick = onSelectRecordings) { Text("Select recordings") }
             OutlinedButton(onClick = onSelectArchives) { Text("Select archives") }
-            OutlinedButton(onClick = onSelectAll) { Text("Select all") }
+            OutlinedButton(onClick = onSelectAll, enabled = state.hasSelectableEntries) { Text(state.selectAllButtonLabel) }
             OutlinedButton(onClick = onClearSelection) { Text("Clear") }
         }
         FlowRow(
@@ -98,6 +100,7 @@ fun SessionsScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Button(onClick = onShareSelected, enabled = canShare) { Text("Share ZIP") }
+            Button(onClick = onShareNmeaSelected, enabled = canShareNmea) { Text("Share NMEA") }
             Button(onClick = { confirmation = ConfirmationAction.ARCHIVE }, enabled = canArchive) { Text("Archive") }
             Button(onClick = { confirmation = ConfirmationAction.RESTORE }, enabled = canRestore) { Text("Restore") }
             Button(onClick = { confirmation = ConfirmationAction.DELETE }, enabled = canDelete) { Text("Delete") }

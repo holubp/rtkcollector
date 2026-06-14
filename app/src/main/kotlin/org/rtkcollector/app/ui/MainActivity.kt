@@ -75,6 +75,8 @@ import org.rtkcollector.app.receiver.persistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.um980VersionProbeBytes
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
+import org.rtkcollector.app.recording.SessionNmeaExporter
+import org.rtkcollector.app.recording.SessionNmeaShareSelection
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
 import org.rtkcollector.app.sessions.SessionArchiveManager
 import org.rtkcollector.app.sessions.SessionBrowserEntry
@@ -118,8 +120,10 @@ import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -1000,7 +1004,7 @@ fun RtkCollectorApp(
                     onSelectCurrent = { sessionBrowserState = sessionBrowserState.selectCurrent() },
                     onSelectRecordings = { sessionBrowserState = sessionBrowserState.selectRecordings() },
                     onSelectArchives = { sessionBrowserState = sessionBrowserState.selectArchives() },
-                    onSelectAll = { sessionBrowserState = sessionBrowserState.selectAll() },
+                    onSelectAll = { sessionBrowserState = sessionBrowserState.toggleSelectAll() },
                     onClearSelection = { sessionBrowserState = sessionBrowserState.clearSelection() },
                     onShareSelected = {
                         val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canShareZip)
@@ -1030,6 +1034,56 @@ fun RtkCollectorApp(
                                     runOnMain(context) {
                                         zipProgressText = null
                                         Toast.makeText(context, "Share ZIP failed: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }.start()
+                        }
+                    },
+                    onShareNmeaSelected = {
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canShareZip)
+                        if (selected.isEmpty()) {
+                            Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
+                        } else {
+                            zipProgressText = "Preparing NMEA..."
+                            Thread {
+                                runCatching {
+                                    val cacheRoot = context.cacheDir.resolve("session-share-nmea").toPath()
+                                    cleanupTemporaryNmeaShares(cacheRoot)
+                                    val selection = SessionNmeaShareSelection.fromSessionDirectories(
+                                        sessionDirectories = selected.map { Paths.get(it.location) },
+                                        outputDirectory = cacheRoot,
+                                    )
+                                    val outputs = selection.plans.mapIndexed { index, plan ->
+                                        runOnMain(context) {
+                                            zipProgressText = "NMEA ${index + 1}/${selection.plans.size}"
+                                        }
+                                        SessionNmeaExporter.export(plan)
+                                    }
+                                    selection to outputs
+                                }.onSuccess { (selection, outputs) ->
+                                    runOnMain(context) {
+                                        zipProgressText = null
+                                        if (outputs.isEmpty()) {
+                                            Toast.makeText(
+                                                context,
+                                                "No recorded NMEA file is available for the selected session(s).",
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        } else {
+                                            shareNmeaFiles(context, outputs.map { it.toFile() })
+                                            val message = if (selection.skippedCount > 0) {
+                                                "Shared NMEA for ${outputs.size} session(s); ${selection.skippedCount} selected session(s) had no NMEA export."
+                                            } else {
+                                                "Shared NMEA for ${outputs.size} session(s)."
+                                            }
+                                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                        }
+                                        refreshSessions()
+                                    }
+                                }.onFailure { error ->
+                                    runOnMain(context) {
+                                        zipProgressText = null
+                                        Toast.makeText(context, "Share NMEA failed: ${error.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
                             }.start()
@@ -1590,6 +1644,37 @@ private fun shareZipFiles(context: Context, zipFiles: List<File>) {
     scheduleTemporaryZipCleanup(zipFiles)
 }
 
+private fun shareNmeaFiles(context: Context, nmeaFiles: List<File>) {
+    if (nmeaFiles.isEmpty()) return
+    if (nmeaFiles.size == 1) {
+        shareNmea(context, nmeaFiles.first())
+        return
+    }
+    val uris = ArrayList(
+        nmeaFiles.map { nmeaFile ->
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", nmeaFile)
+        },
+    )
+    val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        type = "text/plain"
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share recording NMEA files"))
+    scheduleTemporaryNmeaCleanup(nmeaFiles)
+}
+
+private fun shareNmea(context: Context, nmeaFile: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", nmeaFile)
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share recording NMEA"))
+    scheduleTemporaryNmeaCleanup(listOf(nmeaFile))
+}
+
 private fun scheduleTemporaryZipCleanup(zipFiles: List<File>) {
     Handler(Looper.getMainLooper()).postDelayed(
         {
@@ -1603,6 +1688,34 @@ private fun scheduleTemporaryZipCleanup(zipFiles: List<File>) {
         },
         TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS,
     )
+}
+
+private fun scheduleTemporaryNmeaCleanup(nmeaFiles: List<File>) {
+    Handler(Looper.getMainLooper()).postDelayed(
+        {
+            runCatching {
+                nmeaFiles.forEach { file ->
+                    if (file.parentFile?.name == "session-share-nmea") {
+                        file.delete()
+                    }
+                }
+            }
+        },
+        TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS,
+    )
+}
+
+private fun cleanupTemporaryNmeaShares(cacheRoot: Path) {
+    runCatching {
+        if (Files.isDirectory(cacheRoot)) {
+            Files.list(cacheRoot).use { stream ->
+                stream
+                    .filter { Files.isRegularFile(it) }
+                    .filter { it.fileName.toString().endsWith(".nmea") }
+                    .forEach { Files.deleteIfExists(it) }
+            }
+        }
+    }
 }
 
 private fun ProfileStores.profileEditorData(

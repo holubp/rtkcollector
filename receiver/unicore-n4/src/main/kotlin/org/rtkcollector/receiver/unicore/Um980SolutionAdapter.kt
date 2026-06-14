@@ -98,3 +98,36 @@ private fun Um980Telemetry.horizontalAccuracyEstimateM(): Double? {
     if (lon == null) return lat
     return kotlin.math.sqrt(lat * lat + lon * lon)
 }
+
+fun NmeaGgaFix.toCandidate(receiverFamily: String, nowMillis: Long): SolutionCandidate? {
+    val lat = latDeg ?: return null
+    val lon = lonDeg ?: return null
+    val fix = ggaFixClass(fixQuality) ?: return null
+    return SolutionCandidate(
+        sourceId = "NMEA-GGA",
+        receiverFamily = receiverFamily,
+        engine = SolutionEngine.GENERIC_NMEA,
+        fixClass = fix,
+        updatedAtMillis = nowMillis,
+        utcTime = utcTime,
+        latDeg = lat,
+        lonDeg = lon,
+        ellipsoidalHeightM = ellipsoidalHeightM,
+        mslAltitudeM = altitudeM,
+        horizontalAccuracyM = null,
+        verticalAccuracyM = null,
+        satellitesUsed = satelliteCount,
+        satellitesInView = null,
+    )
+}
+
+private fun ggaFixClass(quality: Int?): FixClass? =
+    when (quality) {
+        null, 0 -> null
+        1 -> FixClass.SINGLE
+        2 -> FixClass.DGPS
+        4 -> FixClass.RTK_FIXED
+        5 -> FixClass.RTK_FLOAT
+        6 -> FixClass.PPP_CONVERGED
+        else -> FixClass.SINGLE
+    }

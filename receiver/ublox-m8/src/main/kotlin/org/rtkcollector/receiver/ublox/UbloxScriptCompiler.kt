@@ -20,7 +20,8 @@ object UbloxScriptCompiler {
         if (line.isBlank() || line.startsWith("#")) return null
         require(line.startsWith("!UBX ")) { "Unsupported u-blox script line $lineNumber: expected !UBX prefix." }
         val parts = line.split(Regex("\\s+"))
-        require(parts.size >= 3) { "Malformed !UBX line $lineNumber: missing command name." }
+        require(parts.size >= 2) { "Malformed !UBX line $lineNumber: missing command name." }
+        require(parts.size >= 3) { "Malformed !UBX line $lineNumber: missing payload arguments." }
         val commandName = parts[1]
         val classAndId = supportedMessages[commandName]
             ?: throw IllegalArgumentException("Unsupported !UBX command on line $lineNumber: $commandName")
@@ -35,7 +36,9 @@ object UbloxScriptCompiler {
     private fun parseInteger(lineNumber: Int, token: String): Long {
         val value = token.toLongOrNull()
             ?: throw IllegalArgumentException("Malformed !UBX payload on line $lineNumber: '$token' is not an integer.")
-        require(value in 0..4_294_967_295L) { "Malformed !UBX payload on line $lineNumber: '$token' is out of range." }
+        require(value in Int.MIN_VALUE.toLong()..0xFFFF_FFFFL) {
+            "Malformed !UBX payload on line $lineNumber: '$token' is out of range."
+        }
         return value
     }
 

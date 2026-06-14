@@ -58,6 +58,18 @@ data class SessionBrowserState(
     val selectedEntries: List<SessionBrowserEntry>
         get() = allEntries.filter { it.id in selectedIds }
 
+    val hasSelectableEntries: Boolean
+        get() = selectableEntries().isNotEmpty()
+
+    val allSelectableSelected: Boolean
+        get() {
+            val selectable = selectableEntries().map { it.id }.toSet()
+            return selectable.isNotEmpty() && selectedIds.containsAll(selectable)
+        }
+
+    val selectAllButtonLabel: String
+        get() = if (allSelectableSelected) "Unselect all" else "Select all"
+
     fun toggle(id: String): SessionBrowserState =
         if (id in selectedIds) {
             copy(selectedIds = selectedIds - id)
@@ -79,6 +91,13 @@ data class SessionBrowserState(
 
     fun selectAll(): SessionBrowserState =
         copy(selectedIds = selectableEntries().map { it.id }.toSet())
+
+    fun toggleSelectAll(): SessionBrowserState =
+        if (allSelectableSelected) {
+            clearSelection()
+        } else {
+            selectAll()
+        }
 
     private fun selectGroup(kind: SessionBrowserGroupKind): SessionBrowserState =
         copy(

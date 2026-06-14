@@ -43,6 +43,61 @@ class SessionBrowserModelsTest {
     }
 
     @Test
+    fun `select all button label changes when all selectable entries are selected`() {
+        val state = sessionBrowserStateOf(
+            listOf(
+                entry("active", SessionEntryKind.CURRENT_ACTIVE, 30),
+                entry("stopped", SessionEntryKind.CURRENT_STOPPED, 20),
+                entry("recording", SessionEntryKind.RECORDING, 10),
+            ),
+        )
+
+        assertEquals("Select all", state.selectAllButtonLabel)
+
+        val selected = state.selectAll()
+
+        assertEquals(setOf("stopped", "recording"), selected.selectedIds)
+        assertEquals("Unselect all", selected.selectAllButtonLabel)
+    }
+
+    @Test
+    fun `toggle select all clears when every selectable entry is selected`() {
+        val state = sessionBrowserStateOf(
+            listOf(
+                entry("stopped", SessionEntryKind.CURRENT_STOPPED, 20),
+                entry("recording", SessionEntryKind.RECORDING, 10),
+                entry("archive", SessionEntryKind.ARCHIVE, 5),
+            ),
+        ).selectAll()
+
+        assertEquals("Unselect all", state.selectAllButtonLabel)
+
+        val cleared = state.toggleSelectAll()
+
+        assertEquals(emptySet<String>(), cleared.selectedIds)
+        assertEquals("Select all", cleared.selectAllButtonLabel)
+    }
+
+    @Test
+    fun `toggle select all selects when selection is partial`() {
+        val state = sessionBrowserStateOf(
+            listOf(
+                entry("stopped", SessionEntryKind.CURRENT_STOPPED, 20),
+                entry("recording", SessionEntryKind.RECORDING, 10),
+                entry("archive", SessionEntryKind.ARCHIVE, 5),
+            ),
+            selectedIds = setOf("stopped"),
+        )
+
+        assertEquals("Select all", state.selectAllButtonLabel)
+
+        val selected = state.toggleSelectAll()
+
+        assertEquals(setOf("stopped", "recording", "archive"), selected.selectedIds)
+        assertEquals("Unselect all", selected.selectAllButtonLabel)
+    }
+
+    @Test
     fun `session path copy text returns location outside selection mode`() {
         val entry = entry("session-1", SessionEntryKind.RECORDING, 10)
             .copy(location = "/storage/emulated/0/Android/data/org.rtkcollector.app/files/sessions/session-1")

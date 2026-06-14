@@ -44,6 +44,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import org.rtkcollector.app.console.DeviceConsoleController
+import org.rtkcollector.app.console.DeviceConsoleLineEnding
+import org.rtkcollector.app.console.DeviceConsoleState
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.NtripCasterProfile
@@ -85,6 +88,8 @@ import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
+import org.rtkcollector.app.ui.console.DeviceConsoleOption
+import org.rtkcollector.app.ui.console.DeviceConsoleScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListState
 import org.rtkcollector.app.ui.profiles.NtripMountpointEditorState
@@ -121,6 +126,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 private const val TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS = 60L * 60L * 1000L
 private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
 private const val PERSISTENT_RECEIVER_SAVE_OK_TIMEOUT_MILLIS = 3_000L
+private const val DEVICE_CONSOLE_PERMISSION_REQUIRED = "USB permission is required before opening the device console."
 private val persistentReceiverWriteInProgress = AtomicBoolean(false)
 
 class MainActivity : ComponentActivity() {
@@ -182,6 +188,16 @@ fun RtkCollectorApp(
     var settingsImportRequestId by remember { mutableStateOf(0) }
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
     var profileRevision by remember { mutableStateOf(0) }
+    var consoleState by remember { mutableStateOf(DeviceConsoleState()) }
+    var consoleInput by rememberSaveable { mutableStateOf("") }
+    var selectedConsoleUsbProfileId by rememberSaveable {
+        mutableStateOf(profileStore.usbBaudProfiles().firstOrNull()?.id)
+    }
+    var selectedConsoleCommandProfileId by rememberSaveable {
+        mutableStateOf(profileStore.commandProfiles().firstOrNull()?.id)
+    }
+    var consoleLineEnding by rememberSaveable { mutableStateOf(DeviceConsoleLineEnding.CRLF) }
+    var consoleController by remember { mutableStateOf<DeviceConsoleController?>(null) }
     val secretStore = remember(context) { NtripSecretStore(context) }
     @Suppress("UNUSED_VARIABLE")
     val currentProfileRevision = profileRevision
@@ -570,6 +586,7 @@ fun RtkCollectorApp(
                         onImportSettings = {
                             importSettingsLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
                         },
+                        onDeviceConsole = { screen = AppScreen.DEVICE_CONSOLE },
                         onBack = { screen = AppScreen.HOME },
                     )
                 AppScreen.NTRIP_MOUNTPOINT -> NtripMountpointScreen(
@@ -720,7 +737,7 @@ fun RtkCollectorApp(
                     supportsSelection = false,
                 )
                 AppScreen.COMMANDS -> ProfileListScreen(
-                    title = "Command scripts",
+                    title = "Init/shutdown scripts",
                     rows = profileStore.commandProfiles().map { it.profileRow() },
                     onSelect = {},
                     onEdit = { id ->
@@ -1065,6 +1082,110 @@ fun RtkCollectorApp(
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                 )
+                AppScreen.DEVICE_CONSOLE -> {
+                    val usbProfiles = profileStore.usbBaudProfiles()
+                    val commandProfiles = profileStore.commandProfiles()
+                    val selectedUsbProfile =
+                        usbProfiles.firstOrNull { it.id == selectedConsoleUsbProfileId } ?: usbProfiles.firstOrNull()
+                    val selectedCommandProfile =
+                        commandProfiles.firstOrNull { it.id == selectedConsoleCommandProfileId } ?: commandProfiles.firstOrNull()
+
+                    DisposableEffect(screen) {
+                        onDispose {
+                            consoleController?.disconnect()
+                            consoleController = null
+                        }
+                    }
+
+                    DeviceConsoleScreen(
+                        state = consoleState.copy(
+                            lineEnding = consoleLineEnding,
+                            selectedUsbProfileId = selectedUsbProfile?.id,
+                            selectedCommandProfileId = selectedCommandProfile?.id,
+                        ),
+                        recordingActive = state.isRecording,
+                        usbProfiles = usbProfiles.map { DeviceConsoleOption(it.id, it.name) },
+                        commandProfiles = commandProfiles.map { DeviceConsoleOption(it.id, it.name) },
+                        selectedUsbProfileId = selectedUsbProfile?.id,
+                        selectedCommandProfileId = selectedCommandProfile?.id,
+                        inputText = consoleInput,
+                        onInputChange = { consoleInput = it },
+                        onUsbProfileSelected = { id ->
+                            consoleController?.disconnect()
+                            consoleController = null
+                            selectedConsoleUsbProfileId = id
+                            consoleState = DeviceConsoleState(selectedUsbProfileId = id, lineEnding = consoleLineEnding)
+                        },
+                        onCommandProfileSelected = { id -> selectedConsoleCommandProfileId = id },
+                        onLineEndingSelected = { consoleLineEnding = it },
+                        onBufferLimitSelected = { bytes ->
+                            consoleController?.setBufferLimit(bytes)
+                            consoleState = consoleState.copy(bufferLimitBytes = bytes)
+                        },
+                        onConnect = {
+                            val profile = selectedUsbProfile
+                            if (profile == null) {
+                                Toast.makeText(context, "No USB/baud profile is available.", Toast.LENGTH_LONG).show()
+                            } else {
+                                val controller = consoleController ?: createDeviceConsoleController(
+                                    context = context,
+                                    isRecording = { state.isRecording },
+                                    usbProfile = profile,
+                                    onState = { nextState ->
+                                        runOnMain(context) {
+                                            consoleState = nextState
+                                        }
+                                    },
+                                ).also { consoleController = it }
+                                controller.connect().onFailure { error ->
+                                    if (error.message == DEVICE_CONSOLE_PERMISSION_REQUIRED) {
+                                        requestUsbPermissionForProfile(context, profile.id)
+                                        Toast.makeText(
+                                            context,
+                                            "Approve USB access, then tap Connect again.",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            error.message ?: "Device console could not connect.",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                }
+                            }
+                        },
+                        onDisconnect = { consoleController?.disconnect() },
+                        onSend = {
+                            consoleController?.send(consoleInput, consoleLineEnding)?.onFailure { error ->
+                                Toast.makeText(context, error.message ?: "Device console send failed.", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        onSendInit = {
+                            val script = selectedCommandProfile?.runtimeScript.orEmpty()
+                            if (script.isBlank()) {
+                                Toast.makeText(context, "Selected init script is empty.", Toast.LENGTH_LONG).show()
+                            } else {
+                                consoleController?.send(script, consoleLineEnding)?.onFailure { error ->
+                                    Toast.makeText(context, error.message ?: "Init script send failed.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        onClearInput = { consoleInput = "" },
+                        onPauseToggle = { consoleController?.setPaused(!consoleState.paused) },
+                        onCopyOutput = {
+                            context.getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("RtkCollector device console output", consoleState.output))
+                            Toast.makeText(context, "Console output copied", Toast.LENGTH_SHORT).show()
+                        },
+                        onClearOutput = { consoleController?.clearOutput() },
+                        onBack = {
+                            consoleController?.disconnect()
+                            consoleController = null
+                            screen = AppScreen.SETTINGS
+                        },
+                    )
+                }
                 AppScreen.PROFILE_EDITOR -> {
                     val target = profileEditorTarget
                     if (target == null) {
@@ -1966,6 +2087,7 @@ private enum class AppScreen {
     RECORDING_OUTPUTS,
     STORAGE,
     SESSIONS,
+    DEVICE_CONSOLE,
     SETTINGS_SETS,
     SETTINGS_SET_SELECTOR,
     MOUNTPOINT_SELECTOR,
@@ -2363,6 +2485,31 @@ private fun requestUsbPermissionForDevice(context: Context, device: UsbDevice) {
     )
     val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
     usbManager.requestPermission(device, permissionIntent)
+}
+
+private fun createDeviceConsoleController(
+    context: Context,
+    isRecording: () -> Boolean,
+    usbProfile: UsbBaudProfile,
+    onState: (DeviceConsoleState) -> Unit,
+): DeviceConsoleController {
+    val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    return DeviceConsoleController(
+        recordingActive = isRecording,
+        transportFactory = {
+            val device = usbManager.selectUsbDevice(usbProfile)
+                ?: error("Selected USB receiver is not connected.")
+            if (!usbManager.hasPermission(device)) {
+                error(DEVICE_CONSOLE_PERMISSION_REQUIRED)
+            }
+            AndroidUsbSerialTransport(
+                usbManager = usbManager,
+                device = device,
+                options = UsbSerialOpenOptions(usbProfile.profileBaud),
+            )
+        },
+        stateListener = onState,
+    )
 }
 
 private fun writeCommandProfilePersistentlyToDevice(

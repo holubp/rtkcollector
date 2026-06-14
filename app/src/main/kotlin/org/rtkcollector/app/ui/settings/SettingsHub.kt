@@ -57,6 +57,7 @@ fun SettingsHub(
     onSessions: () -> Unit,
     onExportSettings: () -> Unit,
     onImportSettings: () -> Unit,
+    onDeviceConsole: () -> Unit,
     onBack: () -> Unit,
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
@@ -100,7 +101,7 @@ fun SettingsHub(
                 SettingsSection("Receiver and USB") {
                     SettingsRow("USB", "USB device and baud", onUsbBaud)
                     SettingsDivider()
-                    SettingsRow("⌁", "Command scripts", onCommands)
+                    SettingsRow("⌁", "Init/shutdown scripts", onCommands)
                     SettingsDivider()
                     SettingsRow("RX", "Receiver family/profile", onReceiverProfile)
                 }
@@ -119,6 +120,10 @@ fun SettingsHub(
                     SettingsRow("⇧", "Export settings backup", onExportSettings)
                     SettingsDivider()
                     SettingsRow("⇩", "Import settings backup", onImportSettings)
+                }
+
+                SettingsSection("Device tools") {
+                    SettingsRow("IO", "Device console", onDeviceConsole)
                 }
             }
             HelpOverlay(topic = helpTopic, onDismiss = { helpTopic = null })
@@ -240,6 +245,7 @@ private fun SettingsHubPreview() {
             onSessions = {},
             onExportSettings = {},
             onImportSettings = {},
+            onDeviceConsole = {},
             onBack = {},
         )
     }

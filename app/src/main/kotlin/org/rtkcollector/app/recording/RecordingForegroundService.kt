@@ -65,6 +65,9 @@ import org.rtkcollector.receiver.unicore.Um980NmeaExporter
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980StreamParser
 import org.rtkcollector.receiver.unicore.Um980Telemetry
+import org.rtkcollector.receiver.unicore.toBestnavCandidate
+import org.rtkcollector.receiver.unicore.toCandidate
+import org.rtkcollector.receiver.unicore.toPppCandidate
 import org.rtkcollector.receiver.api.ReceiverCommand
 import org.rtkcollector.receiver.ublox.UbloxMessageFrequencyTracker
 import org.rtkcollector.receiver.ublox.UbloxMessageKind
@@ -122,6 +125,7 @@ class RecordingForegroundService : Service() {
     private var mockLocationRequested: Boolean = false
     private var ubloxStreamParser = UbloxStreamParser()
     private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+    private var sharedNmeaGgaParser: NmeaGgaParser = NmeaGgaParser()
     private val solutionCandidates =
         java.util.concurrent.ConcurrentHashMap<String, org.rtkcollector.core.solution.SolutionCandidate>()
     private var mockLocationPublisher: MockLocationPublisher? = null
@@ -304,6 +308,7 @@ class RecordingForegroundService : Service() {
             solutionCandidates.clear()
             ubloxStreamParser = UbloxStreamParser()
             ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+            sharedNmeaGgaParser = NmeaGgaParser()
             val enableMockLocation = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
             mockLocationRequested = enableMockLocation
             configureMockLocation(enableMockLocation)
@@ -1206,6 +1211,16 @@ class RecordingForegroundService : Service() {
                         ubloxFrequencyTracker.record(UbloxMessageKind.TM2, nowMillis)
                 }
             }
+            if (record.kind == "nmea") {
+                val fixes = runCatching { sharedNmeaGgaParser.accept(record.bytes) }
+                    .getOrDefault(emptyList())
+                fixes.forEach { fix ->
+                    ubloxFrequencyTracker.record(UbloxMessageKind.GGA, nowMillis)
+                    fix.toCandidate("ublox", nowMillis)?.let {
+                        solutionCandidates[it.sourceId] = it
+                    }
+                }
+            }
         }
     }
 
@@ -1452,6 +1467,10 @@ class RecordingForegroundService : Service() {
                                         differentialAge = fix.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) }
                                             ?: state.differentialAge,
                                     )
+                                    val now = System.currentTimeMillis()
+                                    fix.toCandidate("um980", now)?.let {
+                                        solutionCandidates[it.sourceId] = it
+                                    }
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
                                     state = state.copy(
@@ -1518,6 +1537,10 @@ class RecordingForegroundService : Service() {
                                                 ellipsoidalHeight = metersDisplay(solution.heightM).takeUnless { it == "n/a" }
                                                     ?: state.ellipsoidalHeight,
                                             ).withReceiverRtkAsciiSolution(solution)
+                                            val now = System.currentTimeMillis()
+                                            solution.toBestnavCandidate(now)?.let {
+                                                solutionCandidates[it.sourceId] = it
+                                            }
                                         }
                                     }
                                 }
@@ -1536,6 +1559,10 @@ class RecordingForegroundService : Service() {
                                     }
                                     state = state.withUm980Telemetry(telemetry)
                                         .withReceiverRtkTelemetry(telemetry)
+                                    val now = System.currentTimeMillis()
+                                    telemetry.toBestnavCandidate(now)?.let {
+                                        solutionCandidates[it.sourceId] = it
+                                    }
                                 }
                                 Um980BinaryParser.parseAdrnavb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {
@@ -1551,6 +1578,10 @@ class RecordingForegroundService : Service() {
                                     state = state.copy(
                                         pppStatus = telemetry.positionType ?: state.pppStatus,
                                     )
+                                    val now = System.currentTimeMillis()
+                                    telemetry.toPppCandidate(now)?.let {
+                                        solutionCandidates[it.sourceId] = it
+                                    }
                                 }
                                 Um980BinaryParser.parseRtkstatusb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {

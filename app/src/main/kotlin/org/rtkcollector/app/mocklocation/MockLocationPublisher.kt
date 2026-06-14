@@ -3,7 +3,6 @@ package org.rtkcollector.app.mocklocation
 import org.rtkcollector.core.solution.BestSolutionSnapshot
 
 data class MockLocationUpdate(
-    val provider: String,
     val latDeg: Double,
     val lonDeg: Double,
     val altitudeM: Double?,
@@ -20,11 +19,15 @@ enum class MockLocationPublishResult {
     STALE,
     PUBLISHED,
     FAILED,
+    NOT_PERMITTED,
 }
 
 class MockLocationPublisher(
     private val sink: MockLocationSink,
 ) {
+    var lastFailure: Throwable? = null
+        private set
+
     fun publish(snapshot: BestSolutionSnapshot?, enabled: Boolean): MockLocationPublishResult {
         if (!enabled) return MockLocationPublishResult.DISABLED
         val current = snapshot ?: return MockLocationPublishResult.STALE
@@ -32,17 +35,22 @@ class MockLocationPublisher(
         return runCatching {
             sink.publish(
                 MockLocationUpdate(
-                    provider = "gps",
                     latDeg = current.latDeg,
                     lonDeg = current.lonDeg,
-                    altitudeM = current.mslAltitudeM ?: current.ellipsoidalHeightM,
+                    altitudeM = current.mslAltitudeM,
                     horizontalAccuracyM = current.horizontalAccuracyM?.toFloat(),
                     timeMillis = current.updatedAtMillis,
                 ),
             )
         }.fold(
-            onSuccess = { MockLocationPublishResult.PUBLISHED },
-            onFailure = { MockLocationPublishResult.FAILED },
+            onSuccess = {
+                lastFailure = null
+                MockLocationPublishResult.PUBLISHED
+            },
+            onFailure = { error ->
+                lastFailure = error
+                MockLocationPublishResult.FAILED
+            },
         )
     }
 }

@@ -6,6 +6,13 @@ data class UbloxStreamRecord(
     val text: String? = null,
 )
 
+/**
+ * Incremental parser that frames mixed UBX, NMEA and noise bytes.
+ *
+ * Maintains an internal buffer of bytes spanning calls (`pending`). Not
+ * thread-safe. Confine to a single advisory-consumer thread or wrap
+ * `accept()` calls in external synchronization.
+ */
 class UbloxStreamParser {
     private var pending = ByteArray(0)
 

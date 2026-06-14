@@ -49,6 +49,70 @@ class BestSolutionSelectorTest {
         assertEquals("dgps", selected?.sourceId)
     }
 
+    @Test
+    fun `ignores candidate dated in the future`() {
+        val now = 10_000L
+        val future = candidate("future", FixClass.RTK_FIXED, updatedAtMillis = now + 1_000)
+
+        val selected = BestSolutionSelector.select(listOf(future), nowMillis = now)
+
+        assertNull(selected)
+    }
+
+    @Test
+    fun `prefers more recent candidate when rank and accuracy tie`() {
+        val now = 10_000L
+        val older = candidate(
+            "older",
+            FixClass.SINGLE,
+            updatedAtMillis = now - 1_500,
+            horizontalAccuracyM = 1.0,
+        )
+        val newer = candidate(
+            "newer",
+            FixClass.SINGLE,
+            updatedAtMillis = now - 500,
+            horizontalAccuracyM = 1.0,
+        )
+
+        val selected = BestSolutionSelector.select(listOf(older, newer), nowMillis = now)
+
+        assertEquals("newer", selected?.sourceId)
+    }
+
+    @Test
+    fun `respects custom maxAgeMillis`() {
+        val now = 10_000L
+        val recent = candidate("recent", FixClass.RTK_FIXED, updatedAtMillis = now - 3_000)
+
+        val selectedDefault = BestSolutionSelector.select(listOf(recent), nowMillis = now)
+        val selectedTight = BestSolutionSelector.select(listOf(recent), nowMillis = now, maxAgeMillis = 1_000)
+
+        assertEquals("recent", selectedDefault?.sourceId)
+        assertNull(selectedTight)
+    }
+
+    @Test
+    fun `sbas and dgps share rank so accuracy breaks the tie`() {
+        val now = 10_000L
+        val sbas = candidate(
+            "sbas",
+            FixClass.SBAS,
+            updatedAtMillis = now - 100,
+            horizontalAccuracyM = 2.0,
+        )
+        val dgps = candidate(
+            "dgps",
+            FixClass.DGPS,
+            updatedAtMillis = now - 100,
+            horizontalAccuracyM = 0.4,
+        )
+
+        val selected = BestSolutionSelector.select(listOf(sbas, dgps), nowMillis = now)
+
+        assertEquals("dgps", selected?.sourceId)
+    }
+
     private fun candidate(
         id: String,
         fixClass: FixClass,

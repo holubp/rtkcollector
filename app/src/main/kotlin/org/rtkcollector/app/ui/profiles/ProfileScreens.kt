@@ -541,7 +541,7 @@ fun ProfileDetailScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ProfileEditorScreen(
     data: ProfileEditorData,
@@ -689,11 +689,12 @@ fun ProfileEditorScreen(
                         tonalElevation = 1.dp,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Row(
+                        FlowRow(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             utilityActions.forEach { action ->
                                 TextButton(

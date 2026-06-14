@@ -89,3 +89,32 @@ data class RecordingServiceState(
     val ntripBaseLatDeg: Double? = null,
     val ntripBaseLonDeg: Double? = null,
 )
+
+internal fun recordingNotificationText(state: RecordingServiceState): String =
+    recordingNotificationText(
+        running = state.running,
+        receiverRxBytes = state.receiverRxBytes,
+        correctionInputBytes = state.correctionInputBytes,
+    )
+
+internal fun recordingNotificationText(
+    running: Boolean,
+    receiverRxBytes: Long,
+    correctionInputBytes: Long,
+): String =
+    if (!running) {
+        "Recording inactive"
+    } else if (receiverRxBytes == 0L && correctionInputBytes == 0L) {
+        "Starting recording"
+    } else {
+        "Recording in progress · RAW ${recordingNotificationBytes(receiverRxBytes)} · " +
+            "NTRIP ${recordingNotificationBytes(correctionInputBytes)}"
+    }
+
+private fun recordingNotificationBytes(bytes: Long): String =
+    when {
+        bytes < 1000 -> "$bytes B"
+        bytes < 1_000_000 -> "%.1f kB".format(java.util.Locale.US, bytes / 1000.0)
+        bytes < 1_000_000_000 -> "%.1f MB".format(java.util.Locale.US, bytes / 1_000_000.0)
+        else -> "%.1f GB".format(java.util.Locale.US, bytes / 1_000_000_000.0)
+    }

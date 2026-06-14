@@ -106,6 +106,8 @@ class RecordingForegroundService : Service() {
     private var ntripRateWindowStartedAtMillis: Long = 0L
     private var ntripRateWindowCorrectionBytes: Long = 0L
     private var ntripRateWindowTxBytes: Long = 0L
+    private var lastNotificationUpdateAtMillis: Long = 0L
+    private var lastNotificationText: String = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -148,6 +150,12 @@ class RecordingForegroundService : Service() {
             errorCategory = RecordingErrorCategory.NONE,
             errorSeverity = RecordingErrorSeverity.NONE,
             lastError = null,
+            receiverRxBytes = 0,
+            txToReceiverBytes = 0,
+            correctionInputBytes = 0,
+            nmeaBytes = 0,
+            ntripTransferred = "0 B",
+            ntripRates = "n/a",
             rawRecordingActive = false,
             correctionsActive = false,
             receiverRtkStatus = "n/a",
@@ -163,7 +171,9 @@ class RecordingForegroundService : Service() {
         )
         broadcastState()
 
-        startForeground(NOTIFICATION_ID, notification("Starting recording"))
+        lastNotificationText = recordingNotificationText(running = true, receiverRxBytes = 0, correctionInputBytes = 0)
+        lastNotificationUpdateAtMillis = System.currentTimeMillis()
+        startForeground(NOTIFICATION_ID, notification(lastNotificationText))
         acquireWakeLock()
 
         try {
@@ -356,6 +366,7 @@ class RecordingForegroundService : Service() {
                     ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                 )
                 broadcastState()
+                updateForegroundNotification()
             }.onFailure { error ->
                 state = state.copy(
                     lastError = error.message,
@@ -476,6 +487,7 @@ class RecordingForegroundService : Service() {
                         errorSeverity = if (txResult.isFailure) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
                     )
                     broadcastState()
+                    updateForegroundNotification()
                 }
             },
         )
@@ -1154,6 +1166,23 @@ class RecordingForegroundService : Service() {
             .build()
     }
 
+    private fun updateForegroundNotification(force: Boolean = false) {
+        if (!running.get() && !force) return
+        val text = recordingNotificationText(state)
+        val now = System.currentTimeMillis()
+        val becameActive = lastNotificationText == "Starting recording" && text.startsWith("Recording in progress")
+        if (!force && text == lastNotificationText) {
+            return
+        }
+        if (!force && !becameActive && now - lastNotificationUpdateAtMillis < NOTIFICATION_UPDATE_INTERVAL_MILLIS) {
+            return
+        }
+        lastNotificationText = text
+        lastNotificationUpdateAtMillis = now
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID, notification(text))
+    }
+
     private fun broadcastState() {
         sendBroadcast(
             Intent(ACTION_STATE).apply {
@@ -1736,6 +1765,7 @@ class RecordingForegroundService : Service() {
 
         private const val CHANNEL_ID = "rtkcollector-recording"
         private const val NOTIFICATION_ID = 101
+        private const val NOTIFICATION_UPDATE_INTERVAL_MILLIS = 1_000L
         private const val READ_BUFFER_BYTES = 16 * 1024
         private const val PROFILE_DRAIN_MILLIS = 2000L
         private const val SAVE_CONFIG_OK_TIMEOUT_MILLIS = 3_000L

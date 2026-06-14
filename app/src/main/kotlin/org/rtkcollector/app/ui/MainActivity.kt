@@ -2225,7 +2225,10 @@ private fun buildDashboardStartIntent(
         putStringArrayListExtra(RecordingForegroundService.EXTRA_EXPECTED_ARTIFACTS, ArrayList(activeConfig.expectedSessionArtifactNames))
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, settingsSet.displayNameWithOverrides())
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_COMMAND_PROFILE_NAME, commandProfile.name)
-        putExtra(RecordingForegroundService.EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME, usbProfile.name)
+        putExtra(
+            RecordingForegroundService.EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME,
+            dashboardBaudLabel(usbProfile.name, activeConfig.serialBaud),
+        )
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_NTRIP_CASTER_PROFILE_NAME, ntripCaster?.name ?: "NTRIP disabled")
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_RECORDING_OUTPUT_PROFILE_NAME, recordingPolicy.name)
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_STORAGE_PROFILE_NAME, storageProfile.name)
@@ -2668,8 +2671,17 @@ private fun ProfileStores.selectedReceiverLabel(selectedSettingsSetId: String): 
 
 private fun ProfileStores.selectedBaudProfileLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    return usbBaudProfiles().firstOrNull { it.id == settingsSet.usbBaudProfileRef.id }?.name ?: settingsSet.usbBaudProfileRef.name
+    val profile = usbBaudProfiles().firstOrNull { it.id == settingsSet.usbBaudProfileRef.id }
+        ?: return settingsSet.usbBaudProfileRef.name
+    val targetBaud = settingsSet.overrides.usbBaud?.serialBaud ?: profile.serialBaud
+    return dashboardBaudLabel(profile.name, targetBaud)
 }
+
+internal fun UsbBaudProfile.dashboardBaudLabel(): String =
+    dashboardBaudLabel(name, serialBaud)
+
+internal fun dashboardBaudLabel(profileName: String, targetBaud: Int): String =
+    "$profileName · target $targetBaud baud"
 
 private fun ProfileStores.selectedNtripCasterProfileLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"

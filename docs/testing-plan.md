@@ -30,8 +30,9 @@
    startup commands.
 5. Stop recording and verify the foreground notification disappears and the
    session folder remains readable.
-6. Repeat with NTRIP configured. Verify `correction-input.raw` and
-   `tx-to-receiver.raw` grow while receiver RX continues.
+6. Repeat with NTRIP configured. Verify `correction-input.raw`,
+   `correction-input.rtcm3` and `tx-to-receiver.raw` grow while receiver RX
+   continues.
 7. Turn the screen off for at least 15 minutes during recording. Verify RX byte
    counters continue after wake.
 8. Disconnect USB during recording. Verify a visible error is reported and the

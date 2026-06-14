@@ -8,6 +8,7 @@ session/
   receiver-rx.raw
   tx-to-receiver.raw
   correction-input.raw
+  correction-input.rtcm3
   events.jsonl
   quality-live.jsonl
   receiver-solution.nmea optional, derived from receiver RX
@@ -75,13 +76,17 @@ supported, record normal device solution and record receiver PPP solution where
 supported.
 
 Experimental V1 writes `receiver-rx.raw`, `tx-to-receiver.raw`,
-`correction-input.raw`, `events.jsonl`, `quality-live.jsonl` and selected
-derived solution sidecars as separate append-only artifacts. Receiver RX is the
-authoritative raw capture. Receiver TX includes init commands, shutdown commands
-and RTCM correction bytes that were sent to the receiver. Correction input
-records the NTRIP byte stream before receiver injection. `receiver-solution.nmea`
-and solution JSONL files are advisory exports derived from the RX stream and may
-be disabled by recording policy; parser/export failure must not stop raw
+`correction-input.raw`, `correction-input.rtcm3`, `events.jsonl`,
+`quality-live.jsonl` and selected derived solution sidecars as separate
+append-only artifacts. Receiver RX is the authoritative raw capture. Receiver TX
+includes init commands, shutdown commands and RTCM correction bytes that were
+sent to the receiver. Correction input records the NTRIP byte stream before
+receiver injection; `correction-input.rtcm3` is a same-byte RTCM3-named copy for
+downstream tools that expect an RTCM3 extension. The canonical correction input
+is `correction-input.raw`; the `.rtcm3` mirror is best-effort where storage
+permits. `receiver-solution.nmea` and
+solution JSONL files are advisory exports derived from the RX stream and may be
+disabled by recording policy; parser/export failure must not stop raw
 recording.
 
 `storageKind` records whether the session used app-private storage or a SAF

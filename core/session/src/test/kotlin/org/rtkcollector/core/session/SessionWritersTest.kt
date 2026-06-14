@@ -41,6 +41,7 @@ class SessionWritersTest {
         assertArrayEquals(byteArrayOf(0x01, 0x02, 0x03), Files.readAllBytes(tempDir.resolve("receiver-rx.raw")))
         assertArrayEquals(byteArrayOf(0x10, 0x11, 0x12), Files.readAllBytes(tempDir.resolve("tx-to-receiver.raw")))
         assertArrayEquals(byteArrayOf(0x20, 0x21, 0x22), Files.readAllBytes(tempDir.resolve("correction-input.raw")))
+        assertArrayEquals(byteArrayOf(0x20, 0x21, 0x22), Files.readAllBytes(tempDir.resolve("correction-input.rtcm3")))
         assertEquals(
             listOf("""{"event":"started"}""", """{"event":"stopped"}"""),
             Files.readAllLines(tempDir.resolve("events.jsonl")),
@@ -92,6 +93,22 @@ class SessionWritersTest {
         }
 
         assertArrayEquals(byteArrayOf(0x01, 0x02, 0x03), Files.readAllBytes(rxPath))
+    }
+
+    @Test
+    fun `correction input raw remains writable when rtcm3 mirror cannot be opened`() {
+        val sessionDirectory = Files.createTempDirectory("rtkcollector-rtcm3-mirror-blocked")
+        Files.createDirectory(sessionDirectory.resolve(SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName))
+
+        SessionWriters.openAppendForRecovery(sessionDirectory).use { writers ->
+            writers.appendCorrectionInput(byteArrayOf(0x20, 0x21, 0x22))
+            writers.flush()
+        }
+
+        assertArrayEquals(
+            byteArrayOf(0x20, 0x21, 0x22),
+            Files.readAllBytes(sessionDirectory.resolve(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName)),
+        )
     }
 
     @Test

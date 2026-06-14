@@ -14,6 +14,7 @@ class SessionWriters private constructor(
     private val receiverRx: OutputStream,
     private val txToReceiver: OutputStream,
     private val correctionInput: OutputStream,
+    private val correctionInputRtcm3: OutputStream?,
     private val events: OutputStream,
     private val qualityLive: OutputStream,
     private val receiverSolutionNmea: OutputStream,
@@ -38,6 +39,7 @@ class SessionWriters private constructor(
 
     fun appendCorrectionInput(bytes: ByteArray) {
         correctionInput.write(bytes)
+        correctionInputRtcm3.writeBestEffort(bytes)
     }
 
     fun appendEventJson(json: String) {
@@ -77,6 +79,7 @@ class SessionWriters private constructor(
         receiverRx.flush()
         txToReceiver.flush()
         correctionInput.flush()
+        correctionInputRtcm3.flushBestEffort()
         events.flush()
         qualityLive.flush()
         receiverSolutionNmea.flush()
@@ -89,6 +92,7 @@ class SessionWriters private constructor(
         receiverRx.close()
         txToReceiver.close()
         correctionInput.close()
+        correctionInputRtcm3.closeBestEffort()
         events.close()
         qualityLive.close()
         receiverSolutionNmea.close()
@@ -110,6 +114,7 @@ class SessionWriters private constructor(
                 receiverRx = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_RX_RAW.fileName),
                 txToReceiver = sessionDirectory.appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName),
                 correctionInput = sessionDirectory.appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
+                correctionInputRtcm3 = sessionDirectory.tryAppendStream(SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName),
                 events = sessionDirectory.appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
                 qualityLive = sessionDirectory.appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
                 receiverSolutionNmea = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
@@ -203,6 +208,24 @@ private fun Path.appendStream(fileName: String): OutputStream {
             StandardOpenOption.APPEND,
         ),
     )
+}
+
+private fun Path.tryAppendStream(fileName: String): OutputStream? =
+    runCatching { appendStream(fileName) }.getOrNull()
+
+private fun OutputStream?.writeBestEffort(bytes: ByteArray) {
+    this ?: return
+    runCatching { write(bytes) }
+}
+
+private fun OutputStream?.flushBestEffort() {
+    this ?: return
+    runCatching { flush() }
+}
+
+private fun OutputStream?.closeBestEffort() {
+    this ?: return
+    runCatching { close() }
 }
 
 private fun OutputStream.writeJsonLine(json: String) {

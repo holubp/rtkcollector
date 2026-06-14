@@ -115,8 +115,9 @@ raw writes.
 
 For TX: `CaptureRuntime.sendToReceiver()` writes to `tx-to-receiver.raw`
 before the transport write. `injectCorrectionBytes()` adds a duplicate write
-to `correction-input.raw`. That is deliberate — corrections received and
-corrections transmitted are accounted separately.
+to `correction-input.raw`, with `correction-input.rtcm3` as a same-byte
+compatibility copy where available. That is deliberate — corrections received
+and corrections transmitted are accounted separately.
 
 ## The workflow model
 

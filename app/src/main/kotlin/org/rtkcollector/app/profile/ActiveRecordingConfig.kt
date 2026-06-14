@@ -186,6 +186,7 @@ private fun buildSessionArtifacts(
     }
     if (recordNtripCorrectionInput) {
         artifacts += SessionArtifact.CORRECTION_INPUT_RAW
+        artifacts += SessionArtifact.CORRECTION_INPUT_RTCM3
     }
     return artifacts
 }

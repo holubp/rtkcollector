@@ -351,6 +351,18 @@ class WorkflowValidatorTest {
     }
 
     @Test
+    fun `correction input rtcm3 artifact is required when correction input is recorded`() {
+        val baseline = WorkflowExamples.roverWithNtripToReceiver(ReceiverCapabilityFixtures.um980N4())
+        val spec = baseline.copy(
+            recording = baseline.recording.copy(
+                expectedSessionArtifacts = baseline.recording.expectedSessionArtifacts - SessionArtifact.CORRECTION_INPUT_RTCM3,
+            ),
+        )
+
+        assertError(spec, "CORRECTION_INPUT_RTCM3_ARTIFACT_REQUIRED")
+    }
+
+    @Test
     fun `foreground service is required for recording workflows`() {
         val spec = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
             .copy(safety = WorkflowSafetySpec(requireForegroundService = false))

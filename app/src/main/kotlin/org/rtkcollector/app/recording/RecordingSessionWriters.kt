@@ -82,6 +82,7 @@ internal class SafRecordingSessionWriters private constructor(
     private val receiverRx: OutputStream,
     private val txToReceiver: OutputStream,
     private val correctionInput: OutputStream,
+    private val correctionInputRtcm3: OutputStream?,
     private val events: OutputStream,
     private val qualityLive: OutputStream,
     private val receiverSolutionNmea: OutputStream,
@@ -103,6 +104,7 @@ internal class SafRecordingSessionWriters private constructor(
 
     override fun appendCorrectionInput(bytes: ByteArray) {
         correctionInput.write(bytes)
+        correctionInputRtcm3.writeBestEffort(bytes)
     }
 
     override fun appendEventJson(json: String) {
@@ -137,6 +139,7 @@ internal class SafRecordingSessionWriters private constructor(
         receiverRx.flush()
         txToReceiver.flush()
         correctionInput.flush()
+        correctionInputRtcm3.flushBestEffort()
         events.flush()
         qualityLive.flush()
         receiverSolutionNmea.flush()
@@ -168,6 +171,13 @@ internal class SafRecordingSessionWriters private constructor(
         closeStream(
             stream = correctionInput,
             artifact = SessionArtifactFile.CORRECTION_INPUT_RAW,
+            category = SessionWriterIssueCategory.BINARY_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeOptionalStream(
+            stream = correctionInputRtcm3,
+            artifact = SessionArtifactFile.CORRECTION_INPUT_RTCM3,
             category = SessionWriterIssueCategory.BINARY_SIDECAR,
             severity = SessionWriterIssueSeverity.DEGRADED,
             issues = issues,
@@ -221,6 +231,7 @@ internal class SafRecordingSessionWriters private constructor(
         receiverRx.close()
         txToReceiver.close()
         correctionInput.close()
+        correctionInputRtcm3.closeBestEffort()
         events.close()
         qualityLive.close()
         receiverSolutionNmea.close()
@@ -273,6 +284,9 @@ internal class SafRecordingSessionWriters private constructor(
                 )
             }
 
+            fun tryAppendStream(fileName: String): OutputStream? =
+                runCatching { appendStream(fileName) }.getOrNull()
+
             return SafRecordingSessionWriters(
                 resolver = resolver,
                 sessionUri = sessionUri,
@@ -280,6 +294,7 @@ internal class SafRecordingSessionWriters private constructor(
                 receiverRx = appendStream(SessionArtifactFile.RECEIVER_RX_RAW.fileName),
                 txToReceiver = appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName),
                 correctionInput = appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
+                correctionInputRtcm3 = tryAppendStream(SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName),
                 events = appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
                 qualityLive = appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
                 receiverSolutionNmea = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
@@ -289,6 +304,17 @@ internal class SafRecordingSessionWriters private constructor(
             )
         }
     }
+}
+
+private fun closeOptionalStream(
+    stream: OutputStream?,
+    artifact: SessionArtifactFile,
+    category: SessionWriterIssueCategory,
+    severity: SessionWriterIssueSeverity,
+    issues: MutableList<SessionWriterIssue>,
+) {
+    stream ?: return
+    closeStream(stream, artifact, category, severity, issues)
 }
 
 private fun closeStream(
@@ -309,6 +335,21 @@ private fun closeStream(
             message = error.message ?: "Failed to close ${artifact.fileName}",
         )
     }
+}
+
+private fun OutputStream?.writeBestEffort(bytes: ByteArray) {
+    this ?: return
+    runCatching { write(bytes) }
+}
+
+private fun OutputStream?.flushBestEffort() {
+    this ?: return
+    runCatching { flush() }
+}
+
+private fun OutputStream?.closeBestEffort() {
+    this ?: return
+    runCatching { close() }
 }
 
 private fun OutputStream.writeJsonLine(json: String) {

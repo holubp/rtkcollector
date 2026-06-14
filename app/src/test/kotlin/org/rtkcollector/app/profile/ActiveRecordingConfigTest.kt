@@ -98,6 +98,7 @@ class ActiveRecordingConfigTest {
         assertTrue(config.baudSwitchCommands.contains("CONFIG COM1 115200"))
         assertEquals(false, config.recording.expectedSessionArtifacts.contains(SessionArtifact.TX_TO_RECEIVER_RAW))
         assertEquals(false, config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RAW))
+        assertEquals(false, config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RTCM3))
     }
 
     @Test
@@ -122,6 +123,7 @@ class ActiveRecordingConfigTest {
 
         assertTrue(config.recording.expectedSessionArtifacts.contains(SessionArtifact.TX_TO_RECEIVER_RAW))
         assertTrue(config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RAW))
+        assertTrue(config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RTCM3))
     }
 
     @Test

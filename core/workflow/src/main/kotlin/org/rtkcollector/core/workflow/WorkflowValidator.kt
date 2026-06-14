@@ -260,6 +260,14 @@ class WorkflowValidator {
                 "Correction input recording requires a correction input sidecar as an expected artifact.",
             )
         }
+        if (spec.recording.recordCorrectionInput &&
+            SessionArtifact.CORRECTION_INPUT_RTCM3 !in spec.recording.expectedSessionArtifacts
+        ) {
+            errors += error(
+                "CORRECTION_INPUT_RTCM3_ARTIFACT_REQUIRED",
+                "Correction input recording should declare correction-input.rtcm3 as a best-effort expected artifact.",
+            )
+        }
 
         if (spec.recording.recordQualityEvents &&
             SessionArtifact.QUALITY_LIVE_JSONL !in spec.recording.expectedSessionArtifacts

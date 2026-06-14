@@ -67,7 +67,11 @@ USB or raw storage fails.
   mistakes once the RTCM extractor exists.
 - Correction age must be monitored.
 - Serial TX injection must use a queue separate from raw receiver RX capture.
-- All correction bytes received from NTRIP are written to `correction-input.raw`.
+- All correction bytes received from NTRIP are written to `correction-input.raw`
+  and, when correction input recording is enabled, to the same-byte
+  `correction-input.rtcm3` file for downstream tools that expect an RTCM3
+  extension. `correction-input.raw` is canonical; the `.rtcm3` mirror is
+  best-effort where storage permits.
 - All correction bytes sent to the receiver are also written to
   `tx-to-receiver.raw` before serial TX.
 - NTRIP must not block raw capture.

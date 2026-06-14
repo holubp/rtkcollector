@@ -253,7 +253,9 @@ For NTRIP-enabled workflows, the UI can request a live caster or mountpoint
 update without stopping raw receiver recording. The service cancels the old
 NTRIP client, records a redacted event, starts the new NTRIP client and
 continues writing `receiver-rx.raw`. `correction-input.raw` and
-`tx-to-receiver.raw` remain append-only across the switch.
+the same-byte compatibility file `correction-input.rtcm3` remain append-only
+across the switch. `tx-to-receiver.raw` remains the separate app-to-receiver
+transmit log.
 
 The user can also disable NTRIP during recording. This stops correction feeding
 but leaves raw receiver capture active.

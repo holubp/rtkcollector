@@ -118,3 +118,14 @@ private fun recordingNotificationBytes(bytes: Long): String =
         bytes < 1_000_000_000 -> "%.1f MB".format(java.util.Locale.US, bytes / 1_000_000.0)
         else -> "%.1f GB".format(java.util.Locale.US, bytes / 1_000_000_000.0)
     }
+
+internal fun RecordingServiceState.clearRecoverableUsbError(): RecordingServiceState =
+    if (errorCategory == RecordingErrorCategory.USB && errorSeverity == RecordingErrorSeverity.DEGRADED) {
+        copy(
+            lastError = null,
+            errorCategory = RecordingErrorCategory.NONE,
+            errorSeverity = RecordingErrorSeverity.NONE,
+        )
+    } else {
+        this
+    }

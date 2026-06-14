@@ -364,7 +364,8 @@ class RecordingForegroundService : Service() {
                     correctionInputBytes = recorder.correctionInputBytes,
                     nmeaBytes = recorder.nmeaBytes,
                     ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
-                )
+                    rawRecordingActive = true,
+                ).clearRecoverableUsbError()
                 broadcastState()
                 updateForegroundNotification()
             }.onFailure { error ->
@@ -475,7 +476,7 @@ class RecordingForegroundService : Service() {
                     if (txResult.isSuccess) {
                         ntripRateWindowTxBytes += bytes.size
                     }
-                    state = state.copy(
+                    val updatedState = state.copy(
                         correctionInputBytes = recorder.correctionInputBytes,
                         nmeaBytes = recorder.nmeaBytes,
                         ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
@@ -486,6 +487,11 @@ class RecordingForegroundService : Service() {
                         errorCategory = if (txResult.isFailure) RecordingErrorCategory.USB else state.errorCategory,
                         errorSeverity = if (txResult.isFailure) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
                     )
+                    state = if (txResult.isSuccess) {
+                        updatedState.clearRecoverableUsbError()
+                    } else {
+                        updatedState
+                    }
                     broadcastState()
                     updateForegroundNotification()
                 }

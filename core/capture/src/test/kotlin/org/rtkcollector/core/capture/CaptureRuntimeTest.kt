@@ -29,6 +29,26 @@ class CaptureRuntimeTest {
     }
 
     @Test
+    fun `read receiver bytes returns recorded bytes before advisory callbacks`() {
+        val recorder = MemoryRecorder()
+        val transport = FakeSerialTransport(reads = queueOf(byteArrayOf(0x41, 0x42, 0x43)))
+        val runtime = CaptureRuntime(
+            transport = transport,
+            recorder = recorder,
+            eventSink = MemoryEvents(),
+            advisoryReceiverBytes = {
+                assertArrayEquals(byteArrayOf(0x41, 0x42, 0x43), recorder.receiverBytes())
+            },
+        )
+
+        runtime.open()
+        val bytes = runtime.readReceiverBytesOnce(maxBytes = 1024)
+
+        assertArrayEquals(byteArrayOf(0x41, 0x42, 0x43), bytes)
+        assertArrayEquals(byteArrayOf(0x41, 0x42, 0x43), recorder.receiverBytes())
+    }
+
+    @Test
     fun `tx bytes are recorded before they are written to transport`() {
         val recorder = MemoryRecorder()
         val transport = FakeSerialTransport()

@@ -52,9 +52,14 @@ class PersistentReceiverCommandsTest {
     }
 
     @Test
-    fun `persistent baud commands configure com1 target then saveconfig`() {
+    fun `persistent baud commands configure all receiver com ports then saveconfig`() {
         assertEquals(
-            listOf("CONFIG COM1 460800", "SAVECONFIG"),
+            listOf(
+                "CONFIG COM1 460800",
+                "CONFIG COM2 460800",
+                "CONFIG COM3 460800",
+                "SAVECONFIG",
+            ),
             persistentBaudCommands(460800),
         )
     }

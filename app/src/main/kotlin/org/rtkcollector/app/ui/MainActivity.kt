@@ -65,6 +65,7 @@ import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
 import org.rtkcollector.app.receiver.PersistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
+import org.rtkcollector.app.receiver.isUm980CommandOkResponse
 import org.rtkcollector.app.receiver.persistentBaudCommands
 import org.rtkcollector.app.receiver.persistentReceiverCommands
 import org.rtkcollector.app.receiver.persistentReceiverWriteRoute
@@ -106,16 +107,20 @@ import org.rtkcollector.app.ui.settings.SettingsHub
 import org.rtkcollector.app.ui.usb.UsbDeviceChoice
 import org.rtkcollector.app.ui.usb.UsbStartAccessAction
 import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
+import org.rtkcollector.receiver.unicore.Um980PersistentBaudPlan
+import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.ByteArrayOutputStream
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS = 60L * 60L * 1000L
 private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
+private const val PERSISTENT_RECEIVER_SAVE_OK_TIMEOUT_MILLIS = 3_000L
 private val persistentReceiverWriteInProgress = AtomicBoolean(false)
 
 class MainActivity : ComponentActivity() {
@@ -2294,11 +2299,13 @@ private fun persistentReceiverServiceIntent(
     context: Context,
     label: String,
     commands: List<String>,
+    targetBaud: Int? = null,
 ): Intent =
     Intent(context, RecordingForegroundService::class.java).apply {
         action = RecordingForegroundService.ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG
         putExtra(RecordingForegroundService.EXTRA_PERSISTENT_WRITE_LABEL, label)
         putStringArrayListExtra(RecordingForegroundService.EXTRA_PERSISTENT_COMMANDS, ArrayList(commands))
+        targetBaud?.let { putExtra(RecordingForegroundService.EXTRA_PERSISTENT_TARGET_BAUD, it) }
     }
 
 private fun requestSelectedUsbPermission(context: Context, selectedSettingsSetId: String) {
@@ -2443,6 +2450,7 @@ private fun writeUsbBaudPersistentlyToDevice(
                 context = context,
                 label = "USB target baud persistent write",
                 commands = commands,
+                targetBaud = usbProfile.serialBaud,
             ),
         )
         Toast.makeText(context, "Writing receiver target baud through active recording connection...", Toast.LENGTH_SHORT).show()
@@ -2453,6 +2461,7 @@ private fun writeUsbBaudPersistentlyToDevice(
         usbProfile = usbProfile,
         commandProfileName = "USB target baud ${usbProfile.serialBaud}",
         commands = commands,
+        targetBaud = usbProfile.serialBaud,
     )
 }
 
@@ -2461,6 +2470,7 @@ private fun writePersistentCommandsViaMaintenanceConnection(
     usbProfile: UsbBaudProfile,
     commandProfileName: String,
     commands: List<String>,
+    targetBaud: Int? = null,
 ) {
     val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
     val device = usbManager.selectUsbDevice(usbProfile)
@@ -2494,9 +2504,14 @@ private fun writePersistentCommandsViaMaintenanceConnection(
             runCatching {
                 transport.open()
                 verifyMaintenanceReceiverConnection(transport)
-                commands.forEach { command ->
-                    transport.write("$command\r\n".toByteArray(Charsets.US_ASCII))
-                    Thread.sleep(PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS)
+                if (targetBaud == null) {
+                    sendPersistentMaintenanceCommands(transport, commands)
+                } else {
+                    executePersistentBaudPlanOnMaintenanceTransport(
+                        transport = transport,
+                        currentHostBaud = usbProfile.profileBaud,
+                        targetBaud = targetBaud,
+                    )
                 }
             }.onSuccess {
                 runOnMain(context) {
@@ -2520,6 +2535,100 @@ private fun writePersistentCommandsViaMaintenanceConnection(
             persistentReceiverWriteInProgress.set(false)
         }
     }.start()
+}
+
+private fun executePersistentBaudPlanOnMaintenanceTransport(
+    transport: AndroidUsbSerialTransport,
+    currentHostBaud: Int,
+    targetBaud: Int,
+) {
+    val plan = Um980PersistentBaudPlan.build(
+        currentHostBaud = currentHostBaud,
+        targetBaud = targetBaud,
+    )
+    plan.steps.forEach { step ->
+        when (step) {
+            is Um980PersistentBaudStep.SendCommands -> sendMaintenanceCommandLines(transport, step.commands)
+            Um980PersistentBaudStep.PauseAfterDeviceBaudCommands -> Thread.sleep(500)
+            is Um980PersistentBaudStep.ReconfigureHostBaud -> transport.reconfigureBaud(step.baud)
+            Um980PersistentBaudStep.VerifyReceiverAtTargetBaud -> verifyMaintenanceReceiverConnection(transport)
+            Um980PersistentBaudStep.ExpectSaveConfigOk -> waitForMaintenanceCommandOk(transport, "SAVECONFIG")
+        }
+    }
+}
+
+private fun sendPersistentMaintenanceCommands(
+    transport: AndroidUsbSerialTransport,
+    commands: List<String>,
+) {
+    commands.forEach { command ->
+        sendMaintenanceCommandLines(transport, listOf(command))
+        if (command.trim().equals("SAVECONFIG", ignoreCase = true)) {
+            waitForMaintenanceCommandOk(transport, "SAVECONFIG")
+        }
+    }
+}
+
+private fun sendMaintenanceCommandLines(
+    transport: AndroidUsbSerialTransport,
+    commands: List<String>,
+) {
+    commands.forEach { command ->
+        transport.write("$command\r\n".toByteArray(Charsets.US_ASCII))
+        Thread.sleep(PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS)
+    }
+}
+
+private fun waitForMaintenanceCommandOk(
+    transport: AndroidUsbSerialTransport,
+    commandLabel: String,
+) {
+    val response = collectMaintenanceCommandOkBytes(transport, PERSISTENT_RECEIVER_SAVE_OK_TIMEOUT_MILLIS)
+    require(isUm980CommandOkResponse(response)) {
+        "$commandLabel was not acknowledged by receiver."
+    }
+}
+
+private fun collectMaintenanceCommandOkBytes(
+    transport: AndroidUsbSerialTransport,
+    timeoutMillis: Long,
+): ByteArray {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    val response = ByteArrayOutputStream()
+    while (System.currentTimeMillis() < deadline) {
+        val bytes = transport.readAvailable(4096)
+        if (bytes.isNotEmpty()) {
+            response.write(bytes)
+            val collected = response.toByteArray()
+            if (isUm980CommandOkResponse(collected)) {
+                return collected
+            }
+        } else {
+            Thread.sleep(50)
+        }
+    }
+    return response.toByteArray()
+}
+
+private fun collectMaintenanceReceiverBytes(
+    transport: AndroidUsbSerialTransport,
+    timeoutMillis: Long,
+): ByteArray {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    val response = ByteArrayOutputStream()
+    while (System.currentTimeMillis() < deadline) {
+        val bytes = transport.readAvailable(4096)
+        if (bytes.isNotEmpty()) {
+            response.write(bytes)
+            val collected = response.toByteArray()
+            if (isPlausibleUm980MaintenanceResponse(collected) || isUm980CommandOkResponse(collected)) {
+                return collected
+            }
+        } else {
+            Thread.sleep(50)
+        }
+    }
+    return response.toByteArray()
 }
 
 private fun verifyMaintenanceReceiverConnection(transport: AndroidUsbSerialTransport) {

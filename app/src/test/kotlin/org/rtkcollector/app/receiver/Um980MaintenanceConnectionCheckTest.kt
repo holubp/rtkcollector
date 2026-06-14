@@ -33,4 +33,11 @@ class Um980MaintenanceConnectionCheckTest {
         assertFalse(isPlausibleUm980MaintenanceResponse(ByteArray(0)))
         assertFalse(isPlausibleUm980MaintenanceResponse(byteArrayOf(0x00, 0x01, 0x02, 0x03)))
     }
+
+    @Test
+    fun `classifies unicore command ok responses`() {
+        assertTrue(isUm980CommandOkResponse("\$command,saveconfig,response: OK*55\r\n".toByteArray(Charsets.US_ASCII)))
+        assertTrue(isUm980CommandOkResponse("\$command,Config com1 230400,response: OK*21\r\n".toByteArray(Charsets.US_ASCII)))
+        assertFalse(isUm980CommandOkResponse("\$command,saveconfig,response: ERROR*00\r\n".toByteArray(Charsets.US_ASCII)))
+    }
 }

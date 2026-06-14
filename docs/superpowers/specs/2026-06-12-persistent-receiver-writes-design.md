@@ -57,6 +57,8 @@ The action sends:
 
 ```text
 CONFIG COM1 <target receiver and host baud>
+CONFIG COM2 <target receiver and host baud>
+CONFIG COM3 <target receiver and host baud>
 SAVECONFIG
 ```
 
@@ -92,11 +94,14 @@ Rules:
   a user-visible error rather than silently opening a second connection.
 
 For a command profile persistent write, the service sends validated profile
-commands followed by `SAVECONFIG`.
+commands followed by `SAVECONFIG`, then requires an explicit receiver
+`response: OK` acknowledgement.
 
 For a USB/baud persistent write, the service sends `CONFIG COM1 <target baud>`,
 waits briefly, reconfigures the host bridge to the target baud if needed, checks
-that receiver communication continues, then sends `SAVECONFIG`.
+that receiver communication continues, then sends `CONFIG COM2 <target baud>`,
+`CONFIG COM3 <target baud>` and `SAVECONFIG` at the target baud. Success requires
+an explicit receiver `response: OK` acknowledgement for `SAVECONFIG`.
 
 ### Not Recording
 
@@ -140,13 +145,16 @@ logical sequence:
 5. Reconfigure the host USB serial bridge to the target baud when the target
    differs from the current host baud.
 6. Confirm receiver communication at the target baud.
-7. Send `SAVECONFIG` at the target baud.
-8. Report success only after the command sequence has been written without
-   transport errors.
+7. Send `CONFIG COM2 <target baud>` and `CONFIG COM3 <target baud>` at the
+   target baud.
+8. Send `SAVECONFIG` at the target baud.
+9. Report success only after `SAVECONFIG` returns an explicit receiver
+   `response: OK`; otherwise report the write as failed.
 
 The app must not claim that the receiver definitely committed flash/NVM unless
-the receiver provides an explicit acknowledgement that is parsed. In V1, success
-means the commands were sent through a verified connection without write errors.
+the receiver provides an explicit acknowledgement that is parsed. In V1,
+persistent-write success requires a verified connection, successful writes and
+an explicit `SAVECONFIG` OK acknowledgement.
 
 ## Command Safety
 
@@ -220,8 +228,8 @@ Add or update tests for:
 - persistent command builder appends exactly one final `SAVECONFIG`;
 - user-supplied `SAVECONFIG` inside the command body does not create duplicates;
 - unsafe commands are rejected before persistent write;
-- baud-persistence command builder emits `CONFIG COM1 <target baud>` then
-  `SAVECONFIG`;
+- baud-persistence command builder emits `CONFIG COM1 <target baud>`,
+  `CONFIG COM2 <target baud>`, `CONFIG COM3 <target baud>` and `SAVECONFIG`;
 - unsupported baud values are rejected;
 - active-recording decision chooses service TX path;
 - not-recording decision chooses maintenance connection path;

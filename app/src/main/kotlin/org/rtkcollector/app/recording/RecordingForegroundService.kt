@@ -14,6 +14,9 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import org.rtkcollector.app.ui.MainActivity
+import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
+import org.rtkcollector.app.receiver.isUm980CommandOkResponse
+import org.rtkcollector.app.receiver.um980VersionProbeBytes
 import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
@@ -59,9 +62,12 @@ import org.rtkcollector.receiver.unicore.Um980MessageFrequencyTracker
 import org.rtkcollector.receiver.unicore.Um980MessageKind
 import org.rtkcollector.receiver.unicore.Um980ModeParser
 import org.rtkcollector.receiver.unicore.Um980NmeaExporter
+import org.rtkcollector.receiver.unicore.Um980PersistentBaudPlan
+import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980StreamParser
 import org.rtkcollector.receiver.unicore.Um980Telemetry
+import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
@@ -84,6 +90,8 @@ class RecordingForegroundService : Service() {
     private var activeRecorder: SessionRawRecorder? = null
     private var activeEventSink: CaptureEventSink? = null
     private var activeProfileBaud: Int = 230400
+    private var activeSerialBaud: Int = 230400
+    private var activeTargetBaud: Int = 230400
     private var activeBaudPlan: Um980BaudTransitionPlan? = null
     private var activeUsbVid: Int? = null
     private var activeUsbPid: Int? = null
@@ -245,6 +253,8 @@ class RecordingForegroundService : Service() {
             val eventSink = SessionEventSink(sessionWriters)
             activeEventSink = eventSink
             activeProfileBaud = profileBaud
+            activeSerialBaud = profileBaud
+            activeTargetBaud = serialBaud
             activeUsbVid = usbDevice.vendorId
             activeUsbPid = usbDevice.productId
             val asyncAdvisoryFanout = AsyncAdvisoryFanout(
@@ -282,6 +292,7 @@ class RecordingForegroundService : Service() {
             )
             activeBaudPlan = baudPlan
             executeBaudTransition(baudPlan, captureRuntime, usbTransport)
+            activeSerialBaud = serialBaud
 
             state = state.copy(
                 running = true,
@@ -396,6 +407,7 @@ class RecordingForegroundService : Service() {
                 )
                 captureRuntime.open()
                 executeBaudTransition(plan, captureRuntime, usbTransport)
+                activeSerialBaud = activeTargetBaud
                 transport = usbTransport
                 runtime = captureRuntime
             }
@@ -635,6 +647,11 @@ class RecordingForegroundService : Service() {
         }
         val label = intent.getStringExtra(EXTRA_PERSISTENT_WRITE_LABEL)?.takeIf(String::isNotBlank)
             ?: "persistent receiver configuration"
+        val targetBaud = if (intent.hasExtra(EXTRA_PERSISTENT_TARGET_BAUD)) {
+            validateBaud(intent.getIntExtra(EXTRA_PERSISTENT_TARGET_BAUD, activeSerialBaud), "persistent target baud")
+        } else {
+            null
+        }
         if (!persistentWriteInProgress.compareAndSet(false, true)) {
             state = state.copy(
                 lastError = "Persistent receiver configuration write is already in progress.",
@@ -646,7 +663,7 @@ class RecordingForegroundService : Service() {
         }
         Thread({
             try {
-                writePersistentReceiverConfigAsync(captureRuntime, commands, label)
+                writePersistentReceiverConfigAsync(captureRuntime, usbTransport, commands, label, targetBaud)
             } finally {
                 persistentWriteInProgress.set(false)
             }
@@ -655,17 +672,27 @@ class RecordingForegroundService : Service() {
 
     private fun writePersistentReceiverConfigAsync(
         captureRuntime: CaptureRuntime,
+        usbTransport: AndroidUsbSerialTransport,
         commands: List<String>,
         label: String,
+        targetBaud: Int?,
     ) {
         runCatching {
             writers?.appendEventJson(
                 """{"type":"persistent-receiver-write-started","label":"${label.jsonEscape()}","commandCount":${commands.size}}""",
             )
-            synchronized(txLock) {
-                commands.forEach { command ->
-                    captureRuntime.sendToReceiver("$command\r\n".toByteArray(Charsets.US_ASCII))
-                    Thread.sleep(100L)
+            synchronized(runtimeLock) {
+                if (targetBaud == null) {
+                    sendPersistentCommandLines(captureRuntime, commands)
+                } else {
+                    val plan = Um980PersistentBaudPlan.build(
+                        currentHostBaud = activeSerialBaud,
+                        targetBaud = targetBaud,
+                    )
+                    executePersistentBaudPlan(plan, captureRuntime, usbTransport)
+                    activeSerialBaud = targetBaud
+                    activeTargetBaud = targetBaud
+                    activeProfileBaud = targetBaud
                 }
             }
             writers?.appendEventJson(
@@ -691,6 +718,87 @@ class RecordingForegroundService : Service() {
             )
             broadcastState()
         }
+    }
+
+    private fun executePersistentBaudPlan(
+        plan: Um980PersistentBaudPlan,
+        captureRuntime: CaptureRuntime,
+        usbTransport: AndroidUsbSerialTransport,
+    ) {
+        plan.steps.forEach { step ->
+            when (step) {
+                is Um980PersistentBaudStep.SendCommands -> sendCommandLines(captureRuntime, step.commands)
+                Um980PersistentBaudStep.PauseAfterDeviceBaudCommands -> Thread.sleep(500)
+                is Um980PersistentBaudStep.ReconfigureHostBaud -> {
+                    usbTransport.reconfigureBaud(step.baud)
+                    activeSerialBaud = step.baud
+                }
+                Um980PersistentBaudStep.VerifyReceiverAtTargetBaud -> verifyActiveReceiverConnection(captureRuntime)
+                Um980PersistentBaudStep.ExpectSaveConfigOk -> waitForActiveCommandOk(captureRuntime, "SAVECONFIG")
+            }
+        }
+    }
+
+    private fun sendPersistentCommandLines(captureRuntime: CaptureRuntime, commands: List<String>) {
+        commands.forEach { command ->
+            sendCommandLines(captureRuntime, listOf(command))
+            if (command.trim().equals("SAVECONFIG", ignoreCase = true)) {
+                waitForActiveCommandOk(captureRuntime, "SAVECONFIG")
+            }
+        }
+    }
+
+    private fun verifyActiveReceiverConnection(captureRuntime: CaptureRuntime) {
+        val initialBytes = collectActiveReceiverBytes(captureRuntime, 300)
+        if (isPlausibleUm980MaintenanceResponse(initialBytes)) return
+        captureRuntime.sendToReceiver(um980VersionProbeBytes())
+        val response = collectActiveReceiverBytes(captureRuntime, 1_200)
+        require(isPlausibleUm980MaintenanceResponse(response)) {
+            "Receiver did not respond after host baud reconfiguration."
+        }
+    }
+
+    private fun waitForActiveCommandOk(captureRuntime: CaptureRuntime, commandLabel: String) {
+        val response = collectActiveCommandOkBytes(captureRuntime, SAVE_CONFIG_OK_TIMEOUT_MILLIS)
+        require(isUm980CommandOkResponse(response)) {
+            "$commandLabel was not acknowledged by receiver."
+        }
+    }
+
+    private fun collectActiveCommandOkBytes(captureRuntime: CaptureRuntime, timeoutMillis: Long): ByteArray {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        val response = ByteArrayOutputStream()
+        while (System.currentTimeMillis() < deadline) {
+            val bytes = captureRuntime.readReceiverBytesOnce(READ_BUFFER_BYTES)
+            if (bytes.isNotEmpty()) {
+                response.write(bytes)
+                val collected = response.toByteArray()
+                if (isUm980CommandOkResponse(collected)) {
+                    return collected
+                }
+            } else {
+                Thread.sleep(50)
+            }
+        }
+        return response.toByteArray()
+    }
+
+    private fun collectActiveReceiverBytes(captureRuntime: CaptureRuntime, timeoutMillis: Long): ByteArray {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        val response = ByteArrayOutputStream()
+        while (System.currentTimeMillis() < deadline) {
+            val bytes = captureRuntime.readReceiverBytesOnce(READ_BUFFER_BYTES)
+            if (bytes.isNotEmpty()) {
+                response.write(bytes)
+                val collected = response.toByteArray()
+                if (isPlausibleUm980MaintenanceResponse(collected) || isUm980CommandOkResponse(collected)) {
+                    return collected
+                }
+            } else {
+                Thread.sleep(50)
+            }
+        }
+        return response.toByteArray()
     }
 
     private fun stopRecording(sendShutdown: Boolean) {
@@ -769,6 +877,8 @@ class RecordingForegroundService : Service() {
         activeBaudPlan = null
         activeUsbVid = null
         activeUsbPid = null
+        activeSerialBaud = 230400
+        activeTargetBaud = 230400
         ntripController = null
         activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
@@ -1628,6 +1738,7 @@ class RecordingForegroundService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val READ_BUFFER_BYTES = 16 * 1024
         private const val PROFILE_DRAIN_MILLIS = 2000L
+        private const val SAVE_CONFIG_OK_TIMEOUT_MILLIS = 3_000L
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =
             "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
 

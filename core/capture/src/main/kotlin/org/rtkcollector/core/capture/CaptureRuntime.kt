@@ -17,10 +17,14 @@ class CaptureRuntime(
     }
 
     fun readOnce(maxBytes: Int): Int {
+        return readReceiverBytesOnce(maxBytes).size
+    }
+
+    fun readReceiverBytesOnce(maxBytes: Int): ByteArray {
         require(maxBytes > 0) { "maxBytes must be positive" }
         val bytes = transport.readAvailable(maxBytes)
         if (bytes.isEmpty()) {
-            return 0
+            return bytes
         }
 
         recorder.appendReceiverBytes(bytes)
@@ -30,7 +34,7 @@ class CaptureRuntime(
         runAdvisory("advisory-error") {
             advisoryReceiverBytes(bytes)
         }
-        return bytes.size
+        return bytes
     }
 
     fun sendToReceiver(bytes: ByteArray) {

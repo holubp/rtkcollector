@@ -10,3 +10,11 @@ fun isPlausibleUm980MaintenanceResponse(bytes: ByteArray): Boolean {
         ascii.contains("Unicore", ignoreCase = true) ||
         ascii.contains("#VERSION", ignoreCase = true)
 }
+
+fun isUm980CommandOkResponse(bytes: ByteArray): Boolean {
+    if (bytes.isEmpty()) return false
+    val normalized = bytes
+        .toString(Charsets.US_ASCII)
+        .replace(" ", "")
+    return normalized.contains(",response:OK", ignoreCase = true)
+}

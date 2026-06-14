@@ -1,5 +1,6 @@
 package org.rtkcollector.app.receiver
 
+import org.rtkcollector.receiver.unicore.Um980PersistentBaudPlan
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 
 val SupportedPersistentBaudRates: Set<Int> = setOf(
@@ -30,5 +31,5 @@ fun persistentBaudCommands(targetBaud: Int): List<String> {
     require(targetBaud in SupportedPersistentBaudRates) {
         "Target baud must be one of ${SupportedPersistentBaudRates.sorted().joinToString()}."
     }
-    return listOf("CONFIG COM1 $targetBaud", "SAVECONFIG")
+    return Um980PersistentBaudPlan.commands(targetBaud)
 }

@@ -179,9 +179,13 @@ write receiver non-volatile memory. Persistent writes are explicit warned
 maintenance actions:
 
 - Menu > Command scripts > Edit > Write init config persistently to device:
-  sends the visible Init script and then `SAVECONFIG`.
+  sends the visible Init script, then `SAVECONFIG`, and requires the receiver's
+  `response: OK` acknowledgement.
 - Menu > USB device and baud > Edit > Write target baud persistently to device:
-  sends `CONFIG COM1 <target baud>` and then `SAVECONFIG`.
+  sends `CONFIG COM1 <target baud>`, switches the host to the target baud when
+  needed, verifies receiver communication, sends `CONFIG COM2 <target baud>`,
+  `CONFIG COM3 <target baud>` and `SAVECONFIG`, and requires the receiver's
+  `response: OK` acknowledgement for `SAVECONFIG`.
 
 If recording is active, persistent writes use the foreground recording service's
 existing receiver connection and are recorded in `tx-to-receiver.raw`. If

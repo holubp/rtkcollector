@@ -8,6 +8,13 @@ enum class UbloxMessageKind(val label: String) {
     GGA("GGA"),
 }
 
+/**
+ * Tracks per-kind sample timestamps over a one-second sliding window and
+ * formats them as a compact "X/Y/Z/A/B Hz" line for the dashboard.
+ *
+ * Not thread-safe. Confine to a single advisory-consumer thread or wrap
+ * `record()` and `display()` in external synchronization.
+ */
 class UbloxMessageFrequencyTracker {
     private val recent = mutableMapOf<UbloxMessageKind, MutableList<Long>>()
 
@@ -18,14 +25,15 @@ class UbloxMessageFrequencyTracker {
     }
 
     fun display(nowMillis: Long): String {
+        val header = UbloxMessageKind.entries.joinToString("/") { it.label }
         val values = UbloxMessageKind.entries.joinToString("/") { kind ->
             val count = recent[kind].orEmpty().count { nowMillis - it < WINDOW_MILLIS }
             if (count == 0) "-" else count.toString()
         }
-        return "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA $values Hz"
+        return "Frequency $header $values Hz"
     }
 
     private companion object {
-        const val WINDOW_MILLIS = 1_500L
+        const val WINDOW_MILLIS = 1_000L
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,7 @@ import org.rtkcollector.app.ui.common.HelpOverlay
 import org.rtkcollector.app.ui.common.HelpTopic
 import org.rtkcollector.app.ui.common.TidyColors
 import org.rtkcollector.app.ui.common.TidyMetricRow
+import kotlinx.coroutines.delay
 
 private val CompactSetupTileHeight = 46.dp
 private val RailSetupItemHeight = 50.dp
@@ -97,6 +99,35 @@ fun HomeDashboard(
             Toast.makeText(context, "Error copied to clipboard", Toast.LENGTH_SHORT).show()
         }
         Unit
+    }
+    val errorSnapshot = DashboardErrorSnapshot(
+        category = state.errorCategory,
+        severity = state.errorSeverity,
+        message = state.lastError,
+    )
+    var displayedErrorFingerprint by remember { mutableStateOf<String?>(null) }
+    var errorFirstSeenAtMillis by remember { mutableStateOf(0L) }
+    var errorNowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    val currentErrorFingerprint = errorSnapshot.fingerprint
+
+    LaunchedEffect(currentErrorFingerprint) {
+        displayedErrorFingerprint = currentErrorFingerprint
+        errorFirstSeenAtMillis = System.currentTimeMillis()
+        errorNowMillis = errorFirstSeenAtMillis
+    }
+    LaunchedEffect(currentErrorFingerprint, errorFirstSeenAtMillis) {
+        while (true) {
+            delay(1_000)
+            errorNowMillis = System.currentTimeMillis()
+        }
+    }
+    val displayedError = if (
+        displayedErrorFingerprint == currentErrorFingerprint &&
+        errorSnapshot.shouldDisplay(errorNowMillis - errorFirstSeenAtMillis)
+    ) {
+        errorSnapshot
+    } else {
+        null
     }
 
     Scaffold(
@@ -154,6 +185,7 @@ fun HomeDashboard(
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
+                        displayedError = displayedError,
                     )
                 } else {
                     CompactDashboard(
@@ -166,6 +198,7 @@ fun HomeDashboard(
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
+                        displayedError = displayedError,
                     )
                 }
             }
@@ -293,6 +326,7 @@ private fun CompactDashboard(
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
+    displayedError: DashboardErrorSnapshot?,
 ) {
     Column(
         modifier = Modifier
@@ -308,7 +342,7 @@ private fun CompactDashboard(
             onReceiver = onReceiver,
             onStorage = onStorage,
         )
-        ErrorStrip(state = state, onCopy = onCopyError)
+        ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
         DashboardCards(
             state = state,
             onSettingsSet = onSettingsSet,
@@ -328,6 +362,7 @@ private fun RailDashboard(
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
+    displayedError: DashboardErrorSnapshot?,
 ) {
     Row(
         modifier = Modifier
@@ -359,7 +394,7 @@ private fun RailDashboard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                ErrorStrip(state = state, onCopy = onCopyError)
+                ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
                 defaultDashboardSetupItems.forEach { item ->
                     SetupRailItem(
                         label = item.label,
@@ -387,10 +422,10 @@ private fun RailDashboard(
 
 @Composable
 private fun ErrorStrip(
-    state: DashboardState,
+    snapshot: DashboardErrorSnapshot?,
     onCopy: () -> Unit,
 ) {
-    val text = state.errorClipboardText() ?: return
+    val text = snapshot?.message?.takeIf { it.isNotBlank() }?.let { "${snapshot.category}: $it" } ?: return
     Surface(
         color = TidyColors.MissingBackground,
         contentColor = TidyColors.MissingText,

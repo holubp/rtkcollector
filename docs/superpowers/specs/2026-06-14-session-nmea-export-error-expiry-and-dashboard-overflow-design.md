@@ -78,6 +78,17 @@ No recorded NMEA file is available for the selected session(s).
 Temporary `.nmea` share files should be deleted on a best-effort basis after
 sharing, using the same delayed cleanup style as temporary ZIP shares.
 
+## Explicit NMEA Re-Export Addendum
+
+A later explicit `Re-export NMEA` action is separate from direct sharing. It may
+regenerate the derived `receiver-solution.nmea` sidecar for filesystem-backed
+stopped sessions from the authoritative `receiver-rx.raw` stream. This is used
+for fixes to generated NMEA semantics such as PPP-to-GGA quality mapping. The
+operation must not mutate `receiver-rx.raw`, receiver TX, correction input or
+session metadata. PPP mapping is configurable in the recording-output profile:
+`2` is the default, `5` and `9` are selectable, and `4` is reserved until a
+future parser can distinguish PPP-AR/PPP-RTK integer-fixed output.
+
 ## Selection Toggle
 
 The session-browser selection model should expose whether every selectable entry

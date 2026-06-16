@@ -116,6 +116,8 @@ import org.rtkcollector.app.ui.usb.UsbStartAccessAction
 import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudPlan
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
+import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
+import org.rtkcollector.receiver.unicore.Um980NmeaReexporter
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
@@ -1089,6 +1091,56 @@ fun RtkCollectorApp(
                             }.start()
                         }
                     },
+                    onReexportNmeaSelected = {
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canShareZip)
+                        if (selected.isEmpty()) {
+                            Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
+                        } else {
+                            zipProgressText = "Re-exporting NMEA..."
+                            Thread {
+                                val pppGgaQuality = currentPppNmeaGgaQuality(
+                                    profileStore = profileStore,
+                                    settingsSets = settingsSets,
+                                    selectedSettingsSetId = selectedSettingsSetId,
+                                )
+                                val options = Um980NmeaExportOptions(pppGgaQuality = pppGgaQuality)
+                                var reexported = 0
+                                var skipped = 0
+                                var failed = 0
+                                selected.forEachIndexed { index, entry ->
+                                    runOnMain(context) {
+                                        zipProgressText = "Re-export NMEA ${index + 1}/${selected.size}"
+                                    }
+                                    val sessionDirectory = Paths.get(entry.location)
+                                    val receiverRxRaw = sessionDirectory.resolve("receiver-rx.raw")
+                                    if (!Files.isRegularFile(receiverRxRaw)) {
+                                        skipped++
+                                    } else {
+                                        runCatching {
+                                            Um980NmeaReexporter.reexportReceiverRxRaw(
+                                                receiverRxRaw = receiverRxRaw,
+                                                outputNmea = sessionDirectory.resolve("receiver-solution.nmea"),
+                                                options = options,
+                                            )
+                                        }.onSuccess {
+                                            reexported++
+                                        }.onFailure {
+                                            failed++
+                                        }
+                                    }
+                                }
+                                runOnMain(context) {
+                                    zipProgressText = null
+                                    refreshSessions()
+                                    Toast.makeText(
+                                        context,
+                                        "Re-exported NMEA for $reexported session(s); skipped $skipped; failed $failed.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }.start()
+                        }
+                    },
                     onArchiveSelected = {
                         val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canArchive)
                         runSessionTask("Archive") {
@@ -1532,6 +1584,26 @@ private fun buildSessionBrowserState(
     }
 }
 
+private fun currentPppNmeaGgaQuality(
+    profileStore: ProfileStores,
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+): Int {
+    val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+        ?: profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
+    val profileQuality = selectedSet
+        ?.recordingOutputProfileRef
+        ?.id
+        ?.let { id -> profileStore.recordingPolicyProfiles().firstOrNull { it.id == id } }
+        ?.pppNmeaGgaQuality
+        ?: RecordingPolicyProfile.DEFAULT_PPP_NMEA_GGA_QUALITY
+    return selectedSet
+        ?.overrides
+        ?.recordingOutput
+        ?.pppNmeaGgaQuality
+        ?: profileQuality
+}
+
 private fun runOnMain(context: Context, action: () -> Unit) {
     (context as? ComponentActivity)?.runOnUiThread(action) ?: action()
 }
@@ -1888,6 +1960,12 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("recordTxToReceiver", "Record app TX to receiver", profile.recordTxToReceiver.toString(), boolean = true),
                     EditableProfileField("recordNtripCorrectionInput", "Record NTRIP correction input", profile.recordNtripCorrectionInput.toString(), boolean = true),
                     EditableProfileField("exportNmea", "Export derived NMEA", profile.exportNmea.toString(), boolean = true),
+                    EditableProfileField(
+                        key = "pppNmeaGgaQuality",
+                        label = "PPP GGA quality in generated NMEA",
+                        value = profile.pppNmeaGgaQuality.toString(),
+                        optionItems = PPP_NMEA_GGA_QUALITY_OPTIONS,
+                    ),
                     EditableProfileField("exportJsonSolution", "Export JSON solution", profile.exportJsonSolution.toString(), boolean = true),
                     EditableProfileField("exportGpx", "Export GPX", profile.exportGpx.toString(), boolean = true),
                     EditableProfileField("recordRemoteBaseRaw", "Record remote base raw", profile.recordRemoteBaseRaw.toString(), boolean = true),
@@ -2031,6 +2109,8 @@ private fun ProfileStores.saveProfileEditorData(
                         recordTxToReceiver = values.optional("recordTxToReceiver").toBooleanStrictOrFalse(),
                         recordNtripCorrectionInput = values.optional("recordNtripCorrectionInput").toBooleanStrictOrFalse(),
                         exportNmea = values.optional("exportNmea").toBooleanStrictOrFalse(),
+                        pppNmeaGgaQuality = values.optional("pppNmeaGgaQuality")?.toIntOrNull()
+                            ?: RecordingPolicyProfile.DEFAULT_PPP_NMEA_GGA_QUALITY,
                         exportJsonSolution = values.optional("exportJsonSolution").toBooleanStrictOrFalse(),
                         exportGpx = values.optional("exportGpx").toBooleanStrictOrFalse(),
                         recordRemoteBaseRaw = values.optional("recordRemoteBaseRaw").toBooleanStrictOrFalse(),
@@ -2249,6 +2329,12 @@ private val WORKFLOW_APPLICATION_POLICY_OPTIONS = listOf(
     EditableProfileOption(WorkflowApplicationPolicy.LEAVE_INTACT, "Leave current workflow intact"),
 )
 
+private val PPP_NMEA_GGA_QUALITY_OPTIONS = listOf(
+    EditableProfileOption("2", "2 - DGPS/DGNSS compatibility (default)"),
+    EditableProfileOption("5", "5 - RTK float compatibility"),
+    EditableProfileOption("9", "9 - GNSS fix compatibility"),
+)
+
 private const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"
 
 private enum class ProfileKind {
@@ -2454,6 +2540,7 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_STORAGE_TREE_URI, activeConfig.storage.treeUri)
         putExtra(RecordingForegroundService.EXTRA_RECORD_NTRIP_CORRECTION_INPUT, activeConfig.recording.recordNtripCorrectionInput)
         putExtra(RecordingForegroundService.EXTRA_EXPORT_NMEA, activeConfig.recording.exportNmea)
+        putExtra(RecordingForegroundService.EXTRA_PPP_NMEA_GGA_QUALITY, activeConfig.recording.pppNmeaGgaQuality)
         putExtra(RecordingForegroundService.EXTRA_EXPORT_JSON_SOLUTION, activeConfig.recording.exportJsonSolution)
         putExtra(RecordingForegroundService.EXTRA_RECORD_REMOTE_BASE_RAW, activeConfig.recording.recordRemoteBaseRaw)
         putExtra(RecordingForegroundService.EXTRA_COORDINATE_SOURCE, "NONE")
@@ -3207,6 +3294,7 @@ private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): Prof
             if (recordTxToReceiver) add("TX")
             if (recordNtripCorrectionInput) add("corrections")
             if (exportNmea) add("NMEA")
+            if (exportNmea) add("PPP->$pppNmeaGgaQuality")
             if (exportJsonSolution) add("JSON")
             if (exportGpx) add("GPX")
             if (recordRemoteBaseRaw) add("remote base raw")

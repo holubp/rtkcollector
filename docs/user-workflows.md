@@ -25,6 +25,8 @@ It also provides the experimental real-recording controls:
   stored Keystore-backed passwords;
 - recording policies for derived NMEA/JSONL exports, NTRIP correction input and
   optional remote-base raw observations where a source supports them;
+- selectable PPP-to-GGA quality mapping for generated NMEA, defaulting to `2`
+  with `5` and `9` available for compatibility with downstream consumers;
 - storage profiles, with app-private storage as the default and Android SAF
   folder selection for user-visible session folders;
 - manual fixed-base coordinates or pasted/imported `base-position.json`;
@@ -44,11 +46,14 @@ folders untouched. Users can also share the derived NMEA solution export
 directly when `receiver-solution.nmea` exists for the selected session. Direct
 NMEA sharing creates temporary `.nmea` files in app cache with names matching
 the session ZIP naming pattern, sends those files through the Android share
-sheet and does not modify the session folder. Old temporary share ZIPs and NMEA
-files are cleaned up on later share attempts, and newly shared temporary files
-are scheduled for delayed best-effort cleanup because Android does not expose a
-reliable signal that the receiving app has finished reading them. Archiving is
-a different operation: it creates a permanent
+sheet and does not modify the session folder. The same session list also offers
+an explicit `Re-export NMEA` action for filesystem-backed stopped sessions; it
+regenerates `receiver-solution.nmea` from `receiver-rx.raw` using the currently
+selected PPP-to-GGA mapping and leaves raw/correction/TX artifacts unchanged.
+Old temporary share ZIPs and NMEA files are cleaned up on later share attempts,
+and newly shared temporary files are scheduled for delayed best-effort cleanup
+because Android does not expose a reliable signal that the receiving app has
+finished reading them. Archiving is a different operation: it creates a permanent
 maximum-compression ZIP in session storage, verifies that the ZIP contains
 session artifacts, then removes the original folder. Archived recordings are
 marked in the list. Restore extracts an archive back to a session folder,

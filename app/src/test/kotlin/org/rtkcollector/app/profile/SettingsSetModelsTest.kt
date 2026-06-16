@@ -115,4 +115,29 @@ class SettingsSetModelsTest {
 
         assertEquals("UM980 rover + NTRIP + local changes", set.displayNameWithOverrides())
     }
+
+    @Test
+    fun `settings set round trip preserves ppp nmea quality override`() {
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            id = "ppp-quality",
+            name = "PPP quality override",
+            isProtected = false,
+            overrides = SettingsSetOverrides(
+                recordingOutput = RecordingOutputOverride(pppNmeaGgaQuality = 9),
+            ),
+        )
+
+        val decoded = RecordingSettingsSet.fromJson(settingsSet.toJson())
+
+        assertEquals(9, decoded.overrides.recordingOutput?.pppNmeaGgaQuality)
+    }
+
+    @Test
+    fun `settings set rejects invalid ppp nmea quality override`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            SettingsSetOverrides(
+                recordingOutput = RecordingOutputOverride(pppNmeaGgaQuality = 4),
+            ).validate()
+        }
+    }
 }

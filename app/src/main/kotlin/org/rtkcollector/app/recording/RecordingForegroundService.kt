@@ -63,6 +63,7 @@ import org.rtkcollector.receiver.unicore.Um980MessageFrequencyTracker
 import org.rtkcollector.receiver.unicore.Um980MessageKind
 import org.rtkcollector.receiver.unicore.Um980ModeParser
 import org.rtkcollector.receiver.unicore.Um980NmeaExporter
+import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudPlan
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
@@ -164,6 +165,7 @@ class RecordingForegroundService : Service() {
             rtkCalculateStatus = null,
             rtkCalculateStatusDescription = null,
             receiverRtkEvidenceAtMillis = null,
+            correctionInputRtcmAtMillis = null,
             rtcmDecodedAtMillis = null,
             rtcmLastMessageId = null,
             rtcmLastBaseId = null,
@@ -273,6 +275,12 @@ class RecordingForegroundService : Service() {
                     sessionWriters = sessionWriters,
                     eventSink = eventSink,
                     exportNmea = intent.getBooleanExtra(EXTRA_EXPORT_NMEA, true),
+                    nmeaExportOptions = Um980NmeaExportOptions(
+                        pppGgaQuality = intent.getIntExtra(
+                            EXTRA_PPP_NMEA_GGA_QUALITY,
+                            Um980NmeaExportOptions.DEFAULT_PPP_GGA_QUALITY,
+                        ),
+                    ),
                     exportJsonSolution = intent.getBooleanExtra(EXTRA_EXPORT_JSON_SOLUTION, true),
                 ),
                 eventSink = eventSink,
@@ -508,7 +516,11 @@ class RecordingForegroundService : Service() {
         rtcmExtractor: Rtcm3Extractor,
     ) {
         recorder.appendCorrectionInputBytes(bytes)
-        rtcmExtractor.accept(bytes).forEach { frame ->
+        val frames = rtcmExtractor.accept(bytes)
+        if (frames.isNotEmpty()) {
+            state = state.copy(correctionInputRtcmAtMillis = android.os.SystemClock.elapsedRealtime())
+        }
+        frames.forEach { frame ->
             runCatching {
                 writers?.appendQualityLiveJson(
                     """{"type":"ntrip-rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"}}""",
@@ -1264,6 +1276,7 @@ class RecordingForegroundService : Service() {
         sessionWriters: RecordingSessionWriters,
         eventSink: CaptureEventSink,
         exportNmea: Boolean,
+        nmeaExportOptions: Um980NmeaExportOptions,
         exportJsonSolution: Boolean,
     ): AdvisoryFanout {
         val ggaParser = NmeaGgaParser()
@@ -1386,7 +1399,7 @@ class RecordingForegroundService : Service() {
                                         sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
                                     }
                                     if (exportNmea) {
-                                        Um980NmeaExporter.export(telemetry).forEach { sentence ->
+                                        Um980NmeaExporter.export(telemetry, nmeaExportOptions).forEach { sentence ->
                                             sessionWriters.appendReceiverSolutionNmea(sentence)
                                             activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
                                         }
@@ -1496,7 +1509,8 @@ class RecordingForegroundService : Service() {
             solutionStatus = solution.solutionStatus,
             calculateStatus = rtkCalculateStatus,
             differentialAgeS = null,
-            recentRtcmDecoded = hasRecentRtcmDecoded(),
+            recentCorrectionInput = hasRecentCorrectionInput(),
+            recentReceiverRtcmDecoded = hasRecentRtcmDecoded(),
         )
         return copy(
             receiverRtkStatus = status,
@@ -1514,7 +1528,8 @@ class RecordingForegroundService : Service() {
             solutionStatus = telemetry.solutionStatus,
             calculateStatus = calculateStatus,
             differentialAgeS = telemetry.differentialAgeS,
-            recentRtcmDecoded = hasRecentRtcmDecoded(),
+            recentCorrectionInput = hasRecentCorrectionInput(),
+            recentReceiverRtcmDecoded = hasRecentRtcmDecoded(),
         )
         return copy(
             receiverRtkStatus = status,
@@ -1541,6 +1556,9 @@ class RecordingForegroundService : Service() {
 
     private fun RecordingServiceState.hasRecentRtcmDecoded(): Boolean =
         rtcmDecodedAtMillis?.let { android.os.SystemClock.elapsedRealtime() - it < RTCM_STATUS_RECENT_MILLIS } == true
+
+    private fun RecordingServiceState.hasRecentCorrectionInput(): Boolean =
+        correctionInputRtcmAtMillis?.let { android.os.SystemClock.elapsedRealtime() - it < RTCM_STATUS_RECENT_MILLIS } == true
 
     private fun RecordingServiceState.withRtcmReferenceStation(station: Rtcm3ReferenceStation): RecordingServiceState {
         val baseLat = station.latDeg
@@ -1682,6 +1700,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STORAGE_TREE_URI = "storageTreeUri"
         const val EXTRA_RECORD_NTRIP_CORRECTION_INPUT = "recordNtripCorrectionInput"
         const val EXTRA_EXPORT_NMEA = "exportNmea"
+        const val EXTRA_PPP_NMEA_GGA_QUALITY = "pppNmeaGgaQuality"
         const val EXTRA_EXPORT_JSON_SOLUTION = "exportJsonSolution"
         const val EXTRA_RECORD_REMOTE_BASE_RAW = "recordRemoteBaseRaw"
         const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
@@ -1790,20 +1809,25 @@ internal fun classifyReceiverRtkStatus(
     solutionStatus: String?,
     calculateStatus: Int?,
     differentialAgeS: Double?,
-    recentRtcmDecoded: Boolean,
+    recentCorrectionInput: Boolean,
+    recentReceiverRtcmDecoded: Boolean,
 ): String {
     if (differentialAgeS != null && differentialAgeS > RTK_STALE_DIFFERENTIAL_AGE_SECONDS) return "RTK stale"
-    when (calculateStatus) {
-        0 -> return "No RTCM"
-        1 -> return "Base obs insufficient"
-        2 -> return "RTK stale"
-        4 -> return "Rover obs insufficient"
-    }
     if (solutionStatus.equals("SOL_COMPUTED", ignoreCase = true)) {
         when (positionType?.uppercase()) {
             "NARROW_INT", "INS_RTKFIXED" -> return "RTK fixed"
             "NARROW_FLOAT", "IONOFREE_FLOAT", "L1_FLOAT", "INS_RTKFLOAT" -> return "RTK float"
         }
+    }
+    when (calculateStatus) {
+        0 -> return when {
+            recentReceiverRtcmDecoded -> "RTCM decoded, receiver pending"
+            recentCorrectionInput -> "RTCM input, receiver pending"
+            else -> "No RTCM"
+        }
+        1 -> return "Base obs insufficient"
+        2 -> return "RTK stale"
+        4 -> return "Rover obs insufficient"
     }
     if (solutionStatus == null && calculateStatus == 5) {
         when (positionType?.uppercase()) {
@@ -1812,7 +1836,15 @@ internal fun classifyReceiverRtkStatus(
         }
     }
     return when (calculateStatus) {
-        5 -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
-        else -> if (recentRtcmDecoded) "RTCM decoded" else "n/a"
+        5 -> when {
+            recentReceiverRtcmDecoded -> "RTCM decoded"
+            recentCorrectionInput -> "RTCM input"
+            else -> "n/a"
+        }
+        else -> when {
+            recentReceiverRtcmDecoded -> "RTCM decoded"
+            recentCorrectionInput -> "RTCM input"
+            else -> "n/a"
+        }
     }
 }

@@ -6,18 +6,24 @@ import java.util.Locale
 import kotlin.math.absoluteValue
 
 object Um980NmeaExporter {
-    fun export(telemetry: Um980Telemetry): List<String> {
+    fun export(
+        telemetry: Um980Telemetry,
+        options: Um980NmeaExportOptions = Um980NmeaExportOptions(),
+    ): List<String> {
         if (telemetry.latDeg == null || telemetry.lonDeg == null || telemetry.utcTime == null) {
             return emptyList()
         }
         return listOfNotNull(
-            gga(telemetry),
+            gga(telemetry, options),
             rmc(telemetry),
             vtg(telemetry),
         )
     }
 
-    fun gga(telemetry: Um980Telemetry): String? {
+    fun gga(
+        telemetry: Um980Telemetry,
+        options: Um980NmeaExportOptions = Um980NmeaExportOptions(),
+    ): String? {
         val lat = telemetry.latDeg ?: return null
         val lon = telemetry.lonDeg ?: return null
         val time = nmeaTime(telemetry.utcTime) ?: return null
@@ -31,7 +37,7 @@ object Um980NmeaExporter {
             if (lat >= 0.0) "N" else "S",
             nmeaLongitude(lon),
             if (lon >= 0.0) "E" else "W",
-            fixQuality(telemetry.positionType).toString(),
+            fixQuality(telemetry.positionType, options).toString(),
             (telemetry.satellitesUsed ?: 0).toString().padStart(2, '0'),
             nmeaDecimal(telemetry.hdop),
             nmeaDecimal(altitude),
@@ -112,13 +118,14 @@ object Um980NmeaExporter {
     private fun nmeaDecimal(value: Double?): String =
         value?.let { "%.3f".format(Locale.US, it) }.orEmpty()
 
-    private fun fixQuality(positionType: String?): Int =
+    private fun fixQuality(positionType: String?, options: Um980NmeaExportOptions): Int =
         when (positionType) {
             "NARROW_INT", "WIDE_INT", "L1_INT", "INS_RTKFIXED" -> 4
             "NARROW_FLOAT", "IONOFREE_FLOAT", "L1_FLOAT", "INS_RTKFLOAT" -> 5
             "PSRDIFF", "INS_PSRDIFF" -> 2
             "SBAS" -> 2
-            "PPP", "PPP_CONVERGING" -> 6
+            "PPP" -> options.pppGgaQuality
+            "PPP_CONVERGING" -> 1
             "SINGLE", "INS_PSRSP" -> 1
             else -> 0
         }
@@ -131,4 +138,19 @@ object Um980NmeaExporter {
     private const val MPS_TO_KNOTS = 1.94384449
     private const val MPS_TO_KMH = 3.6
     private const val NANOS_PER_MILLISECOND = 1_000_000
+}
+
+data class Um980NmeaExportOptions(
+    val pppGgaQuality: Int = DEFAULT_PPP_GGA_QUALITY,
+) {
+    init {
+        require(pppGgaQuality in ALLOWED_PPP_GGA_QUALITIES) {
+            "PPP GGA quality must be one of ${ALLOWED_PPP_GGA_QUALITIES.joinToString()}."
+        }
+    }
+
+    companion object {
+        const val DEFAULT_PPP_GGA_QUALITY = 2
+        val ALLOWED_PPP_GGA_QUALITIES: Set<Int> = setOf(2, 5, 9)
+    }
 }

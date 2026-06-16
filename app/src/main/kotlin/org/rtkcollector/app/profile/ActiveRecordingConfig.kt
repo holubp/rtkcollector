@@ -101,6 +101,8 @@ data class ActiveRecordingConfig(
                 recordNtripCorrectionInput = workflowUsesNtrip &&
                     (recordingOverride?.recordNtripCorrectionInput ?: recordingPolicyProfile.recordNtripCorrectionInput),
                 exportNmea = recordingOverride?.exportNmea ?: recordingPolicyProfile.exportNmea,
+                pppNmeaGgaQuality = recordingOverride?.pppNmeaGgaQuality
+                    ?: recordingPolicyProfile.pppNmeaGgaQuality,
                 exportJsonSolution = recordingOverride?.exportJsonSolution
                     ?: recordingPolicyProfile.exportJsonSolution,
                 exportGpx = recordingOverride?.exportGpx ?: recordingPolicyProfile.exportGpx,
@@ -156,6 +158,7 @@ data class ActiveRecordingOutputConfig(
     val recordTxToReceiver: Boolean,
     val recordNtripCorrectionInput: Boolean,
     val exportNmea: Boolean,
+    val pppNmeaGgaQuality: Int,
     val exportJsonSolution: Boolean,
     val exportGpx: Boolean,
     val recordRemoteBaseRaw: Boolean,

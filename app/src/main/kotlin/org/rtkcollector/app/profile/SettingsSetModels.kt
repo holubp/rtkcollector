@@ -80,10 +80,19 @@ data class RecordingOutputOverride(
     val recordTxToReceiver: Boolean? = null,
     val recordNtripCorrectionInput: Boolean? = null,
     val exportNmea: Boolean? = null,
+    val pppNmeaGgaQuality: Int? = null,
     val exportJsonSolution: Boolean? = null,
     val exportGpx: Boolean? = null,
     val recordRemoteBaseRaw: Boolean? = null,
-)
+) {
+    fun validate() {
+        pppNmeaGgaQuality?.let {
+            require(it in RecordingPolicyProfile.ALLOWED_PPP_NMEA_GGA_QUALITIES) {
+                "PPP NMEA GGA quality override must be one of ${RecordingPolicyProfile.ALLOWED_PPP_NMEA_GGA_QUALITIES.joinToString()}."
+            }
+        }
+    }
+}
 
 data class StorageProfileOverride(
     val kind: String? = null,
@@ -112,6 +121,7 @@ data class SettingsSetOverrides(
     fun validate() {
         usbBaud?.validate()
         ntripCaster?.validate()
+        recordingOutput?.validate()
         storage?.validate()
     }
 
@@ -289,6 +299,7 @@ private fun SettingsSetOverrides.toJson(): JSONObject {
                 .putNullable("recordTxToReceiver", it.recordTxToReceiver)
                 .putNullable("recordNtripCorrectionInput", it.recordNtripCorrectionInput)
                 .putNullable("exportNmea", it.exportNmea)
+                .putNullable("pppNmeaGgaQuality", it.pppNmeaGgaQuality)
                 .putNullable("exportJsonSolution", it.exportJsonSolution)
                 .putNullable("exportGpx", it.exportGpx)
                 .putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw),
@@ -366,6 +377,7 @@ private object SettingsSetOverridesJson {
                     recordTxToReceiver = it.optBooleanOrNull("recordTxToReceiver"),
                     recordNtripCorrectionInput = it.optBooleanOrNull("recordNtripCorrectionInput"),
                     exportNmea = it.optBooleanOrNull("exportNmea"),
+                    pppNmeaGgaQuality = it.optIntOrNull("pppNmeaGgaQuality"),
                     exportJsonSolution = it.optBooleanOrNull("exportJsonSolution"),
                     exportGpx = it.optBooleanOrNull("exportGpx"),
                     recordRemoteBaseRaw = it.optBooleanOrNull("recordRemoteBaseRaw"),

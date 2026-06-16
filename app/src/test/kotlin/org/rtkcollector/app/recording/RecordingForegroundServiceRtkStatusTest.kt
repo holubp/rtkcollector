@@ -5,16 +5,59 @@ import org.junit.jupiter.api.Test
 
 class RecordingForegroundServiceRtkStatusTest {
     @Test
-    fun `rtkstatus diagnostic failure takes precedence over float position type`() {
+    fun `rtkstatus no differential data remains no rtcm when no correction evidence exists`() {
         val status = classifyReceiverRtkStatus(
             positionType = "NARROW_FLOAT",
             solutionStatus = null,
             calculateStatus = 0,
             differentialAgeS = null,
-            recentRtcmDecoded = true,
+            recentCorrectionInput = false,
+            recentReceiverRtcmDecoded = false,
         )
 
         assertEquals("No RTCM", status)
+    }
+
+    @Test
+    fun `rtkstatus no differential data with ntrip frames reports receiver pending`() {
+        val status = classifyReceiverRtkStatus(
+            positionType = "NONE",
+            solutionStatus = null,
+            calculateStatus = 0,
+            differentialAgeS = null,
+            recentCorrectionInput = true,
+            recentReceiverRtcmDecoded = false,
+        )
+
+        assertEquals("RTCM input, receiver pending", status)
+    }
+
+    @Test
+    fun `rtkstatus no differential data with receiver decode reports decoded pending`() {
+        val status = classifyReceiverRtkStatus(
+            positionType = "NONE",
+            solutionStatus = null,
+            calculateStatus = 0,
+            differentialAgeS = null,
+            recentCorrectionInput = true,
+            recentReceiverRtcmDecoded = true,
+        )
+
+        assertEquals("RTCM decoded, receiver pending", status)
+    }
+
+    @Test
+    fun `computed float solution is not hidden by stale no differential diagnostic`() {
+        val status = classifyReceiverRtkStatus(
+            positionType = "NARROW_FLOAT",
+            solutionStatus = "SOL_COMPUTED",
+            calculateStatus = 0,
+            differentialAgeS = null,
+            recentCorrectionInput = true,
+            recentReceiverRtcmDecoded = true,
+        )
+
+        assertEquals("RTK float", status)
     }
 
     @Test
@@ -24,7 +67,8 @@ class RecordingForegroundServiceRtkStatusTest {
             solutionStatus = null,
             calculateStatus = 2,
             differentialAgeS = null,
-            recentRtcmDecoded = true,
+            recentCorrectionInput = true,
+            recentReceiverRtcmDecoded = true,
         )
 
         assertEquals("RTK stale", status)
@@ -37,7 +81,8 @@ class RecordingForegroundServiceRtkStatusTest {
             solutionStatus = null,
             calculateStatus = null,
             differentialAgeS = null,
-            recentRtcmDecoded = false,
+            recentCorrectionInput = false,
+            recentReceiverRtcmDecoded = false,
         )
 
         assertEquals("n/a", status)
@@ -50,7 +95,8 @@ class RecordingForegroundServiceRtkStatusTest {
             solutionStatus = "SOL_COMPUTED",
             calculateStatus = null,
             differentialAgeS = 1.0,
-            recentRtcmDecoded = true,
+            recentCorrectionInput = true,
+            recentReceiverRtcmDecoded = true,
         )
 
         assertEquals("RTK fixed", status)
@@ -65,5 +111,16 @@ class RecordingForegroundServiceRtkStatusTest {
         )
 
         assertEquals("RTCM decoded", status)
+    }
+
+    @Test
+    fun `rtcm decoded update preserves receiver pending status while evidence is recent`() {
+        val status = receiverRtkStatusAfterRtcmDecoded(
+            previousStatus = "RTCM input, receiver pending",
+            lastReceiverRtkEvidenceAtMillis = 1_000L,
+            nowMillis = 2_000L,
+        )
+
+        assertEquals("RTCM input, receiver pending", status)
     }
 }

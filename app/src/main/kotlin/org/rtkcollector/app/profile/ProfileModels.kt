@@ -190,6 +190,7 @@ data class RecordingPolicyProfile(
     val recordTxToReceiver: Boolean = true,
     val recordNtripCorrectionInput: Boolean = true,
     val exportNmea: Boolean = true,
+    val pppNmeaGgaQuality: Int = DEFAULT_PPP_NMEA_GGA_QUALITY,
     val exportJsonSolution: Boolean = true,
     val exportGpx: Boolean = false,
     val recordRemoteBaseRaw: Boolean = false,
@@ -199,6 +200,9 @@ data class RecordingPolicyProfile(
         require(id.isNotBlank()) { "Recording policy id must not be blank." }
         require(name.isNotBlank()) { "Recording policy name must not be blank." }
         require(recordReceiverRx) { "Device receiver RX recording is required." }
+        require(pppNmeaGgaQuality in ALLOWED_PPP_NMEA_GGA_QUALITIES) {
+            "PPP NMEA GGA quality must be one of ${ALLOWED_PPP_NMEA_GGA_QUALITIES.joinToString()}."
+        }
     }
 
     fun copyProfile(id: String, name: String): RecordingPolicyProfile =
@@ -212,11 +216,15 @@ data class RecordingPolicyProfile(
         .put("recordTxToReceiver", recordTxToReceiver)
         .put("recordNtripCorrectionInput", recordNtripCorrectionInput)
         .put("exportNmea", exportNmea)
+        .put("pppNmeaGgaQuality", pppNmeaGgaQuality)
         .put("exportJsonSolution", exportJsonSolution)
         .put("exportGpx", exportGpx)
         .put("recordRemoteBaseRaw", recordRemoteBaseRaw)
 
     companion object {
+        const val DEFAULT_PPP_NMEA_GGA_QUALITY = 2
+        val ALLOWED_PPP_NMEA_GGA_QUALITIES: Set<Int> = setOf(2, 5, 9)
+
         fun fromJson(json: JSONObject): RecordingPolicyProfile = RecordingPolicyProfile(
             id = json.getString("id"),
             name = json.getString("name"),
@@ -225,6 +233,7 @@ data class RecordingPolicyProfile(
             recordTxToReceiver = json.optBoolean("recordTxToReceiver", true),
             recordNtripCorrectionInput = json.optBoolean("recordNtripCorrectionInput", true),
             exportNmea = json.optBoolean("exportNmea", true),
+            pppNmeaGgaQuality = json.optInt("pppNmeaGgaQuality", DEFAULT_PPP_NMEA_GGA_QUALITY),
             exportJsonSolution = json.optBoolean("exportJsonSolution", true),
             exportGpx = json.optBoolean("exportGpx", false),
             recordRemoteBaseRaw = json.optBoolean("recordRemoteBaseRaw", false),

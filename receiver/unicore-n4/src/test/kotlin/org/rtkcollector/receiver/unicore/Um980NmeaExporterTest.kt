@@ -86,6 +86,78 @@ class Um980NmeaExporterTest {
     }
 
     @Test
+    fun `exports converged ppp as default dgps quality instead of estimated`() {
+        val telemetry = Um980Telemetry(
+            source = "BESTNAVB",
+            utcTime = "2026-06-14T19:29:52Z",
+            solutionStatus = "SOL_COMPUTED",
+            positionType = "PPP",
+            latDeg = 49.25167342112689,
+            lonDeg = 16.556459890287186,
+            altitudeM = 329.273,
+            satellitesUsed = 16,
+            differentialAgeS = 2.0,
+            stationId = "9901",
+        )
+
+        val sentences = Um980NmeaExporter.export(telemetry)
+
+        assertTrue(
+            sentences[0].startsWith("\$GPGGA,192952.000,4915.100405,N,01633.387593,E,2,16,"),
+            sentences.joinToString(),
+        )
+        sentences.forEach(::assertChecksum)
+    }
+
+    @Test
+    fun `exports converged ppp with selectable quality`() {
+        val telemetry = Um980Telemetry(
+            source = "BESTNAVB",
+            utcTime = "2026-06-14T19:29:52Z",
+            solutionStatus = "SOL_COMPUTED",
+            positionType = "PPP",
+            latDeg = 49.25167342112689,
+            lonDeg = 16.556459890287186,
+            altitudeM = 329.273,
+            satellitesUsed = 16,
+        )
+
+        val qualityFive = Um980NmeaExporter.export(
+            telemetry,
+            options = Um980NmeaExportOptions(pppGgaQuality = 5),
+        )
+        val qualityNine = Um980NmeaExporter.export(
+            telemetry,
+            options = Um980NmeaExportOptions(pppGgaQuality = 9),
+        )
+
+        assertTrue(qualityFive[0].startsWith("\$GPGGA,192952.000,4915.100405,N,01633.387593,E,5,16,"))
+        assertTrue(qualityNine[0].startsWith("\$GPGGA,192952.000,4915.100405,N,01633.387593,E,9,16,"))
+        qualityFive.forEach(::assertChecksum)
+        qualityNine.forEach(::assertChecksum)
+    }
+
+    @Test
+    fun `exports ppp converging as single quality instead of estimated`() {
+        val telemetry = Um980Telemetry(
+            source = "BESTNAVB",
+            utcTime = "2026-06-14T19:29:52Z",
+            solutionStatus = "SOL_COMPUTED",
+            positionType = "PPP_CONVERGING",
+            latDeg = 49.25167342112689,
+            lonDeg = 16.556459890287186,
+        )
+
+        val sentences = Um980NmeaExporter.export(telemetry)
+
+        assertTrue(
+            sentences[0].startsWith("\$GPGGA,192952.000,4915.100405,N,01633.387593,E,1,00,"),
+            sentences.joinToString(),
+        )
+        sentences.forEach(::assertChecksum)
+    }
+
+    @Test
     fun `does not export nmea without position or utc`() {
         assertEquals(emptyList<String>(), Um980NmeaExporter.export(Um980Telemetry(source = "BESTNAVB")))
     }

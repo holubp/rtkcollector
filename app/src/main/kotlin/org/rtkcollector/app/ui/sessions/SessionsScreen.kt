@@ -47,6 +47,7 @@ fun SessionsScreen(
     onClearSelection: () -> Unit,
     onShareSelected: () -> Unit,
     onShareNmeaSelected: () -> Unit,
+    onReexportNmeaSelected: () -> Unit,
     onArchiveSelected: () -> Unit,
     onRestoreSelected: () -> Unit,
     onDeleteSelected: () -> Unit,
@@ -58,6 +59,7 @@ fun SessionsScreen(
     val selectionMode = state.selectedIds.isNotEmpty()
     val canShare = selected.any(SessionBrowserEntry::canShareZip)
     val canShareNmea = selected.any(SessionBrowserEntry::canShareZip)
+    val canReexportNmea = selected.any(SessionBrowserEntry::canShareZip)
     val canArchive = selected.any(SessionBrowserEntry::canArchive)
     val canRestore = selected.any(SessionBrowserEntry::canRestore)
     val canDelete = selected.any(SessionBrowserEntry::canDelete)
@@ -101,6 +103,7 @@ fun SessionsScreen(
         ) {
             Button(onClick = onShareSelected, enabled = canShare) { Text("Share ZIP") }
             Button(onClick = onShareNmeaSelected, enabled = canShareNmea) { Text("Share NMEA") }
+            Button(onClick = onReexportNmeaSelected, enabled = canReexportNmea) { Text("Re-export NMEA") }
             Button(onClick = { confirmation = ConfirmationAction.ARCHIVE }, enabled = canArchive) { Text("Archive") }
             Button(onClick = { confirmation = ConfirmationAction.RESTORE }, enabled = canRestore) { Text("Restore") }
             Button(onClick = { confirmation = ConfirmationAction.DELETE }, enabled = canDelete) { Text("Delete") }

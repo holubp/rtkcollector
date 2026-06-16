@@ -41,3 +41,9 @@ dependencies {
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     useJUnitPlatform()
 }
+
+tasks.register("unitTestClasses") {
+    group = "build"
+    description = "Compatibility alias for tools that request JVM-style unit test classes in the Android app module."
+    dependsOn("compileDebugUnitTestKotlin", "compileDebugUnitTestJavaWithJavac", "processDebugUnitTestJavaRes")
+}

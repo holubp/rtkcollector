@@ -148,13 +148,135 @@ data class PositionCardState(
     val lonError: String = "n/a",
 )
 
-fun PositionCardState.latLonLinesForNarrowLayout(): List<String> {
+data class CoordinatePair(
+    val lat: String,
+    val lon: String,
+) {
+    val latDouble: Double?
+        get() = lat.toDoubleOrNull()
+
+    val lonDouble: Double?
+        get() = lon.toDoubleOrNull()
+}
+
+enum class CoordinateCopyFormat(
+    val label: String,
+) {
+    GEO_URI("geo:lat,lon"),
+    LAT_LON("lat,lon"),
+    LAT("lat"),
+    LON("lon"),
+    ;
+
+    fun format(coordinates: CoordinatePair): String =
+        when (this) {
+            GEO_URI -> "geo:${coordinates.lat},${coordinates.lon}"
+            LAT_LON -> "${coordinates.lat},${coordinates.lon}"
+            LAT -> coordinates.lat
+            LON -> coordinates.lon
+    }
+}
+
+fun CoordinatePair.toManualBasePositionJsonOrNull(): String? {
+    val lat = latDouble ?: return null
+    val lon = lonDouble ?: return null
+    return "{" +
+        "\"latDeg\":$lat," +
+        "\"lonDeg\":$lon," +
+        "\"heightM\":null," +
+        "\"frame\":\"UNKNOWN\"," +
+        "\"method\":\"MANUAL_KNOWN_POINT\"," +
+        "\"source\":\"MANUAL\"" +
+        "}"
+}
+
+fun PositionCardState.coordinatePairOrNull(): CoordinatePair? {
     val parts = latLon.split(",", limit = 2).map { it.trim() }
-    return if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
-        listOf("Lat ${parts[0]}", "Lon ${parts[1]}")
+    if (parts.size != 2 || parts.any { it.isBlank() || it.equals("n/a", ignoreCase = true) }) {
+        return null
+    }
+    return CoordinatePair(lat = parts[0], lon = parts[1])
+}
+
+fun PositionCardState.latLonLinesForNarrowLayout(): List<String> {
+    val coordinates = coordinatePairOrNull()
+    return if (coordinates != null) {
+        listOf("Lat ${coordinates.lat}", "Lon ${coordinates.lon}")
     } else {
         listOf(latLon)
     }
+}
+
+data class CoordinateAveragingState(
+    val active: Boolean = false,
+    val fixType: String = "",
+    val sampleCount: Int = 0,
+    val meanLat: Double? = null,
+    val meanLon: Double? = null,
+    val stoppedReason: String? = null,
+) {
+    val statusLabel: String
+        get() = when {
+            active && sampleCount > 0 -> "Avg ${sampleCount}x"
+            active -> "Avg active"
+            stoppedReason != null -> stoppedReason
+            else -> "Avg off"
+        }
+}
+
+fun startCoordinateAveraging(fixType: String, coordinates: CoordinatePair?): CoordinateAveragingState {
+    if (fixType.isMissingFixType()) {
+        return CoordinateAveragingState(stoppedReason = "No fix")
+    }
+    val lat = coordinates?.latDouble
+    val lon = coordinates?.lonDouble
+    return if (lat != null && lon != null) {
+        CoordinateAveragingState(
+            active = true,
+            fixType = fixType,
+            sampleCount = 1,
+            meanLat = lat,
+            meanLon = lon,
+        )
+    } else {
+        CoordinateAveragingState(stoppedReason = "No coordinate")
+    }
+}
+
+fun CoordinateAveragingState.addSample(fixType: String, coordinates: CoordinatePair?): CoordinateAveragingState {
+    if (!active) return this
+    if (fixType.isMissingFixType()) {
+        return copy(
+            active = false,
+            stoppedReason = "No fix",
+        )
+    }
+    if (fixType != this.fixType) {
+        return copy(
+            active = false,
+            stoppedReason = "Fix changed",
+        )
+    }
+    val lat = coordinates?.latDouble
+    val lon = coordinates?.lonDouble
+    if (lat == null || lon == null || meanLat == null || meanLon == null) {
+        return copy(
+            active = false,
+            stoppedReason = "No coordinate",
+        )
+    }
+    val nextCount = sampleCount + 1
+    return copy(
+        sampleCount = nextCount,
+        meanLat = meanLat + (lat - meanLat) / nextCount,
+        meanLon = meanLon + (lon - meanLon) / nextCount,
+        stoppedReason = null,
+    )
+}
+
+private fun String.isMissingFixType(): Boolean {
+    val normalized = trim()
+    return normalized.isBlank() || normalized.equals("n/a", ignoreCase = true) || normalized.equals("none", ignoreCase = true)
 }
 
 data class FixCardState(

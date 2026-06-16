@@ -117,6 +117,52 @@ internal fun RecordingServiceState.clearBestSolutionFields(
     ubloxFrequency = ubloxFrequency,
 )
 
+internal fun RecordingServiceState.applyBestSolutionDisplayDelta(
+    delta: BestSolutionStateDelta,
+    ubloxFrequency: String,
+    formatLatLon: (Double, Double) -> String,
+    formatMeters: (Double) -> String,
+    formatSatellites: (Int?, Int?) -> String,
+): RecordingServiceState {
+    if (delta.bestSolutionSource == "n/a") {
+        return copy(
+            bestSolutionSource = "n/a",
+            bestSolutionFix = "n/a",
+            bestSolutionAgeMs = null,
+            mockLocationState = delta.mockResult.name,
+            ubloxFrequency = ubloxFrequency,
+        )
+    }
+
+    val nextLatDeg = delta.latDeg ?: latDeg
+    val nextLonDeg = delta.lonDeg ?: lonDeg
+    val nextSatellitesUsed = delta.satellitesUsed ?: satellitesUsed
+    val nextSatellitesInView = delta.satellitesInView ?: satellitesInView
+    val nextSatellites = formatSatellites(nextSatellitesUsed, nextSatellitesInView)
+
+    return copy(
+        bestSolutionSource = delta.bestSolutionSource,
+        bestSolutionFix = delta.bestSolutionFix,
+        bestSolutionAgeMs = delta.bestSolutionAgeMs,
+        mockLocationState = delta.mockResult.name,
+        latDeg = nextLatDeg,
+        lonDeg = nextLonDeg,
+        latLon = if (nextLatDeg != null && nextLonDeg != null) {
+            formatLatLon(nextLatDeg, nextLonDeg)
+        } else {
+            latLon
+        },
+        ellipsoidalHeight = delta.ellipsoidalHeightM?.let(formatMeters) ?: ellipsoidalHeight,
+        altitude = delta.mslAltitudeM?.let(formatMeters) ?: altitude,
+        horizontalAccuracy = delta.horizontalAccuracyM?.let(formatMeters) ?: horizontalAccuracy,
+        verticalAccuracy = delta.verticalAccuracyM?.let(formatMeters) ?: verticalAccuracy,
+        satellitesUsed = nextSatellitesUsed,
+        satellitesInView = nextSatellitesInView,
+        satellites = nextSatellites.takeUnless { it == "n/a" } ?: satellites,
+        ubloxFrequency = ubloxFrequency,
+    )
+}
+
 internal fun recordingNotificationText(state: RecordingServiceState): String =
     recordingNotificationText(
         running = state.running,

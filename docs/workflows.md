@@ -46,8 +46,8 @@ failure must never imply recording failure.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Plain rover recording | `ROVER` | none | none | no | yes, if available | no | requested if supported |
 | Rover + NTRIP to receiver | `ROVER` | `NTRIP` | `RECEIVER` | yes, NTRIP/CORS mountpoint context | yes | no | requested if supported |
-| Temporary-base preparation, raw only | `BASE_CALIBRATION` | none | none | no | yes | requested if supported | required at >= 1 Hz if supported |
-| Temporary-base preparation with CORS/NTRIP | `BASE_CALIBRATION` | `NTRIP` | `RECEIVER` | yes, NTRIP/CORS mountpoint context | yes | requested if supported | required at >= 1 Hz if supported |
+| Temporary base, raw only | `BASE_CALIBRATION` | none | none | no | yes | requested if supported | required at >= 1 Hz if supported |
+| Temporary base with CORS/NTRIP | `BASE_CALIBRATION` | `NTRIP` | `RECEIVER` | yes, NTRIP/CORS mountpoint context | yes | requested if supported | required at >= 1 Hz if supported |
 | Fixed base from accepted coordinate | `FIXED_BASE` | none | downstream rover/caster later | yes, accepted fixed coordinate | base status only | no | optional |
 | Replay/test | `REPLAY_TEST` | file replay | none | no | no | no | replayed from file |
 
@@ -83,14 +83,14 @@ Required properties:
 - raw observations are requested where supported, so later validation is not
   limited to the receiver's live RTK result.
 
-### Temporary-Base Preparation Recording
+### Temporary Base Recording
 
 Purpose: place a temporary base close to the rover, preferably with open sky
 visibility, and record enough evidence to derive an accepted base coordinate
 later.
 
-Temporary-base preparation is not a standalone final operating mode. It is the
-coordinate-generation part of preparing a later fixed-base workflow.
+Temporary base recording is not the same as final fixed-base operation. It is
+the coordinate-generation part of preparing a later fixed-base workflow.
 
 Required properties:
 
@@ -103,6 +103,26 @@ Required properties:
   profile supports it;
 - optional NTRIP/CORS corrections may be fed to the receiver;
 - output is eligible for later `base-position.json` candidate generation.
+
+Runtime mode sanity:
+
+- rover workflows must not start a receiver command profile that sends
+  `MODE BASE`;
+- base workflows may record with receiver rover-mode commands when the purpose
+  is static raw collection or deriving the temporary-base coordinate from an
+  external base, PPP or later processing;
+- fixed-base streaming still requires an accepted coordinate before correction
+  output is treated as valid.
+
+Dashboard coordinate actions are helpers around this workflow model, not new
+modes. The displayed coordinate may be copied as `geo:lat,lon`, `lat,lon`,
+`lat` or `lon`. In temporary-base workflows, a compact live average may be
+started only while the receiver is stationary and the fix type remains stable;
+the average must stop if the interpreted fix type changes. A UI action may
+switch the next session toward fixed-base operation using the current coordinate,
+but it must not invent receiver fixed-base commands. It may select an existing
+`MODE BASE` command profile only through explicit user selection; otherwise it
+must make the missing command profile visible to the user.
 
 Base-position candidates are generated from the recording, not by switching to a
 separate app mode. Candidate methods are ranked as:

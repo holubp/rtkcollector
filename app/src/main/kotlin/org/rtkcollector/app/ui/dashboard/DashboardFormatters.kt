@@ -43,8 +43,9 @@ fun interpretGgaFixQuality(quality: Int?): String =
         4 -> "RTK fix"
         5 -> "RTK float"
         6 -> "Estimated"
+        7 -> "Base/manual"
         9 -> "PPP"
-        else -> "Quality $quality"
+        else -> "Unknown GGA $quality"
     }
 
 private fun Double.oneDecimal(): String =

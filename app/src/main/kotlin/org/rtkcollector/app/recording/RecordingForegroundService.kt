@@ -17,6 +17,7 @@ import org.rtkcollector.app.mocklocation.AndroidMockLocationSink
 import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
+import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
 import org.rtkcollector.app.receiver.isUm980CommandOkResponse
@@ -229,6 +230,12 @@ class RecordingForegroundService : Service() {
             val serialBaud = validateBaud(intent.getIntExtra(EXTRA_SERIAL_BAUD, 230400), "serial baud")
             val profileBaud = validateBaud(intent.getIntExtra(EXTRA_PROFILE_BAUD, serialBaud), "profile baud")
             val workflowUsesNtrip = intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)
+            activeReceiverFamily = receiverFamilyFromDriverId(intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID))
+            val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
+            val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
+            val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
+            shutdownCommands = intent.getStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS).orEmpty().validatedCommands()
+            validateWorkflowModeCommandsForStart(intent.getStringExtra(EXTRA_WORKFLOW_ID), initCommands + baudSwitchCommands + modeCommands)
             val preflight = RecordingStartPreflight.validate(
                 RecordingStartPreflight.Input(
                     workflowUsesNtrip = workflowUsesNtrip,
@@ -335,7 +342,6 @@ class RecordingForegroundService : Service() {
             captureRuntime.open()
             runtime = captureRuntime
 
-            activeReceiverFamily = receiverFamilyFromDriverId(intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID))
             solutionCandidates.clear()
             ubloxStreamParser = UbloxStreamParser()
             ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
@@ -343,10 +349,6 @@ class RecordingForegroundService : Service() {
             val enableMockLocation = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
             mockLocationRequested = enableMockLocation
             configureMockLocation(enableMockLocation)
-            val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
-            val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
-            val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
-            shutdownCommands = intent.getStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS).orEmpty().validatedCommands()
             val configuredMode = Um980ModeParser.configuredMode(
                 (initCommands + baudSwitchCommands + modeCommands).joinToString("\n"),
             )
@@ -1449,26 +1451,12 @@ class RecordingForegroundService : Service() {
         delta: BestSolutionStateDelta,
         nowMillis: Long,
     ) {
-        state = state.copy(
-            bestSolutionSource = delta.bestSolutionSource,
-            bestSolutionFix = delta.bestSolutionFix,
-            bestSolutionAgeMs = delta.bestSolutionAgeMs,
-            mockLocationState = delta.mockResult.name,
-            latDeg = delta.latDeg,
-            lonDeg = delta.lonDeg,
-            latLon = latLonDisplay(delta.latDeg, delta.lonDeg),
-            ellipsoidalHeight = metersDisplay(delta.ellipsoidalHeightM),
-            altitude = metersDisplay(delta.mslAltitudeM),
-            horizontalAccuracy = metersDisplay(delta.horizontalAccuracyM),
-            verticalAccuracy = metersDisplay(delta.verticalAccuracyM),
-            satellitesUsed = delta.satellitesUsed,
-            satellitesInView = delta.satellitesInView,
-            satellites = if (delta.satellitesUsed == null) {
-                "n/a"
-            } else {
-                satelliteDisplay(delta.satellitesUsed, delta.satellitesInView)
-            },
+        state = state.applyBestSolutionDisplayDelta(
+            delta = delta,
             ubloxFrequency = ubloxFrequencyTracker.display(nowMillis),
+            formatLatLon = ::latLonDisplay,
+            formatMeters = ::metersDisplay,
+            formatSatellites = ::satelliteDisplay,
         )
     }
 

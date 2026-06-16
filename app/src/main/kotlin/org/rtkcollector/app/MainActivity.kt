@@ -141,7 +141,7 @@ class MainActivity : Activity() {
         WorkflowOption("Rover + NTRIP to receiver", Um980WorkflowMode.ROVER_NTRIP) { receiver ->
             WorkflowExamples.roverWithNtripToReceiver(receiver.capabilities(), receiver.profileId)
         },
-        WorkflowOption("Temporary base preparation", Um980WorkflowMode.TEMPORARY_BASE) { receiver ->
+        WorkflowOption("Temporary base", Um980WorkflowMode.TEMPORARY_BASE) { receiver ->
             WorkflowExamples.temporaryBasePreparation(receiver.capabilities(), receiver.profileId)
         },
         WorkflowOption("Temporary base + NTRIP", Um980WorkflowMode.TEMPORARY_BASE_NTRIP) { receiver ->

@@ -52,8 +52,9 @@ class DashboardFormattersTest {
         assertEquals("RTK fix", interpretGgaFixQuality(4))
         assertEquals("RTK float", interpretGgaFixQuality(5))
         assertEquals("Estimated", interpretGgaFixQuality(6))
+        assertEquals("Base/manual", interpretGgaFixQuality(7))
         assertEquals("PPP", interpretGgaFixQuality(9))
-        assertEquals("Quality 17", interpretGgaFixQuality(17))
+        assertEquals("Unknown GGA 17", interpretGgaFixQuality(17))
         assertEquals("n/a", interpretGgaFixQuality(null))
     }
 }

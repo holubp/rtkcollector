@@ -89,10 +89,16 @@ import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
+import org.rtkcollector.app.ui.dashboard.CoordinateAveragingState
+import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
+import org.rtkcollector.app.ui.dashboard.addSample
+import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.dashboard.formatBytes
+import org.rtkcollector.app.ui.dashboard.startCoordinateAveraging
+import org.rtkcollector.app.ui.dashboard.toManualBasePositionJsonOrNull
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
@@ -220,6 +226,27 @@ fun RtkCollectorApp(
     }
     var state by remember {
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
+    }
+    var coordinateAveraging by remember { mutableStateOf(CoordinateAveragingState()) }
+    var manualBaseCoordinate by remember { mutableStateOf<CoordinatePair?>(null) }
+    LaunchedEffect(state.position.latLon) {
+        val selectedCoordinate = manualBaseCoordinate
+        if (selectedCoordinate != null && state.position.coordinatePairOrNull() != selectedCoordinate) {
+            manualBaseCoordinate = null
+            Toast.makeText(context, "Manual base coordinate cleared because live position changed.", Toast.LENGTH_LONG).show()
+        }
+    }
+    LaunchedEffect(state.position.latLon, state.fix.fixType) {
+        if (coordinateAveraging.active) {
+            val updated = coordinateAveraging.addSample(
+                fixType = state.fix.fixType,
+                coordinates = state.position.coordinatePairOrNull(),
+            )
+            coordinateAveraging = updated
+            if (!updated.active && updated.stoppedReason != null) {
+                Toast.makeText(context, "Coordinate averaging stopped: ${updated.stoppedReason}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
     LaunchedEffect(externalIntent) {
         if (externalIntent != null) {
@@ -516,6 +543,7 @@ fun RtkCollectorApp(
                                 settingsSets = settingsSets,
                                 selectedSettingsSetId = selectedSettingsSetId,
                                 selectedWorkflowId = selectedWorkflowId,
+                                manualBaseCoordinate = manualBaseCoordinate,
                             )?.let { intent ->
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     context.startForegroundService(intent)
@@ -560,6 +588,35 @@ fun RtkCollectorApp(
                         }
                     },
                     onMark = {},
+                    coordinateAveraging = coordinateAveraging,
+                    onStartCoordinateAveraging = { coordinates ->
+                        val started = startCoordinateAveraging(state.fix.fixType, coordinates)
+                        coordinateAveraging = started
+                        val message = if (started.active) {
+                            "Coordinate averaging started for ${state.fix.fixType}."
+                        } else {
+                            "Cannot start averaging: ${started.stoppedReason ?: "no coordinate"}."
+                        }
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    },
+                    onStopCoordinateAveraging = {
+                        coordinateAveraging = coordinateAveraging.copy(
+                            active = false,
+                            stoppedReason = "Stopped",
+                        )
+                        Toast.makeText(context, "Coordinate averaging stopped.", Toast.LENGTH_SHORT).show()
+                    },
+                    onUseCurrentCoordinateAsManualBase = { coordinates ->
+                        manualBaseCoordinate = coordinates
+                        selectedWorkflowId = WORKFLOW_FIXED_BASE
+                        profileStore.saveSelectedWorkflowId(WORKFLOW_FIXED_BASE)
+                        refreshProfileUi(settingsSets)
+                        Toast.makeText(
+                            context,
+                            "Fixed-base workflow selected with manual coordinate ${coordinates.lat}, ${coordinates.lon}. Choose a matching base command profile before starting.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    },
                 )
                 AppScreen.SETTINGS ->
                     SettingsHub(
@@ -638,6 +695,7 @@ fun RtkCollectorApp(
                     state = SettingsSetListState.from(settingsSets, selectedSettingsSetId),
                     onSelect = { id ->
                         selectedSettingsSetId = id
+                        manualBaseCoordinate = null
                         profileStore.saveSelectedSettingsSetId(id)
                         settingsSets = profileStore.settingsSetsWithRememberedMountpoint(id)
                         val selected = settingsSets.firstOrNull { it.id == id }
@@ -897,6 +955,7 @@ fun RtkCollectorApp(
                             screen = AppScreen.HOME
                         } else {
                             selectedSettingsSetId = id
+                            manualBaseCoordinate = null
                             profileStore.saveSelectedSettingsSetId(id)
                             settingsSets = profileStore.settingsSetsWithRememberedMountpoint(id)
                             val selectedSet = settingsSets.firstOrNull { it.id == id }
@@ -959,6 +1018,7 @@ fun RtkCollectorApp(
                             screen = AppScreen.HOME
                         } else {
                             profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                manualBaseCoordinate = null
                                 settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                     set.copy(commandProfileRef = ProfileReference(profile.id, profile.name))
                                 }
@@ -1498,11 +1558,13 @@ fun RtkCollectorApp(
                         when (selector) {
                             DashboardSelector.WORKFLOW -> {
                                 selectedWorkflowId = id
+                                manualBaseCoordinate = null
                                 profileStore.saveSelectedWorkflowId(id)
                                 refreshProfileUi(settingsSets)
                             }
                             DashboardSelector.SETTINGS_SET -> {
                                 selectedSettingsSetId = id
+                                manualBaseCoordinate = null
                                 profileStore.saveSelectedSettingsSetId(id)
                                 settingsSets = profileStore.settingsSetsWithRememberedMountpoint(id)
                                 val selectedSet = settingsSets.firstOrNull { it.id == id }
@@ -1530,6 +1592,7 @@ fun RtkCollectorApp(
                             }
                             DashboardSelector.RECEIVER -> {
                                 profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                    manualBaseCoordinate = null
                                     settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                         set.copy(commandProfileRef = ProfileReference(profile.id, profile.name))
                                     }
@@ -2444,7 +2507,7 @@ private const val WORKFLOW_FIXED_BASE = "fixed-base"
 private val WORKFLOW_MODE_OPTIONS = listOf(
     EditableProfileOption(WORKFLOW_PLAIN_ROVER, "Plain rover"),
     EditableProfileOption(WORKFLOW_ROVER_NTRIP, "Rover with NTRIP"),
-    EditableProfileOption(WORKFLOW_BASE_CALIBRATION, "Temporary base recording"),
+    EditableProfileOption(WORKFLOW_BASE_CALIBRATION, "Temporary base"),
     EditableProfileOption(WORKFLOW_FIXED_BASE, "Fixed base"),
 )
 
@@ -2549,6 +2612,7 @@ private fun buildDashboardStartIntent(
     settingsSets: List<RecordingSettingsSet>,
     selectedSettingsSetId: String,
     selectedWorkflowId: String?,
+    manualBaseCoordinate: CoordinatePair?,
 ): Intent? {
     val profileStore = ProfileStores(context)
     val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
@@ -2652,7 +2716,7 @@ private fun buildDashboardStartIntent(
         activeConfig.ntrip.baseLonDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LON, it) }
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_ID, activeConfig.workflowId)
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_NAME, activeConfig.workflowName)
-        putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, "ROVER")
+        putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, workflowId.receiverRoleForSession())
         putExtra(RecordingForegroundService.EXTRA_RECEIVER_PROFILE_ID, activeConfig.receiverProfileId)
         putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, activeConfig.commandProfileId)
         putExtra(RecordingForegroundService.EXTRA_COMMAND_PROFILE_ID, activeConfig.commandProfileId)
@@ -2669,7 +2733,16 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_EXPORT_JSON_SOLUTION, activeConfig.recording.exportJsonSolution)
         putExtra(RecordingForegroundService.EXTRA_RECORD_REMOTE_BASE_RAW, activeConfig.recording.recordRemoteBaseRaw)
         putExtra(RecordingForegroundService.EXTRA_ENABLE_MOCK_LOCATION, activeConfig.recording.enableMockLocation)
-        putExtra(RecordingForegroundService.EXTRA_COORDINATE_SOURCE, "NONE")
+        val manualBasePositionJson = if (workflowId == WORKFLOW_FIXED_BASE) {
+            manualBaseCoordinate?.toManualBasePositionJsonOrNull().orEmpty()
+        } else {
+            ""
+        }
+        putExtra(
+            RecordingForegroundService.EXTRA_COORDINATE_SOURCE,
+            if (manualBasePositionJson.isNotBlank()) "MANUAL" else "NONE",
+        )
+        putExtra(RecordingForegroundService.EXTRA_BASE_POSITION_JSON, manualBasePositionJson)
         putStringArrayListExtra(RecordingForegroundService.EXTRA_EXPECTED_ARTIFACTS, ArrayList(activeConfig.expectedSessionArtifactNames))
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, settingsSet.displayNameWithOverrides())
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_COMMAND_PROFILE_NAME, commandProfile.name)
@@ -3336,9 +3409,16 @@ private fun String.workflowName(): String =
     when (this) {
         WORKFLOW_PLAIN_ROVER -> "Plain rover recording"
         WORKFLOW_ROVER_NTRIP -> "Rover + NTRIP to receiver"
-        WORKFLOW_BASE_CALIBRATION -> "Temporary base preparation"
+        WORKFLOW_BASE_CALIBRATION -> "Temporary base"
         WORKFLOW_FIXED_BASE -> "Fixed base operation"
         else -> replace('-', ' ').replaceFirstChar { it.titlecase() }
+    }
+
+private fun String.receiverRoleForSession(): String =
+    when (this) {
+        WORKFLOW_BASE_CALIBRATION -> "BASE_CALIBRATION"
+        WORKFLOW_FIXED_BASE -> "FIXED_BASE"
+        else -> "ROVER"
     }
 
 internal fun restoredWorkflowIdOrNull(workflowId: String?): String? =

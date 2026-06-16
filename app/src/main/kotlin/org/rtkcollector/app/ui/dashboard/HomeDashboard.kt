@@ -26,15 +26,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -90,6 +93,10 @@ fun HomeDashboard(
     onReceiver: () -> Unit,
     onStorage: () -> Unit,
     onMark: () -> Unit,
+    coordinateAveraging: CoordinateAveragingState = CoordinateAveragingState(),
+    onStartCoordinateAveraging: (CoordinatePair) -> Unit = {},
+    onStopCoordinateAveraging: () -> Unit = {},
+    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit = {},
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
     val context = LocalContext.current
@@ -187,6 +194,10 @@ fun HomeDashboard(
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
+                        coordinateAveraging = coordinateAveraging,
+                        onStartCoordinateAveraging = onStartCoordinateAveraging,
+                        onStopCoordinateAveraging = onStopCoordinateAveraging,
+                        onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
                     )
                 } else {
                     CompactDashboard(
@@ -200,6 +211,10 @@ fun HomeDashboard(
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
+                        coordinateAveraging = coordinateAveraging,
+                        onStartCoordinateAveraging = onStartCoordinateAveraging,
+                        onStopCoordinateAveraging = onStopCoordinateAveraging,
+                        onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
                     )
                 }
             }
@@ -328,6 +343,10 @@ private fun CompactDashboard(
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
+    coordinateAveraging: CoordinateAveragingState,
+    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStopCoordinateAveraging: () -> Unit,
+    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -348,6 +367,10 @@ private fun CompactDashboard(
             state = state,
             onSettingsSet = onSettingsSet,
             onHelp = onHelp,
+            coordinateAveraging = coordinateAveraging,
+            onStartCoordinateAveraging = onStartCoordinateAveraging,
+            onStopCoordinateAveraging = onStopCoordinateAveraging,
+            onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
         )
     }
 }
@@ -364,6 +387,10 @@ private fun RailDashboard(
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
+    coordinateAveraging: CoordinateAveragingState,
+    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStopCoordinateAveraging: () -> Unit,
+    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -417,6 +444,10 @@ private fun RailDashboard(
             onSettingsSet = onSettingsSet,
             onHelp = onHelp,
             modifier = Modifier.weight(1f),
+            coordinateAveraging = coordinateAveraging,
+            onStartCoordinateAveraging = onStartCoordinateAveraging,
+            onStopCoordinateAveraging = onStopCoordinateAveraging,
+            onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
         )
     }
 }
@@ -604,6 +635,10 @@ private fun DashboardCards(
     modifier: Modifier = Modifier,
     onSettingsSet: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
+    coordinateAveraging: CoordinateAveragingState,
+    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStopCoordinateAveraging: () -> Unit,
+    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val useTwoColumns = compactDashboardCardColumnCount(maxWidth.value.toInt()) == 2
@@ -620,7 +655,14 @@ private fun DashboardCards(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        PositionCard(state = state, onHelp = onHelp)
+                        PositionCard(
+                            state = state,
+                            coordinateAveraging = coordinateAveraging,
+                            onStartCoordinateAveraging = onStartCoordinateAveraging,
+                            onStopCoordinateAveraging = onStopCoordinateAveraging,
+                            onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+                            onHelp = onHelp,
+                        )
                         CorrectionsCard(state = state, onHelp = onHelp)
                     }
                     Column(
@@ -632,7 +674,14 @@ private fun DashboardCards(
                     }
                 }
             } else {
-                PositionCard(state = state, onHelp = onHelp)
+                PositionCard(
+                    state = state,
+                    coordinateAveraging = coordinateAveraging,
+                    onStartCoordinateAveraging = onStartCoordinateAveraging,
+                    onStopCoordinateAveraging = onStopCoordinateAveraging,
+                    onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+                    onHelp = onHelp,
+                )
                 FixCard(state = state, onHelp = onHelp)
                 CorrectionsCard(state = state, onHelp = onHelp)
                 RecordingCard(state = state, onHelp = onHelp)
@@ -645,15 +694,41 @@ private fun DashboardCards(
 @Composable
 private fun PositionCard(
     state: DashboardState,
+    coordinateAveraging: CoordinateAveragingState,
+    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStopCoordinateAveraging: () -> Unit,
+    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
     onHelp: (HelpTopic) -> Unit,
 ) {
+    val coordinates = state.position.coordinatePairOrNull()
+    val context = LocalContext.current
+    var showCopyDialog by remember { mutableStateOf(false) }
+    val baseControlsVisible = state.status.workflow.isBaseCoordinateWorkflow()
     DashboardCard(
         title = "Position",
         cardHeight = PositionDashboardCardHeight,
-        helpTopic = HelpTopic.ELLIPSOIDAL_HEIGHT,
+        helpTopic = HelpTopic.COORDINATE_ACTIONS,
         onHelp = onHelp,
     ) {
-        PositionMajorValue(state.position)
+        PositionMajorValue(
+            position = state.position,
+            onClick = {
+                if (coordinates != null) {
+                    showCopyDialog = true
+                } else {
+                    Toast.makeText(context, "No coordinate available to copy.", Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+        if (baseControlsVisible) {
+            CoordinateActionRow(
+                coordinates = coordinates,
+                averaging = coordinateAveraging,
+                onStartCoordinateAveraging = onStartCoordinateAveraging,
+                onStopCoordinateAveraging = onStopCoordinateAveraging,
+                onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+            )
+        }
         Metric("UTC", state.position.utcTime)
         Metric("Ellipsoidal height", state.position.ellipsoidalHeight)
         Metric("Altitude", state.position.altitude)
@@ -661,12 +736,28 @@ private fun PositionCard(
         Metric("Latitude error", state.position.latError)
         Metric("Longitude error", state.position.lonError)
     }
+    if (showCopyDialog && coordinates != null) {
+        CoordinateCopyDialog(
+            coordinates = coordinates,
+            onDismiss = { showCopyDialog = false },
+        )
+    }
 }
 
 @Composable
-private fun PositionMajorValue(position: PositionCardState) {
+private fun PositionMajorValue(
+    position: PositionCardState,
+    onClick: () -> Unit,
+) {
     Column(
-        modifier = Modifier.height(PositionMajorValueHeight),
+        modifier = Modifier
+            .height(PositionMajorValueHeight)
+            .fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = "Position coordinates"
+            }
+            .clickable(onClick = onClick),
         verticalArrangement = Arrangement.Center,
     ) {
         position.latLonLinesForNarrowLayout().forEach { line ->
@@ -679,6 +770,107 @@ private fun PositionMajorValue(position: PositionCardState) {
             )
         }
     }
+}
+
+@Composable
+private fun CoordinateActionRow(
+    coordinates: CoordinatePair?,
+    averaging: CoordinateAveragingState,
+    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStopCoordinateAveraging: () -> Unit,
+    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
+) {
+    val enabled = coordinates != null
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CompactCoordinateButton(
+            label = "Base",
+            enabled = enabled,
+            onClick = {
+                coordinates?.let(onUseCurrentCoordinateAsManualBase)
+            },
+        )
+        CompactCoordinateButton(
+            label = if (averaging.active) "Stop" else "Avg",
+            enabled = enabled || averaging.active,
+            onClick = {
+                if (averaging.active) {
+                    onStopCoordinateAveraging()
+                } else {
+                    coordinates?.let(onStartCoordinateAveraging)
+                }
+            },
+        )
+        Text(
+            text = averaging.statusLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun CompactCoordinateButton(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.height(28.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 9.dp, vertical = 0.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun CoordinateCopyDialog(
+    coordinates: CoordinatePair,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    fun copy(format: CoordinateCopyFormat) {
+        val text = format.format(coordinates)
+        context.getSystemService(ClipboardManager::class.java)
+            .setPrimaryClip(ClipData.newPlainText("RtkCollector coordinate", text))
+        Toast.makeText(context, "Coordinate copied.", Toast.LENGTH_SHORT).show()
+        onDismiss()
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Copy coordinate") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                CoordinateCopyFormat.entries.forEach { format ->
+                    TextButton(onClick = { copy(format) }) {
+                        Text(format.label)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+private fun String.isBaseCoordinateWorkflow(): Boolean {
+    val normalized = lowercase()
+    return normalized.contains("temporary base") || normalized.contains("fixed base")
 }
 
 @Composable

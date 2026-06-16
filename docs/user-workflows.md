@@ -34,6 +34,17 @@ It also provides the experimental real-recording controls:
 - foreground-service start/stop;
 - live receiver RX, receiver TX, correction input and NTRIP state counters.
 
+The Position card is also an action surface. Tapping the displayed coordinate
+opens copy choices for `geo:lat,lon`, `lat,lon`, `lat` and `lon`. In base
+workflows, compact `Base` and `Avg` controls may appear next to the coordinate:
+`Base` switches the next-session setup toward fixed-base operation using the
+current coordinate; the user must still choose or create a matching `MODE BASE`
+command profile before starting. `Avg` starts a live coordinate average.
+Averaging is valid only while the interpreted fix type remains unchanged. If the
+fix changes, averaging stops and the app reports the reason. This live average
+is field guidance, not a replacement for PPP/static RTK or an accepted
+`base-position.json`.
+
 The Files card shows the active session location and recorded byte counts. The
 Sessions menu lists recordings in the configured app-private storage with latest
 sessions first and separates the current session, completed recordings and
@@ -318,15 +329,18 @@ TX, NTRIP correction input, events, quality logs and derived solution sidecars
 are separate files in that folder. Raw receiver bytes remain in
 `receiver-rx.raw`; metadata and parser-derived exports are sidecars.
 
-## Temporary-Base Preparation
+## Temporary Base
 
 Use this when you want to place a temporary base close to the rover, often with
 better sky visibility than a distant permanent base. A stationary car roof in
 open sky can be useful if the antenna mount is stable and multipath is
-acceptable.
+acceptable. The temporary base is a normal base-position determination
+workflow: it records raw observations and in-device solutions so its coordinate
+can be determined by RTK against another base, PPP, static post-processing, or
+fallback averaging.
 
-Temporary-base preparation is not a final fixed-base mode. It records the data
-needed to produce one or more base-position candidates later.
+Temporary base is not the same as final fixed-base operation. It records the
+data needed to produce one or more base-position candidates later.
 
 Required recording behaviour:
 
@@ -348,6 +362,21 @@ Base-position candidate preference:
 6. manual known point or external `base-position.json`.
 
 Long averaging is fallback evidence. It is not equivalent to static RTK or PPP.
+It should carry duration and uncertainty and should be used only when better
+methods are unavailable.
+
+The temporary-base dashboard can help capture an accepted coordinate in the
+field. Use `Avg` only while the receiver is stationary and the fix type is
+stable. Use `Base` only after deciding the shown or averaged coordinate is good
+enough for the intended work; if no `MODE BASE` command profile exists, create
+or select one in Menu > Init/shutdown scripts before starting fixed-base
+operation.
+
+The app performs a start-time sanity check: a rover workflow must not run a
+receiver command profile that sends `MODE BASE`. Temporary-base and other
+base-style recordings may still use rover-mode receiver commands when the
+purpose is to derive the base coordinate from another base, PPP or later
+processing.
 
 ## Fixed Base From Accepted Coordinate
 

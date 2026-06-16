@@ -219,4 +219,75 @@ class ActiveRecordingConfigTest {
 
         config.validateForStart()
     }
+
+    @Test
+    fun `rover workflow rejects base mode command profile before start`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                runtimeScript = "MODE BASE TIME 120 2.5\nGNGGA 1",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertEquals("Rover workflow cannot start with a command profile that sets MODE BASE.", error.message)
+    }
+
+    @Test
+    fun `rover workflow rejects base mode init command before start`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                initScript = "UNLOG COM1\nMODE BASE TIME 120 2.5",
+                runtimeScript = "GNGGA 1",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertEquals("Rover workflow cannot start with a command profile that sets MODE BASE.", error.message)
+    }
+
+    @Test
+    fun `fixed base workflow permits rover mode command profile for raw collection`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "fixed-base"),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                runtimeScript = "MODE ROVER SURVEY\nBESTNAVB COM1 1",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Fixed base",
+            workflowUsesNtrip = false,
+            passwordLookup = { null },
+        )
+
+        config.validateForStart()
+    }
 }

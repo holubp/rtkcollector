@@ -144,6 +144,90 @@ class DashboardStateTest {
     }
 
     @Test
+    fun `position coordinate pair parses lat lon for actions`() {
+        val coordinates = PositionCardState(latLon = "50.087451234, 14.421253456").coordinatePairOrNull()
+
+        assertEquals(CoordinatePair("50.087451234", "14.421253456"), coordinates)
+    }
+
+    @Test
+    fun `position coordinate pair ignores missing value`() {
+        assertEquals(null, PositionCardState().coordinatePairOrNull())
+    }
+
+    @Test
+    fun `coordinate copy formats are stable`() {
+        val coordinates = CoordinatePair("50.087451234", "14.421253456")
+
+        assertEquals("geo:50.087451234,14.421253456", CoordinateCopyFormat.GEO_URI.format(coordinates))
+        assertEquals("50.087451234,14.421253456", CoordinateCopyFormat.LAT_LON.format(coordinates))
+        assertEquals("50.087451234", CoordinateCopyFormat.LAT.format(coordinates))
+        assertEquals("14.421253456", CoordinateCopyFormat.LON.format(coordinates))
+    }
+
+    @Test
+    fun `manual base position json records coordinate candidate without inventing height`() {
+        val coordinates = CoordinatePair("50.087451234", "14.421253456")
+
+        assertEquals(
+            "{" +
+                "\"latDeg\":50.087451234," +
+                "\"lonDeg\":14.421253456," +
+                "\"heightM\":null," +
+                "\"frame\":\"UNKNOWN\"," +
+                "\"method\":\"MANUAL_KNOWN_POINT\"," +
+                "\"source\":\"MANUAL\"" +
+                "}",
+            coordinates.toManualBasePositionJsonOrNull(),
+        )
+    }
+
+    @Test
+    fun `coordinate averaging starts and accumulates mean`() {
+        val started = startCoordinateAveraging(
+            fixType = "RTK fixed",
+            coordinates = CoordinatePair("50.0", "14.0"),
+        )
+        val updated = started.addSample(
+            fixType = "RTK fixed",
+            coordinates = CoordinatePair("52.0", "16.0"),
+        )
+
+        assertTrue(updated.active)
+        assertEquals(2, updated.sampleCount)
+        assertEquals(51.0, updated.meanLat)
+        assertEquals(15.0, updated.meanLon)
+        assertEquals("Avg 2x", updated.statusLabel)
+    }
+
+    @Test
+    fun `coordinate averaging stops when fix type changes`() {
+        val started = startCoordinateAveraging(
+            fixType = "RTK fixed",
+            coordinates = CoordinatePair("50.0", "14.0"),
+        )
+        val stopped = started.addSample(
+            fixType = "DGPS",
+            coordinates = CoordinatePair("50.1", "14.1"),
+        )
+
+        assertFalse(stopped.active)
+        assertEquals("Fix changed", stopped.stoppedReason)
+        assertEquals("Fix changed", stopped.statusLabel)
+    }
+
+    @Test
+    fun `coordinate averaging does not start without known fix`() {
+        val started = startCoordinateAveraging(
+            fixType = "n/a",
+            coordinates = CoordinatePair("50.0", "14.0"),
+        )
+
+        assertFalse(started.active)
+        assertEquals("No fix", started.stoppedReason)
+    }
+
+    @Test
     fun `error clipboard text includes category and full message`() {
         val state = DashboardState.planned(
             workflow = "Rover + NTRIP",

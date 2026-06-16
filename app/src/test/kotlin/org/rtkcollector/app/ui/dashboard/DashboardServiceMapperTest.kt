@@ -178,6 +178,43 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `bestnav solution type has priority over unknown gga quality`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "PSRDIFF")
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 7)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("DGPS", state.fix.fixType)
+    }
+
+    @Test
+    fun `base manual gga quality is shown explicitly`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 7)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("Base/manual", state.fix.fixType)
+    }
+
+    @Test
+    fun `unknown gga quality is shown as unknown instead of settled fix`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, 17)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("Unknown GGA 17", state.fix.fixType)
+    }
+
+    @Test
     fun `ppp converging stays in ppp field and does not replace gga fix type`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

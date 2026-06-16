@@ -81,6 +81,17 @@ Important docs:
   M8P.
 - Long-term averaging is a fallback base-position strategy, not equivalent to
   PPP/static RTK or a known control point.
+- Temporary-base recording and fixed-base operation are separate phases. A
+  temporary base is a stationary receiver used to determine a coordinate from
+  RTK against another base, PPP, static/post-processing or fallback averaging.
+  A fixed base uses an already accepted coordinate to configure base output.
+- Rover workflows must not use command profiles that put the receiver in
+  `MODE BASE`. Base/temporary-base workflows may use rover-mode commands when
+  the goal is coordinate determination from another base, PPP or raw/static
+  post-processing.
+- Dashboard coordinate actions are intentionally compact: tapping coordinates
+  copies them, `Base` moves toward fixed-base use of the current coordinate,
+  and `Avg` starts a live average that must stop if the fix type changes.
 
 ## Android Implementation Rules
 

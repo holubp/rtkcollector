@@ -23,6 +23,10 @@ enum class HelpTopic(
         title = "Ellipsoidal height",
         body = "Height above the reference ellipsoid, distinct from orthometric altitude.",
     ),
+    COORDINATE_ACTIONS(
+        title = "Position actions",
+        body = "Tap the coordinate to copy it as geo:lat,lon, lat,lon, lat or lon. In base workflows, Base selects fixed-base operation using the current coordinate, then you must choose a matching MODE BASE command profile before starting. Avg starts a live coordinate average and stops automatically if the fix type changes.",
+    ),
     TX_TO_RECEIVER(
         title = "TX to receiver",
         body = "Bytes transmitted by the app toward the receiver serial input.",

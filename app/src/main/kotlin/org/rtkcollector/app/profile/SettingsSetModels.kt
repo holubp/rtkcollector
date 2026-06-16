@@ -84,6 +84,7 @@ data class RecordingOutputOverride(
     val exportJsonSolution: Boolean? = null,
     val exportGpx: Boolean? = null,
     val recordRemoteBaseRaw: Boolean? = null,
+    val enableMockLocation: Boolean? = null,
 ) {
     fun validate() {
         pppNmeaGgaQuality?.let {
@@ -302,7 +303,8 @@ private fun SettingsSetOverrides.toJson(): JSONObject {
                 .putNullable("pppNmeaGgaQuality", it.pppNmeaGgaQuality)
                 .putNullable("exportJsonSolution", it.exportJsonSolution)
                 .putNullable("exportGpx", it.exportGpx)
-                .putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw),
+                .putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw)
+                .putNullable("enableMockLocation", it.enableMockLocation),
         )
     }
     storage?.let {
@@ -381,6 +383,7 @@ private object SettingsSetOverridesJson {
                     exportJsonSolution = it.optBooleanOrNull("exportJsonSolution"),
                     exportGpx = it.optBooleanOrNull("exportGpx"),
                     recordRemoteBaseRaw = it.optBooleanOrNull("recordRemoteBaseRaw"),
+                    enableMockLocation = it.optBooleanOrNull("enableMockLocation"),
                 )
             }
         },

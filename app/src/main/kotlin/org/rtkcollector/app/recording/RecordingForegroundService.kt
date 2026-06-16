@@ -13,6 +13,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import org.rtkcollector.app.mocklocation.AndroidMockLocationSink
+import org.rtkcollector.app.mocklocation.MockLocationPublishResult
+import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
 import org.rtkcollector.app.receiver.isUm980CommandOkResponse
@@ -69,6 +72,17 @@ import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980StreamParser
 import org.rtkcollector.receiver.unicore.Um980Telemetry
+import org.rtkcollector.receiver.unicore.toBestnavCandidate
+import org.rtkcollector.receiver.unicore.toCandidate
+import org.rtkcollector.receiver.unicore.toPppCandidate
+import org.rtkcollector.receiver.api.ReceiverCommand
+import org.rtkcollector.receiver.ublox.UbloxMessageFrequencyTracker
+import org.rtkcollector.receiver.ublox.UbloxMessageKind
+import org.rtkcollector.receiver.ublox.UbloxNavPvtParser
+import org.rtkcollector.receiver.ublox.UbloxScriptCompiler
+import org.rtkcollector.receiver.ublox.UbloxStreamParser
+import org.rtkcollector.core.solution.BestSolutionSelector
+import org.rtkcollector.core.solution.SolutionCandidate
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import java.time.Instant
@@ -80,6 +94,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 class RecordingForegroundService : Service() {
+    private enum class CompilePhase { START, STOP }
     private val running = AtomicBoolean(false)
     private val stopping = AtomicBoolean(false)
     private val shutdownSent = AtomicBoolean(false)
@@ -110,6 +125,22 @@ class RecordingForegroundService : Service() {
     private var ntripRateWindowTxBytes: Long = 0L
     private var lastNotificationUpdateAtMillis: Long = 0L
     private var lastNotificationText: String = ""
+    @Volatile
+    private var activeReceiverFamily: String = ""
+    private val bestSolutionExecutor: java.util.concurrent.ScheduledExecutorService =
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "rtkcollector-best").apply { isDaemon = true }
+        }
+    private var bestSolutionTicker: java.util.concurrent.ScheduledFuture<*>? = null
+    private var lastMockPublishedAt: Long? = null
+    private var previousMockResult: org.rtkcollector.app.mocklocation.MockLocationPublishResult? = null
+    private var mockLocationRequested: Boolean = false
+    private var ubloxStreamParser = UbloxStreamParser()
+    private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+    private var sharedNmeaGgaParser: NmeaGgaParser = NmeaGgaParser()
+    private val solutionCandidates =
+        java.util.concurrent.ConcurrentHashMap<String, org.rtkcollector.core.solution.SolutionCandidate>()
+    private var mockLocationPublisher: MockLocationPublisher? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -137,6 +168,9 @@ class RecordingForegroundService : Service() {
 
     override fun onDestroy() {
         stopRecording(sendShutdown = false)
+        bestSolutionTicker?.cancel(false)
+        bestSolutionTicker = null
+        bestSolutionExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -171,6 +205,10 @@ class RecordingForegroundService : Service() {
             rtcmLastBaseId = null,
             um980Frequency = DEFAULT_UM980_FREQUENCY_DISPLAY,
             um980Mode = "n/a",
+            bestSolutionSource = "n/a",
+            bestSolutionFix = "n/a",
+            bestSolutionAgeMs = null,
+            ubloxFrequency = DEFAULT_UBLOX_FREQUENCY_DISPLAY,
         )
         broadcastState()
 
@@ -295,6 +333,14 @@ class RecordingForegroundService : Service() {
             captureRuntime.open()
             runtime = captureRuntime
 
+            activeReceiverFamily = receiverFamilyFromDriverId(intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID))
+            solutionCandidates.clear()
+            ubloxStreamParser = UbloxStreamParser()
+            ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+            sharedNmeaGgaParser = NmeaGgaParser()
+            val enableMockLocation = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
+            mockLocationRequested = enableMockLocation
+            configureMockLocation(enableMockLocation)
             val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
@@ -342,6 +388,13 @@ class RecordingForegroundService : Service() {
             ntripRateWindowTxBytes = 0L
             activeWorkflowUsesNtrip = workflowUsesNtrip
             broadcastState()
+
+            lastMockPublishedAt = null
+            previousMockResult = null
+            bestSolutionTicker = bestSolutionExecutor.scheduleAtFixedRate(
+                { runBestSolutionTick() },
+                1, 1, java.util.concurrent.TimeUnit.SECONDS,
+            )
 
             captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
             maybeStartNtrip(intent, recorder)
@@ -847,7 +900,7 @@ class RecordingForegroundService : Service() {
             runCatching {
                 runtime?.let { captureRuntime ->
                     synchronized(txLock) {
-                        sendCommandLines(captureRuntime, shutdownCommands)
+                        sendCommandLines(captureRuntime, shutdownCommands, CompilePhase.STOP)
                     }
                 }
             }.onFailure { error ->
@@ -859,6 +912,8 @@ class RecordingForegroundService : Service() {
                 broadcastState()
             }
         }
+        bestSolutionTicker?.cancel(false)
+        bestSolutionTicker = null
         runCatching { ntripController?.stop() }
         runCatching { captureThread?.join(1500) }
         runCatching { advisoryFanout?.close() }
@@ -913,6 +968,11 @@ class RecordingForegroundService : Service() {
         ntripController = null
         activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
+        teardownMockLocation()
+        solutionCandidates.clear()
+        lastMockPublishedAt = null
+        previousMockResult = null
+        mockLocationRequested = false
         releaseWakeLock()
         state = state.copy(
             running = false,
@@ -923,6 +983,11 @@ class RecordingForegroundService : Service() {
             },
             rawRecordingActive = false,
             correctionsActive = false,
+            bestSolutionSource = "n/a",
+            bestSolutionFix = "n/a",
+            bestSolutionAgeMs = null,
+            mockLocationState = "Disabled",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
         )
         stopping.set(false)
         broadcastState()
@@ -930,16 +995,20 @@ class RecordingForegroundService : Service() {
         stopSelf()
     }
 
-    private fun sendCommandLines(captureRuntime: CaptureRuntime, commands: List<String>) {
-        commands.asSequence()
-            .map(String::trim)
-            .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .forEach { command ->
-                synchronized(txLock) {
-                    captureRuntime.sendToReceiver("$command\r\n".toByteArray(Charsets.US_ASCII))
-                    Thread.sleep(100)
-                }
+    private fun sendCommandLines(
+        captureRuntime: CaptureRuntime,
+        commands: List<String>,
+        phase: CompilePhase = CompilePhase.START,
+    ) {
+        if (commands.isEmpty()) return
+        val script = commands.joinToString("\n")
+        val compiled = compileReceiverCommands(phase, activeReceiverFamily, script)
+        compiled.forEach { command ->
+            synchronized(txLock) {
+                captureRuntime.sendToReceiver(command.payload)
+                Thread.sleep(100)
             }
+        }
     }
 
     private fun executeBaudTransition(
@@ -958,12 +1027,18 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun List<String>.validatedCommands(): List<String> =
-        asSequence()
+    private fun List<String>.validatedCommands(): List<String> {
+        val isUblox = activeReceiverFamily.startsWith("ublox", ignoreCase = true)
+        return asSequence()
             .map(String::trim)
             .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .onEach(Um980RuntimeCommandValidator::validateRuntimeCommand)
+            .onEach { command ->
+                if (!isUblox) {
+                    Um980RuntimeCommandValidator.validateRuntimeCommand(command)
+                }
+            }
             .toList()
+    }
 
     private fun validateBaud(value: Int, label: String): Int {
         require(value in 9600..921600) { "$label must be between 9600 and 921600." }
@@ -1258,6 +1333,10 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_CORRECTIONS_ACTIVE, state.correctionsActive)
                 putExtra(EXTRA_STATE_UM980_FREQUENCY, state.um980Frequency)
                 putExtra(EXTRA_STATE_UM980_MODE, state.um980Mode)
+                putExtra(EXTRA_STATE_BEST_SOLUTION_SOURCE, state.bestSolutionSource)
+                putExtra(EXTRA_STATE_BEST_SOLUTION_FIX, state.bestSolutionFix)
+                putExtra(EXTRA_STATE_MOCK_LOCATION_STATE, state.mockLocationState)
+                putExtra(EXTRA_STATE_UBLOX_FREQUENCY, state.ubloxFrequency)
             },
         )
     }
@@ -1269,6 +1348,231 @@ class RecordingForegroundService : Service() {
             509 -> frequencyTracker.record(Um980MessageKind.RTKSTATUS, System.currentTimeMillis())
             1026 -> frequencyTracker.record(Um980MessageKind.PPPNAV, System.currentTimeMillis())
             2118 -> frequencyTracker.record(Um980MessageKind.BESTNAV, System.currentTimeMillis())
+        }
+    }
+
+    private fun parseUbloxAdvisory(bytes: ByteArray, nowMillis: Long) {
+        ubloxStreamParser.accept(bytes).forEach { record ->
+            if (record.kind == "ubx") {
+                when {
+                    record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x07.toByte() -> {
+                        ubloxFrequencyTracker.record(UbloxMessageKind.NAV_PVT, nowMillis)
+                        UbloxNavPvtParser.parse(record.bytes, nowMillis)?.toSolutionCandidate()?.let {
+                            solutionCandidates[it.sourceId] = it
+                        }
+                    }
+                    record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x15.toByte() ->
+                        ubloxFrequencyTracker.record(UbloxMessageKind.RAWX, nowMillis)
+                    record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x13.toByte() ->
+                        ubloxFrequencyTracker.record(UbloxMessageKind.SFRBX, nowMillis)
+                    record.bytes.getOrNull(2) == 0x0D.toByte() && record.bytes.getOrNull(3) == 0x03.toByte() ->
+                        ubloxFrequencyTracker.record(UbloxMessageKind.TM2, nowMillis)
+                }
+            }
+            if (record.kind == "nmea") {
+                val fixes = runCatching { sharedNmeaGgaParser.accept(record.bytes) }
+                    .getOrDefault(emptyList())
+                fixes.forEach { fix ->
+                    ubloxFrequencyTracker.record(UbloxMessageKind.GGA, nowMillis)
+                    fix.toCandidate("ublox", nowMillis)?.let {
+                        solutionCandidates[it.sourceId] = it
+                    }
+                }
+            }
+        }
+    }
+
+    private fun runBestSolutionTick() {
+        runCatching {
+            val now = System.currentTimeMillis()
+            val ageLimit = org.rtkcollector.core.solution.BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS
+            // Evict stale entries proactively so the map stays bounded.
+            solutionCandidates.entries.removeIf { entry ->
+                now - entry.value.updatedAtMillis > ageLimit
+            }
+            val tickInput = BestSolutionTickInput(
+                candidates = solutionCandidates.values,
+                nowMillis = now,
+                mockEnabled = mockLocationRequested,
+                mockProviderAvailable = mockLocationPublisher != null,
+                lastMockPublishedAt = lastMockPublishedAt,
+                previousMockResult = previousMockResult,
+            )
+            val tick = BestSolutionTickLogic.compute(tickInput)
+
+            val best = (tick.publishAction as? PublishAction.Publish)?.snapshot
+            // Update derived dashboard fields up front so the UI sees them
+            // even if the publish attempt below fails.
+            applyTickStateDelta(tick.stateDelta, best, now)
+
+            when (val action = tick.publishAction) {
+                PublishAction.None -> {
+                    lastMockPublishedAt = tick.newLastMockPublishedAt
+                    previousMockResult = tick.newPreviousMockResult
+                }
+                is PublishAction.Publish -> {
+                    val publisher = mockLocationPublisher
+                    if (publisher == null) {
+                        previousMockResult = org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED
+                        state = state.copy(mockLocationState = previousMockResult!!.name)
+                    } else {
+                        val published = publisher.publish(action.snapshot, enabled = true)
+                        val applied = BestSolutionTickLogic.applyPublishResult(
+                            previous = tick,
+                            publishedResult = published,
+                            publishedAtMillis = action.snapshot.updatedAtMillis,
+                        )
+                        lastMockPublishedAt = applied.newLastMockPublishedAt
+                        previousMockResult = published
+                        state = state.copy(mockLocationState = published.name)
+                        if (applied.setLastError) {
+                            state = state.copy(
+                                lastError = "Android mock-location update failed. " +
+                                    "Check Developer options mock-location app setting.",
+                                errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+                                errorSeverity = RecordingErrorSeverity.DEGRADED,
+                            )
+                        }
+                    }
+                }
+            }
+            broadcastState()
+        }
+    }
+
+    private fun applyTickStateDelta(
+        delta: BestSolutionStateDelta,
+        best: org.rtkcollector.core.solution.BestSolutionSnapshot?,
+        nowMillis: Long,
+    ) {
+        state = state.copy(
+            bestSolutionSource = delta.bestSolutionSource,
+            bestSolutionFix = delta.bestSolutionFix,
+            bestSolutionAgeMs = delta.bestSolutionAgeMs,
+            mockLocationState = delta.mockResult.name,
+            latDeg = best?.latDeg ?: state.latDeg,
+            lonDeg = best?.lonDeg ?: state.lonDeg,
+            latLon = best?.let { latLonDisplay(it.latDeg, it.lonDeg) } ?: state.latLon,
+            ellipsoidalHeight = best?.ellipsoidalHeightM?.let(::metersDisplay) ?: state.ellipsoidalHeight,
+            altitude = best?.mslAltitudeM?.let(::metersDisplay) ?: state.altitude,
+            horizontalAccuracy = best?.horizontalAccuracyM?.let(::metersDisplay) ?: state.horizontalAccuracy,
+            verticalAccuracy = best?.verticalAccuracyM?.let(::metersDisplay) ?: state.verticalAccuracy,
+            satellitesUsed = best?.satellitesUsed ?: state.satellitesUsed,
+            ubloxFrequency = ubloxFrequencyTracker.display(nowMillis),
+        )
+    }
+
+    private fun configureMockLocation(enabled: Boolean) {
+        if (!enabled) {
+            teardownMockLocation()
+            return
+        }
+        val manager = getSystemService(android.location.LocationManager::class.java)
+        if (manager == null) {
+            mockLocationPublisher = null
+            state = state.copy(
+                mockLocationState =
+                    org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED.name,
+            )
+            return
+        }
+        val outcome = runCatching {
+            manager.addTestProvider(
+                android.location.LocationManager.GPS_PROVIDER,
+                /* requiresNetwork = */ false,
+                /* requiresSatellite = */ false,
+                /* requiresCell = */ false,
+                /* hasMonetaryCost = */ false,
+                /* supportsAltitude = */ true,
+                /* supportsSpeed = */ true,
+                /* supportsBearing = */ true,
+                android.location.provider.ProviderProperties.POWER_USAGE_LOW,
+                android.location.provider.ProviderProperties.ACCURACY_FINE,
+            )
+            manager.setTestProviderEnabled(
+                android.location.LocationManager.GPS_PROVIDER,
+                true,
+            )
+        }
+        if (outcome.isFailure) {
+            mockLocationPublisher = null
+            previousMockResult =
+                org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED
+            state = state.copy(
+                mockLocationState = previousMockResult!!.name,
+                lastError = "RtkCollector is not the selected mock location app. " +
+                    "Enable it in Developer Options.",
+                errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            return
+        }
+        mockLocationPublisher = org.rtkcollector.app.mocklocation.MockLocationPublisher(
+            org.rtkcollector.app.mocklocation.AndroidMockLocationSink(
+                manager,
+                android.location.LocationManager.GPS_PROVIDER,
+            ),
+        )
+    }
+
+    private fun teardownMockLocation() {
+        if (mockLocationPublisher == null) return
+        mockLocationPublisher = null
+        runCatching {
+            val manager = getSystemService(android.location.LocationManager::class.java) ?: return
+            manager.setTestProviderEnabled(
+                android.location.LocationManager.GPS_PROVIDER,
+                false,
+            )
+            manager.removeTestProvider(android.location.LocationManager.GPS_PROVIDER)
+        }
+    }
+
+    private fun compileReceiverCommands(
+        phase: CompilePhase,
+        receiverFamily: String,
+        script: String,
+    ): List<org.rtkcollector.receiver.api.ReceiverCommand> {
+        return try {
+            if (receiverFamily.startsWith("ublox", ignoreCase = true)) {
+                org.rtkcollector.receiver.ublox.UbloxScriptCompiler.compile(script)
+            } else {
+                script.lineSequence()
+                    .map(String::trim)
+                    .filter { it.isNotBlank() }
+                    .map {
+                        org.rtkcollector.receiver.api.ReceiverCommand(
+                            label = it.take(40),
+                            payload = "$it\r\n".toByteArray(Charsets.US_ASCII),
+                        )
+                    }
+                    .toList()
+            }
+        } catch (error: Exception) {
+            val severity = when (phase) {
+                CompilePhase.START -> RecordingErrorSeverity.FATAL
+                CompilePhase.STOP -> RecordingErrorSeverity.DEGRADED
+            }
+            state = state.copy(
+                lastError = error.message ?: error.javaClass.simpleName,
+                errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+                errorSeverity = severity,
+            )
+            broadcastState()
+            if (phase == CompilePhase.START) {
+                throw error
+            }
+            emptyList()
+        }
+    }
+
+    private fun receiverFamilyFromDriverId(driverId: String?): String {
+        if (driverId.isNullOrBlank()) return ""
+        val normalized = driverId.lowercase()
+        return when {
+            normalized.startsWith("ublox") -> "ublox"
+            normalized.startsWith("um980") || normalized.startsWith("unicore") -> "um980"
+            else -> normalized.substringBefore('-')
         }
     }
 
@@ -1322,6 +1626,10 @@ class RecordingForegroundService : Service() {
                                         differentialAge = fix.differentialAgeS?.let { "%.1f s".format(java.util.Locale.US, it) }
                                             ?: state.differentialAge,
                                     )
+                                    val now = System.currentTimeMillis()
+                                    fix.toCandidate("um980", now)?.let {
+                                        solutionCandidates[it.sourceId] = it
+                                    }
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
                                     state = state.copy(
@@ -1388,6 +1696,10 @@ class RecordingForegroundService : Service() {
                                                 ellipsoidalHeight = metersDisplay(solution.heightM).takeUnless { it == "n/a" }
                                                     ?: state.ellipsoidalHeight,
                                             ).withReceiverRtkAsciiSolution(solution)
+                                            val now = System.currentTimeMillis()
+                                            solution.toBestnavCandidate(now)?.let {
+                                                solutionCandidates[it.sourceId] = it
+                                            }
                                         }
                                     }
                                 }
@@ -1406,6 +1718,10 @@ class RecordingForegroundService : Service() {
                                     }
                                     state = state.withUm980Telemetry(telemetry)
                                         .withReceiverRtkTelemetry(telemetry)
+                                    val now = System.currentTimeMillis()
+                                    telemetry.toBestnavCandidate(now)?.let {
+                                        solutionCandidates[it.sourceId] = it
+                                    }
                                 }
                                 Um980BinaryParser.parseAdrnavb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {
@@ -1421,6 +1737,10 @@ class RecordingForegroundService : Service() {
                                     state = state.copy(
                                         pppStatus = telemetry.positionType ?: state.pppStatus,
                                     )
+                                    val now = System.currentTimeMillis()
+                                    telemetry.toPppCandidate(now)?.let {
+                                        solutionCandidates[it.sourceId] = it
+                                    }
                                 }
                                 Um980BinaryParser.parseRtkstatusb(record.bytes)?.let { telemetry ->
                                     if (exportJsonSolution) {
@@ -1443,6 +1763,11 @@ class RecordingForegroundService : Service() {
                             }
                         }
                         state = state.copy(um980Frequency = frequencyTracker.display(System.currentTimeMillis()))
+                    }
+                },
+                AdvisoryConsumer("ublox-mixed-stream") { bytes ->
+                    if (activeReceiverFamily.startsWith("ublox", ignoreCase = true)) {
+                        parseUbloxAdvisory(bytes, System.currentTimeMillis())
                     }
                 },
                 AdvisoryConsumer("rtcm3-extractor") { bytes ->
@@ -1703,6 +2028,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_PPP_NMEA_GGA_QUALITY = "pppNmeaGgaQuality"
         const val EXTRA_EXPORT_JSON_SOLUTION = "exportJsonSolution"
         const val EXTRA_RECORD_REMOTE_BASE_RAW = "recordRemoteBaseRaw"
+        const val EXTRA_ENABLE_MOCK_LOCATION = "enableMockLocation"
         const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
         const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
@@ -1766,6 +2092,10 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_CORRECTIONS_ACTIVE = "correctionsActive"
         const val EXTRA_STATE_UM980_FREQUENCY = "um980Frequency"
         const val EXTRA_STATE_UM980_MODE = "um980Mode"
+        const val EXTRA_STATE_BEST_SOLUTION_SOURCE = "bestSolutionSource"
+        const val EXTRA_STATE_BEST_SOLUTION_FIX = "bestSolutionFix"
+        const val EXTRA_STATE_MOCK_LOCATION_STATE = "mockLocationState"
+        const val EXTRA_STATE_UBLOX_FREQUENCY = "ubloxFrequency"
 
         private const val CHANNEL_ID = "rtkcollector-recording"
         private const val NOTIFICATION_ID = 101
@@ -1775,6 +2105,8 @@ class RecordingForegroundService : Service() {
         private const val SAVE_CONFIG_OK_TIMEOUT_MILLIS = 3_000L
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =
             "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
+        private const val DEFAULT_UBLOX_FREQUENCY_DISPLAY =
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz"
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)

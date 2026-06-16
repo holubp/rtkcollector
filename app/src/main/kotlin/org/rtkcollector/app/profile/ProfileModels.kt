@@ -194,6 +194,7 @@ data class RecordingPolicyProfile(
     val exportJsonSolution: Boolean = true,
     val exportGpx: Boolean = false,
     val recordRemoteBaseRaw: Boolean = false,
+    val enableMockLocation: Boolean = false,
     val isProtected: Boolean = false,
 ) {
     fun validate() {
@@ -220,6 +221,7 @@ data class RecordingPolicyProfile(
         .put("exportJsonSolution", exportJsonSolution)
         .put("exportGpx", exportGpx)
         .put("recordRemoteBaseRaw", recordRemoteBaseRaw)
+        .put("enableMockLocation", enableMockLocation)
 
     companion object {
         const val DEFAULT_PPP_NMEA_GGA_QUALITY = 2
@@ -237,6 +239,7 @@ data class RecordingPolicyProfile(
             exportJsonSolution = json.optBoolean("exportJsonSolution", true),
             exportGpx = json.optBoolean("exportGpx", false),
             recordRemoteBaseRaw = json.optBoolean("recordRemoteBaseRaw", false),
+            enableMockLocation = json.optBoolean("enableMockLocation", false),
         ).also(RecordingPolicyProfile::validate)
     }
 }

@@ -51,7 +51,8 @@ class UbloxM8Driver(
 
     override fun identify(sample: ByteArray): ReceiverIdentification? = null
 
-    override fun buildInitCommands(profile: ReceiverProfile): List<ReceiverCommand> = emptyList()
+    override fun buildInitCommands(profile: ReceiverProfile): List<ReceiverCommand> =
+        UbloxScriptCompiler.compile(profile.initScript.orEmpty())
 
     override fun buildRoverCommands(config: RoverConfig): List<ReceiverCommand> = emptyList()
 

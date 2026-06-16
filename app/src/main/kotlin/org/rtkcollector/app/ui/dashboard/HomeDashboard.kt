@@ -705,6 +705,8 @@ private fun FixCard(
         Metric("PPP", state.fix.pppStatus)
         Metric("RTK", state.fix.rtkStatus)
         Metric("RTKLIB", state.fix.rtklibStatus)
+        Metric("Best", state.fix.bestSolution)
+        Metric("Mock loc", state.fix.mockLocation)
         DashedSeparator()
         Metric("Mode", state.fix.receiverMode)
         Text(

@@ -2091,6 +2091,7 @@ private fun ProfileStores.profileEditorData(
                     ),
                     EditableProfileField("exportJsonSolution", "Export JSON solution", profile.exportJsonSolution.toString(), boolean = true),
                     EditableProfileField("exportGpx", "Export GPX", profile.exportGpx.toString(), boolean = true),
+                    EditableProfileField("enableMockLocation", "Publish Android mock location while recording", profile.enableMockLocation.toString(), boolean = true),
                     EditableProfileField("recordRemoteBaseRaw", "Record remote base raw", profile.recordRemoteBaseRaw.toString(), boolean = true),
                 ),
             )
@@ -2237,6 +2238,7 @@ private fun ProfileStores.saveProfileEditorData(
                         exportJsonSolution = values.optional("exportJsonSolution").toBooleanStrictOrFalse(),
                         exportGpx = values.optional("exportGpx").toBooleanStrictOrFalse(),
                         recordRemoteBaseRaw = values.optional("recordRemoteBaseRaw").toBooleanStrictOrFalse(),
+                        enableMockLocation = values.optional("enableMockLocation").toBooleanStrictOrFalse(),
                     )
                 } else {
                     profile
@@ -2666,6 +2668,7 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_PPP_NMEA_GGA_QUALITY, activeConfig.recording.pppNmeaGgaQuality)
         putExtra(RecordingForegroundService.EXTRA_EXPORT_JSON_SOLUTION, activeConfig.recording.exportJsonSolution)
         putExtra(RecordingForegroundService.EXTRA_RECORD_REMOTE_BASE_RAW, activeConfig.recording.recordRemoteBaseRaw)
+        putExtra(RecordingForegroundService.EXTRA_ENABLE_MOCK_LOCATION, activeConfig.recording.enableMockLocation)
         putExtra(RecordingForegroundService.EXTRA_COORDINATE_SOURCE, "NONE")
         putStringArrayListExtra(RecordingForegroundService.EXTRA_EXPECTED_ARTIFACTS, ArrayList(activeConfig.expectedSessionArtifactNames))
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, settingsSet.displayNameWithOverrides())

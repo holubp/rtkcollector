@@ -171,6 +171,8 @@ data class FixCardState(
     val rtklibStatus: String = "Not configured",
     val receiverFrequency: String = "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz",
     val receiverMode: String = "n/a",
+    val bestSolution: String = "n/a",
+    val mockLocation: String = "Disabled",
 )
 
 data class NtripCardState(

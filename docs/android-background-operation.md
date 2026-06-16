@@ -34,6 +34,10 @@ before session writers are opened. If Start requests permission, the user must
 approve the Android dialog and press Start again; V1 does not auto-start
 recording from the permission callback.
 
+Mock-location publishing, when enabled, is owned by the same foreground service
+as recording. It is not an Activity-owned feature and must stop when the
+recording/session stops.
+
 ## Limits
 
 Android cannot guarantee survival after:

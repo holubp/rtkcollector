@@ -98,13 +98,13 @@ GGA quality field for generated NMEA. V1 allows `2`, `5` or `9`, defaults to
 `2`, and must not emit `4` for PPP unless a future parser can explicitly prove
 PPP-AR/PPP-RTK integer-fixed status.
 
-For filesystem-backed stopped sessions, the app may re-export
-`receiver-solution.nmea` from `receiver-rx.raw` on explicit user request. This
-operation replaces only the derived NMEA sidecar and must leave
-`receiver-rx.raw`, `tx-to-receiver.raw`, correction input and session metadata
-unchanged. Archived ZIP and SAF document-tree re-export are future work unless
-the archive or SAF session is first restored to a normal filesystem-backed
-session folder.
+For stopped sessions, the app may re-export `receiver-solution.nmea` from
+`receiver-rx.raw` on explicit user request. This operation replaces only the
+derived NMEA sidecar and must leave `receiver-rx.raw`, `tx-to-receiver.raw`,
+correction input and session metadata unchanged. Filesystem-backed storage and
+SAF document-tree storage should both expose this workflow; SAF implementations
+must use stream-based reads and writes because document URIs are not filesystem
+paths.
 
 `storageKind` records whether the session used app-private storage or a SAF
 tree. For SAF sessions, the UI-displayed session location may be a document URI

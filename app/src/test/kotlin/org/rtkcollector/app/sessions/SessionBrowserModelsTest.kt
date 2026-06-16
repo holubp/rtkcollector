@@ -43,6 +43,28 @@ class SessionBrowserModelsTest {
     }
 
     @Test
+    fun `SAF entries can expose supported actions without pretending to be filesystem backed`() {
+        val saf = entry("saf", SessionEntryKind.RECORDING, 10).copy(
+            filesystemBacked = false,
+            capabilities = SessionActionCapabilities(
+                shareZip = true,
+                shareNmea = true,
+                reexportNmea = true,
+                archive = false,
+                restore = false,
+                delete = true,
+            ),
+        )
+
+        assertTrue(saf.canShareZip)
+        assertTrue(saf.canShareNmea)
+        assertTrue(saf.canReexportNmea)
+        assertFalse(saf.canArchive)
+        assertFalse(saf.canRestore)
+        assertTrue(saf.canDelete)
+    }
+
+    @Test
     fun `select all button label changes when all selectable entries are selected`() {
         val state = sessionBrowserStateOf(
             listOf(

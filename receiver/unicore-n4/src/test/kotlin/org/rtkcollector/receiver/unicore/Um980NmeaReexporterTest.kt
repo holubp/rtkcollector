@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -76,5 +78,26 @@ class Um980NmeaReexporterTest {
         assertEquals(4, result.sentencesWritten)
         assertTrue(text.startsWith(sourceNmea))
         assertTrue("\$GPGGA,124914.000,5005.247074,N,01425.275207,E,2,18," in text)
+    }
+
+    @Test
+    fun `stream reexport preserves nmea input and reports byte progress`() {
+        val raw = "\$GNGGA,151437.150,4914.6094192,N,01634.8215775,E,2,8,,278.536,M,44.249,M,2.2,1022*79\r\n"
+            .toByteArray(Charsets.US_ASCII)
+        val output = ByteArrayOutputStream()
+        val progress = mutableListOf<Um980NmeaReexportProgress>()
+
+        val result = Um980NmeaReexporter.reexportReceiverRxRaw(
+            input = ByteArrayInputStream(raw),
+            output = output,
+            totalBytes = raw.size.toLong(),
+            onProgress = progress::add,
+        )
+
+        assertEquals(raw.decodeToString(), output.toString(Charsets.US_ASCII.name()))
+        assertEquals(1, result.sentencesWritten)
+        assertEquals(raw.size.toLong(), progress.last().bytesRead)
+        assertEquals(raw.size.toLong(), progress.last().totalBytes)
+        assertEquals(1, progress.last().sentencesWritten)
     }
 }

@@ -61,9 +61,12 @@ verifies the restored artifacts and removes the archive ZIP only after a
 successful restore. Delete requires confirmation and can remove selected
 completed folders or archive ZIPs.
 
-The first implementation fully supports filesystem-backed app-private session
-browsing. SAF recording still writes valid sessions, but full SAF document-tree
-session browsing, archive and restore are future work. Start/Stop and Menu are
+Filesystem-backed app-private storage and SAF document-tree storage should offer
+the same session-management workflow where Android's document provider supports
+the required operations: browse sessions, share temporary ZIPs, share generated
+NMEA, re-export generated NMEA, archive, restore and delete completed
+recordings. SAF operations are stream-based and provider-dependent; failures
+must be reported without mutating `receiver-rx.raw`. Start/Stop and Menu are
 intended to stay outside scrollable content so they remain reachable in portrait
 and landscape layouts.
 

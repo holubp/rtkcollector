@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,7 @@ import org.rtkcollector.app.sessions.sessionPathCopyText
 fun SessionsScreen(
     state: SessionBrowserState,
     progressText: String? = null,
+    progressFraction: Float? = null,
     onToggle: (String) -> Unit,
     onSelectCurrent: () -> Unit,
     onSelectRecordings: () -> Unit,
@@ -58,8 +60,8 @@ fun SessionsScreen(
     val selected = state.selectedEntries
     val selectionMode = state.selectedIds.isNotEmpty()
     val canShare = selected.any(SessionBrowserEntry::canShareZip)
-    val canShareNmea = selected.any(SessionBrowserEntry::canShareZip)
-    val canReexportNmea = selected.any(SessionBrowserEntry::canShareZip)
+    val canShareNmea = selected.any(SessionBrowserEntry::canShareNmea)
+    val canReexportNmea = selected.any(SessionBrowserEntry::canReexportNmea)
     val canArchive = selected.any(SessionBrowserEntry::canArchive)
     val canRestore = selected.any(SessionBrowserEntry::canRestore)
     val canDelete = selected.any(SessionBrowserEntry::canDelete)
@@ -83,6 +85,10 @@ fun SessionsScreen(
                 text = it,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
+            )
+            LinearProgressIndicator(
+                progress = { progressFraction?.coerceIn(0f, 1f) ?: 0f },
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         FlowRow(

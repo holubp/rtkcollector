@@ -13,6 +13,27 @@ enum class SessionBrowserGroupKind {
     ARCHIVES,
 }
 
+data class SessionActionCapabilities(
+    val shareZip: Boolean,
+    val shareNmea: Boolean,
+    val reexportNmea: Boolean,
+    val archive: Boolean,
+    val restore: Boolean,
+    val delete: Boolean,
+) {
+    companion object {
+        fun forFilesystem(kind: SessionEntryKind, isActive: Boolean): SessionActionCapabilities =
+            SessionActionCapabilities(
+                shareZip = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
+                shareNmea = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
+                reexportNmea = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
+                archive = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
+                restore = kind == SessionEntryKind.ARCHIVE,
+                delete = !isActive,
+            )
+    }
+}
+
 data class SessionBrowserEntry(
     val id: String,
     val title: String,
@@ -22,6 +43,7 @@ data class SessionBrowserEntry(
     val modifiedEpochMillis: Long,
     val sizeBytes: Long? = null,
     val filesystemBacked: Boolean = true,
+    val capabilities: SessionActionCapabilities? = null,
 ) {
     val isActive: Boolean
         get() = kind == SessionEntryKind.CURRENT_ACTIVE
@@ -29,17 +51,37 @@ data class SessionBrowserEntry(
     val isArchive: Boolean
         get() = kind == SessionEntryKind.ARCHIVE
 
+    private val effectiveCapabilities: SessionActionCapabilities
+        get() = capabilities ?: if (filesystemBacked) {
+            SessionActionCapabilities.forFilesystem(kind, isActive)
+        } else {
+            SessionActionCapabilities(
+                shareZip = false,
+                shareNmea = false,
+                reexportNmea = false,
+                archive = false,
+                restore = false,
+                delete = false,
+            )
+        }
+
     val canShareZip: Boolean
-        get() = filesystemBacked && !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING)
+        get() = effectiveCapabilities.shareZip
+
+    val canShareNmea: Boolean
+        get() = effectiveCapabilities.shareNmea
+
+    val canReexportNmea: Boolean
+        get() = effectiveCapabilities.reexportNmea
 
     val canArchive: Boolean
-        get() = filesystemBacked && !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING)
+        get() = effectiveCapabilities.archive
 
     val canRestore: Boolean
-        get() = filesystemBacked && kind == SessionEntryKind.ARCHIVE
+        get() = effectiveCapabilities.restore
 
     val canDelete: Boolean
-        get() = filesystemBacked && !isActive
+        get() = effectiveCapabilities.delete
 }
 
 data class SessionBrowserGroup(

@@ -78,6 +78,8 @@ import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.recording.SessionNmeaExporter
 import org.rtkcollector.app.recording.SessionNmeaShareSelection
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
+import org.rtkcollector.app.sessions.SafSessionActions
+import org.rtkcollector.app.sessions.SafSessionBrowser
 import org.rtkcollector.app.sessions.SessionArchiveManager
 import org.rtkcollector.app.sessions.SessionBrowserEntry
 import org.rtkcollector.app.sessions.SessionBrowserState
@@ -90,6 +92,7 @@ import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
+import org.rtkcollector.app.ui.dashboard.formatBytes
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
@@ -190,6 +193,7 @@ fun RtkCollectorApp(
     var showSettingsExportDialog by remember { mutableStateOf(false) }
     var includePlaintextPasswordsInBackup by remember { mutableStateOf(false) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
+    var sessionProgressFraction by remember { mutableStateOf<Float?>(null) }
     var pendingSettingsImport by remember { mutableStateOf<PendingSettingsImport?>(null) }
     var settingsImportRequestId by remember { mutableStateOf(0) }
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
@@ -254,17 +258,20 @@ fun RtkCollectorApp(
     }
     fun runSessionTask(label: String, task: () -> Unit) {
         zipProgressText = "$label..."
+        sessionProgressFraction = null
         Thread {
             runCatching(task)
                 .onSuccess {
                     runOnMain(context) {
                         zipProgressText = null
+                        sessionProgressFraction = null
                         refreshSessions()
                     }
                 }
                 .onFailure { error ->
                     runOnMain(context) {
                         zipProgressText = null
+                        sessionProgressFraction = null
                         refreshSessions()
                         Toast.makeText(context, "$label failed: ${error.message}", Toast.LENGTH_LONG).show()
                     }
@@ -1002,6 +1009,7 @@ fun RtkCollectorApp(
                 AppScreen.SESSIONS -> SessionsScreen(
                     state = sessionBrowserState,
                     progressText = zipProgressText,
+                    progressFraction = sessionProgressFraction,
                     onToggle = { id -> sessionBrowserState = sessionBrowserState.toggle(id) },
                     onSelectCurrent = { sessionBrowserState = sessionBrowserState.selectCurrent() },
                     onSelectRecordings = { sessionBrowserState = sessionBrowserState.selectRecordings() },
@@ -1014,27 +1022,44 @@ fun RtkCollectorApp(
                             Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
                         } else {
                             zipProgressText = "Preparing ZIP..."
+                            sessionProgressFraction = 0f
                             Thread {
                                 runCatching {
                                     val cacheRoot = context.cacheDir.resolve("session-share-zips").toPath()
                                     SessionArchiveManager.cleanupTemporaryShareZips(cacheRoot)
                                     selected.mapIndexed { index, entry ->
-                                        val source = Paths.get(entry.location)
-                                        SessionArchiveManager.createTemporaryShareZip(source, cacheRoot) { progress ->
-                                            runOnMain(context) {
-                                                zipProgressText = "ZIP ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
+                                        if (entry.isSafLocation) {
+                                            SafSessionActions.createTemporaryShareZip(
+                                                resolver = context.contentResolver,
+                                                sessionUri = Uri.parse(entry.location),
+                                                cacheRoot = cacheRoot,
+                                            ) { progress ->
+                                                runOnMain(context) {
+                                                    zipProgressText = "ZIP ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
+                                                    sessionProgressFraction = progress.fraction.toFloat()
+                                                }
+                                            }
+                                        } else {
+                                            val source = Paths.get(entry.location)
+                                            SessionArchiveManager.createTemporaryShareZip(source, cacheRoot) { progress ->
+                                                runOnMain(context) {
+                                                    zipProgressText = "ZIP ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
+                                                    sessionProgressFraction = progress.fraction.toFloat()
+                                                }
                                             }
                                         }
                                     }
                                 }.onSuccess { zips ->
                                     runOnMain(context) {
                                         zipProgressText = null
+                                        sessionProgressFraction = null
                                         shareZipFiles(context, zips.map { it.toFile() })
                                         refreshSessions()
                                     }
                                 }.onFailure { error ->
                                     runOnMain(context) {
                                         zipProgressText = null
+                                        sessionProgressFraction = null
                                         Toast.makeText(context, "Share ZIP failed: ${error.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
@@ -1042,29 +1067,52 @@ fun RtkCollectorApp(
                         }
                     },
                     onShareNmeaSelected = {
-                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canShareZip)
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canShareNmea)
                         if (selected.isEmpty()) {
                             Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
                         } else {
                             zipProgressText = "Preparing NMEA..."
+                            sessionProgressFraction = 0f
                             Thread {
                                 runCatching {
                                     val cacheRoot = context.cacheDir.resolve("session-share-nmea").toPath()
                                     cleanupTemporaryNmeaShares(cacheRoot)
+                                    val filesystemEntries = selected.filterNot { it.isSafLocation }
+                                    val safEntries = selected.filter { it.isSafLocation }
                                     val selection = SessionNmeaShareSelection.fromSessionDirectories(
-                                        sessionDirectories = selected.map { Paths.get(it.location) },
+                                        sessionDirectories = filesystemEntries.map { Paths.get(it.location) },
                                         outputDirectory = cacheRoot,
                                     )
                                     val outputs = selection.plans.mapIndexed { index, plan ->
                                         runOnMain(context) {
-                                            zipProgressText = "NMEA ${index + 1}/${selection.plans.size}"
+                                            zipProgressText = "NMEA ${index + 1}/${selected.size}"
+                                            sessionProgressFraction = (index + 1).toFloat() / selected.size.toFloat()
                                         }
                                         SessionNmeaExporter.export(plan)
+                                    }.toMutableList()
+                                    var skipped = selection.skippedCount
+                                    safEntries.forEachIndexed { index, entry ->
+                                        val output = SafSessionActions.createTemporaryNmeaShare(
+                                            resolver = context.contentResolver,
+                                            sessionUri = Uri.parse(entry.location),
+                                            cacheRoot = cacheRoot,
+                                        )
+                                        if (output == null) {
+                                            skipped++
+                                        } else {
+                                            outputs.add(output)
+                                        }
+                                        runOnMain(context) {
+                                            val completed = filesystemEntries.size + index + 1
+                                            zipProgressText = "NMEA $completed/${selected.size}"
+                                            sessionProgressFraction = completed.toFloat() / selected.size.toFloat()
+                                        }
                                     }
-                                    selection to outputs
-                                }.onSuccess { (selection, outputs) ->
+                                    skipped to outputs
+                                }.onSuccess { (skipped, outputs) ->
                                     runOnMain(context) {
                                         zipProgressText = null
+                                        sessionProgressFraction = null
                                         if (outputs.isEmpty()) {
                                             Toast.makeText(
                                                 context,
@@ -1073,8 +1121,8 @@ fun RtkCollectorApp(
                                             ).show()
                                         } else {
                                             shareNmeaFiles(context, outputs.map { it.toFile() })
-                                            val message = if (selection.skippedCount > 0) {
-                                                "Shared NMEA for ${outputs.size} session(s); ${selection.skippedCount} selected session(s) had no NMEA export."
+                                            val message = if (skipped > 0) {
+                                                "Shared NMEA for ${outputs.size} session(s); $skipped selected session(s) had no NMEA export."
                                             } else {
                                                 "Shared NMEA for ${outputs.size} session(s)."
                                             }
@@ -1085,6 +1133,7 @@ fun RtkCollectorApp(
                                 }.onFailure { error ->
                                     runOnMain(context) {
                                         zipProgressText = null
+                                        sessionProgressFraction = null
                                         Toast.makeText(context, "Share NMEA failed: ${error.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
@@ -1092,11 +1141,12 @@ fun RtkCollectorApp(
                         }
                     },
                     onReexportNmeaSelected = {
-                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canShareZip)
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canReexportNmea)
                         if (selected.isEmpty()) {
                             Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
                         } else {
                             zipProgressText = "Re-exporting NMEA..."
+                            sessionProgressFraction = 0f
                             Thread {
                                 val pppGgaQuality = currentPppNmeaGgaQuality(
                                     profileStore = profileStore,
@@ -1110,27 +1160,50 @@ fun RtkCollectorApp(
                                 selected.forEachIndexed { index, entry ->
                                     runOnMain(context) {
                                         zipProgressText = "Re-export NMEA ${index + 1}/${selected.size}"
+                                        sessionProgressFraction = index.toFloat() / selected.size.toFloat()
                                     }
-                                    val sessionDirectory = Paths.get(entry.location)
-                                    val receiverRxRaw = sessionDirectory.resolve("receiver-rx.raw")
-                                    if (!Files.isRegularFile(receiverRxRaw)) {
-                                        skipped++
-                                    } else {
+                                    if (entry.isSafLocation) {
                                         runCatching {
-                                            Um980NmeaReexporter.reexportReceiverRxRaw(
-                                                receiverRxRaw = receiverRxRaw,
-                                                outputNmea = sessionDirectory.resolve("receiver-solution.nmea"),
+                                            val sentences = SafSessionActions.reexportNmea(
+                                                resolver = context.contentResolver,
+                                                sessionUri = Uri.parse(entry.location),
                                                 options = options,
-                                            )
-                                        }.onSuccess {
-                                            reexported++
+                                            ) { progress ->
+                                                val withinSession = progress.fraction?.toFloat() ?: 0f
+                                                runOnMain(context) {
+                                                    zipProgressText =
+                                                        "Re-export NMEA ${index + 1}/${selected.size}: ${formatBytes(progress.bytesRead)}"
+                                                    sessionProgressFraction =
+                                                        (index.toFloat() + withinSession) / selected.size.toFloat()
+                                                }
+                                            }
+                                            if (sentences == 0L) skipped++ else reexported++
                                         }.onFailure {
                                             failed++
+                                        }
+                                    } else {
+                                        val sessionDirectory = Paths.get(entry.location)
+                                        val receiverRxRaw = sessionDirectory.resolve("receiver-rx.raw")
+                                        if (!Files.isRegularFile(receiverRxRaw)) {
+                                            skipped++
+                                        } else {
+                                            runCatching {
+                                                Um980NmeaReexporter.reexportReceiverRxRaw(
+                                                    receiverRxRaw = receiverRxRaw,
+                                                    outputNmea = sessionDirectory.resolve("receiver-solution.nmea"),
+                                                    options = options,
+                                                )
+                                            }.onSuccess {
+                                                reexported++
+                                            }.onFailure {
+                                                failed++
+                                            }
                                         }
                                     }
                                 }
                                 runOnMain(context) {
                                     zipProgressText = null
+                                    sessionProgressFraction = null
                                     refreshSessions()
                                     Toast.makeText(
                                         context,
@@ -1144,11 +1217,27 @@ fun RtkCollectorApp(
                     onArchiveSelected = {
                         val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canArchive)
                         runSessionTask("Archive") {
+                            val safTreeUri = selectedSafTreeUri(profileStore, settingsSets, selectedSettingsSetId)
                             selected.forEachIndexed { index, entry ->
-                                val source = Paths.get(entry.location)
-                                SessionArchiveManager.archiveSession(source) { progress ->
-                                    runOnMain(context) {
-                                        zipProgressText = "Archive ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
+                                if (entry.isSafLocation) {
+                                    SafSessionActions.archiveSession(
+                                        resolver = context.contentResolver,
+                                        sessionUri = Uri.parse(entry.location),
+                                        rootTreeUri = safTreeUri ?: error("SAF storage tree is required for SAF archive."),
+                                        cacheRoot = context.cacheDir.resolve("session-archive-saf").toPath(),
+                                    ) { progress ->
+                                        runOnMain(context) {
+                                            zipProgressText = "Archive ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
+                                            sessionProgressFraction = progress.fraction.toFloat()
+                                        }
+                                    }
+                                } else {
+                                    val source = Paths.get(entry.location)
+                                    SessionArchiveManager.archiveSession(source) { progress ->
+                                        runOnMain(context) {
+                                            zipProgressText = "Archive ${index + 1}/${selected.size}: ${progress.filesCompleted}/${progress.totalFiles}"
+                                            sessionProgressFraction = progress.fraction.toFloat()
+                                        }
                                     }
                                 }
                             }
@@ -1157,11 +1246,21 @@ fun RtkCollectorApp(
                     onRestoreSelected = {
                         val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canRestore)
                         runSessionTask("Restore") {
+                            val safTreeUri = selectedSafTreeUri(profileStore, settingsSets, selectedSettingsSetId)
                             selected.forEachIndexed { index, entry ->
                                 runOnMain(context) {
                                     zipProgressText = "Restore ${index + 1}/${selected.size}"
+                                    sessionProgressFraction = index.toFloat() / selected.size.toFloat()
                                 }
-                                SessionArchiveManager.restoreArchive(Paths.get(entry.location))
+                                if (entry.isSafLocation) {
+                                    SafSessionActions.restoreArchive(
+                                        resolver = context.contentResolver,
+                                        archiveUri = Uri.parse(entry.location),
+                                        rootTreeUri = safTreeUri ?: error("SAF storage tree is required for SAF restore."),
+                                    )
+                                } else {
+                                    SessionArchiveManager.restoreArchive(Paths.get(entry.location))
+                                }
                             }
                         }
                     },
@@ -1171,12 +1270,22 @@ fun RtkCollectorApp(
                             selected.forEachIndexed { index, entry ->
                                 runOnMain(context) {
                                     zipProgressText = "Delete ${index + 1}/${selected.size}"
+                                    sessionProgressFraction = index.toFloat() / selected.size.toFloat()
                                 }
-                                when (entry.kind) {
-                                    SessionEntryKind.ARCHIVE -> FilesystemSessionBrowser.deleteArchive(Paths.get(entry.location))
-                                    SessionEntryKind.CURRENT_STOPPED,
-                                    SessionEntryKind.RECORDING -> FilesystemSessionBrowser.deleteRecording(Paths.get(entry.location))
-                                    SessionEntryKind.CURRENT_ACTIVE -> Unit
+                                if (entry.isSafLocation) {
+                                    when (entry.kind) {
+                                        SessionEntryKind.ARCHIVE -> SafSessionActions.deleteArchive(context.contentResolver, Uri.parse(entry.location))
+                                        SessionEntryKind.CURRENT_STOPPED,
+                                        SessionEntryKind.RECORDING -> SafSessionActions.deleteRecording(context.contentResolver, Uri.parse(entry.location))
+                                        SessionEntryKind.CURRENT_ACTIVE -> Unit
+                                    }
+                                } else {
+                                    when (entry.kind) {
+                                        SessionEntryKind.ARCHIVE -> FilesystemSessionBrowser.deleteArchive(Paths.get(entry.location))
+                                        SessionEntryKind.CURRENT_STOPPED,
+                                        SessionEntryKind.RECORDING -> FilesystemSessionBrowser.deleteRecording(Paths.get(entry.location))
+                                        SessionEntryKind.CURRENT_ACTIVE -> Unit
+                                    }
                                 }
                             }
                         }
@@ -1564,20 +1673,14 @@ private fun buildSessionBrowserState(
             currentSessionActive = dashboardState.isRecording,
         )
     } else {
-        sessionLocation
-            ?.let { location ->
-                sessionBrowserStateOf(
-                    listOf(
-                        SessionBrowserEntry(
-                            id = location,
-                            title = if (dashboardState.isRecording) "Current recording" else "Last session",
-                            subtitle = "SAF browsing/export is not available yet: $location",
-                            location = location,
-                            kind = if (dashboardState.isRecording) SessionEntryKind.CURRENT_ACTIVE else SessionEntryKind.CURRENT_STOPPED,
-                            modifiedEpochMillis = System.currentTimeMillis(),
-                            filesystemBacked = false,
-                        ),
-                    ),
+        storageProfile.treeUri
+            ?.takeIf { it.isNotBlank() }
+            ?.let { treeUri ->
+                SafSessionBrowser.discover(
+                    resolver = context.contentResolver,
+                    treeUri = Uri.parse(treeUri),
+                    currentSessionLocation = sessionLocation,
+                    currentSessionActive = dashboardState.isRecording,
                 )
             }
             ?: SessionBrowserState()
@@ -1602,6 +1705,26 @@ private fun currentPppNmeaGgaQuality(
         ?.recordingOutput
         ?.pppNmeaGgaQuality
         ?: profileQuality
+}
+
+private val SessionBrowserEntry.isSafLocation: Boolean
+    get() = location.startsWith("content://")
+
+private fun selectedSafTreeUri(
+    profileStore: ProfileStores,
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+): Uri? {
+    val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+        ?: profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
+    return selectedSet
+        ?.storageProfileRef
+        ?.id
+        ?.let { id -> profileStore.storageProfiles().firstOrNull { it.id == id } }
+        ?.takeIf { it.kind == "SAF_TREE" }
+        ?.treeUri
+        ?.takeIf { it.isNotBlank() }
+        ?.let(Uri::parse)
 }
 
 private fun runOnMain(context: Context, action: () -> Unit) {

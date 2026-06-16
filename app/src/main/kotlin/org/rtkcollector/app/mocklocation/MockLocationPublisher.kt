@@ -1,5 +1,6 @@
 package org.rtkcollector.app.mocklocation
 
+import org.rtkcollector.core.solution.BestSolutionSelector
 import org.rtkcollector.core.solution.BestSolutionSnapshot
 
 data class MockLocationUpdate(
@@ -38,7 +39,9 @@ class MockLocationPublisher(
     fun publish(snapshot: BestSolutionSnapshot?, enabled: Boolean): MockLocationPublishResult {
         if (!enabled) return MockLocationPublishResult.DISABLED
         val current = snapshot ?: return MockLocationPublishResult.STALE
-        if (!current.isFresh) return MockLocationPublishResult.STALE
+        if (!current.isFreshFor(maxAgeMillis = BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS)) {
+            return MockLocationPublishResult.STALE
+        }
         return runCatching {
             sink.publish(
                 MockLocationUpdate(
@@ -59,13 +62,6 @@ class MockLocationPublisher(
                 MockLocationPublishResult.FAILED
             },
         )
-    }
-}
-
-class FakeMockLocationSink : MockLocationSink {
-    val locations = mutableListOf<MockLocationUpdate>()
-    override fun publish(update: MockLocationUpdate) {
-        locations += update
     }
 }
 

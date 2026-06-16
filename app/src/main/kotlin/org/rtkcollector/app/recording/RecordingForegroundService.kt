@@ -1462,11 +1462,11 @@ class RecordingForegroundService : Service() {
             horizontalAccuracy = metersDisplay(delta.horizontalAccuracyM),
             verticalAccuracy = metersDisplay(delta.verticalAccuracyM),
             satellitesUsed = delta.satellitesUsed,
-            satellitesInView = if (delta.satellitesUsed == null) null else state.satellitesInView,
+            satellitesInView = delta.satellitesInView,
             satellites = if (delta.satellitesUsed == null) {
                 "n/a"
             } else {
-                satelliteDisplay(delta.satellitesUsed, state.satellitesInView)
+                satelliteDisplay(delta.satellitesUsed, delta.satellitesInView)
             },
             ubloxFrequency = ubloxFrequencyTracker.display(nowMillis),
         )

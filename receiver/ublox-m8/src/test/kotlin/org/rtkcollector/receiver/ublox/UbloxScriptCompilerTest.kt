@@ -82,6 +82,24 @@ class UbloxScriptCompilerTest {
     }
 
     @Test
+    fun `rejects negative cfg gnss flags uint32`() {
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            UbloxScriptCompiler.compile("!UBX CFG-GNSS 0 32 32 1 0 8 16 0 -1")
+        }
+
+        assertTrue(error.message!!.contains("uint32"))
+    }
+
+    @Test
+    fun `rejects cfg gnss flags above uint32 range`() {
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            UbloxScriptCompiler.compile("!UBX CFG-GNSS 0 32 32 1 0 8 16 0 4294967296")
+        }
+
+        assertTrue(error.message!!.contains("uint32"))
+    }
+
+    @Test
     fun `missing payload reports actionable line message`() {
         val error = assertThrows(IllegalArgumentException::class.java) {
             UbloxScriptCompiler.compile("!UBX CFG-RATE")

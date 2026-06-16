@@ -215,9 +215,9 @@ class BestSolutionTickLogicTest {
     }
 
     @Test
-    fun `selector ignores entries older than maxAgeMillis`() {
-        val fresh = candidate("UBX-NAV-PVT", FixClass.SINGLE, updatedAtMillis = 4_900L)
-        val stale = candidate("UM980-BESTNAV", FixClass.RTK_FIXED, updatedAtMillis = 0L)
+    fun `selector ignores stale best state while accepting fresh replacement`() {
+        val fresh = candidate("UBX-NAV-PVT", FixClass.SINGLE, updatedAtMillis = 5_100L, satellitesInView = 14)
+        val stale = candidate("UM980-BESTNAV", FixClass.RTK_FIXED, updatedAtMillis = 4_999L, satellitesInView = 30)
 
         val out = BestSolutionTickLogic.compute(
             input(
@@ -230,6 +230,8 @@ class BestSolutionTickLogicTest {
         // BestSolutionSelector filters stale candidates; the fresh one wins
         // even though it ranks lower than the stale RTK_FIXED.
         assertEquals("UBX-NAV-PVT", out.stateDelta.bestSolutionSource)
+        assertEquals(4_900L, out.stateDelta.bestSolutionAgeMs)
+        assertEquals(14, out.stateDelta.satellitesInView)
     }
 
     private fun input(
@@ -273,6 +275,7 @@ class BestSolutionTickLogicTest {
         fixClass: FixClass,
         updatedAtMillis: Long,
         horizontalAccuracyM: Double? = null,
+        satellitesInView: Int? = null,
     ): SolutionCandidate = SolutionCandidate(
         sourceId = sourceId,
         receiverFamily = "test",
@@ -286,6 +289,6 @@ class BestSolutionTickLogicTest {
         horizontalAccuracyM = horizontalAccuracyM,
         verticalAccuracyM = null,
         satellitesUsed = 12,
-        satellitesInView = null,
+        satellitesInView = satellitesInView,
     )
 }

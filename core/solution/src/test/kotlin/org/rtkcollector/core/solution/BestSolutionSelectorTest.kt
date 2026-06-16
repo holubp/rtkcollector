@@ -93,6 +93,18 @@ class BestSolutionSelectorTest {
     }
 
     @Test
+    fun `snapshot freshness can be evaluated against caller max age`() {
+        val selected = BestSolutionSelector.select(
+            candidates = listOf(candidate("recent", FixClass.SINGLE, updatedAtMillis = 7_000L)),
+            nowMillis = 10_000L,
+            maxAgeMillis = 4_000L,
+        )
+
+        assertEquals(true, selected?.isFreshFor(maxAgeMillis = 4_000L))
+        assertEquals(false, selected?.isFreshFor(maxAgeMillis = 2_000L))
+    }
+
+    @Test
     fun `sbas and dgps share rank so accuracy breaks the tie`() {
         val now = 10_000L
         val sbas = candidate(

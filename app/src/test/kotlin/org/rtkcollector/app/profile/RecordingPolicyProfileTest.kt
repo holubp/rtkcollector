@@ -31,6 +31,30 @@ class RecordingPolicyProfileTest {
     }
 
     @Test
+    fun `recording policy defaults mock location publishing to disabled`() {
+        val decoded = RecordingPolicyProfile.fromJson(
+            JSONObject()
+                .put("id", "old")
+                .put("name", "Old recording profile"),
+        )
+
+        assertEquals(false, decoded.enableMockLocation)
+    }
+
+    @Test
+    fun `recording policy round trip preserves mock location publishing`() {
+        val profile = RecordingPolicyProfile(
+            id = "recording",
+            name = "Recording",
+            enableMockLocation = true,
+        )
+
+        val decoded = RecordingPolicyProfile.fromJson(profile.toJson())
+
+        assertEquals(true, decoded.enableMockLocation)
+    }
+
+    @Test
     fun `recording policy rejects unsupported ppp nmea quality`() {
         assertThrows(IllegalArgumentException::class.java) {
             RecordingPolicyProfile(

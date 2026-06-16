@@ -53,5 +53,7 @@ data class BestSolutionSnapshot(
     val ageMillis: Long,
 ) {
     val isFresh: Boolean
-        get() = ageMillis <= BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS
+        get() = isFreshFor(BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS)
+
+    fun isFreshFor(maxAgeMillis: Long): Boolean = ageMillis <= maxAgeMillis
 }

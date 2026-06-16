@@ -34,12 +34,8 @@ object UbloxScriptCompiler {
     }
 
     private fun parseInteger(lineNumber: Int, token: String): Long {
-        val value = token.toLongOrNull()
+        return token.toLongOrNull()
             ?: throw IllegalArgumentException("Malformed !UBX payload on line $lineNumber: '$token' is not an integer.")
-        require(value in Int.MIN_VALUE.toLong()..0xFFFF_FFFFL) {
-            "Malformed !UBX payload on line $lineNumber: '$token' is out of range."
-        }
-        return value
     }
 
     private fun payload(commandName: String, lineNumber: Int, args: List<Long>): ByteArray =
@@ -106,13 +102,15 @@ object UbloxScriptCompiler {
         return byteArrayOf((value and 0xff).toByte(), ((value ushr 8) and 0xff).toByte())
     }
 
-    private fun u32(lineNumber: Int, value: Long): ByteArray =
-        byteArrayOf(
+    private fun u32(lineNumber: Int, value: Long): ByteArray {
+        require(value in 0..0xffff_ffffL) { "Payload value on line $lineNumber does not fit uint32: $value" }
+        return byteArrayOf(
             (value and 0xff).toByte(),
             ((value ushr 8) and 0xff).toByte(),
             ((value ushr 16) and 0xff).toByte(),
             ((value ushr 24) and 0xff).toByte(),
         )
+    }
 
     private fun i32(lineNumber: Int, value: Long): ByteArray {
         require(value in Int.MIN_VALUE..Int.MAX_VALUE) { "Payload value on line $lineNumber does not fit int32: $value" }

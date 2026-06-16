@@ -127,6 +127,41 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `recording config uses mock location policy and settings override`() {
+        val policyConfig = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record", enableMockLocation = true),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+        val overrideConfig = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                overrides = SettingsSetOverrides(
+                    recordingOutput = RecordingOutputOverride(enableMockLocation = false),
+                ),
+            ),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record", enableMockLocation = true),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        assertEquals(true, policyConfig.recording.enableMockLocation)
+        assertEquals(false, overrideConfig.recording.enableMockLocation)
+    }
+
+    @Test
     fun `command profile runtime script becomes mode commands`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "plain-rover"),

@@ -133,6 +133,22 @@ class SettingsSetModelsTest {
     }
 
     @Test
+    fun `settings set round trip preserves mock location override`() {
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            id = "mock-location",
+            name = "Mock location override",
+            isProtected = false,
+            overrides = SettingsSetOverrides(
+                recordingOutput = RecordingOutputOverride(enableMockLocation = true),
+            ),
+        )
+
+        val decoded = RecordingSettingsSet.fromJson(settingsSet.toJson())
+
+        assertEquals(true, decoded.overrides.recordingOutput?.enableMockLocation)
+    }
+
+    @Test
     fun `settings set rejects invalid ppp nmea quality override`() {
         assertThrows(IllegalArgumentException::class.java) {
             SettingsSetOverrides(

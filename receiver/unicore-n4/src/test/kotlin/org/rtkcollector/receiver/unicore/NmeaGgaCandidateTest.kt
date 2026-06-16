@@ -33,13 +33,13 @@ class NmeaGgaCandidateTest {
     }
 
     @Test
-    fun `quality 6 maps to PPP_CONVERGED`() {
-        assertEquals(FixClass.PPP_CONVERGED, gga(quality = 6).toCandidate("um980", 0L)?.fixClass)
+    fun `quality 6 returns null instead of claiming PPP`() {
+        assertNull(gga(quality = 6).toCandidate("um980", 0L))
     }
 
     @Test
-    fun `unknown quality maps to SINGLE`() {
-        assertEquals(FixClass.SINGLE, gga(quality = 9).toCandidate("um980", 0L)?.fixClass)
+    fun `unknown quality returns null`() {
+        assertNull(gga(quality = 9).toCandidate("um980", 0L))
     }
 
     @Test

@@ -11,6 +11,7 @@ data class BestSolutionTickInput(
     val mockEnabled: Boolean,
     val mockProviderAvailable: Boolean = true,
     val lastMockPublishedAt: Long? = null,
+    val lastMockPublishedIdentity: String? = null,
     val previousMockResult: MockLocationPublishResult? = null,
     val maxAgeMillis: Long = BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS,
 )
@@ -31,13 +32,16 @@ data class BestSolutionTickOutput(
     val stateDelta: BestSolutionStateDelta,
     val publishAction: PublishAction,
     val newLastMockPublishedAt: Long?,
+    val newLastMockPublishedIdentity: String?,
     val newPreviousMockResult: MockLocationPublishResult?,
+    val previousMockResult: MockLocationPublishResult?,
 )
 
 data class PublishResultApplication(
     val mockResult: MockLocationPublishResult,
     val setLastError: Boolean,
     val newLastMockPublishedAt: Long?,
+    val newLastMockPublishedIdentity: String?,
 )
 
 object BestSolutionTickLogic {
@@ -47,12 +51,17 @@ object BestSolutionTickLogic {
             input.nowMillis,
             input.maxAgeMillis,
         )
+        val bestIdentity = best?.publishIdentity()
+        val samePublishedCandidate =
+            best != null &&
+                best.updatedAtMillis == input.lastMockPublishedAt &&
+                bestIdentity == input.lastMockPublishedIdentity
 
         val mockResult = when {
             !input.mockEnabled -> MockLocationPublishResult.DISABLED
             !input.mockProviderAvailable -> MockLocationPublishResult.NOT_PERMITTED
             best == null -> MockLocationPublishResult.STALE
-            best.updatedAtMillis == input.lastMockPublishedAt ->
+            samePublishedCandidate ->
                 input.previousMockResult ?: MockLocationPublishResult.PUBLISHED
             else -> MockLocationPublishResult.PUBLISHED // tentative; caller updates via applyPublishResult
         }
@@ -61,16 +70,11 @@ object BestSolutionTickLogic {
             input.mockEnabled &&
             input.mockProviderAvailable &&
             best != null &&
-            best.updatedAtMillis != input.lastMockPublishedAt
+            !samePublishedCandidate
         ) {
             PublishAction.Publish(best)
         } else {
             PublishAction.None
-        }
-
-        val newLastPublishedAt = when (publishAction) {
-            is PublishAction.Publish -> publishAction.snapshot.updatedAtMillis
-            PublishAction.None -> input.lastMockPublishedAt
         }
 
         return BestSolutionTickOutput(
@@ -81,8 +85,10 @@ object BestSolutionTickLogic {
                 mockResult = mockResult,
             ),
             publishAction = publishAction,
-            newLastMockPublishedAt = newLastPublishedAt,
+            newLastMockPublishedAt = input.lastMockPublishedAt,
+            newLastMockPublishedIdentity = input.lastMockPublishedIdentity,
             newPreviousMockResult = mockResult,
+            previousMockResult = input.previousMockResult,
         )
     }
 
@@ -97,15 +103,24 @@ object BestSolutionTickLogic {
     ): PublishResultApplication {
         val transitionedIntoFailed =
             publishedResult == MockLocationPublishResult.FAILED &&
-                previous.newPreviousMockResult != MockLocationPublishResult.FAILED
+                previous.previousMockResult != MockLocationPublishResult.FAILED
+        val publishedSnapshot = (previous.publishAction as? PublishAction.Publish)?.snapshot
         val newLastPublishedAt = when (publishedResult) {
             MockLocationPublishResult.PUBLISHED -> publishedAtMillis
             else -> previous.newLastMockPublishedAt
+        }
+        val newLastPublishedIdentity = when (publishedResult) {
+            MockLocationPublishResult.PUBLISHED -> publishedSnapshot?.publishIdentity()
+            else -> previous.newLastMockPublishedIdentity
         }
         return PublishResultApplication(
             mockResult = publishedResult,
             setLastError = transitionedIntoFailed,
             newLastMockPublishedAt = newLastPublishedAt,
+            newLastMockPublishedIdentity = newLastPublishedIdentity,
         )
     }
+
+    private fun BestSolutionSnapshot.publishIdentity(): String =
+        "$sourceId|$receiverFamily|$engine"
 }

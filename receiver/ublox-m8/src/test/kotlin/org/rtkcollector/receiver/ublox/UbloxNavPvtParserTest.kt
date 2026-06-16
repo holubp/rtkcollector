@@ -14,7 +14,7 @@ class UbloxNavPvtParserTest {
         ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN).apply {
             putInt(0, 123456)
             put(20, 0x03)
-            put(21, 0x02)
+            put(21, 0x03)
             put(23, 14)
             putInt(24, (14.4212534 * 1e7).toInt())
             putInt(28, (50.0874512 * 1e7).toInt())
@@ -40,12 +40,23 @@ class UbloxNavPvtParserTest {
 
     @Test
     fun `nav pvt with carrSoln 1 reports rtk float`() {
-        assertEquals(FixClass.RTK_FLOAT, parseFixClass(fixType = 0x03, flags = 0x40))
+        assertEquals(FixClass.RTK_FLOAT, parseFixClass(fixType = 0x03, flags = 0x41))
     }
 
     @Test
     fun `nav pvt with carrSoln 2 reports rtk fixed`() {
-        assertEquals(FixClass.RTK_FIXED, parseFixClass(fixType = 0x03, flags = 0x80))
+        assertEquals(FixClass.RTK_FIXED, parseFixClass(fixType = 0x03, flags = 0x81))
+    }
+
+    @Test
+    fun `nav pvt with carrSoln but without gnssFixOK does not report rtk`() {
+        assertEquals(FixClass.SINGLE, parseFixClass(fixType = 0x03, flags = 0x40))
+        assertEquals(FixClass.SINGLE, parseFixClass(fixType = 0x03, flags = 0x80))
+    }
+
+    @Test
+    fun `nav pvt with carrSoln and two dimensional fix does not report rtk`() {
+        assertEquals(FixClass.NONE, parseFixClass(fixType = 0x02, flags = 0x41))
     }
 
     private fun parseFixClass(fixType: Int, flags: Int): FixClass {

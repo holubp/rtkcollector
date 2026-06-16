@@ -45,6 +45,12 @@ class Um980SolutionAdapterTest {
     }
 
     @Test
+    fun `unknown position type returns null`() {
+        val candidate = bestnavTelemetry(positionType = "TYPE_1234").toBestnavCandidate(0L)
+        assertNull(candidate)
+    }
+
+    @Test
     fun `blank position type returns null`() {
         val candidate = bestnavTelemetry(positionType = null).toBestnavCandidate(0L)
         assertNull(candidate)
@@ -78,6 +84,26 @@ class Um980SolutionAdapterTest {
     }
 
     @Test
+    fun `bestnav non computed solution status returns null`() {
+        val candidate = bestnavTelemetry(
+            solutionStatus = "INSUFFICIENT_OBS",
+            positionType = "NARROW_INT",
+        ).toBestnavCandidate(0L)
+
+        assertNull(candidate)
+    }
+
+    @Test
+    fun `pppnav non computed solution status returns null`() {
+        val candidate = pppTelemetry(
+            solutionStatus = "COLD_START",
+            positionType = "PPP",
+        ).toPppCandidate(0L)
+
+        assertNull(candidate)
+    }
+
+    @Test
     fun `ascii BESTNAV solution maps via positionType`() {
         val solution = Um980AsciiSolution(
             logName = "BESTNAVA",
@@ -95,12 +121,30 @@ class Um980SolutionAdapterTest {
         assertEquals(300.0, candidate?.ellipsoidalHeightM)
     }
 
+    @Test
+    fun `ascii BESTNAV non computed solution status returns null`() {
+        val solution = Um980AsciiSolution(
+            logName = "BESTNAVA",
+            solutionStatus = "INSUFFICIENT_OBS",
+            positionType = "WIDE_INT",
+            latDeg = 50.0,
+            lonDeg = 14.0,
+            heightM = 300.0,
+        )
+
+        val candidate = solution.toBestnavCandidate(0L)
+
+        assertNull(candidate)
+    }
+
     private fun bestnavTelemetry(
+        solutionStatus: String? = "SOL_COMPUTED",
         positionType: String?,
         latDeg: Double? = 50.0,
         lonDeg: Double? = 14.0,
     ): Um980Telemetry = Um980Telemetry(
         source = "BESTNAVB",
+        solutionStatus = solutionStatus,
         positionType = positionType,
         latDeg = latDeg,
         lonDeg = lonDeg,
@@ -113,8 +157,12 @@ class Um980SolutionAdapterTest {
         satellitesInView = 22,
     )
 
-    private fun pppTelemetry(positionType: String?): Um980Telemetry = Um980Telemetry(
+    private fun pppTelemetry(
+        solutionStatus: String? = "SOL_COMPUTED",
+        positionType: String?,
+    ): Um980Telemetry = Um980Telemetry(
         source = "PPPNAVB",
+        solutionStatus = solutionStatus,
         positionType = positionType,
         latDeg = 50.0,
         lonDeg = 14.0,

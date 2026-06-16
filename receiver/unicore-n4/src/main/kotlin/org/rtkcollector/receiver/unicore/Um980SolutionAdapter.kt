@@ -7,6 +7,7 @@ import org.rtkcollector.core.solution.SolutionEngine
 private const val UM980_FAMILY = "um980"
 
 fun Um980Telemetry.toBestnavCandidate(nowMillis: Long): SolutionCandidate? {
+    if (!hasComputedSolutionStatus(solutionStatus)) return null
     val lat = latDeg ?: return null
     val lon = lonDeg ?: return null
     val fix = bestnavFixClass(positionType) ?: return null
@@ -30,6 +31,7 @@ fun Um980Telemetry.toBestnavCandidate(nowMillis: Long): SolutionCandidate? {
 }
 
 fun Um980Telemetry.toPppCandidate(nowMillis: Long): SolutionCandidate? {
+    if (!hasComputedSolutionStatus(solutionStatus)) return null
     val lat = latDeg ?: return null
     val lon = lonDeg ?: return null
     val fix = pppFixClass(positionType) ?: return null
@@ -53,6 +55,7 @@ fun Um980Telemetry.toPppCandidate(nowMillis: Long): SolutionCandidate? {
 }
 
 fun Um980AsciiSolution.toBestnavCandidate(nowMillis: Long): SolutionCandidate? {
+    if (!hasComputedSolutionStatus(solutionStatus)) return null
     val lat = latDeg ?: return null
     val lon = lonDeg ?: return null
     val fix = bestnavFixClass(positionType) ?: return null
@@ -80,7 +83,7 @@ private fun bestnavFixClass(positionType: String?): FixClass? =
         "SINGLE", "INS_PSRSP" -> FixClass.SINGLE
         "PPP" -> FixClass.PPP_CONVERGED
         "PPP_CONVERGING" -> FixClass.PPP_CONVERGING
-        else -> FixClass.SINGLE
+        else -> null
     }
 
 private fun pppFixClass(positionType: String?): FixClass? =
@@ -98,6 +101,9 @@ private fun Um980Telemetry.horizontalAccuracyEstimateM(): Double? {
     if (lon == null) return lat
     return kotlin.math.sqrt(lat * lat + lon * lon)
 }
+
+private fun hasComputedSolutionStatus(solutionStatus: String?): Boolean =
+    solutionStatus?.uppercase() == "SOL_COMPUTED"
 
 fun NmeaGgaFix.toCandidate(receiverFamily: String, nowMillis: Long): SolutionCandidate? {
     val lat = latDeg ?: return null
@@ -128,6 +134,6 @@ private fun ggaFixClass(quality: Int?): FixClass? =
         2 -> FixClass.DGPS
         4 -> FixClass.RTK_FIXED
         5 -> FixClass.RTK_FLOAT
-        6 -> FixClass.PPP_CONVERGED
-        else -> FixClass.SINGLE
+        6 -> null
+        else -> null
     }

@@ -133,6 +133,7 @@ class RecordingForegroundService : Service() {
         }
     private var bestSolutionTicker: java.util.concurrent.ScheduledFuture<*>? = null
     private var lastMockPublishedAt: Long? = null
+    private var lastMockPublishedIdentity: String? = null
     private var previousMockResult: org.rtkcollector.app.mocklocation.MockLocationPublishResult? = null
     private var mockLocationRequested: Boolean = false
     private var ubloxStreamParser = UbloxStreamParser()
@@ -390,6 +391,7 @@ class RecordingForegroundService : Service() {
             broadcastState()
 
             lastMockPublishedAt = null
+            lastMockPublishedIdentity = null
             previousMockResult = null
             bestSolutionTicker = bestSolutionExecutor.scheduleAtFixedRate(
                 { runBestSolutionTick() },
@@ -971,6 +973,7 @@ class RecordingForegroundService : Service() {
         teardownMockLocation()
         solutionCandidates.clear()
         lastMockPublishedAt = null
+        lastMockPublishedIdentity = null
         previousMockResult = null
         mockLocationRequested = false
         releaseWakeLock()
@@ -1396,6 +1399,7 @@ class RecordingForegroundService : Service() {
                 mockEnabled = mockLocationRequested,
                 mockProviderAvailable = mockLocationPublisher != null,
                 lastMockPublishedAt = lastMockPublishedAt,
+                lastMockPublishedIdentity = lastMockPublishedIdentity,
                 previousMockResult = previousMockResult,
             )
             val tick = BestSolutionTickLogic.compute(tickInput)
@@ -1408,6 +1412,7 @@ class RecordingForegroundService : Service() {
             when (val action = tick.publishAction) {
                 PublishAction.None -> {
                     lastMockPublishedAt = tick.newLastMockPublishedAt
+                    lastMockPublishedIdentity = tick.newLastMockPublishedIdentity
                     previousMockResult = tick.newPreviousMockResult
                 }
                 is PublishAction.Publish -> {
@@ -1423,6 +1428,7 @@ class RecordingForegroundService : Service() {
                             publishedAtMillis = action.snapshot.updatedAtMillis,
                         )
                         lastMockPublishedAt = applied.newLastMockPublishedAt
+                        lastMockPublishedIdentity = applied.newLastMockPublishedIdentity
                         previousMockResult = published
                         state = state.copy(mockLocationState = published.name)
                         if (applied.setLastError) {

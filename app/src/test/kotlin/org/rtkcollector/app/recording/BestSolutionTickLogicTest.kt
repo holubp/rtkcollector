@@ -63,6 +63,7 @@ class BestSolutionTickLogicTest {
                 nowMillis = 1_500L,
                 mockEnabled = true,
                 lastMockPublishedAt = 1_000L,
+                lastMockPublishedIdentity = "UBX-NAV-PVT|test|DEVICE_INTERNAL",
                 previousMockResult = MockLocationPublishResult.PUBLISHED,
             ),
         )
@@ -70,6 +71,31 @@ class BestSolutionTickLogicTest {
         assertTrue(out.publishAction is PublishAction.None)
         assertEquals(MockLocationPublishResult.PUBLISHED, out.stateDelta.mockResult)
         assertEquals(1_000L, out.newLastMockPublishedAt)
+        assertEquals("UBX-NAV-PVT|test|DEVICE_INTERNAL", out.newLastMockPublishedIdentity)
+    }
+
+    @Test
+    fun `same updatedAt with different selected candidate republishes`() {
+        val candidate = candidate("UM980-BESTNAV", FixClass.RTK_FIXED, updatedAtMillis = 1_000L)
+
+        val out = BestSolutionTickLogic.compute(
+            input(
+                candidates = listOf(candidate),
+                nowMillis = 1_500L,
+                mockEnabled = true,
+                lastMockPublishedAt = 1_000L,
+                lastMockPublishedIdentity = "UBX-NAV-PVT|test|DEVICE_INTERNAL",
+                previousMockResult = MockLocationPublishResult.PUBLISHED,
+            ),
+        )
+
+        assertTrue(out.publishAction is PublishAction.Publish)
+        val applied = BestSolutionTickLogic.applyPublishResult(
+            previous = out,
+            publishedResult = MockLocationPublishResult.PUBLISHED,
+            publishedAtMillis = (out.publishAction as PublishAction.Publish).snapshot.updatedAtMillis,
+        )
+        assertEquals("UM980-BESTNAV|test|DEVICE_INTERNAL", applied.newLastMockPublishedIdentity)
     }
 
     @Test
@@ -90,6 +116,39 @@ class BestSolutionTickLogicTest {
 
         assertEquals(MockLocationPublishResult.FAILED, out.mockResult)
         assertEquals(true, out.setLastError)
+        assertEquals(1_000L, out.newLastMockPublishedAt)
+        assertNull(out.newLastMockPublishedIdentity)
+    }
+
+    @Test
+    fun `failed publish does not mark candidate as published so next tick retries`() {
+        val candidate = candidate("UBX-NAV-PVT", FixClass.SINGLE, updatedAtMillis = 1_500L)
+        val previous = previousState(
+            candidates = listOf(candidate),
+            nowMillis = 2_000L,
+            mockEnabled = true,
+            lastMockPublishedAt = 1_000L,
+            lastMockPublishedIdentity = "OLD|test|DEVICE_INTERNAL",
+            previousMockResult = MockLocationPublishResult.PUBLISHED,
+        )
+        val failed = BestSolutionTickLogic.applyPublishResult(
+            previous = previous,
+            publishedResult = MockLocationPublishResult.FAILED,
+            publishedAtMillis = null,
+        )
+
+        val retry = BestSolutionTickLogic.compute(
+            input(
+                candidates = listOf(candidate),
+                nowMillis = 2_500L,
+                mockEnabled = true,
+                lastMockPublishedAt = failed.newLastMockPublishedAt,
+                lastMockPublishedIdentity = failed.newLastMockPublishedIdentity,
+                previousMockResult = MockLocationPublishResult.FAILED,
+            ),
+        )
+
+        assertTrue(retry.publishAction is PublishAction.Publish)
     }
 
     @Test
@@ -149,6 +208,7 @@ class BestSolutionTickLogicTest {
         nowMillis: Long = 1_000L,
         mockEnabled: Boolean,
         lastMockPublishedAt: Long? = null,
+        lastMockPublishedIdentity: String? = null,
         previousMockResult: MockLocationPublishResult? = null,
         mockProviderAvailable: Boolean = true,
     ): BestSolutionTickInput = BestSolutionTickInput(
@@ -157,6 +217,7 @@ class BestSolutionTickLogicTest {
         mockEnabled = mockEnabled,
         mockProviderAvailable = mockProviderAvailable,
         lastMockPublishedAt = lastMockPublishedAt,
+        lastMockPublishedIdentity = lastMockPublishedIdentity,
         previousMockResult = previousMockResult,
     )
 
@@ -165,9 +226,17 @@ class BestSolutionTickLogicTest {
         nowMillis: Long,
         mockEnabled: Boolean,
         lastMockPublishedAt: Long?,
+        lastMockPublishedIdentity: String? = null,
         previousMockResult: MockLocationPublishResult?,
     ): BestSolutionTickOutput = BestSolutionTickLogic.compute(
-        input(candidates, nowMillis, mockEnabled, lastMockPublishedAt, previousMockResult),
+        input(
+            candidates = candidates,
+            nowMillis = nowMillis,
+            mockEnabled = mockEnabled,
+            lastMockPublishedAt = lastMockPublishedAt,
+            lastMockPublishedIdentity = lastMockPublishedIdentity,
+            previousMockResult = previousMockResult,
+        ),
     )
 
     private fun candidate(

@@ -30,8 +30,6 @@ object M8PProfile {
 
 object M8TProfile {
     val capabilities: ReceiverCapabilities = ReceiverCapabilities(
-        supportsBaseMode = true,
-        supportsFixedBaseMode = true,
         supportsNativeRawObservation = true,
     )
 }

@@ -16,6 +16,7 @@ import android.os.PowerManager
 import org.rtkcollector.app.mocklocation.AndroidMockLocationSink
 import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.app.mocklocation.MockLocationPublisher
+import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
 import org.rtkcollector.app.receiver.isUm980CommandOkResponse
@@ -206,9 +207,9 @@ class RecordingForegroundService : Service() {
             rtcmLastBaseId = null,
             um980Frequency = DEFAULT_UM980_FREQUENCY_DISPLAY,
             um980Mode = "n/a",
-            bestSolutionSource = "n/a",
-            bestSolutionFix = "n/a",
-            bestSolutionAgeMs = null,
+            ubloxFrequency = DEFAULT_UBLOX_FREQUENCY_DISPLAY,
+        ).clearBestSolutionFields(
+            mockLocationState = "Disabled",
             ubloxFrequency = DEFAULT_UBLOX_FREQUENCY_DISPLAY,
         )
         broadcastState()
@@ -986,9 +987,8 @@ class RecordingForegroundService : Service() {
             },
             rawRecordingActive = false,
             correctionsActive = false,
-            bestSolutionSource = "n/a",
-            bestSolutionFix = "n/a",
-            bestSolutionAgeMs = null,
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+        ).clearBestSolutionFields(
             mockLocationState = "Disabled",
             ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
         )
@@ -1404,10 +1404,9 @@ class RecordingForegroundService : Service() {
             )
             val tick = BestSolutionTickLogic.compute(tickInput)
 
-            val best = (tick.publishAction as? PublishAction.Publish)?.snapshot
-            // Update derived dashboard fields up front so the UI sees them
-            // even if the publish attempt below fails.
-            applyTickStateDelta(tick.stateDelta, best, now)
+            // Update derived dashboard fields from the selected best solution,
+            // independently of whether Android mock-location publishing is enabled.
+            applyTickStateDelta(tick.stateDelta, now)
 
             when (val action = tick.publishAction) {
                 PublishAction.None -> {
@@ -1448,7 +1447,6 @@ class RecordingForegroundService : Service() {
 
     private fun applyTickStateDelta(
         delta: BestSolutionStateDelta,
-        best: org.rtkcollector.core.solution.BestSolutionSnapshot?,
         nowMillis: Long,
     ) {
         state = state.copy(
@@ -1456,14 +1454,20 @@ class RecordingForegroundService : Service() {
             bestSolutionFix = delta.bestSolutionFix,
             bestSolutionAgeMs = delta.bestSolutionAgeMs,
             mockLocationState = delta.mockResult.name,
-            latDeg = best?.latDeg ?: state.latDeg,
-            lonDeg = best?.lonDeg ?: state.lonDeg,
-            latLon = best?.let { latLonDisplay(it.latDeg, it.lonDeg) } ?: state.latLon,
-            ellipsoidalHeight = best?.ellipsoidalHeightM?.let(::metersDisplay) ?: state.ellipsoidalHeight,
-            altitude = best?.mslAltitudeM?.let(::metersDisplay) ?: state.altitude,
-            horizontalAccuracy = best?.horizontalAccuracyM?.let(::metersDisplay) ?: state.horizontalAccuracy,
-            verticalAccuracy = best?.verticalAccuracyM?.let(::metersDisplay) ?: state.verticalAccuracy,
-            satellitesUsed = best?.satellitesUsed ?: state.satellitesUsed,
+            latDeg = delta.latDeg,
+            lonDeg = delta.lonDeg,
+            latLon = latLonDisplay(delta.latDeg, delta.lonDeg),
+            ellipsoidalHeight = metersDisplay(delta.ellipsoidalHeightM),
+            altitude = metersDisplay(delta.mslAltitudeM),
+            horizontalAccuracy = metersDisplay(delta.horizontalAccuracyM),
+            verticalAccuracy = metersDisplay(delta.verticalAccuracyM),
+            satellitesUsed = delta.satellitesUsed,
+            satellitesInView = if (delta.satellitesUsed == null) null else state.satellitesInView,
+            satellites = if (delta.satellitesUsed == null) {
+                "n/a"
+            } else {
+                satelliteDisplay(delta.satellitesUsed, state.satellitesInView)
+            },
             ubloxFrequency = ubloxFrequencyTracker.display(nowMillis),
         )
     }
@@ -1506,8 +1510,7 @@ class RecordingForegroundService : Service() {
                 org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED
             state = state.copy(
                 mockLocationState = previousMockResult!!.name,
-                lastError = "RtkCollector is not the selected mock location app. " +
-                    "Enable it in Developer Options.",
+                lastError = mockLocationSetupFailureMessage(outcome.exceptionOrNull()!!),
                 errorCategory = RecordingErrorCategory.PARSER_EXPORT,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
             )

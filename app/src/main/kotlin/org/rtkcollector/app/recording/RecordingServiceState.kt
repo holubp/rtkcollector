@@ -96,6 +96,27 @@ data class RecordingServiceState(
     val ntripBaseLonDeg: Double? = null,
 )
 
+internal fun RecordingServiceState.clearBestSolutionFields(
+    mockLocationState: String = this.mockLocationState,
+    ubloxFrequency: String = this.ubloxFrequency,
+): RecordingServiceState = copy(
+    latDeg = null,
+    lonDeg = null,
+    latLon = "n/a",
+    ellipsoidalHeight = "n/a",
+    altitude = "n/a",
+    horizontalAccuracy = "n/a",
+    verticalAccuracy = "n/a",
+    satellites = "n/a",
+    satellitesUsed = null,
+    satellitesInView = null,
+    bestSolutionSource = "n/a",
+    bestSolutionFix = "n/a",
+    bestSolutionAgeMs = null,
+    mockLocationState = mockLocationState,
+    ubloxFrequency = ubloxFrequency,
+)
+
 internal fun recordingNotificationText(state: RecordingServiceState): String =
     recordingNotificationText(
         running = state.running,

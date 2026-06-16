@@ -36,6 +36,11 @@ class BestSolutionTickLogicTest {
         assertEquals("UBX-NAV-PVT", out.stateDelta.bestSolutionSource)
         assertEquals("SINGLE", out.stateDelta.bestSolutionFix)
         assertEquals(500L, out.stateDelta.bestSolutionAgeMs)
+        assertEquals(50.0, out.stateDelta.latDeg)
+        assertEquals(14.0, out.stateDelta.lonDeg)
+        assertEquals(300.0, out.stateDelta.ellipsoidalHeightM)
+        assertEquals(250.0, out.stateDelta.mslAltitudeM)
+        assertEquals(12, out.stateDelta.satellitesUsed)
         assertTrue(out.publishAction is PublishAction.Publish)
         assertEquals(1_000L, (out.publishAction as PublishAction.Publish).snapshot.updatedAtMillis)
     }
@@ -49,8 +54,32 @@ class BestSolutionTickLogicTest {
         )
 
         assertEquals(MockLocationPublishResult.DISABLED, out.stateDelta.mockResult)
+        assertEquals("UM980-BESTNAV", out.stateDelta.bestSolutionSource)
+        assertEquals(50.0, out.stateDelta.latDeg)
+        assertEquals(14.0, out.stateDelta.lonDeg)
+        assertEquals(300.0, out.stateDelta.ellipsoidalHeightM)
+        assertEquals(250.0, out.stateDelta.mslAltitudeM)
+        assertEquals(12, out.stateDelta.satellitesUsed)
         assertTrue(out.publishAction is PublishAction.None)
         assertNull(out.newLastMockPublishedAt)
+    }
+
+    @Test
+    fun `stale best solution clears coordinate delta`() {
+        val out = BestSolutionTickLogic.compute(
+            input(candidates = emptyList(), nowMillis = 1_500L, mockEnabled = true),
+        )
+
+        assertEquals("n/a", out.stateDelta.bestSolutionSource)
+        assertEquals("n/a", out.stateDelta.bestSolutionFix)
+        assertNull(out.stateDelta.bestSolutionAgeMs)
+        assertNull(out.stateDelta.latDeg)
+        assertNull(out.stateDelta.lonDeg)
+        assertNull(out.stateDelta.ellipsoidalHeightM)
+        assertNull(out.stateDelta.mslAltitudeM)
+        assertNull(out.stateDelta.horizontalAccuracyM)
+        assertNull(out.stateDelta.verticalAccuracyM)
+        assertNull(out.stateDelta.satellitesUsed)
     }
 
     @Test

@@ -59,6 +59,23 @@ class MockLocationPublisherTest {
     }
 
     @Test
+    fun `security setup failure message points to mock app selection`() {
+        val message = mockLocationSetupFailureMessage(SecurityException("denied"))
+
+        assertEquals(
+            "RtkCollector is not the selected mock location app. Enable it in Developer Options.",
+            message,
+        )
+    }
+
+    @Test
+    fun `generic setup failure message preserves provider cause`() {
+        val message = mockLocationSetupFailureMessage(IllegalStateException("provider exists"))
+
+        assertEquals("Android mock-location provider setup failed: provider exists", message)
+    }
+
+    @Test
     fun `omits altitude when mslAltitudeM is null`() {
         val sink = FakeMockLocationSink()
         val publisher = MockLocationPublisher(sink)

@@ -22,6 +22,13 @@ enum class MockLocationPublishResult {
     NOT_PERMITTED,
 }
 
+internal fun mockLocationSetupFailureMessage(error: Throwable): String =
+    if (error is SecurityException) {
+        "RtkCollector is not the selected mock location app. Enable it in Developer Options."
+    } else {
+        "Android mock-location provider setup failed: ${error.message ?: error::class.java.simpleName}"
+    }
+
 class MockLocationPublisher(
     private val sink: MockLocationSink,
 ) {

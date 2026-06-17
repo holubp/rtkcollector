@@ -238,7 +238,7 @@ git commit -m "Use receiver time for UM980 frequency metrics"
 - Modify: `app/src/main/kotlin/org/rtkcollector/app/recording/RecordingServiceState.kt`
 - Modify: `app/src/test/kotlin/org/rtkcollector/app/recording/RecordingServiceStateTest.kt`
 
-- [ ] **Step 1: Write failing tests for primary screen candidate selection**
+- [x] **Step 1: Write failing tests for primary screen candidate selection**
 
 Create `SelectedSolutionDisplayTest.kt`:
 
@@ -279,7 +279,7 @@ class SelectedSolutionDisplayTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -293,7 +293,11 @@ If running in Termux and the command fails in `:app:processDebugResources` due
 to x86-64 `aapt2`, record the blocker and continue with `:app:compileDebugKotlin`
 after implementation.
 
-- [ ] **Step 3: Add selected-solution helper**
+Checkpoint note: on Termux/aarch64 this failed in `:app:processDebugResources`
+with the known Gradle-resolved x86-64 `aapt2` daemon startup error before the
+new tests could compile.
+
+- [x] **Step 3: Add selected-solution helper**
 
 Create `SelectedSolutionDisplay.kt`:
 
@@ -315,7 +319,7 @@ internal fun SolutionCandidate.isPrimaryScreenCandidateFor(activeReceiverFamily:
 }
 ```
 
-- [ ] **Step 4: Write failing test for state update without telemetry overwrite**
+- [x] **Step 4: Write failing test for state update without telemetry overwrite**
 
 Add to `RecordingServiceStateTest`:
 
@@ -353,7 +357,7 @@ fun `selected solution updates summary without replacing richer direct telemetry
 }
 ```
 
-- [ ] **Step 5: Implement selected-solution state update**
+- [x] **Step 5: Implement selected-solution state update**
 
 Add to `RecordingServiceState.kt`:
 
@@ -373,7 +377,7 @@ This helper intentionally does not alter `latLon`, `horizontalAccuracy`,
 `verticalAccuracy` or satellite display. Direct receiver telemetry owns those
 fields.
 
-- [ ] **Step 6: Run focused compile/check**
+- [x] **Step 6: Run focused compile/check**
 
 Run:
 
@@ -383,7 +387,7 @@ sh gradlew :app:compileDebugKotlin
 
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add app/src/main/kotlin/org/rtkcollector/app/recording/SelectedSolutionDisplay.kt \

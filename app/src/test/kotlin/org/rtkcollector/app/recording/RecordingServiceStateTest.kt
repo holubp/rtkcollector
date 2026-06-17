@@ -3,6 +3,9 @@ package org.rtkcollector.app.recording
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import org.rtkcollector.core.solution.FixClass
+import org.rtkcollector.core.solution.SolutionCandidate
+import org.rtkcollector.core.solution.SolutionEngine
 
 class RecordingServiceStateTest {
     @Test
@@ -157,5 +160,37 @@ class RecordingServiceStateTest {
         assertEquals(4, updated.satellitesUsed)
         assertEquals(19, updated.satellitesInView)
         assertEquals("4 / 19", updated.satellites)
+    }
+
+    @Test
+    fun `selected solution updates summary without replacing richer direct telemetry`() {
+        val previous = RecordingServiceState(
+            latLon = "50.000000000, 14.000000000",
+            horizontalAccuracy = "0.012 m",
+            satellites = "19 / 32",
+            satellitesUsed = 19,
+            satellitesInView = 32,
+        )
+        val candidate = SolutionCandidate(
+            sourceId = "UM980-BESTNAV",
+            receiverFamily = "um980",
+            engine = SolutionEngine.DEVICE_INTERNAL,
+            fixClass = FixClass.RTK_FIXED,
+            updatedAtMillis = 1_000L,
+            latDeg = 50.1,
+            lonDeg = 14.1,
+            horizontalAccuracyM = null,
+            satellitesUsed = null,
+            satellitesInView = null,
+        )
+
+        val updated = previous.withSelectedSolution(candidate, nowMillis = 1_250L)
+
+        assertEquals("UM980-BESTNAV", updated.bestSolutionSource)
+        assertEquals("RTK_FIXED", updated.bestSolutionFix)
+        assertEquals(250L, updated.bestSolutionAgeMs)
+        assertEquals("50.000000000, 14.000000000", updated.latLon)
+        assertEquals("0.012 m", updated.horizontalAccuracy)
+        assertEquals("19 / 32", updated.satellites)
     }
 }

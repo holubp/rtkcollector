@@ -163,6 +163,16 @@ internal fun RecordingServiceState.applyBestSolutionDisplayDelta(
     )
 }
 
+internal fun RecordingServiceState.withSelectedSolution(
+    candidate: org.rtkcollector.core.solution.SolutionCandidate,
+    nowMillis: Long,
+): RecordingServiceState =
+    copy(
+        bestSolutionSource = candidate.sourceId,
+        bestSolutionFix = candidate.fixClass.name,
+        bestSolutionAgeMs = (nowMillis - candidate.updatedAtMillis).coerceAtLeast(0L),
+    )
+
 internal fun recordingNotificationText(state: RecordingServiceState): String =
     recordingNotificationText(
         running = state.running,

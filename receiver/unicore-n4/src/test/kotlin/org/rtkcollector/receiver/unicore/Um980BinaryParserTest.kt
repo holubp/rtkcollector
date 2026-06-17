@@ -36,6 +36,13 @@ class Um980BinaryParserTest {
     }
 
     @Test
+    fun `extracts receiver timestamp millis from binary header`() {
+        val frame = bestnavbFrame()
+
+        assertEquals(2419L * 604_800_000L + 132_572_000L, Um980BinaryParser.receiverTimestampMillis(frame))
+    }
+
+    @Test
     fun `parses documented STADOPB dop fields`() {
         val frame = stadopbFrame()
 

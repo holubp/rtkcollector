@@ -220,6 +220,13 @@ object Um980BinaryParser {
     fun messageId(frame: ByteArray): Int? =
         if (frame.size >= BINARY_HEADER_LENGTH && hasBinarySync(frame, 0)) u16(frame, 4) else null
 
+    fun receiverTimestampMillis(frame: ByteArray): Long? {
+        if (frame.size < BINARY_HEADER_LENGTH || !hasBinarySync(frame, 0)) return null
+        val week = u16(frame, 10).toLong()
+        val towMillis = u32(frame, 12).toLong() and 0xffff_ffffL
+        return week * 604_800_000L + towMillis
+    }
+
     private fun hasBinarySync(input: ByteArray, index: Int): Boolean =
         index + 2 < input.size &&
             input[index] == 0xAA.toByte() &&

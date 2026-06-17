@@ -22,4 +22,21 @@ class Um980MessageFrequencyTrackerTest {
 
         assertEquals("Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz", tracker.display(2_000L))
     }
+
+    @Test
+    fun `receiver timestamp frequency ignores delayed processing time`() {
+        val tracker = Um980MessageFrequencyTracker(windowMillis = 1_000)
+        repeat(20) { index ->
+            tracker.record(
+                kind = Um980MessageKind.BESTNAV,
+                timestampMillis = 100_000L + index * 200L,
+                receiverTimestampMillis = 1_000L + index * 50L,
+            )
+        }
+
+        assertEquals(
+            "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/- Hz",
+            tracker.display(timestampMillis = 104_000L, receiverTimestampMillis = 2_000L),
+        )
+    }
 }

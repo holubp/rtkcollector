@@ -72,7 +72,7 @@
 - Modify: `receiver/unicore-n4/src/test/kotlin/org/rtkcollector/receiver/unicore/Um980BinaryParserTest.kt`
 - Modify: `receiver/unicore-n4/src/test/kotlin/org/rtkcollector/receiver/unicore/Um980MessageFrequencyTrackerTest.kt`
 
-- [ ] **Step 1: Write failing test for UM980 receiver-time extraction**
+- [x] **Step 1: Write failing test for UM980 receiver-time extraction**
 
 Add to `Um980BinaryParserTest`:
 
@@ -81,11 +81,11 @@ Add to `Um980BinaryParserTest`:
 fun `extracts receiver timestamp millis from binary header`() {
     val frame = bestnavbFrame()
 
-    assertEquals(2207L * 604_800_000L + 464_961_000L, Um980BinaryParser.receiverTimestampMillis(frame))
+    assertEquals(2419L * 604_800_000L + 132_572_000L, Um980BinaryParser.receiverTimestampMillis(frame))
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -95,7 +95,7 @@ sh gradlew :receiver:unicore-n4:test --tests org.rtkcollector.receiver.unicore.U
 
 Expected before implementation: compile failure for missing `receiverTimestampMillis`.
 
-- [ ] **Step 3: Implement receiver-time extraction**
+- [x] **Step 3: Implement receiver-time extraction**
 
 In `Um980BinaryParser.kt`, add:
 
@@ -114,7 +114,7 @@ If `UInt.toLong()` is not available in the current Kotlin target, convert with:
 val towMillis = u32(frame, 12).toLong() and 0xffff_ffffL
 ```
 
-- [ ] **Step 4: Write failing test for receiver-time frequency**
+- [x] **Step 4: Write failing test for receiver-time frequency**
 
 Add to `Um980MessageFrequencyTrackerTest`:
 
@@ -137,7 +137,7 @@ fun `receiver timestamp frequency ignores delayed processing time`() {
 }
 ```
 
-- [ ] **Step 5: Implement receiver-time frequency support**
+- [x] **Step 5: Implement receiver-time frequency support**
 
 Change `Um980MessageFrequencyTracker` samples to store receiver-time when present:
 
@@ -208,7 +208,7 @@ private fun prune(now: Long, receiverNow: Long?) {
 }
 ```
 
-- [ ] **Step 6: Run receiver tests**
+- [x] **Step 6: Run receiver tests**
 
 Run:
 
@@ -218,7 +218,7 @@ sh gradlew :receiver:unicore-n4:test --tests org.rtkcollector.receiver.unicore.U
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980BinaryParser.kt \

@@ -12,7 +12,12 @@ enum class Um980MessageKind(val label: String) {
 }
 
 class Um980MessageFrequencyTracker(private val windowMillis: Long = 10_000L) {
-    private val samples = mutableMapOf<Um980MessageKind, ArrayDeque<Long>>()
+    private data class FrequencySample(
+        val processingMillis: Long,
+        val receiverMillis: Long?,
+    )
+
+    private val samples = mutableMapOf<Um980MessageKind, ArrayDeque<FrequencySample>>()
     private val order = listOf(
         Um980MessageKind.BESTNAV,
         Um980MessageKind.GGA,
@@ -22,14 +27,21 @@ class Um980MessageFrequencyTracker(private val windowMillis: Long = 10_000L) {
         Um980MessageKind.OBSVM,
     )
 
-    fun record(kind: Um980MessageKind, timestampMillis: Long) {
+    fun record(
+        kind: Um980MessageKind,
+        timestampMillis: Long,
+        receiverTimestampMillis: Long? = null,
+    ) {
         val queue = samples.getOrPut(kind) { ArrayDeque() }
-        queue.addLast(timestampMillis)
-        prune(timestampMillis)
+        queue.addLast(FrequencySample(timestampMillis, receiverTimestampMillis))
+        prune(timestampMillis, receiverTimestampMillis)
     }
 
-    fun display(timestampMillis: Long): String {
-        prune(timestampMillis)
+    fun display(
+        timestampMillis: Long,
+        receiverTimestampMillis: Long? = null,
+    ): String {
+        prune(timestampMillis, receiverTimestampMillis)
         val values = order.joinToString("/") { kind ->
             val count = samples[kind]?.size ?: 0
             if (count == 0) "-" else formatHz(count * 1_000.0 / windowMillis)
@@ -37,14 +49,22 @@ class Um980MessageFrequencyTracker(private val windowMillis: Long = 10_000L) {
         return "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM $values Hz"
     }
 
-    private fun prune(now: Long) {
+    private fun prune(now: Long, receiverNow: Long?) {
         val cutoff = now - windowMillis
+        val receiverCutoff = receiverNow?.minus(windowMillis)
         samples.values.forEach { queue ->
-            while (queue.isNotEmpty() && queue.first() < cutoff) {
+            while (queue.isNotEmpty() && queue.first().isOlderThan(cutoff, receiverCutoff)) {
                 queue.removeFirst()
             }
         }
     }
+
+    private fun FrequencySample.isOlderThan(processingCutoff: Long, receiverCutoff: Long?): Boolean =
+        if (receiverCutoff != null && receiverMillis != null) {
+            receiverMillis < receiverCutoff
+        } else {
+            processingMillis < processingCutoff
+        }
 
     private fun formatHz(value: Double): String =
         if (value >= 10.0 || value % 1.0 == 0.0) {

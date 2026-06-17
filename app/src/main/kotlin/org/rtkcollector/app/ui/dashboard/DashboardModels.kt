@@ -259,6 +259,7 @@ fun PositionCardState.latLonLinesForNarrowLayout(): List<String> {
 
 data class CoordinateAveragingState(
     val active: Boolean = false,
+    val sessionLocation: String? = null,
     val fixType: String = "",
     val sampleCount: Int = 0,
     val meanLat: Double? = null,
@@ -295,10 +296,13 @@ data class CoordinateAveragingState(
 }
 
 fun startCoordinateAveraging(
+    sessionLocation: String?,
     fixType: String,
     coordinates: CoordinatePair?,
     ellipsoidalHeightM: Double?,
 ): CoordinateAveragingState {
+    val activeSessionLocation = sessionLocation.activeSessionLocationOrNull()
+        ?: return CoordinateAveragingState(stoppedReason = "No active session")
     if (fixType.isMissingFixType()) {
         return CoordinateAveragingState(stoppedReason = "No fix")
     }
@@ -310,6 +314,7 @@ fun startCoordinateAveraging(
     return if (lat != null && lon != null) {
         CoordinateAveragingState(
             active = true,
+            sessionLocation = activeSessionLocation,
             fixType = fixType,
             sampleCount = 1,
             meanLat = lat,
@@ -322,11 +327,19 @@ fun startCoordinateAveraging(
 }
 
 fun CoordinateAveragingState.addSample(
+    sessionLocation: String?,
     fixType: String,
     coordinates: CoordinatePair?,
     ellipsoidalHeightM: Double?,
 ): CoordinateAveragingState {
     if (!active) return this
+    val activeSessionLocation = sessionLocation.activeSessionLocationOrNull()
+    if (activeSessionLocation == null || activeSessionLocation != this.sessionLocation) {
+        return copy(
+            active = false,
+            stoppedReason = "Session changed",
+        )
+    }
     if (fixType.isMissingFixType()) {
         return copy(
             active = false,
@@ -367,6 +380,11 @@ private fun String.isMissingFixType(): Boolean {
     val normalized = trim()
     return normalized.isBlank() || normalized.equals("n/a", ignoreCase = true) || normalized.equals("none", ignoreCase = true)
 }
+
+internal fun String?.activeSessionLocationOrNull(): String? =
+    this
+        ?.trim()
+        ?.takeUnless { it.isBlank() || it.equals("n/a", ignoreCase = true) }
 
 data class FixCardState(
     val fixType: String = "n/a",

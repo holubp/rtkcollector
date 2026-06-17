@@ -95,6 +95,7 @@ import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.addSample
+import org.rtkcollector.app.ui.dashboard.activeSessionLocationOrNull
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.dashboard.ellipsoidalHeightMetersOrNull
@@ -230,9 +231,17 @@ fun RtkCollectorApp(
     }
     var coordinateAveraging by remember { mutableStateOf(CoordinateAveragingState()) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
+    LaunchedEffect(state.files.sessionLocation) {
+        val currentSession = state.files.sessionLocation.activeSessionLocationOrNull()
+        val averagingSession = coordinateAveraging.sessionLocation
+        if (averagingSession != null && currentSession != null && currentSession != averagingSession) {
+            coordinateAveraging = CoordinateAveragingState()
+        }
+    }
     LaunchedEffect(state.position.latLon, state.position.ellipsoidalHeight, state.fix.fixType) {
         if (coordinateAveraging.active) {
             val updated = coordinateAveraging.addSample(
+                sessionLocation = state.files.sessionLocation,
                 fixType = state.fix.fixType,
                 coordinates = state.position.coordinatePairOrNull(),
                 ellipsoidalHeightM = state.position.ellipsoidalHeightMetersOrNull(),
@@ -586,6 +595,7 @@ fun RtkCollectorApp(
                     coordinateAveraging = coordinateAveraging,
                     onStartCoordinateAveraging = { coordinates, ellipsoidalHeightM ->
                         val started = startCoordinateAveraging(
+                            sessionLocation = if (state.isRecording) state.files.sessionLocation else null,
                             fixType = state.fix.fixType,
                             coordinates = coordinates,
                             ellipsoidalHeightM = ellipsoidalHeightM,

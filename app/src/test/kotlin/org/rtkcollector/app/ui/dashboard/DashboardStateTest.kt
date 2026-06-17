@@ -205,11 +205,13 @@ class DashboardStateTest {
     @Test
     fun `coordinate averaging starts and accumulates mean`() {
         val started = startCoordinateAveraging(
+            sessionLocation = "/sessions/current",
             fixType = "RTK fixed",
             coordinates = CoordinatePair("50.0", "14.0"),
             ellipsoidalHeightM = 300.0,
         )
         val updated = started.addSample(
+            sessionLocation = "/sessions/current",
             fixType = "RTK fixed",
             coordinates = CoordinatePair("52.0", "16.0"),
             ellipsoidalHeightM = 304.0,
@@ -226,11 +228,13 @@ class DashboardStateTest {
     @Test
     fun `coordinate averaging stops when fix type changes`() {
         val started = startCoordinateAveraging(
+            sessionLocation = "/sessions/current",
             fixType = "RTK fixed",
             coordinates = CoordinatePair("50.0", "14.0"),
             ellipsoidalHeightM = 300.0,
         )
         val stopped = started.addSample(
+            sessionLocation = "/sessions/current",
             fixType = "DGPS",
             coordinates = CoordinatePair("50.1", "14.1"),
             ellipsoidalHeightM = 301.0,
@@ -244,6 +248,7 @@ class DashboardStateTest {
     @Test
     fun `coordinate averaging does not start without known fix`() {
         val started = startCoordinateAveraging(
+            sessionLocation = "/sessions/current",
             fixType = "n/a",
             coordinates = CoordinatePair("50.0", "14.0"),
             ellipsoidalHeightM = 300.0,
@@ -256,6 +261,7 @@ class DashboardStateTest {
     @Test
     fun `coordinate averaging does not start without ellipsoidal height`() {
         val started = startCoordinateAveraging(
+            sessionLocation = "/sessions/current",
             fixType = "RTK fixed",
             coordinates = CoordinatePair("50.0", "14.0"),
             ellipsoidalHeightM = null,
@@ -263,6 +269,39 @@ class DashboardStateTest {
 
         assertFalse(started.active)
         assertEquals("No ellipsoidal height", started.stoppedReason)
+    }
+
+    @Test
+    fun `coordinate averaging does not start without active session`() {
+        val started = startCoordinateAveraging(
+            sessionLocation = "n/a",
+            fixType = "RTK fixed",
+            coordinates = CoordinatePair("50.0", "14.0"),
+            ellipsoidalHeightM = 300.0,
+        )
+
+        assertFalse(started.active)
+        assertEquals("No active session", started.stoppedReason)
+    }
+
+    @Test
+    fun `coordinate averaging stops when session changes`() {
+        val started = startCoordinateAveraging(
+            sessionLocation = "/sessions/old",
+            fixType = "RTK fixed",
+            coordinates = CoordinatePair("50.0", "14.0"),
+            ellipsoidalHeightM = 300.0,
+        )
+        val stopped = started.addSample(
+            sessionLocation = "/sessions/new",
+            fixType = "RTK fixed",
+            coordinates = CoordinatePair("52.0", "16.0"),
+            ellipsoidalHeightM = 304.0,
+        )
+
+        assertFalse(stopped.active)
+        assertEquals("Session changed", stopped.stoppedReason)
+        assertEquals(1, stopped.sampleCount)
     }
 
     @Test

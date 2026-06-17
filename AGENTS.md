@@ -138,6 +138,9 @@ unchanged.
 - Dashboard coordinate actions are intentionally compact: tapping coordinates
   copies them, `Base` moves toward fixed-base use of the current coordinate,
   and `Avg` starts a live average that must stop if the fix type changes.
+  Live coordinate averaging must be scoped to one active recording session and
+  must not seed or continue from stale dashboard coordinates from a previous
+  recording.
 
 ## Android Implementation Rules
 

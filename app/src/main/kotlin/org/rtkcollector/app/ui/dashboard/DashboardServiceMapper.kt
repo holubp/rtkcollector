@@ -137,7 +137,15 @@ private fun displayFixType(
 }
 
 private fun displayPppStatus(pppStatus: String?): String =
-    pppStatus?.takeIf(::isMeaningfulSolutionStatus) ?: "n/a"
+    when (pppStatus?.trim()?.uppercase()) {
+        null, "", "N/A" -> "n/a"
+        "NONE" -> "PPP not started"
+        "INSUFFICIENT_OBS" -> "PPP not started"
+        "NO_CONVERGENCE" -> "PPP no convergence"
+        "PPP_CONVERGING" -> "PPP converging"
+        "PPP" -> "PPP converged"
+        else -> pppStatus.orEmpty()
+    }
 
 private fun isMeaningfulSolutionStatus(status: String): Boolean =
     status.isNotBlank() &&

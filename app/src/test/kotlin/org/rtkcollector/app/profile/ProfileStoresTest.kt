@@ -96,7 +96,7 @@ class ProfileStoresTest {
     fun `command profile json round trip preserves protected built in marker`() {
         val profile = CommandProfile(
             id = "um980-binary-multihz",
-            name = "UM980 binary multi-Hz",
+            name = "UM980 multi-Hz binary RTK+PPP",
             isProtected = true,
         )
 
@@ -121,7 +121,7 @@ class ProfileStoresTest {
     fun `command profile json round trip preserves runtime script`() {
         val profile = CommandProfile(
             id = "um980-binary-multihz",
-            name = "UM980 binary multi-Hz",
+            name = "UM980 multi-Hz binary RTK+PPP",
             runtimeScript = ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT,
         )
 
@@ -148,14 +148,41 @@ class ProfileStoresTest {
     }
 
     @Test
-    fun `ascii ppp nmea profile contains requested ppp and nmea commands`() {
+    fun `ascii ppp nmea profile contains requested ppp rtk and nmea commands`() {
         val script = ProfileStores.UM980_ASCII_PPP_NMEA_SCRIPT
 
         assertTrue(script.contains("CONFIG PPP ENABLE E6-HAS"))
+        assertTrue(script.contains("CONFIG RTK TIMEOUT 120"))
         assertTrue(script.contains("GNGGA 0.05"))
-        assertTrue(script.contains("PPPNAVA 10"))
-        assertTrue(script.contains("ADRNAVA 10"))
+        assertTrue(script.contains("PPPNAVA 1"))
+        assertTrue(script.contains("ADRNAVA 1"))
+        assertTrue(script.contains("RTKSTATUSA 1"))
+        assertTrue(script.contains("RTCMSTATUSA ONCHANGED"))
         assertTrue(script.contains("TROPINFOA ONCHANGED"))
+        assertFalse(script.contains("SAVECONFIG", ignoreCase = true))
+    }
+
+    @Test
+    fun `um980 one hertz ascii profile contains ppp rtk monitoring`() {
+        val script = ProfileStores.UM980_ASCII_1HZ_RTK_PPP_SCRIPT
+
+        assertTrue(script.contains("UNLOG COM1"))
+        assertTrue(script.contains("MODE ROVER SURVEY"))
+        assertTrue(script.contains("GNGGA 1"))
+        assertTrue(script.contains("PPPNAVA 1"))
+        assertTrue(script.contains("RTKSTATUSA 1"))
+        assertTrue(script.contains("RTCMSTATUSA ONCHANGED"))
+        assertFalse(script.contains("SAVECONFIG", ignoreCase = true))
+    }
+
+    @Test
+    fun `um980 base config profile contains base and rtcm outputs`() {
+        val script = ProfileStores.UM980_BASE_CONFIG_SCRIPT
+
+        assertTrue(script.contains("MODE BASE TIME 120 2.5"))
+        assertTrue(script.contains("RTCM1006 COM1 10"))
+        assertTrue(script.contains("RTCM1074 COM1 1"))
+        assertTrue(script.contains("OBSVMCMPB COM1 1"))
         assertFalse(script.contains("SAVECONFIG", ignoreCase = true))
     }
 
@@ -214,13 +241,15 @@ class ProfileStoresTest {
             defaults = listOf(
                 CommandProfile(
                     id = ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID,
-                    name = "UM980 binary multi-Hz",
+                    name = "UM980 multi-Hz binary RTK+PPP",
                     runtimeScript = ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT,
+                    isProtected = true,
                 ),
                 CommandProfile(
                     id = ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID,
-                    name = "UM980 ASCII PPP/NMEA",
+                    name = "UM980 multi-Hz ASCII RTK+PPP",
                     runtimeScript = ProfileStores.UM980_ASCII_PPP_NMEA_SCRIPT,
+                    isProtected = true,
                 ),
             ),
         )
@@ -232,11 +261,11 @@ class ProfileStoresTest {
         assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("RTKSTATUSB COM1 1"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("RTCMSTATUSB COM1 ONCHANGED"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID }.runtimeScript.contains("CONFIG PPP ENABLE E6-HAS"))
-        assertTrue(migrated.none { it.isProtected })
+        assertTrue(migrated.all { it.isProtected })
     }
 
     @Test
-    fun `migration appends binary rtk monitoring outputs to ppp enabled script`() {
+    fun `migration syncs built in profile id to canonical protected default`() {
         val migrated = ProfileStoreMigrations.commandProfiles(
             profiles = listOf(
                 CommandProfile(
@@ -250,7 +279,14 @@ class ProfileStoresTest {
                     """.trimIndent(),
                 ),
             ),
-            defaults = emptyList(),
+            defaults = listOf(
+                CommandProfile(
+                    id = ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID,
+                    name = "UM980 multi-Hz binary RTK+PPP",
+                    runtimeScript = ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT,
+                    isProtected = true,
+                ),
+            ),
         )
 
         val script = migrated.single().runtimeScript
@@ -259,6 +295,48 @@ class ProfileStoresTest {
         assertTrue(script.contains("RTKSTATUSB COM1 1"))
         assertTrue(script.contains("RTCMSTATUSB COM1 ONCHANGED"))
         assertFalse(script.contains("SAVECONFIG", ignoreCase = true))
+        assertTrue(migrated.single().isProtected)
+    }
+
+    @Test
+    fun `migration syncs legacy built in profile names to canonical protected defaults`() {
+        val migrated = ProfileStoreMigrations.commandProfiles(
+            profiles = listOf(
+                CommandProfile(id = "old-binary", name = "UM980 binary multi-Hz"),
+                CommandProfile(id = "old-ascii", name = "UM980 ASCII PPP/NMEA"),
+                CommandProfile(id = "old-base", name = "UM980 Base"),
+            ),
+            defaults = listOf(
+                CommandProfile(
+                    id = ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID,
+                    name = "UM980 multi-Hz binary RTK+PPP",
+                    runtimeScript = ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT,
+                    isProtected = true,
+                ),
+                CommandProfile(
+                    id = ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID,
+                    name = "UM980 multi-Hz ASCII RTK+PPP",
+                    runtimeScript = ProfileStores.UM980_ASCII_PPP_NMEA_SCRIPT,
+                    isProtected = true,
+                ),
+                CommandProfile(
+                    id = ProfileStores.UM980_BASE_CONFIG_PROFILE_ID,
+                    name = "UM980 base config",
+                    runtimeScript = ProfileStores.UM980_BASE_CONFIG_SCRIPT,
+                    isProtected = true,
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID,
+                ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID,
+                ProfileStores.UM980_BASE_CONFIG_PROFILE_ID,
+            ),
+            migrated.map(CommandProfile::id),
+        )
+        assertTrue(migrated.all(CommandProfile::isProtected))
     }
 
     @Test

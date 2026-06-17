@@ -28,7 +28,7 @@ data class ActiveRecordingConfig(
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
             require(ntrip.mountpoint.isNotBlank()) { "NTRIP mountpoint is required for ${workflowName}." }
         }
-        if (workflowId == WORKFLOW_PLAIN_ROVER || workflowId == WORKFLOW_ROVER_NTRIP) {
+        if (workflowId == WORKFLOW_PLAIN_ROVER || workflowId == WORKFLOW_ROVER_NTRIP || workflowId == WORKFLOW_FIXED_BASE) {
             validateWorkflowModeCommandsForStart(workflowId, initCommands + baudSwitchCommands + modeCommands)
         }
     }
@@ -222,7 +222,13 @@ internal fun validateWorkflowModeCommandsForStart(workflowId: String?, modeComma
             "Rover workflow cannot start with a command profile that sets MODE BASE."
         }
     }
+    if (workflowId == WORKFLOW_FIXED_BASE) {
+        require(!modeCommands.containsModeCommand("ROVER")) {
+            "Fixed base workflow cannot start with a command profile that sets MODE ROVER."
+        }
+    }
 }
 
 private const val WORKFLOW_PLAIN_ROVER = "plain-rover"
 private const val WORKFLOW_ROVER_NTRIP = "rover-ntrip"
+private const val WORKFLOW_FIXED_BASE = "fixed-base"

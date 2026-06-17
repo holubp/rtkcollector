@@ -157,6 +157,38 @@ data class CoordinatePair(
 
     val lonDouble: Double?
         get() = lon.toDoubleOrNull()
+
+    fun displayLabel(): String = "$lat, $lon"
+}
+
+data class BaseCoordinateCandidate(
+    val coordinates: CoordinatePair,
+    val ellipsoidalHeightM: Double,
+    val source: String = "MANUAL",
+    val sampleCount: Int = 0,
+) {
+    fun displayLabel(): String =
+        "${coordinates.displayLabel()}, h %.3f m".format(java.util.Locale.US, ellipsoidalHeightM)
+
+    fun toManualBasePositionJsonOrNull(): String? {
+        val lat = coordinates.latDouble ?: return null
+        val lon = coordinates.lonDouble ?: return null
+        return "{" +
+            "\"latDeg\":$lat," +
+            "\"lonDeg\":$lon," +
+            "\"heightM\":$ellipsoidalHeightM," +
+            "\"frame\":\"UNKNOWN\"," +
+            "\"method\":\"MANUAL_KNOWN_POINT\"," +
+            "\"source\":\"$source\"," +
+            "\"sampleCount\":$sampleCount" +
+            "}"
+    }
+
+    fun toUm980FixedBaseModeCommandOrNull(): String? {
+        val lat = coordinates.latDouble ?: return null
+        val lon = coordinates.lonDouble ?: return null
+        return "MODE BASE %.10f %.10f %.4f".format(java.util.Locale.US, lat, lon, ellipsoidalHeightM)
+    }
 }
 
 enum class CoordinateCopyFormat(
@@ -177,18 +209,11 @@ enum class CoordinateCopyFormat(
     }
 }
 
-fun CoordinatePair.toManualBasePositionJsonOrNull(): String? {
-    val lat = latDouble ?: return null
-    val lon = lonDouble ?: return null
-    return "{" +
-        "\"latDeg\":$lat," +
-        "\"lonDeg\":$lon," +
-        "\"heightM\":null," +
-        "\"frame\":\"UNKNOWN\"," +
-        "\"method\":\"MANUAL_KNOWN_POINT\"," +
-        "\"source\":\"MANUAL\"" +
-        "}"
-}
+fun coordinatePairOf(lat: Double, lon: Double): CoordinatePair =
+    CoordinatePair(
+        lat = "%.10f".format(java.util.Locale.US, lat),
+        lon = "%.10f".format(java.util.Locale.US, lon),
+    )
 
 fun PositionCardState.coordinatePairOrNull(): CoordinatePair? {
     val parts = latLon.split(",", limit = 2).map { it.trim() }
@@ -197,6 +222,31 @@ fun PositionCardState.coordinatePairOrNull(): CoordinatePair? {
     }
     return CoordinatePair(lat = parts[0], lon = parts[1])
 }
+
+fun PositionCardState.baseCoordinateCandidateOrNull(
+    coordinateOverride: CoordinatePair? = null,
+    source: String = "MANUAL",
+    sampleCount: Int = 0,
+    ellipsoidalHeightOverrideM: Double? = null,
+): BaseCoordinateCandidate? {
+    val coordinates = coordinateOverride ?: coordinatePairOrNull() ?: return null
+    val ellipsoidalHeightM = ellipsoidalHeightOverrideM ?: ellipsoidalHeightMetersOrNull() ?: return null
+    return BaseCoordinateCandidate(
+        coordinates = coordinates,
+        ellipsoidalHeightM = ellipsoidalHeightM,
+        source = source,
+        sampleCount = sampleCount,
+    )
+}
+
+fun PositionCardState.ellipsoidalHeightMetersOrNull(): Double? =
+    ellipsoidalHeight.measurementMetersOrNull()
+
+private fun String.measurementMetersOrNull(): Double? =
+    trim()
+        .takeUnless { it.isBlank() || it.equals("n/a", ignoreCase = true) }
+        ?.substringBefore(' ')
+        ?.toDoubleOrNull()
 
 fun PositionCardState.latLonLinesForNarrowLayout(): List<String> {
     val coordinates = coordinatePairOrNull()
@@ -213,23 +263,50 @@ data class CoordinateAveragingState(
     val sampleCount: Int = 0,
     val meanLat: Double? = null,
     val meanLon: Double? = null,
+    val meanEllipsoidalHeightM: Double? = null,
     val stoppedReason: String? = null,
 ) {
+    fun averageCoordinateOrNull(): CoordinatePair? {
+        val lat = meanLat ?: return null
+        val lon = meanLon ?: return null
+        return coordinatePairOf(lat, lon)
+    }
+
+    fun averageBaseCandidateOrNull(): BaseCoordinateCandidate? {
+        val coordinates = averageCoordinateOrNull() ?: return null
+        val height = meanEllipsoidalHeightM ?: return null
+        return BaseCoordinateCandidate(
+            coordinates = coordinates,
+            ellipsoidalHeightM = height,
+            source = "AVERAGE",
+            sampleCount = sampleCount,
+        )
+    }
+
     val statusLabel: String
         get() = when {
-            active && sampleCount > 0 -> "Avg ${sampleCount}x"
+            active && sampleCount > 0 -> "Avg ${sampleCount}x ${averageBaseCandidateOrNull()?.displayLabel().orEmpty()}".trim()
             active -> "Avg active"
+            stoppedReason != null && sampleCount > 0 -> "$stoppedReason · Avg ${sampleCount}x ${averageBaseCandidateOrNull()?.displayLabel().orEmpty()}".trim()
+            sampleCount > 0 -> "Avg ${sampleCount}x ${averageBaseCandidateOrNull()?.displayLabel().orEmpty()}".trim()
             stoppedReason != null -> stoppedReason
             else -> "Avg off"
         }
 }
 
-fun startCoordinateAveraging(fixType: String, coordinates: CoordinatePair?): CoordinateAveragingState {
+fun startCoordinateAveraging(
+    fixType: String,
+    coordinates: CoordinatePair?,
+    ellipsoidalHeightM: Double?,
+): CoordinateAveragingState {
     if (fixType.isMissingFixType()) {
         return CoordinateAveragingState(stoppedReason = "No fix")
     }
     val lat = coordinates?.latDouble
     val lon = coordinates?.lonDouble
+    if (ellipsoidalHeightM == null) {
+        return CoordinateAveragingState(stoppedReason = "No ellipsoidal height")
+    }
     return if (lat != null && lon != null) {
         CoordinateAveragingState(
             active = true,
@@ -237,13 +314,18 @@ fun startCoordinateAveraging(fixType: String, coordinates: CoordinatePair?): Coo
             sampleCount = 1,
             meanLat = lat,
             meanLon = lon,
+            meanEllipsoidalHeightM = ellipsoidalHeightM,
         )
     } else {
         CoordinateAveragingState(stoppedReason = "No coordinate")
     }
 }
 
-fun CoordinateAveragingState.addSample(fixType: String, coordinates: CoordinatePair?): CoordinateAveragingState {
+fun CoordinateAveragingState.addSample(
+    fixType: String,
+    coordinates: CoordinatePair?,
+    ellipsoidalHeightM: Double?,
+): CoordinateAveragingState {
     if (!active) return this
     if (fixType.isMissingFixType()) {
         return copy(
@@ -259,7 +341,13 @@ fun CoordinateAveragingState.addSample(fixType: String, coordinates: CoordinateP
     }
     val lat = coordinates?.latDouble
     val lon = coordinates?.lonDouble
-    if (lat == null || lon == null || meanLat == null || meanLon == null) {
+    if (ellipsoidalHeightM == null) {
+        return copy(
+            active = false,
+            stoppedReason = "No ellipsoidal height",
+        )
+    }
+    if (lat == null || lon == null || meanLat == null || meanLon == null || meanEllipsoidalHeightM == null) {
         return copy(
             active = false,
             stoppedReason = "No coordinate",
@@ -270,6 +358,7 @@ fun CoordinateAveragingState.addSample(fixType: String, coordinates: CoordinateP
         sampleCount = nextCount,
         meanLat = meanLat + (lat - meanLat) / nextCount,
         meanLon = meanLon + (lon - meanLon) / nextCount,
+        meanEllipsoidalHeightM = meanEllipsoidalHeightM + (ellipsoidalHeightM - meanEllipsoidalHeightM) / nextCount,
         stoppedReason = null,
     )
 }

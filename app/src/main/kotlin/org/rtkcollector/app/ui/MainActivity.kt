@@ -89,6 +89,7 @@ import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
+import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
 import org.rtkcollector.app.ui.dashboard.CoordinateAveragingState
 import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
@@ -96,9 +97,9 @@ import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.addSample
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
+import org.rtkcollector.app.ui.dashboard.ellipsoidalHeightMetersOrNull
 import org.rtkcollector.app.ui.dashboard.formatBytes
 import org.rtkcollector.app.ui.dashboard.startCoordinateAveraging
-import org.rtkcollector.app.ui.dashboard.toManualBasePositionJsonOrNull
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
@@ -228,19 +229,13 @@ fun RtkCollectorApp(
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
     }
     var coordinateAveraging by remember { mutableStateOf(CoordinateAveragingState()) }
-    var manualBaseCoordinate by remember { mutableStateOf<CoordinatePair?>(null) }
-    LaunchedEffect(state.position.latLon) {
-        val selectedCoordinate = manualBaseCoordinate
-        if (selectedCoordinate != null && state.position.coordinatePairOrNull() != selectedCoordinate) {
-            manualBaseCoordinate = null
-            Toast.makeText(context, "Manual base coordinate cleared because live position changed.", Toast.LENGTH_LONG).show()
-        }
-    }
-    LaunchedEffect(state.position.latLon, state.fix.fixType) {
+    var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
+    LaunchedEffect(state.position.latLon, state.position.ellipsoidalHeight, state.fix.fixType) {
         if (coordinateAveraging.active) {
             val updated = coordinateAveraging.addSample(
                 fixType = state.fix.fixType,
                 coordinates = state.position.coordinatePairOrNull(),
+                ellipsoidalHeightM = state.position.ellipsoidalHeightMetersOrNull(),
             )
             coordinateAveraging = updated
             if (!updated.active && updated.stoppedReason != null) {
@@ -589,8 +584,12 @@ fun RtkCollectorApp(
                     },
                     onMark = {},
                     coordinateAveraging = coordinateAveraging,
-                    onStartCoordinateAveraging = { coordinates ->
-                        val started = startCoordinateAveraging(state.fix.fixType, coordinates)
+                    onStartCoordinateAveraging = { coordinates, ellipsoidalHeightM ->
+                        val started = startCoordinateAveraging(
+                            fixType = state.fix.fixType,
+                            coordinates = coordinates,
+                            ellipsoidalHeightM = ellipsoidalHeightM,
+                        )
                         coordinateAveraging = started
                         val message = if (started.active) {
                             "Coordinate averaging started for ${state.fix.fixType}."
@@ -606,14 +605,23 @@ fun RtkCollectorApp(
                         )
                         Toast.makeText(context, "Coordinate averaging stopped.", Toast.LENGTH_SHORT).show()
                     },
-                    onUseCurrentCoordinateAsManualBase = { coordinates ->
-                        manualBaseCoordinate = coordinates
+                    onUseCurrentCoordinateAsManualBase = { candidate ->
+                        manualBaseCoordinate = candidate
                         selectedWorkflowId = WORKFLOW_FIXED_BASE
                         profileStore.saveSelectedWorkflowId(WORKFLOW_FIXED_BASE)
+                        settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                            val baseProfile = profileStore.commandProfiles().preferredBaseCommandProfile()
+                            if (baseProfile != null) {
+                                set.copy(commandProfileRef = ProfileReference(baseProfile.id, baseProfile.name))
+                            } else {
+                                set
+                            }
+                        }
+                        profileStore.saveSettingsSets(settingsSets)
                         refreshProfileUi(settingsSets)
                         Toast.makeText(
                             context,
-                            "Fixed-base workflow selected with manual coordinate ${coordinates.lat}, ${coordinates.lon}. Choose a matching base command profile before starting.",
+                            "Fixed-base workflow selected with base coordinate ${candidate.displayLabel()}.",
                             Toast.LENGTH_LONG,
                         ).show()
                     },
@@ -2612,7 +2620,7 @@ private fun buildDashboardStartIntent(
     settingsSets: List<RecordingSettingsSet>,
     selectedSettingsSetId: String,
     selectedWorkflowId: String?,
-    manualBaseCoordinate: CoordinatePair?,
+    manualBaseCoordinate: BaseCoordinateCandidate?,
 ): Intent? {
     val profileStore = ProfileStores(context)
     val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
@@ -2641,6 +2649,27 @@ private fun buildDashboardStartIntent(
     val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
     if (workflowId.isNullOrBlank()) {
         Toast.makeText(context, "Cannot start: workflow is not selected.", Toast.LENGTH_LONG).show()
+        return null
+    }
+    if (workflowId == WORKFLOW_FIXED_BASE && manualBaseCoordinate == null) {
+        Toast.makeText(
+            context,
+            "Cannot start: fixed base requires an accepted base coordinate. Use Base on the Position card first.",
+            Toast.LENGTH_LONG,
+        ).show()
+        return null
+    }
+    val fixedBaseModeCommand = if (workflowId == WORKFLOW_FIXED_BASE) {
+        manualBaseCoordinate?.toUm980FixedBaseModeCommandOrNull()
+    } else {
+        null
+    }
+    if (workflowId == WORKFLOW_FIXED_BASE && fixedBaseModeCommand == null) {
+        Toast.makeText(
+            context,
+            "Cannot start: fixed base coordinate needs ellipsoidal height.",
+            Toast.LENGTH_LONG,
+        ).show()
         return null
     }
     val workflowUsesNtrip = workflowId.workflowUsesNtrip()
@@ -2701,7 +2730,10 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_SERIAL_BAUD, activeConfig.serialBaud)
         putStringArrayListExtra(RecordingForegroundService.EXTRA_INIT_COMMANDS, ArrayList(activeConfig.initCommands))
         putStringArrayListExtra(RecordingForegroundService.EXTRA_BAUD_SWITCH_COMMANDS, ArrayList(activeConfig.baudSwitchCommands))
-        putStringArrayListExtra(RecordingForegroundService.EXTRA_MODE_COMMANDS, ArrayList(activeConfig.modeCommands))
+        putStringArrayListExtra(
+            RecordingForegroundService.EXTRA_MODE_COMMANDS,
+            ArrayList(activeConfig.modeCommands.withFixedBaseModeCommand(fixedBaseModeCommand)),
+        )
         putStringArrayListExtra(RecordingForegroundService.EXTRA_SHUTDOWN_COMMANDS, ArrayList(activeConfig.shutdownCommands))
         putExtra(RecordingForegroundService.EXTRA_NTRIP_ENABLED, activeConfig.ntrip.enabled)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, activeConfig.ntrip.host)
@@ -3398,6 +3430,29 @@ private inline fun <reified T> List<T>.findByReference(id: String, label: String
             else -> false
         }
     } ?: error("Missing $label '$id'.")
+
+private fun List<CommandProfile>.preferredBaseCommandProfile(): CommandProfile? =
+    firstOrNull { it.id == ProfileStores.UM980_BASE_CONFIG_PROFILE_ID }
+        ?: firstOrNull { profile ->
+            profile.receiverFamily.equals("um980-n4", ignoreCase = true) &&
+                profile.runtimeScript
+                    .lineSequence()
+                    .any { it.trimStart().startsWith("MODE BASE", ignoreCase = true) }
+        }
+
+private fun List<String>.withFixedBaseModeCommand(command: String?): List<String> {
+    if (command.isNullOrBlank()) return this
+    var replaced = false
+    val updated = map { line ->
+        if (line.trimStart().startsWith("MODE BASE", ignoreCase = true)) {
+            replaced = true
+            command
+        } else {
+            line
+        }
+    }
+    return if (replaced) updated else listOf(command) + this
+}
 
 internal fun String.workflowUsesNtrip(): Boolean =
     this == WORKFLOW_ROVER_NTRIP

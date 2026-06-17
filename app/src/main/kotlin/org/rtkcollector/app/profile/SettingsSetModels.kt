@@ -192,7 +192,7 @@ data class RecordingSettingsSet(
                 name = "UM980 rover + NTRIP",
                 workflowId = "rover-ntrip",
                 receiverProfileId = "um980-n4",
-                commandProfileRef = ProfileReference("um980-binary-multihz", "UM980 binary multi-Hz"),
+                commandProfileRef = ProfileReference("um980-binary-multihz", "UM980 multi-Hz binary RTK+PPP"),
                 usbBaudProfileRef = ProfileReference("um980-230400", "UM980 230400"),
                 ntripCasterProfileRef = ProfileReference("ntrip-caster-default", "NTRIP caster"),
                 ntripMountpointProfileRef = null,

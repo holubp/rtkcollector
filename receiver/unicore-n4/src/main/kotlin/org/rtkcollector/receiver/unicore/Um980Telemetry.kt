@@ -48,3 +48,27 @@ data class Um980Telemetry(
     val rtcmSatelliteCount: Int? = null,
     val rtcmObservableCounts: List<Int> = emptyList(),
 )
+
+fun Um980Telemetry.pppStatusLabel(): String? =
+    um980PppStatusLabel(solutionStatus = solutionStatus, positionType = positionType)
+
+fun um980PppStatusLabel(solutionStatus: String?, positionType: String?): String? {
+    val type = positionType?.trim()?.uppercase()?.takeIf(String::isNotBlank)
+    val status = solutionStatus?.trim()?.uppercase()?.takeIf(String::isNotBlank)
+    return when {
+        type == "PPP" -> "PPP converged"
+        type == "PPP_CONVERGING" -> "PPP converging"
+        type == null && status == null -> null
+        type == "NONE" && status == "INSUFFICIENT_OBS" -> "PPP not started"
+        type == "NONE" && status == "NO_CONVERGENCE" -> "PPP no convergence"
+        type == "NONE" -> status?.let { "PPP ${it.displayToken()}" } ?: "PPP no solution"
+        status != null && status != "SOL_COMPUTED" -> "PPP ${status.displayToken()}"
+        else -> positionType
+    }
+}
+
+private fun String.displayToken(): String =
+    lowercase()
+        .split('_')
+        .filter(String::isNotBlank)
+        .joinToString(" ") { token -> token.replaceFirstChar { it.uppercaseChar() } }

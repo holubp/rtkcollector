@@ -6,21 +6,7 @@ internal object ProfileStoreMigrations {
         defaults: List<CommandProfile>,
     ): List<CommandProfile> {
         val rewritten = profiles.map { profile ->
-            when (profile.id) {
-                ProfileStores.OLD_UM980_COMMAND_PROFILE_ID -> defaults.required(ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID)
-                ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID -> profile.copy(
-                    name = profile.name.ifBlank { "UM980 binary multi-Hz" },
-                    runtimeScript = profile.runtimeScript
-                        .ifBlank { ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT }
-                        .migrateUm980BinaryRtkMonitoringOutput(),
-                    isProtected = false,
-                )
-                ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID -> profile.copy(
-                    runtimeScript = profile.runtimeScript.ifBlank { ProfileStores.UM980_ASCII_PPP_NMEA_SCRIPT },
-                    isProtected = false,
-                )
-                else -> profile
-            }
+            profile.canonicalBuiltInCommandProfile(defaults) ?: profile
         }.distinctBy(CommandProfile::id)
 
         return rewritten.withMissingDefaults(defaults, CommandProfile::id)
@@ -96,7 +82,7 @@ internal object ProfileStoreMigrations {
         settingsSets.map { settingsSet ->
             settingsSet.copy(
                 commandProfileRef = if (settingsSet.commandProfileRef.id == ProfileStores.OLD_UM980_COMMAND_PROFILE_ID) {
-                    ProfileReference(ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID, "UM980 binary multi-Hz")
+                    ProfileReference(ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID, "UM980 multi-Hz binary RTK+PPP")
                 } else {
                     settingsSet.commandProfileRef
                 },
@@ -114,29 +100,28 @@ internal object ProfileStoreMigrations {
 private fun String.blankOldNone(): String =
     if (equals("NONE", ignoreCase = true)) "" else this
 
-private fun String.migrateUm980BinaryRtkMonitoringOutput(): String {
-    if (isOldUm980BinaryProfile()) return ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT
-    if (!contains("CONFIG PPP ENABLE", ignoreCase = true)) return this
-    return withMissingCommand("PPPNAVB COM1 1")
-        .withMissingCommand("ADRNAVB COM1 1")
-        .withMissingCommand("RTKSTATUSB COM1 1")
-        .withMissingCommand("RTCMSTATUSB COM1 ONCHANGED")
+private fun String.normalizedProfileName(): String =
+    trim().lowercase().replace(Regex("\\s+"), " ")
+
+private fun CommandProfile.canonicalBuiltInCommandProfile(defaults: List<CommandProfile>): CommandProfile? {
+    val defaultsById = defaults.associateBy(CommandProfile::id)
+    val defaultsByName = defaults.associateBy { it.name.normalizedProfileName() }
+    val canonicalId = when {
+        id == ProfileStores.OLD_UM980_COMMAND_PROFILE_ID -> ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID
+        defaultsById.containsKey(id) -> id
+        else -> legacyBuiltInCommandProfileIdByName(name.normalizedProfileName())
+    }
+    return canonicalId?.let { defaultsById[it] } ?: defaultsByName[name.normalizedProfileName()]
 }
 
-private fun String.isOldUm980BinaryProfile(): Boolean =
-    contains("BESTNAVB COM1 0.1", ignoreCase = true) &&
-        contains("OBSVMCMPB COM1 0.25", ignoreCase = true) &&
-        contains("STADOPB COM1 1", ignoreCase = true) &&
-        !contains("CONFIG PPP ENABLE", ignoreCase = true)
-
-private fun String.lineStartsWith(prefix: String): Boolean =
-    lineSequence().any { it.trimStart().startsWith(prefix, ignoreCase = true) }
-
-private fun String.withMissingCommand(command: String): String {
-    val commandName = command.substringBefore(' ')
-    if (lineStartsWith(commandName)) return this
-    return trimEnd() + "\n$command"
-}
+private fun legacyBuiltInCommandProfileIdByName(name: String): String? =
+    when (name) {
+        "um980 binary multi-hz" -> ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID
+        "um980 ascii ppp/nmea" -> ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID
+        "um980 ascii ppp/nmea rtk" -> ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID
+        "um980 base" -> ProfileStores.UM980_BASE_CONFIG_PROFILE_ID
+        else -> null
+    }
 
 private fun List<CommandProfile>.required(id: String): CommandProfile =
     firstOrNull { it.id == id } ?: error("Missing default command profile '$id'.")

@@ -164,13 +164,31 @@ class ProfileStores(context: Context) {
         listOf(
             CommandProfile(
                 id = "um980-binary-multihz",
-                name = "UM980 binary multi-Hz",
+                name = "UM980 multi-Hz binary RTK+PPP",
+                receiverFamily = "um980-n4",
                 runtimeScript = UM980_BINARY_MULTI_HZ_SCRIPT,
+                isProtected = true,
             ),
             CommandProfile(
                 id = "um980-ascii-ppp-nmea",
-                name = "UM980 ASCII PPP/NMEA",
+                name = "UM980 multi-Hz ASCII RTK+PPP",
+                receiverFamily = "um980-n4",
                 runtimeScript = UM980_ASCII_PPP_NMEA_SCRIPT,
+                isProtected = true,
+            ),
+            CommandProfile(
+                id = "um980-ascii-1hz-rtk-ppp",
+                name = "UM980 1 Hz ASCII RTK+PPP",
+                receiverFamily = "um980-n4",
+                runtimeScript = UM980_ASCII_1HZ_RTK_PPP_SCRIPT,
+                isProtected = true,
+            ),
+            CommandProfile(
+                id = "um980-base-config",
+                name = "UM980 base config",
+                receiverFamily = "um980-n4",
+                runtimeScript = UM980_BASE_CONFIG_SCRIPT,
+                isProtected = true,
             ),
             CommandProfile(
                 id = "ublox-m8t-raw-1hz-safe",
@@ -237,6 +255,8 @@ class ProfileStores(context: Context) {
         const val OLD_UM980_COMMAND_PROFILE_ID = "um980-default-commands"
         const val UM980_BINARY_MULTI_HZ_PROFILE_ID = "um980-binary-multihz"
         const val UM980_ASCII_PPP_NMEA_PROFILE_ID = "um980-ascii-ppp-nmea"
+        const val UM980_ASCII_1HZ_RTK_PPP_PROFILE_ID = "um980-ascii-1hz-rtk-ppp"
+        const val UM980_BASE_CONFIG_PROFILE_ID = "um980-base-config"
         const val UBLOX_M8T_RAW_1HZ_PROFILE_ID = "ublox-m8t-raw-1hz-safe"
         const val UBLOX_M8T_RAW_5HZ_RTKLIB_EX_PROFILE_ID = "ublox-m8t-raw-5hz-rtklib-ex"
         const val UBLOX_M8T_RAW_STATUS_MOCK_PROFILE_ID = "ublox-m8t-raw-status-mock"
@@ -286,7 +306,9 @@ class ProfileStores(context: Context) {
             CONFIG PPP TIMEOUT 120
             CONFIG PPP CONVERGE 15 30
 
-            MODE ROVER
+            MODE ROVER SURVEY
+            CONFIG RTK TIMEOUT 120
+            CONFIG RTK RELIABILITY 3 1
 
             GNGGA 0.05
             GNRMC 0.05
@@ -296,11 +318,62 @@ class ProfileStores(context: Context) {
             GPGLL 1
             GPGNS 1
             GPGRS 30
-            PPPNAVA 10
-            ADRNAVA 10
+            PPPNAVA 1
+            ADRNAVA 1
+            RTKSTATUSA 1
+            RTCMSTATUSA ONCHANGED
 
             TROPINFOA ONCHANGED
             GPSIONB ONCHANGED
+        """.trimIndent()
+
+        val UM980_ASCII_1HZ_RTK_PPP_SCRIPT: String = """
+            UNLOG COM1
+            MODE ROVER SURVEY
+            CONFIG MMP ENABLE
+            CONFIG RTK TIMEOUT 120
+            CONFIG RTK RELIABILITY 3 1
+            CONFIG PPP ENABLE E6-HAS
+            CONFIG PPP DATUM WGS84
+            CONFIG PPP TIMEOUT 120
+            CONFIG PPP CONVERGE 15 30
+
+            GNGGA 1
+            GNRMC 1
+            GNGST 1
+            GNGSV 1
+            GNGSA 1
+            GPGLL 1
+            GPGNS 1
+            GPGRS 30
+            PPPNAVA 1
+            ADRNAVA 1
+            RTKSTATUSA 1
+            RTCMSTATUSA ONCHANGED
+
+            TROPINFOA ONCHANGED
+            GPSIONB ONCHANGED
+        """.trimIndent()
+
+        val UM980_BASE_CONFIG_SCRIPT: String = """
+            UNLOG COM1
+            MODE BASE TIME 120 2.5
+            GNGGA 1
+            GNRMC 1
+            GNGST 1
+            GNGSV 1
+            GNGSA 1
+            BESTNAVB COM1 1
+            STADOPB COM1 1
+            RTCM1006 COM1 10
+            RTCM1033 COM1 10
+            RTCM1074 COM1 1
+            RTCM1084 COM1 1
+            RTCM1094 COM1 1
+            RTCM1114 COM1 1
+            RTCM1124 COM1 1
+            RTCM1230 COM1 10
+            OBSVMCMPB COM1 1
         """.trimIndent()
 
         val UBLOX_M8T_RAW_1HZ_SCRIPT: String = UbloxM8tProfiles.raw1HzSafe

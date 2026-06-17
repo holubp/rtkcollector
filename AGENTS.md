@@ -201,6 +201,11 @@ Prefer the strongest feasible verification for the touched code:
 - Derived `receiver-solution.nmea` exports must preserve sub-second UTC from
   structured/binary receiver telemetry and must not copy binary/noise fragments
   that merely look like dollar-prefixed lines.
+- User-provided debug recordings should be expected under `samples/debug/`.
+  Treat `samples/` as local evidence only; do not commit those captures.
+- App-distributed init/shutdown command profiles are built-ins: keep them
+  read-only in the UI, sync same-id/same-name copies to the current app default
+  on update, and require users to copy before editing.
 - UM980 profile-to-runtime baud changes must keep receiver baud-switch commands
   separate from post-switch mode/log commands: send init, send the baud switch,
   reconfigure the host serial bridge without purging RX/TX, drain through the

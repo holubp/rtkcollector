@@ -74,9 +74,11 @@ import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980StreamParser
 import org.rtkcollector.receiver.unicore.Um980Telemetry
+import org.rtkcollector.receiver.unicore.pppStatusLabel
 import org.rtkcollector.receiver.unicore.toBestnavCandidate
 import org.rtkcollector.receiver.unicore.toCandidate
 import org.rtkcollector.receiver.unicore.toPppCandidate
+import org.rtkcollector.receiver.unicore.um980PppStatusLabel
 import org.rtkcollector.receiver.api.ReceiverCommand
 import org.rtkcollector.receiver.ublox.UbloxMessageFrequencyTracker
 import org.rtkcollector.receiver.ublox.UbloxMessageKind
@@ -1670,7 +1672,10 @@ class RecordingForegroundService : Service() {
                                                 sessionWriters.appendReceiverPppSolutionJson(solution.toJson())
                                             }
                                             state = state.copy(
-                                                pppStatus = solution.positionType ?: state.pppStatus,
+                                                pppStatus = um980PppStatusLabel(
+                                                    solutionStatus = solution.solutionStatus,
+                                                    positionType = solution.positionType,
+                                                ) ?: state.pppStatus,
                                             )
                                         }
                                         "ADRNAVA" -> {
@@ -1732,7 +1737,7 @@ class RecordingForegroundService : Service() {
                                         sessionWriters.appendReceiverPppSolutionJson(telemetry.toJson())
                                     }
                                     state = state.copy(
-                                        pppStatus = telemetry.positionType ?: state.pppStatus,
+                                        pppStatus = telemetry.pppStatusLabel() ?: state.pppStatus,
                                     )
                                     val now = System.currentTimeMillis()
                                     telemetry.toPppCandidate(now)?.let {

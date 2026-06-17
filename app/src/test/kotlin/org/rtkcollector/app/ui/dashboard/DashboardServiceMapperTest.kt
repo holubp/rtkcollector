@@ -116,7 +116,7 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("n/a", state.fix.fixType)
-        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+        assertEquals("PPP converging", state.fix.pppStatus)
     }
 
     @Test
@@ -131,11 +131,11 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("DGPS", state.fix.fixType)
-        assertEquals("PPP", state.fix.pppStatus)
+        assertEquals("PPP converged", state.fix.pppStatus)
     }
 
     @Test
-    fun `ppp none does not hide gga fix quality`() {
+    fun `explicit ppp none is shown as not started and does not hide gga fix quality`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
             putExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE, "NONE")
@@ -146,7 +146,7 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("RTK float", state.fix.fixType)
-        assertEquals("n/a", state.fix.pppStatus)
+        assertEquals("PPP not started", state.fix.pppStatus)
     }
 
     @Test
@@ -226,7 +226,7 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("DGPS", state.fix.fixType)
-        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+        assertEquals("PPP converging", state.fix.pppStatus)
     }
 
     @Test
@@ -241,7 +241,7 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("RTK float", state.fix.fixType)
-        assertEquals("PPP_CONVERGING", state.fix.pppStatus)
+        assertEquals("PPP converging", state.fix.pppStatus)
         assertEquals("RTK float", state.fix.rtkStatus)
         assertEquals("Not configured", state.fix.rtklibStatus)
     }

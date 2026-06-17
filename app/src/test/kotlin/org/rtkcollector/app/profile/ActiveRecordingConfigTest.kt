@@ -270,7 +270,7 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
-    fun `fixed base workflow permits rover mode command profile for raw collection`() {
+    fun `fixed base workflow rejects rover mode command profile before start`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "fixed-base"),
             commandProfile = CommandProfile(
@@ -288,6 +288,8 @@ class ActiveRecordingConfigTest {
             passwordLookup = { null },
         )
 
-        config.validateForStart()
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertEquals("Fixed base workflow cannot start with a command profile that sets MODE ROVER.", error.message)
     }
 }

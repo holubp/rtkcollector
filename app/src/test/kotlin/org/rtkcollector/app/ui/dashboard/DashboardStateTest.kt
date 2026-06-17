@@ -166,20 +166,40 @@ class DashboardStateTest {
     }
 
     @Test
-    fun `manual base position json records coordinate candidate without inventing height`() {
-        val coordinates = CoordinatePair("50.087451234", "14.421253456")
+    fun `base candidate includes dashboard height and source`() {
+        val candidate = PositionCardState(
+            latLon = "50.087451234, 14.421253456",
+            ellipsoidalHeight = "321.456 m",
+        ).baseCoordinateCandidateOrNull(source = "AVERAGE", sampleCount = 12)
 
+        assertEquals("50.087451234, 14.421253456, h 321.456 m", candidate?.displayLabel())
+        assertEquals(
+            "MODE BASE 50.0874512340 14.4212534560 321.4560",
+            candidate?.toUm980FixedBaseModeCommandOrNull(),
+        )
         assertEquals(
             "{" +
                 "\"latDeg\":50.087451234," +
                 "\"lonDeg\":14.421253456," +
-                "\"heightM\":null," +
+                "\"heightM\":321.456," +
                 "\"frame\":\"UNKNOWN\"," +
                 "\"method\":\"MANUAL_KNOWN_POINT\"," +
-                "\"source\":\"MANUAL\"" +
+                "\"source\":\"AVERAGE\"," +
+                "\"sampleCount\":12" +
                 "}",
-            coordinates.toManualBasePositionJsonOrNull(),
+            candidate?.toManualBasePositionJsonOrNull(),
         )
+    }
+
+    @Test
+    fun `base candidate requires ellipsoidal height and does not fall back to altitude`() {
+        val candidate = PositionCardState(
+            latLon = "50.087451234, 14.421253456",
+            ellipsoidalHeight = "n/a",
+            altitude = "287.000 m",
+        ).baseCoordinateCandidateOrNull()
+
+        assertEquals(null, candidate)
     }
 
     @Test
@@ -187,17 +207,20 @@ class DashboardStateTest {
         val started = startCoordinateAveraging(
             fixType = "RTK fixed",
             coordinates = CoordinatePair("50.0", "14.0"),
+            ellipsoidalHeightM = 300.0,
         )
         val updated = started.addSample(
             fixType = "RTK fixed",
             coordinates = CoordinatePair("52.0", "16.0"),
+            ellipsoidalHeightM = 304.0,
         )
 
         assertTrue(updated.active)
         assertEquals(2, updated.sampleCount)
         assertEquals(51.0, updated.meanLat)
         assertEquals(15.0, updated.meanLon)
-        assertEquals("Avg 2x", updated.statusLabel)
+        assertEquals(302.0, updated.meanEllipsoidalHeightM)
+        assertEquals("Avg 2x 51.0000000000, 15.0000000000, h 302.000 m", updated.statusLabel)
     }
 
     @Test
@@ -205,15 +228,17 @@ class DashboardStateTest {
         val started = startCoordinateAveraging(
             fixType = "RTK fixed",
             coordinates = CoordinatePair("50.0", "14.0"),
+            ellipsoidalHeightM = 300.0,
         )
         val stopped = started.addSample(
             fixType = "DGPS",
             coordinates = CoordinatePair("50.1", "14.1"),
+            ellipsoidalHeightM = 301.0,
         )
 
         assertFalse(stopped.active)
         assertEquals("Fix changed", stopped.stoppedReason)
-        assertEquals("Fix changed", stopped.statusLabel)
+        assertEquals("Fix changed · Avg 1x 50.0000000000, 14.0000000000, h 300.000 m", stopped.statusLabel)
     }
 
     @Test
@@ -221,10 +246,23 @@ class DashboardStateTest {
         val started = startCoordinateAveraging(
             fixType = "n/a",
             coordinates = CoordinatePair("50.0", "14.0"),
+            ellipsoidalHeightM = 300.0,
         )
 
         assertFalse(started.active)
         assertEquals("No fix", started.stoppedReason)
+    }
+
+    @Test
+    fun `coordinate averaging does not start without ellipsoidal height`() {
+        val started = startCoordinateAveraging(
+            fixType = "RTK fixed",
+            coordinates = CoordinatePair("50.0", "14.0"),
+            ellipsoidalHeightM = null,
+        )
+
+        assertFalse(started.active)
+        assertEquals("No ellipsoidal height", started.stoppedReason)
     }
 
     @Test

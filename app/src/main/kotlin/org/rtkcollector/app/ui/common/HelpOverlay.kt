@@ -25,7 +25,7 @@ enum class HelpTopic(
     ),
     COORDINATE_ACTIONS(
         title = "Position actions",
-        body = "Tap the coordinate to copy it as geo:lat,lon, lat,lon, lat or lon. In base workflows, Base selects fixed-base operation using the current coordinate, then you must choose a matching MODE BASE command profile before starting. Avg starts a live coordinate average and stops automatically if the fix type changes.",
+        body = "Tap the coordinate to copy it as geo:lat,lon, lat,lon, lat or lon. In base workflows, Base selects fixed-base operation using the current or averaged coordinate plus ellipsoidal height. Avg averages coordinate and ellipsoidal height, and stops automatically if the fix type changes or required height disappears.",
     ),
     TX_TO_RECEIVER(
         title = "TX to receiver",

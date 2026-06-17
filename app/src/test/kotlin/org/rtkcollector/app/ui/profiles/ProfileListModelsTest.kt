@@ -95,8 +95,8 @@ class ProfileListModelsTest {
             label = "Command profile",
             value = "um980-binary-multihz",
             optionItems = listOf(
-                EditableProfileOption("um980-binary-multihz", "UM980 binary multi-Hz"),
-                EditableProfileOption("um980-ascii-ppp-nmea", "UM980 ASCII PPP/NMEA"),
+                EditableProfileOption("um980-binary-multihz", "UM980 multi-Hz binary RTK+PPP"),
+                EditableProfileOption("um980-ascii-ppp-nmea", "UM980 multi-Hz ASCII RTK+PPP"),
             ),
         )
         val list = EditableProfileField(
@@ -106,7 +106,7 @@ class ProfileListModelsTest {
             readOnlyList = listOf("TUBO00CZE0", "GOPE00CZE0"),
         )
 
-        assertEquals("UM980 binary multi-Hz", selector.optionItems.first().label)
+        assertEquals("UM980 multi-Hz binary RTK+PPP", selector.optionItems.first().label)
         assertEquals(listOf("TUBO00CZE0", "GOPE00CZE0"), list.readOnlyList)
     }
 

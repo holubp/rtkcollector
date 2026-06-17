@@ -94,9 +94,9 @@ fun HomeDashboard(
     onStorage: () -> Unit,
     onMark: () -> Unit,
     coordinateAveraging: CoordinateAveragingState = CoordinateAveragingState(),
-    onStartCoordinateAveraging: (CoordinatePair) -> Unit = {},
+    onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit = { _, _ -> },
     onStopCoordinateAveraging: () -> Unit = {},
-    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit = {},
+    onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit = {},
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
     val context = LocalContext.current
@@ -344,9 +344,9 @@ private fun CompactDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     coordinateAveraging: CoordinateAveragingState,
-    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
-    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
+    onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -388,9 +388,9 @@ private fun RailDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     coordinateAveraging: CoordinateAveragingState,
-    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
-    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
+    onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -636,9 +636,9 @@ private fun DashboardCards(
     onSettingsSet: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     coordinateAveraging: CoordinateAveragingState,
-    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
-    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
+    onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val useTwoColumns = compactDashboardCardColumnCount(maxWidth.value.toInt()) == 2
@@ -695,12 +695,15 @@ private fun DashboardCards(
 private fun PositionCard(
     state: DashboardState,
     coordinateAveraging: CoordinateAveragingState,
-    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
-    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
+    onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
     onHelp: (HelpTopic) -> Unit,
 ) {
     val coordinates = state.position.coordinatePairOrNull()
+    val baseCandidate = coordinateAveraging.averageBaseCandidateOrNull()
+        ?: state.position.baseCoordinateCandidateOrNull()
+    val ellipsoidalHeightM = state.position.ellipsoidalHeightMetersOrNull()
     val context = LocalContext.current
     var showCopyDialog by remember { mutableStateOf(false) }
     val baseControlsVisible = state.status.workflow.isBaseCoordinateWorkflow()
@@ -723,6 +726,8 @@ private fun PositionCard(
         if (baseControlsVisible) {
             CoordinateActionRow(
                 coordinates = coordinates,
+                baseCandidate = baseCandidate,
+                ellipsoidalHeightM = ellipsoidalHeightM,
                 averaging = coordinateAveraging,
                 onStartCoordinateAveraging = onStartCoordinateAveraging,
                 onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -775,10 +780,12 @@ private fun PositionMajorValue(
 @Composable
 private fun CoordinateActionRow(
     coordinates: CoordinatePair?,
+    baseCandidate: BaseCoordinateCandidate?,
+    ellipsoidalHeightM: Double?,
     averaging: CoordinateAveragingState,
-    onStartCoordinateAveraging: (CoordinatePair) -> Unit,
+    onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
-    onUseCurrentCoordinateAsManualBase: (CoordinatePair) -> Unit,
+    onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
 ) {
     val enabled = coordinates != null
     Row(
@@ -788,9 +795,9 @@ private fun CoordinateActionRow(
     ) {
         CompactCoordinateButton(
             label = "Base",
-            enabled = enabled,
+            enabled = baseCandidate != null,
             onClick = {
-                coordinates?.let(onUseCurrentCoordinateAsManualBase)
+                baseCandidate?.let(onUseCurrentCoordinateAsManualBase)
             },
         )
         CompactCoordinateButton(
@@ -800,7 +807,7 @@ private fun CoordinateActionRow(
                 if (averaging.active) {
                     onStopCoordinateAveraging()
                 } else {
-                    coordinates?.let(onStartCoordinateAveraging)
+                    coordinates?.let { onStartCoordinateAveraging(it, ellipsoidalHeightM) }
                 }
             },
         )

@@ -38,12 +38,13 @@ The Position card is also an action surface. Tapping the displayed coordinate
 opens copy choices for `geo:lat,lon`, `lat,lon`, `lat` and `lon`. In base
 workflows, compact `Base` and `Avg` controls may appear next to the coordinate:
 `Base` switches the next-session setup toward fixed-base operation using the
-current coordinate; the user must still choose or create a matching `MODE BASE`
-command profile before starting. `Avg` starts a live coordinate average.
-Averaging is valid only while the interpreted fix type remains unchanged. If the
-fix changes, averaging stops and the app reports the reason. This live average
-is field guidance, not a replacement for PPP/static RTK or an accepted
-`base-position.json`.
+current coordinate and ellipsoidal height; the user must still choose or create
+a matching `MODE BASE` command profile before starting. `Avg` starts a live
+coordinate and ellipsoidal-height average. Averaging is valid only while the
+interpreted fix type remains unchanged and the receiver continues reporting
+ellipsoidal height. If the fix changes or required height disappears, averaging
+stops and the app reports the reason. This live average is field guidance, not a
+replacement for PPP/static RTK or an accepted `base-position.json`.
 
 The Files card shows the active session location and recorded byte counts. The
 Sessions menu lists recordings in the configured app-private storage with latest
@@ -135,7 +136,9 @@ permission dialog, then press Start again. If Android reports permission granted
 but the receiver cannot be opened, reconnect the receiver, close other serial
 apps and retry USB access.
 
-The default editable UM980 command profile is `UM980 binary multi-Hz`. It sends
+The built-in UM980 command profile `UM980 multi-Hz binary RTK+PPP` is the
+recommended default. Built-in profiles are app-distributed, read-only in the UI
+and synced on app update; copy one before editing it. This profile sends
 binary receiver-solution, raw-observation, DOP, ephemeris and ionosphere/time
 logs while avoiding high-rate NMEA chatter:
 
@@ -173,7 +176,7 @@ BD3UTCB ONCHANGED
 GALUTCB ONCHANGED
 ```
 
-A second editable profile, `UM980 ASCII PPP/NMEA`, is available for lower-risk
+The built-in profile `UM980 multi-Hz ASCII RTK+PPP` is available for lower-risk
 ASCII/PPP-oriented testing:
 
 ```text
@@ -182,7 +185,9 @@ CONFIG PPP DATUM WGS84
 CONFIG PPP TIMEOUT 120
 CONFIG PPP CONVERGE 15 30
 
-MODE ROVER
+MODE ROVER SURVEY
+CONFIG RTK TIMEOUT 120
+CONFIG RTK RELIABILITY 3 1
 
 GNGGA 0.05
 GNRMC 0.05
@@ -192,18 +197,23 @@ GNGSA 1
 GPGLL 1
 GPGNS 1
 GPGRS 30
-PPPNAVA 10
-ADRNAVA 10
+PPPNAVA 1
+ADRNAVA 1
+RTKSTATUSA 1
+RTCMSTATUSA ONCHANGED
 
 TROPINFOA ONCHANGED
 GPSIONB ONCHANGED
 ```
 
-Both profiles are defaults, not immutable firmware recipes: users can copy,
-edit, rename or remove them from Menu > Init/shutdown scripts. Fixed-base RTCM output
-uses documented RTCM message command families such as `RTCM1006`, `RTCM1074`,
-`RTCM1084`, `RTCM1094` and `RTCM1124` when those workflows are enabled later.
-User changes to command scripts should remain conservative and source-backed.
+Additional built-ins include `UM980 1 Hz ASCII RTK+PPP` and `UM980 base config`.
+They are also read-only and copyable. Fixed-base start from the Position card
+replaces the base template's survey-style `MODE BASE TIME ...` line with an
+explicit `MODE BASE <lat> <lon> <ellipsoidal-height>` command from the accepted
+current or averaged coordinate. The height is ellipsoidal height, matching the
+UM980 fixed-base command model and the local UM980 RTKLIB pipeline; orthometric
+altitude/MSL height must not be substituted. User changes to copied command
+scripts should remain conservative and source-backed.
 
 The normal recording start path sends runtime UM980 commands only. It does not
 write receiver non-volatile memory. Persistent writes are explicit warned
@@ -297,6 +307,12 @@ RTK solution. The dashboard separates:
 The app does not use UM980 internal NTRIP-client commands in V1. RTCM bytes from
 NTRIP are fed unchanged to the receiver input and are recorded separately from
 the authoritative receiver RX stream.
+
+PPP status is shown only from explicit PPP receiver logs such as `PPPNAVB` or
+`PPPNAVA`: no PPP log means `n/a`; PPP logs with insufficient observations mean
+`PPP not started`; `PPP_CONVERGING` means `PPP converging`; and a converged PPP
+position type means `PPP converged`. PPP convergence is not used to replace the
+main receiver fix unless the receiver's main solution itself reports PPP.
 
 ### Live NTRIP Changes During Recording
 

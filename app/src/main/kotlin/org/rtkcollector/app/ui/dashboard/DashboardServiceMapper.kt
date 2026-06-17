@@ -15,6 +15,8 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         receiver = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_LABEL) ?: "n/a",
         storage = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_STORAGE_LABEL) ?: "n/a",
     )
+    val receiverFamily = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_FAMILY)
+        ?: status.receiver
     val position = PositionCardState(
         latLon = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_LON) ?: "n/a",
         ellipsoidalHeight = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ELLIPSOIDAL_HEIGHT) ?: "n/a",
@@ -38,12 +40,16 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         pppStatus = displayPppStatus(pppStatus),
         rtkStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_RTK_STATUS) ?: "n/a",
         receiverFrequency = run {
+            val um980 = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
+                ?: "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
             val ublox = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY)
-            if (ublox != null && frequencyLineHasMeasuredValues(ublox)) {
-                ublox
-            } else {
-                intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
-                    ?: "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
+                ?: "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz"
+            when {
+                receiverFamily.startsWith("ublox", ignoreCase = true) -> ublox
+                receiverFamily.startsWith("um980", ignoreCase = true) ||
+                    receiverFamily.startsWith("unicore", ignoreCase = true) -> um980
+                frequencyLineHasMeasuredValues(ublox) -> ublox
+                else -> um980
             }
         },
         receiverMode = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_MODE) ?: "n/a",

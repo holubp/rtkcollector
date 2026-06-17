@@ -1295,6 +1295,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_RUNNING, state.running)
                 putExtra(EXTRA_STATE_WORKFLOW_LABEL, state.workflowLabel)
                 putExtra(EXTRA_STATE_RECEIVER_LABEL, state.receiverLabel)
+                putExtra(EXTRA_STATE_RECEIVER_FAMILY, activeReceiverFamily)
                 putExtra(EXTRA_STATE_STORAGE_LABEL, state.storageLabel)
                 putExtra(EXTRA_STATE_SESSION_PATH, state.sessionPath)
                 putExtra(EXTRA_STATE_RX_BYTES, state.receiverRxBytes)
@@ -2055,6 +2056,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_RUNNING = "running"
         const val EXTRA_STATE_WORKFLOW_LABEL = "workflowLabel"
         const val EXTRA_STATE_RECEIVER_LABEL = "receiverLabel"
+        const val EXTRA_STATE_RECEIVER_FAMILY = "receiverFamily"
         const val EXTRA_STATE_STORAGE_LABEL = "storageLabel"
         const val EXTRA_STATE_SESSION_PATH = "sessionPath"
         const val EXTRA_STATE_SETTINGS_SET_LABEL = "settingsSetLabel"
@@ -2113,7 +2115,7 @@ class RecordingForegroundService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val NOTIFICATION_UPDATE_INTERVAL_MILLIS = 1_000L
         private const val READ_BUFFER_BYTES = 16 * 1024
-        private const val ROUTINE_STATE_BROADCAST_INTERVAL_MILLIS = 1_000L
+        private const val ROUTINE_STATE_BROADCAST_INTERVAL_MILLIS = 250L
         private const val PROFILE_DRAIN_MILLIS = 2000L
         private const val SAVE_CONFIG_OK_TIMEOUT_MILLIS = 3_000L
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =

@@ -48,6 +48,7 @@ class DashboardServiceMapperTest {
     fun `default ublox frequency label does not hide live um980 frequency`() {
         val intent = Intent()
             .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_FAMILY, "um980")
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY,
                 "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/4 Hz",
@@ -55,6 +56,50 @@ class DashboardServiceMapperTest {
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
                 "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+            )
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals(
+            "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/4 Hz",
+            state.fix.receiverFrequency,
+        )
+    }
+
+    @Test
+    fun `ublox receiver family shows ublox frequency line even if um980 has stale values`() {
+        val intent = Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_FAMILY, "ublox")
+            .putExtra(
+                RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY,
+                "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/4 Hz",
+            )
+            .putExtra(
+                RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 1/1/-/5/- Hz",
+            )
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals(
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 1/1/-/5/- Hz",
+            state.fix.receiverFrequency,
+        )
+    }
+
+    @Test
+    fun `um980 receiver family shows um980 frequency line even if ublox has stale values`() {
+        val intent = Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_FAMILY, "um980")
+            .putExtra(
+                RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY,
+                "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/4 Hz",
+            )
+            .putExtra(
+                RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 1/1/-/5/- Hz",
             )
 
         val state = dashboardStateFromRecordingIntent(intent)

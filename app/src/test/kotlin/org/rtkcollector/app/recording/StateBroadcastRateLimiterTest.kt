@@ -7,12 +7,13 @@ import org.junit.jupiter.api.Test
 class StateBroadcastRateLimiterTest {
     @Test
     fun `routine broadcasts are limited to configured interval`() {
-        val limiter = StateBroadcastRateLimiter(minIntervalMillis = 1_000)
+        val limiter = StateBroadcastRateLimiter(minIntervalMillis = 250)
 
         assertTrue(limiter.shouldBroadcast(10_000))
-        assertFalse(limiter.shouldBroadcast(10_250))
-        assertFalse(limiter.shouldBroadcast(10_999))
-        assertTrue(limiter.shouldBroadcast(11_000))
+        assertFalse(limiter.shouldBroadcast(10_249))
+        assertTrue(limiter.shouldBroadcast(10_250))
+        assertFalse(limiter.shouldBroadcast(10_499))
+        assertTrue(limiter.shouldBroadcast(10_500))
     }
 
     @Test

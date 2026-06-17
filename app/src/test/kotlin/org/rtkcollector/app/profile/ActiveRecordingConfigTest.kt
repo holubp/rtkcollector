@@ -127,6 +127,45 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `temporary base config enables ntrip when workflow supports corrections`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "base-calibration"),
+            commandProfile = CommandProfile("commands", "Commands", initScript = "UNLOG COM1", runtimeScript = "MODE ROVER"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud", profileBaud = 230400, serialBaud = 921600),
+            ntripCasterProfile = NtripCasterProfile(
+                id = "caster",
+                name = "Caster",
+                host = "caster.example.org",
+                port = 2101,
+                username = "user",
+                secretId = "secret",
+            ),
+            ntripMountpointProfile = NtripMountpointProfile(
+                id = "mount",
+                name = "Mount",
+                casterProfileId = "caster",
+                mountpoint = "CORS01",
+            ),
+            recordingPolicyProfile = RecordingPolicyProfile(
+                id = "record",
+                name = "Record",
+                recordTxToReceiver = true,
+                recordNtripCorrectionInput = true,
+            ),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Temporary base",
+            workflowUsesNtrip = true,
+            passwordLookup = { "password-for-$it" },
+        )
+
+        assertTrue(config.ntrip.enabled)
+        assertEquals("caster.example.org", config.ntrip.host)
+        assertEquals("CORS01", config.ntrip.mountpoint)
+        assertTrue(config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RAW))
+        assertTrue(config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RTCM3))
+    }
+
+    @Test
     fun `recording config uses mock location policy and settings override`() {
         val policyConfig = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip(),

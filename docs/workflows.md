@@ -104,6 +104,11 @@ Required properties:
 - optional NTRIP/CORS corrections may be fed to the receiver;
 - output is eligible for later `base-position.json` candidate generation.
 
+Temporary base may run with no corrections or with a selected NTRIP/CORS
+caster and mountpoint. When a Temporary base workflow has NTRIP profiles
+selected, Android acts as the NTRIP client and feeds RTCM corrections into the
+receiver, while raw receiver RX and correction-input artifacts remain separate.
+
 Runtime mode sanity:
 
 - rover workflows must not start a receiver command profile that sends

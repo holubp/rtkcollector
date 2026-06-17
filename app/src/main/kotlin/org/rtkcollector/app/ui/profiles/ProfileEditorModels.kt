@@ -1,5 +1,8 @@
 package org.rtkcollector.app.ui.profiles
 
+const val RefreshNtripCasterMountpointsLabel = "Refresh mountpoints from caster"
+const val SuspectInvalidMountpointWarning = "Suspect invalid mountpoint"
+
 data class NtripMountpointEditorState(
     val mountpointText: String = "",
     val availableMountpoints: List<String> = emptyList(),

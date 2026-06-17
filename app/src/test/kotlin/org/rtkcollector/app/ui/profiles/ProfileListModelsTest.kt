@@ -111,6 +111,71 @@ class ProfileListModelsTest {
     }
 
     @Test
+    fun `editable profile field can expose validation error`() {
+        val field = EditableProfileField(
+            key = "mountpoint",
+            label = "Mountpoint",
+            value = "OLD",
+            errorText = "Mountpoint is not in the selected caster sourcetable.",
+        )
+
+        assertTrue(field.hasError)
+        assertEquals("Mountpoint is not in the selected caster sourcetable.", field.errorText)
+    }
+
+    @Test
+    fun `editable mountpoint field revalidates against selected caster options`() {
+        val field = EditableProfileField(
+            key = "mountpoint",
+            label = "Mountpoint",
+            value = "TUBO00CZE0",
+            optionGroups = mapOf(
+                "caster-a" to listOf(EditableProfileOption("TUBO00CZE0", "TUBO00CZE0")),
+                "caster-b" to listOf(EditableProfileOption("GOPE00CZE0", "GOPE00CZE0")),
+            ),
+        )
+
+        val valid = field.withRuntimeProfileValidation(
+            mapOf("casterProfileId" to "caster-a", "mountpoint" to "TUBO00CZE0"),
+        )
+        val invalid = field.withRuntimeProfileValidation(
+            mapOf("casterProfileId" to "caster-b", "mountpoint" to "TUBO00CZE0"),
+        )
+
+        assertFalse(valid.hasError)
+        assertTrue(invalid.hasError)
+        assertEquals(listOf("GOPE00CZE0"), invalid.optionItems.map { it.value })
+    }
+
+    @Test
+    fun `profile list row can expose warning state`() {
+        val row = ProfileListRow(
+            id = "mount",
+            name = "Mount",
+            isProtected = false,
+            hasLocalOverrides = false,
+            warningText = SuspectInvalidMountpointWarning,
+        )
+
+        assertTrue(row.hasWarning)
+        assertEquals(SuspectInvalidMountpointWarning, row.warningText)
+    }
+
+    @Test
+    fun `profile editor cannot save while field has validation error`() {
+        val fields = listOf(
+            EditableProfileField(
+                key = "mountpoint",
+                label = "Mountpoint",
+                value = "OLD",
+                errorText = "Mountpoint is not in the selected caster sourcetable.",
+            ),
+        )
+
+        assertFalse(canSaveProfileEditor(fields))
+    }
+
+    @Test
     fun `profile editor actions are non destructive by default`() {
         val action = ProfileEditorAction("Refresh") {}
 

@@ -9,12 +9,14 @@ data class ProfileListRow(
     val hasLocalOverrides: Boolean,
     val isSelected: Boolean = false,
     val summary: String = "",
+    val warningText: String? = null,
 ) {
     val displayName: String = if (hasLocalOverrides) "$name + local changes" else name
     val canEdit: Boolean = !isProtected
     val canRename: Boolean = !isProtected
     val canCopy: Boolean = true
     val canDelete: Boolean = !isProtected || hasLocalOverrides
+    val hasWarning: Boolean get() = !warningText.isNullOrBlank()
 }
 
 data class SettingsSetListState(
@@ -54,9 +56,29 @@ data class EditableProfileField(
     val boolean: Boolean = false,
     val options: List<String> = emptyList(),
     val optionItems: List<EditableProfileOption> = options.map { EditableProfileOption(it, it) },
+    val optionGroups: Map<String, List<EditableProfileOption>> = emptyMap(),
     val readOnly: Boolean = false,
     val readOnlyList: List<String> = emptyList(),
-)
+    val errorText: String? = null,
+) {
+    val hasError: Boolean get() = !errorText.isNullOrBlank()
+}
+
+fun EditableProfileField.withRuntimeProfileValidation(values: Map<String, String>): EditableProfileField {
+    if (key != "mountpoint") return this
+    val selectedCasterId = values["casterProfileId"].orEmpty()
+    val currentMountpoint = values[key].orEmpty()
+    val runtimeOptions = optionGroups[selectedCasterId] ?: optionItems
+    val knownMountpoints = runtimeOptions.map { it.value }.filter(String::isNotBlank)
+    val runtimeError = currentMountpoint
+        .takeIf(String::isNotBlank)
+        ?.takeIf { knownMountpoints.isNotEmpty() && it !in knownMountpoints }
+        ?.let { "Mountpoint is not in the selected caster sourcetable." }
+    return copy(optionItems = runtimeOptions, errorText = runtimeError)
+}
+
+fun canSaveProfileEditor(fields: List<EditableProfileField>): Boolean =
+    fields.none { it.hasError }
 
 data class ProfileEditorData(
     val title: String,

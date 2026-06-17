@@ -115,6 +115,8 @@ import org.rtkcollector.app.ui.profiles.ProfileEditorScreen
 import org.rtkcollector.app.ui.profiles.ProfileListScreen
 import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
+import org.rtkcollector.app.ui.profiles.RefreshNtripCasterMountpointsLabel
+import org.rtkcollector.app.ui.profiles.SuspectInvalidMountpointWarning
 import org.rtkcollector.app.ui.profiles.persistentBaudWriteAction
 import org.rtkcollector.app.ui.profiles.persistentReceiverWriteAction
 import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
@@ -130,6 +132,9 @@ import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
 import org.rtkcollector.receiver.unicore.Um980NmeaReexporter
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
+import org.rtkcollector.core.correction.NtripCredentials
+import org.rtkcollector.core.correction.NtripSourcetableClient
+import org.rtkcollector.core.correction.NtripSourcetableRequest
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -790,7 +795,9 @@ fun RtkCollectorApp(
                 )
                 AppScreen.NTRIP_MOUNTPOINT_PROFILES -> ProfileListScreen(
                     title = "NTRIP mountpoints",
-                    rows = profileStore.ntripMountpointProfiles().map { it.profileRow() },
+                    rows = profileStore.ntripMountpointProfiles().map {
+                        it.profileRow(profileStore.ntripCasterProfiles())
+                    },
                     onSelect = {},
                     onEdit = { id ->
                         profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_MOUNTPOINT, id)
@@ -995,7 +1002,10 @@ fun RtkCollectorApp(
                 AppScreen.MOUNTPOINT_SELECTOR -> ProfileListScreen(
                     title = "Select NTRIP mountpoint",
                     rows = profileStore.ntripMountpointProfiles().map {
-                        it.profileRow(isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.ntripMountpointProfileRef?.id)
+                        it.profileRow(
+                            casters = profileStore.ntripCasterProfiles(),
+                            isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.ntripMountpointProfileRef?.id,
+                        )
                     },
                     onSelect = { id ->
                         profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
@@ -1530,6 +1540,54 @@ fun RtkCollectorApp(
                                         )
                                     }
                                 }
+                                if (target.kind == ProfileKind.NTRIP_CASTER) {
+                                    add(
+                                        ProfileEditorAction(
+                                            label = RefreshNtripCasterMountpointsLabel,
+                                            onClick = {},
+                                            onClickWithValues = { values ->
+                                                refreshNtripCasterMountpoints(
+                                                    context = context,
+                                                    targetId = target.id,
+                                                    values = values,
+                                                    passwordLookup = secretStore::getPassword,
+                                                    savePassword = secretStore::putPassword,
+                                                    profileStore = profileStore,
+                                                    onSuccess = { count ->
+                                                        refreshProfileUi()
+                                                        Toast.makeText(context, "Fetched $count mountpoints.", Toast.LENGTH_LONG).show()
+                                                    },
+                                                    onFailure = { message ->
+                                                        Toast.makeText(context, "Mountpoint refresh failed: $message", Toast.LENGTH_LONG).show()
+                                                    },
+                                                )
+                                            },
+                                        ),
+                                    )
+                                }
+                                if (target.kind == ProfileKind.NTRIP_MOUNTPOINT) {
+                                    add(
+                                        ProfileEditorAction(
+                                            label = RefreshNtripCasterMountpointsLabel,
+                                            onClick = {},
+                                            onClickWithValues = { values ->
+                                                refreshNtripCasterMountpointsForProfileId(
+                                                    context = context,
+                                                    casterProfileId = values["casterProfileId"].orEmpty(),
+                                                    profileStore = profileStore,
+                                                    passwordLookup = secretStore::getPassword,
+                                                    onSuccess = { count ->
+                                                        refreshProfileUi()
+                                                        Toast.makeText(context, "Fetched $count mountpoints.", Toast.LENGTH_LONG).show()
+                                                    },
+                                                    onFailure = { message ->
+                                                        Toast.makeText(context, "Mountpoint refresh failed: $message", Toast.LENGTH_LONG).show()
+                                                    },
+                                                )
+                                            },
+                                        ),
+                                    )
+                                }
                                 if (target.kind == ProfileKind.COMMANDS) {
                                     add(
                                         persistentReceiverWriteAction(
@@ -1820,6 +1878,116 @@ private fun runOnMain(context: Context, action: () -> Unit) {
     (context as? ComponentActivity)?.runOnUiThread(action) ?: action()
 }
 
+private fun refreshNtripCasterMountpoints(
+    context: Context,
+    targetId: String,
+    values: Map<String, String>,
+    passwordLookup: (String) -> String?,
+    savePassword: (String, String) -> Unit,
+    profileStore: ProfileStores,
+    onSuccess: (Int) -> Unit,
+    onFailure: (String) -> Unit,
+) {
+    val host = values["host"].orEmpty().trim()
+    val port = values["port"]?.toIntOrNull() ?: 2101
+    val username = values["username"].orEmpty().trim()
+    val password = values["password"].orEmpty()
+    if (host.isBlank()) {
+        onFailure("NTRIP host is blank.")
+        return
+    }
+    if (port !in 1..65535) {
+        onFailure("NTRIP port must be 1..65535.")
+        return
+    }
+    val existing = profileStore.ntripCasterProfiles().firstOrNull { it.id == targetId }
+    if (existing == null) {
+        onFailure("NTRIP caster profile no longer exists.")
+        return
+    }
+    val secretId = when {
+        password.isNotBlank() && existing.secretId.isNotBlank() -> existing.secretId
+        password.isNotBlank() -> "ntrip:$host:$targetId:$username"
+        else -> existing.secretId
+    }
+    if (password.isNotBlank()) {
+        savePassword(secretId, password)
+    }
+    val resolvedPassword = password.ifBlank {
+        secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
+    }
+    val credentials = username.takeIf(String::isNotBlank)?.let {
+        NtripCredentials(username = it, password = resolvedPassword)
+    }
+
+    Thread(
+        {
+            runCatching {
+                NtripSourcetableClient(
+                    NtripSourcetableRequest(
+                        host = host,
+                        port = port,
+                        credentials = credentials,
+                    ),
+                ).fetch()
+            }.onSuccess { result ->
+                runOnMain(context) {
+                    val updatedProfiles = profileStore.ntripCasterProfiles().map { profile ->
+                        if (profile.id == targetId) {
+                            profile.copy(
+                                host = host,
+                                port = port,
+                                username = username,
+                                secretId = secretId,
+                                sourcetableMountpoints = result.mountpoints,
+                            ).also(NtripCasterProfile::validate)
+                        } else {
+                            profile
+                        }
+                    }
+                    profileStore.saveNtripCasterProfiles(updatedProfiles)
+                    onSuccess(result.mountpoints.size)
+                }
+            }.onFailure { error ->
+                runOnMain(context) {
+                    onFailure(error.message ?: error.javaClass.simpleName)
+                }
+            }
+        },
+        "rtkcollector-ntrip-caster-refresh",
+    ).start()
+}
+
+private fun refreshNtripCasterMountpointsForProfileId(
+    context: Context,
+    casterProfileId: String,
+    profileStore: ProfileStores,
+    passwordLookup: (String) -> String?,
+    onSuccess: (Int) -> Unit,
+    onFailure: (String) -> Unit,
+) {
+    val profile = profileStore.ntripCasterProfiles().firstOrNull { it.id == casterProfileId }
+    if (profile == null) {
+        onFailure("Select an NTRIP caster profile first.")
+        return
+    }
+    refreshNtripCasterMountpoints(
+        context = context,
+        targetId = profile.id,
+        values = mapOf(
+            "host" to profile.host,
+            "port" to profile.port.toString(),
+            "username" to profile.username,
+            "password" to "",
+        ),
+        passwordLookup = passwordLookup,
+        savePassword = { _, _ -> },
+        profileStore = profileStore,
+        onSuccess = onSuccess,
+        onFailure = onFailure,
+    )
+}
+
 private fun buildSettingsBackup(
     context: Context,
     includePlaintextPasswords: Boolean,
@@ -2086,10 +2254,16 @@ private fun ProfileStores.profileEditorData(
             )
         }
         ProfileKind.NTRIP_MOUNTPOINT -> ntripMountpointProfiles().first { it.id == target.id }.let { profile ->
-            val selectedCasterMountpoints = ntripCasterProfiles()
-                .firstOrNull { it.id == profile.casterProfileId }
-                ?.sourcetableMountpoints
-                .orEmpty()
+            val mountpointOptionsByCaster = ntripCasterProfiles().associate { caster ->
+                caster.id to caster.sourcetableMountpoints.map { EditableProfileOption(it, it) }
+            }
+            val selectedCasterMountpoints = mountpointOptionsByCaster[profile.casterProfileId].orEmpty()
+            val mountpointError = profile.mountpoint
+                .takeIf(String::isNotBlank)
+                ?.takeIf { mountpoint ->
+                    selectedCasterMountpoints.isNotEmpty() && selectedCasterMountpoints.none { it.value == mountpoint }
+                }
+                ?.let { "Mountpoint is not in the selected caster sourcetable." }
             ProfileEditorData(
                 title = "Edit NTRIP mountpoint",
                 fields = listOf(
@@ -2104,7 +2278,9 @@ private fun ProfileStores.profileEditorData(
                         key = "mountpoint",
                         label = "Mountpoint",
                         value = profile.mountpoint,
-                        optionItems = selectedCasterMountpoints.map { EditableProfileOption(it, it) },
+                        optionItems = selectedCasterMountpoints,
+                        optionGroups = mountpointOptionsByCaster,
+                        errorText = mountpointError,
                     ),
                     EditableProfileField("ggaUploadPolicy", "GGA upload policy", profile.ggaUploadPolicy),
                     EditableProfileField(
@@ -3495,7 +3671,7 @@ private fun List<String>.withFixedBaseModeCommand(command: String?): List<String
 }
 
 internal fun String.workflowUsesNtrip(): Boolean =
-    this == WORKFLOW_ROVER_NTRIP
+    this == WORKFLOW_ROVER_NTRIP || this == WORKFLOW_BASE_CALIBRATION
 
 private fun String?.workflowLabel(): String =
     this?.workflowName() ?: "Select workflow"
@@ -3575,14 +3751,26 @@ private fun NtripCasterProfile.profileRow(isSelected: Boolean = false): ProfileL
     )
 
 private fun NtripMountpointProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
-    ProfileListRow(
+    profileRow(emptyList(), isSelected)
+
+private fun NtripMountpointProfile.profileRow(
+    casters: List<NtripCasterProfile>,
+    isSelected: Boolean = false,
+): ProfileListRow {
+    val caster = casters.firstOrNull { it.id == casterProfileId }
+    val suspect = mountpoint.isNotBlank() &&
+        caster?.sourcetableMountpoints?.isNotEmpty() == true &&
+        mountpoint !in caster.sourcetableMountpoints
+    return ProfileListRow(
         id = id,
         name = name,
         isProtected = isProtected,
         hasLocalOverrides = false,
         isSelected = isSelected,
         summary = listOf(casterProfileId, mountpoint.ifBlank { "mountpoint not set" }).joinToString(" · "),
+        warningText = if (suspect) SuspectInvalidMountpointWarning else null,
     )
+}
 
 private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
     ProfileListRow(
@@ -3631,7 +3819,10 @@ private fun dashboardSelectorRows(
             )
         }
         DashboardSelector.MOUNTPOINT -> profileStore.ntripMountpointProfiles().map { profile ->
-            profile.profileRow(isSelected = profile.id == selectedSettingsSet?.ntripMountpointProfileRef?.id)
+            profile.profileRow(
+                casters = profileStore.ntripCasterProfiles(),
+                isSelected = profile.id == selectedSettingsSet?.ntripMountpointProfileRef?.id,
+            )
         }
         DashboardSelector.RECEIVER -> profileStore.commandProfiles().map { profile ->
             profile.profileRow(isSelected = profile.id == selectedSettingsSet?.commandProfileRef?.id)

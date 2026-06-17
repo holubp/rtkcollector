@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 
 private val ActiveProfileBackground = Color(0xFFE8F5E9)
 private val ActiveProfileText = Color(0xFF145A18)
+private val WarningOrange = Color(0xFFB26A00)
 private val ReceiverFamilyOptions = listOf(
     EditableProfileOption("um980-n4", "Unicore UM980 / N4"),
     EditableProfileOption("ublox-m8p0", "u-blox M8P-0"),
@@ -250,6 +251,13 @@ private fun ProfileListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (row.hasWarning) {
+                Text(
+                    text = "! ${row.warningText}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = WarningOrange,
                 )
             }
 
@@ -476,7 +484,11 @@ private fun ProfileSelectorRow(row: ProfileListRow, onSelect: (String) -> Unit) 
             modifier = Modifier.padding(10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(row.displayName, color = foreground, modifier = Modifier.weight(1f))
+            Text(
+                text = if (row.hasWarning) "! ${row.displayName}" else row.displayName,
+                color = if (row.hasWarning && !row.isSelected) WarningOrange else foreground,
+                modifier = Modifier.weight(1f),
+            )
             if (row.isSelected) {
                 ActiveLabel()
             }
@@ -558,6 +570,8 @@ fun ProfileEditorScreen(
     var expandedOptions by remember { mutableStateOf(emptySet<String>()) }
     var showUnsavedPrompt by remember { mutableStateOf(false) }
     var pendingDestructiveAction by remember { mutableStateOf<ProfileEditorAction?>(null) }
+    val runtimeFields = data.fields.map { field -> field.withRuntimeProfileValidation(values) }
+    val editorCanSave = canSaveProfileEditor(runtimeFields)
     val savedFingerprint = remember(data.fields) {
         profileEditorFingerprint(data.fields.associate { it.key to it.value })
     }
@@ -566,7 +580,9 @@ fun ProfileEditorScreen(
         currentFingerprint = profileEditorFingerprint(values),
     )
     val saveValues = {
-        onSave(values.mapValues { it.value.trim() })
+        if (editorCanSave) {
+            onSave(values.mapValues { it.value.trim() })
+        }
     }
     val leaveEditor = {
         if (unsavedState.canLeaveWithoutPrompt) {
@@ -655,6 +671,7 @@ fun ProfileEditorScreen(
                     actions = {
                         Button(
                             onClick = saveValues,
+                            enabled = editorCanSave,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF2E7D32),
                                 contentColor = Color.White,
@@ -722,7 +739,7 @@ fun ProfileEditorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(data.fields, key = { it.key }) { field ->
+            items(runtimeFields, key = { it.key }) { field ->
                 if (field.boolean) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -736,6 +753,7 @@ fun ProfileEditorScreen(
                         )
                         Text(field.label, modifier = Modifier.weight(1f))
                     }
+                    ProfileFieldError(field)
                 } else if (field.readOnlyList.isNotEmpty()) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -745,6 +763,7 @@ fun ProfileEditorScreen(
                         field.readOnlyList.forEach { item ->
                             Text(item, style = MaterialTheme.typography.bodyMedium)
                         }
+                        ProfileFieldError(field)
                     }
                 } else if (field.editorOptions().isNotEmpty()) {
                     val optionItems = field.editorOptions()
@@ -774,6 +793,7 @@ fun ProfileEditorScreen(
                             trailingIcon = {
                                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                             },
+                            isError = field.hasError,
                         )
                         ExposedDropdownMenu(
                             expanded = expanded,
@@ -790,6 +810,7 @@ fun ProfileEditorScreen(
                             }
                         }
                     }
+                    ProfileFieldError(field)
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(field.label, style = MaterialTheme.typography.labelLarge)
@@ -800,6 +821,7 @@ fun ProfileEditorScreen(
                                     values = values + (field.key to value)
                                 },
                                 readOnly = field.readOnly,
+                                isError = field.hasError,
                             )
                         } else {
                             OutlinedTextField(
@@ -812,6 +834,7 @@ fun ProfileEditorScreen(
                                 readOnly = field.readOnly,
                                 singleLine = true,
                                 textStyle = MaterialTheme.typography.bodyMedium,
+                                isError = field.hasError,
                                 visualTransformation = if (field.secret && field.key !in visibleSecrets) {
                                     PasswordVisualTransformation()
                                 } else {
@@ -836,6 +859,7 @@ fun ProfileEditorScreen(
                                 },
                             )
                         }
+                        ProfileFieldError(field)
                     }
                 }
             }
@@ -848,6 +872,7 @@ private fun ScriptTextField(
     value: String,
     onValueChange: (String) -> Unit,
     readOnly: Boolean,
+    isError: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
@@ -856,9 +881,21 @@ private fun ScriptTextField(
             .fillMaxWidth(),
         minLines = 4,
         readOnly = readOnly,
+        isError = isError,
         singleLine = false,
         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
     )
+}
+
+@Composable
+private fun ProfileFieldError(field: EditableProfileField) {
+    if (field.hasError) {
+        Text(
+            text = "! ${field.errorText}",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
 }
 
 private fun EditableProfileField.editorOptions(): List<EditableProfileOption> =

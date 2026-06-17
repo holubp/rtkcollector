@@ -308,6 +308,21 @@ The app does not use UM980 internal NTRIP-client commands in V1. RTCM bytes from
 NTRIP are fed unchanged to the receiver input and are recorded separately from
 the authoritative receiver RX stream.
 
+The NTRIP caster editor includes a refresh action for the selected caster. It
+connects to the caster sourcetable, replaces the cached mountpoint list on that
+caster profile, and leaves the selected mountpoint profile unchanged until the
+user selects or edits one.
+
+The NTRIP mountpoint editor includes the same refresh action for the currently
+selected caster, so a stale list can be updated without leaving the mountpoint
+configuration screen. If the refreshed or selected caster list does not contain
+the current mountpoint text, the editor preserves the text, marks the field as
+invalid, and blocks saving until a compatible caster or mountpoint is selected.
+
+Mountpoint profile lists show suspect saved profiles with an orange warning and
+the text `Suspect invalid mountpoint`. The main-screen mountpoint selector shows
+the same profile-level suspect state with a compact warning marker.
+
 PPP status is shown only from explicit PPP receiver logs such as `PPPNAVB` or
 `PPPNAVA`: no PPP log means `n/a`; PPP logs with insufficient observations mean
 `PPP not started`; `PPP_CONVERGING` means `PPP converging`; and a converged PPP
@@ -367,6 +382,10 @@ Required recording behaviour:
 - request and record receiver PPP solution separately where the receiver profile
   supports PPP;
 - optionally feed CORS/EUREF/NTRIP corrections to the receiver.
+
+Temporary base can use the same selected NTRIP caster and mountpoint profiles as
+rover+NTRIP. This is intended for deriving the temporary base coordinate from a
+CORS/EUREF/base correction stream. Plain rover recording remains NTRIP-off.
 
 Base-position candidate preference:
 

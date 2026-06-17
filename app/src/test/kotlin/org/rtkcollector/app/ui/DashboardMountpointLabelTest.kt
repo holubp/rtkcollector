@@ -188,7 +188,10 @@ class DashboardMountpointLabelTest {
 
     @Test
     fun `ntrip workflow detection is explicit`() {
+        assertEquals(false, "plain-rover".workflowUsesNtrip())
         assertEquals(true, "rover-ntrip".workflowUsesNtrip())
+        assertEquals(true, "base-calibration".workflowUsesNtrip())
+        assertEquals(false, "fixed-base".workflowUsesNtrip())
         assertEquals(false, "nontrip-debug".workflowUsesNtrip())
     }
 

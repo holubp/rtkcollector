@@ -28,8 +28,17 @@ render.experimental.xml
 .kotlin/
 out/
 
+# Python helper/test generated state
+__pycache__/
+*.py[cod]
+
 # Local agent worktrees
 .worktrees/
+.codex-tmp/
+.superpowers/
+
+# Local field-test/debug captures
+samples/
 
 # Keystore files
 *.jks

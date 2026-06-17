@@ -200,6 +200,17 @@ For non-trivial work, the expected order is: update domain doc → write spec
 [`AGENTS.md`](../AGENTS.md) § Superpowers Plugin Usage lists which skill to
 use at each step.
 
+## Formal Specification Workflow
+
+The canonical requirements live in `docs/specification/`. Superpowers specs and
+plans are design history and implementation history. For non-trivial changes:
+
+1. Find affected requirement IDs.
+2. Update formal specs if behaviour changes.
+3. Update user-facing docs separately when users need instructions.
+4. Update `docs/specification/verification-matrix.md`.
+5. Update `docs/superpowers/plan-status.md` if large-plan status changes.
+
 ## Quick glossary
 
 - NTRIP — protocol to fetch RTCM corrections over HTTP from a *caster*; a

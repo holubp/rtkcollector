@@ -81,6 +81,12 @@ users. Superpowers brainstorming/spec/plan files are source material and
 traceability history; they are not a substitute for the canonical formal
 specification.
 
+When changing behaviour, identify affected formal requirement IDs from
+`docs/specification/` before implementation. If the behaviour is not covered,
+add or update formal requirements first or in the same branch. Keep
+`docs/specification/verification-matrix.md` aligned with tests, manual checks
+and known gaps.
+
 ## Plan Status Tracking
 
 `docs/superpowers/plan-status.md` is the GitHub-tracked source of truth for
@@ -125,9 +131,10 @@ unchanged.
   RTK against another base, PPP, static/post-processing or fallback averaging.
   A fixed base uses an already accepted coordinate to configure base output.
 - Rover workflows must not use command profiles that put the receiver in
-  `MODE BASE`. Base/temporary-base workflows may use rover-mode commands when
-  the goal is coordinate determination from another base, PPP or raw/static
-  post-processing.
+  `MODE BASE`. Temporary-base workflows may use rover-mode commands when the
+  goal is coordinate determination from another base, PPP or raw/static
+  post-processing. Fixed-base workflows must not use command profiles that put
+  the receiver in `MODE ROVER`.
 - Dashboard coordinate actions are intentionally compact: tapping coordinates
   copies them, `Base` moves toward fixed-base use of the current coordinate,
   and `Avg` starts a live average that must stop if the fix type changes.

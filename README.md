@@ -24,6 +24,12 @@ Android Gradle Plugin invoking SDK native binaries such as `aapt2` that are not
 usable on this Termux/Android host; use `:app:compileDebugKotlin` to validate
 the Kotlin/UI code locally.
 
+Formal contributor-facing requirements live in
+[docs/specification](docs/specification/index.md). User workflow documentation
+lives in [docs/user-workflows.md](docs/user-workflows.md). Superpowers specs and
+plans are retained as design and implementation history under
+[docs/superpowers](docs/superpowers/plan-status.md).
+
 ## Branding Assets
 
 Source logo files live in `logos/`. Android launcher and compact badge assets

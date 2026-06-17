@@ -401,10 +401,14 @@ class RecordingForegroundService : Service() {
             lastMockPublishedAt = null
             lastMockPublishedIdentity = null
             previousMockResult = null
-            bestSolutionTicker = bestSolutionExecutor.scheduleAtFixedRate(
-                { runBestSolutionTick() },
-                1, 1, java.util.concurrent.TimeUnit.SECONDS,
-            )
+            bestSolutionTicker = if (mockLocationRequested) {
+                bestSolutionExecutor.scheduleAtFixedRate(
+                    { runBestSolutionTick() },
+                    1, 1, java.util.concurrent.TimeUnit.SECONDS,
+                )
+            } else {
+                null
+            }
 
             captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
             maybeStartNtrip(intent, recorder)
@@ -1418,10 +1422,6 @@ class RecordingForegroundService : Service() {
                 previousMockResult = previousMockResult,
             )
             val tick = BestSolutionTickLogic.compute(tickInput)
-
-            // Update derived dashboard fields from the selected best solution,
-            // independently of whether Android mock-location publishing is enabled.
-            applyTickStateDelta(tick.stateDelta, now)
 
             when (val action = tick.publishAction) {
                 PublishAction.None -> {

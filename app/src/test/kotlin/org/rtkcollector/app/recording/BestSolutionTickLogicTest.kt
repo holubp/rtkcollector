@@ -46,7 +46,7 @@ class BestSolutionTickLogicTest {
     }
 
     @Test
-    fun `mock disabled emits DISABLED without publish even with fresh candidate`() {
+    fun `mock disabled computes no publish action and no required screen update`() {
         val candidate = candidate("UM980-BESTNAV", FixClass.RTK_FIXED, updatedAtMillis = 1_000L)
 
         val out = BestSolutionTickLogic.compute(
@@ -54,12 +54,6 @@ class BestSolutionTickLogicTest {
         )
 
         assertEquals(MockLocationPublishResult.DISABLED, out.stateDelta.mockResult)
-        assertEquals("UM980-BESTNAV", out.stateDelta.bestSolutionSource)
-        assertEquals(50.0, out.stateDelta.latDeg)
-        assertEquals(14.0, out.stateDelta.lonDeg)
-        assertEquals(300.0, out.stateDelta.ellipsoidalHeightM)
-        assertEquals(250.0, out.stateDelta.mslAltitudeM)
-        assertEquals(12, out.stateDelta.satellitesUsed)
         assertTrue(out.publishAction is PublishAction.None)
         assertNull(out.newLastMockPublishedAt)
     }

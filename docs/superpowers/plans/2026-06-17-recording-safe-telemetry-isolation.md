@@ -406,7 +406,7 @@ git commit -m "Separate selected solution display state"
 - Modify: `app/src/test/kotlin/org/rtkcollector/app/recording/BestSolutionTickLogicTest.kt`
 - Modify: `app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt`
 
-- [ ] **Step 1: Write failing test that mock-disabled tick performs no screen delta**
+- [x] **Step 1: Write failing test that mock-disabled tick performs no screen delta**
 
 Modify `BestSolutionTickLogicTest`:
 
@@ -426,7 +426,7 @@ fun `mock disabled computes no publish action and no required screen update`() {
 
 Keep existing tests that verify mock-enabled publish behaviour.
 
-- [ ] **Step 2: Modify service scheduling so no mock tick is created when disabled**
+- [x] **Step 2: Modify service scheduling so no mock tick is created when disabled**
 
 In `RecordingForegroundService.startRecording`, replace unconditional scheduler:
 
@@ -454,7 +454,7 @@ bestSolutionTicker = if (mockLocationRequested) {
 }
 ```
 
-- [ ] **Step 3: Remove dashboard state mutation from mock tick**
+- [x] **Step 3: Remove dashboard state mutation from mock tick**
 
 In `runBestSolutionTick`, remove this call:
 
@@ -465,7 +465,7 @@ applyTickStateDelta(tick.stateDelta, now)
 Keep updates to `mockLocationState` and mock error state only. If `applyTickStateDelta`
 becomes unused after this task and Task 4, remove the method.
 
-- [ ] **Step 4: Run compile**
+- [x] **Step 4: Run compile**
 
 Run:
 
@@ -475,7 +475,7 @@ sh gradlew :app:compileDebugKotlin
 
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/src/main/kotlin/org/rtkcollector/app/recording/BestSolutionTickLogic.kt \

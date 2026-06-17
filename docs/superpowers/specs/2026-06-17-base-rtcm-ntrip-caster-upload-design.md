@@ -169,6 +169,43 @@ Rules:
 If the receiver outputs RTCM interleaved with solution logs, the app extracts
 valid RTCM frames for upload. Invalid or partial frames are not uploaded.
 
+## Receiver Output Sanity Check
+
+Caster upload must validate that the selected receiver/base configuration is
+expected to produce enough RTCM for useful downstream rover corrections. This is
+separate from validating the caster host, credentials and mountpoint.
+
+The sanity check should run before upload starts and should be visible in the
+profile/workflow UI before recording where practical.
+
+Minimum checks:
+
+- selected workflow is fixed base or explicitly allowed temporary base;
+- receiver family/profile supports base RTCM output or extractable RTCM in the
+  recorded receiver stream;
+- command profile contains an RTCM-output configuration or a known built-in
+  base-output profile;
+- selected coordinate source is accepted when fixed-base upload is requested;
+- expected RTCM message set includes base reference position and observation
+  messages sufficient for the configured receiver/constellations.
+
+For UM980, the first practical validation should recognise configured base RTCM
+output commands in the selected init/runtime profile. It should warn or block if
+the profile only enables solution logs such as `BESTNAVB` without RTCM base
+messages. Exact UM980 RTCM command recognition must be grounded in the local
+Unicore documentation and existing tested command profiles.
+
+Validation outcomes:
+
+- pass: upload may start;
+- warning: upload may start only if the user explicitly accepts reduced
+  usefulness, for example missing optional constellations;
+- error: upload cannot start, for example no RTCM output is configured.
+
+Runtime should keep checking stream health. If upload starts but no valid RTCM
+frames are observed within a bounded time, the caster worker enters a degraded
+state and raw recording continues.
+
 ## Session Artifacts
 
 The session should record:
@@ -196,6 +233,8 @@ The session should record:
 - Fixed-base upload requires accepted base coordinates.
 - Temporary-base upload requires explicit user acceptance or workflow policy.
 - Upload must not start from an unaccepted base-calibration session.
+- Upload must not start when the selected receiver configuration cannot produce
+  the minimum required RTCM stream.
 - Upload from rover workflows is invalid.
 - Upload must not use plaintext secrets in session metadata.
 - Upload worker failure is degraded unless it causes storage failure while
@@ -211,6 +250,9 @@ Required tests for future implementation:
 - rover workflow rejects caster upload;
 - fixed-base workflow rejects upload without accepted base coordinates;
 - temporary-base workflow rejects upload unless explicitly allowed;
+- selected base receiver configuration without RTCM output is rejected;
+- selected base receiver configuration missing optional RTCM messages warns
+  without deleting user configuration;
 - upload queue overflow does not block raw recording;
 - auth error stops retrying and reports terminal upload state;
 - network error enters reconnect wait and recording continues;

@@ -45,6 +45,27 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `default ublox frequency label does not hide live um980 frequency`() {
+        val intent = Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            .putExtra(
+                RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY,
+                "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/4 Hz",
+            )
+            .putExtra(
+                RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+            )
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals(
+            "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/4 Hz",
+            state.fix.receiverFrequency,
+        )
+    }
+
+    @Test
     fun `stopped service state preserves last session files`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)

@@ -39,7 +39,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         rtkStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_RTK_STATUS) ?: "n/a",
         receiverFrequency = run {
             val ublox = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY)
-            if (ublox != null && ublox.any(Char::isDigit)) {
+            if (ublox != null && frequencyLineHasMeasuredValues(ublox)) {
                 ublox
             } else {
                 intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
@@ -111,6 +111,12 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         )
     }
 }
+
+internal fun frequencyLineHasMeasuredValues(line: String): Boolean =
+    line
+        .removeSuffix(" Hz")
+        .substringAfterLast(' ', missingDelimiterValue = "")
+        .any(Char::isDigit)
 
 private fun mountpointFromUrl(url: String?): String =
     url

@@ -152,6 +152,9 @@ unchanged.
   landscape layouts.
 - Keep raw capture independent from Compose, Activity lifecycle and advisory
   parsers.
+- Do not broadcast full dashboard state from high-rate capture loops on every
+  receiver read. Throttle routine UI state broadcasts; keep lifecycle, error,
+  start, stop and reconnect state changes immediate.
 - Record receiver RX, app TX to receiver, correction input, events, quality and
   metadata as separate artifacts.
 - Validate workflow and command safety before sending receiver commands,

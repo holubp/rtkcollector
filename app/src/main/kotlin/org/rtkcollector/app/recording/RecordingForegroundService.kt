@@ -142,6 +142,8 @@ class RecordingForegroundService : Service() {
     private var mockLocationRequested: Boolean = false
     private var ubloxStreamParser = UbloxStreamParser()
     private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+    private val routineStateBroadcastRateLimiter =
+        StateBroadcastRateLimiter(ROUTINE_STATE_BROADCAST_INTERVAL_MILLIS)
     private var sharedNmeaGgaParser: NmeaGgaParser = NmeaGgaParser()
     private val solutionCandidates =
         java.util.concurrent.ConcurrentHashMap<String, org.rtkcollector.core.solution.SolutionCandidate>()
@@ -186,6 +188,7 @@ class RecordingForegroundService : Service() {
         stopping.set(false)
         shutdownSent.set(false)
         activeWorkflowUsesNtrip = false
+        routineStateBroadcastRateLimiter.reset()
         state = state.copy(
             lifecycle = RecordingLifecycleState.STARTING,
             errorCategory = RecordingErrorCategory.NONE,
@@ -435,7 +438,7 @@ class RecordingForegroundService : Service() {
                     ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                     rawRecordingActive = true,
                 ).clearRecoverableUsbError()
-                broadcastState()
+                broadcastRoutineState()
                 updateForegroundNotification()
             }.onFailure { error ->
                 state = state.copy(
@@ -901,6 +904,7 @@ class RecordingForegroundService : Service() {
             stopping.set(false)
             return
         }
+        routineStateBroadcastRateLimiter.reset()
         state = state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false)
         broadcastState()
         if (sendShutdown && shutdownSent.compareAndSet(false, true)) {
@@ -1346,6 +1350,12 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_UBLOX_FREQUENCY, state.ubloxFrequency)
             },
         )
+    }
+
+    private fun broadcastRoutineState() {
+        if (routineStateBroadcastRateLimiter.shouldBroadcast(System.currentTimeMillis())) {
+            broadcastState()
+        }
     }
 
     private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980MessageFrequencyTracker) {
@@ -2103,6 +2113,7 @@ class RecordingForegroundService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val NOTIFICATION_UPDATE_INTERVAL_MILLIS = 1_000L
         private const val READ_BUFFER_BYTES = 16 * 1024
+        private const val ROUTINE_STATE_BROADCAST_INTERVAL_MILLIS = 1_000L
         private const val PROFILE_DRAIN_MILLIS = 2000L
         private const val SAVE_CONFIG_OK_TIMEOUT_MILLIS = 3_000L
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =

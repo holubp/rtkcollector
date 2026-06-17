@@ -2,6 +2,7 @@ package org.rtkcollector.app.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.rtkcollector.app.profile.NtripCasterProfile
 import org.rtkcollector.app.profile.NtripMountpointOverride
 import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.ProfileReference
@@ -31,6 +32,48 @@ class DashboardMountpointLabelTest {
         )
 
         assertEquals("TUBO00CZE0", settingsSet.selectedMountpointLabel(profiles))
+    }
+
+    @Test
+    fun `selected mountpoint profile determines active caster even when settings set caster is stale`() {
+        val oldCaster = NtripCasterProfile(id = "old", name = "Old", host = "old.example.org")
+        val newCaster = NtripCasterProfile(id = "new", name = "New", host = "new.example.org")
+        val mountpoint = NtripMountpointProfile(
+            id = "mount",
+            name = "Mount",
+            casterProfileId = "new",
+            mountpoint = "TUBO00CZE0",
+        )
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterProfileRef = ProfileReference("old", "Old"),
+            ntripMountpointProfileRef = ProfileReference("mount", "Mount"),
+        )
+
+        val resolved = settingsSet.resolveNtripProfiles(
+            casterProfiles = listOf(oldCaster, newCaster),
+            mountpointProfiles = listOf(mountpoint),
+        )
+
+        assertEquals("new", resolved.caster?.id)
+        assertEquals("new.example.org", resolved.caster?.host)
+        assertEquals(ProfileReference("new", "New"), resolved.settingsSet.ntripCasterProfileRef)
+    }
+
+    @Test
+    fun `active caster falls back to settings set only when no mountpoint profile is selected`() {
+        val caster = NtripCasterProfile(id = "caster", name = "Caster", host = "caster.example.org")
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterProfileRef = ProfileReference("caster", "Caster"),
+            ntripMountpointProfileRef = null,
+        )
+
+        val resolved = settingsSet.resolveNtripProfiles(
+            casterProfiles = listOf(caster),
+            mountpointProfiles = emptyList(),
+        )
+
+        assertEquals("caster", resolved.caster?.id)
+        assertEquals(settingsSet, resolved.settingsSet)
     }
 
     @Test

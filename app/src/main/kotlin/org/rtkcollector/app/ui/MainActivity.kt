@@ -1000,8 +1000,12 @@ fun RtkCollectorApp(
                     onSelect = { id ->
                         profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
                             profileStore.saveLastActiveNtripMountpointProfileId(profile.id)
+                            val casterProfileRef = profileStore.ntripCasterProfiles().firstOrNull { it.id == profile.casterProfileId }?.let {
+                                ProfileReference(it.id, it.name)
+                            }
                             settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                 set.copy(
+                                    ntripCasterProfileRef = casterProfileRef,
                                     ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
                                     overrides = set.overrides.copy(ntripMountpoint = null),
                                 )
@@ -1593,8 +1597,12 @@ fun RtkCollectorApp(
                             DashboardSelector.MOUNTPOINT -> {
                                 profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
                                     profileStore.saveLastActiveNtripMountpointProfileId(profile.id)
+                                    val casterProfileRef = profileStore.ntripCasterProfiles().firstOrNull { it.id == profile.casterProfileId }?.let {
+                                        ProfileReference(it.id, it.name)
+                                    }
                                     settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                         set.copy(
+                                            ntripCasterProfileRef = casterProfileRef,
                                             ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
                                             overrides = set.overrides.copy(ntripMountpoint = null),
                                         )
@@ -2268,24 +2276,38 @@ private fun ProfileStores.saveProfileEditorData(
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
         }
-        ProfileKind.NTRIP_MOUNTPOINT -> saveNtripMountpointProfiles(
-            ntripMountpointProfiles().map { profile ->
-                if (profile.id == target.id) {
-                    require(!profile.isProtected) { "Protected NTRIP mountpoint profiles cannot be edited." }
-                    profile.copy(
-                        name = values.required("name"),
-                        casterProfileId = values.required("casterProfileId"),
-                        mountpoint = values.optional("mountpoint").orEmpty(),
-                        ggaUploadPolicy = values.optional("ggaUploadPolicy").orEmpty(),
-                        expectedFormat = values.optional("expectedFormat").orEmpty().ifBlank { "RTCM3" },
-                        remoteBaseRawAvailable = values.optional("remoteBaseRawAvailable").toBooleanStrictOrFalse(),
-                    )
+        ProfileKind.NTRIP_MOUNTPOINT -> {
+            val newName = values.required("name")
+            val casterProfileId = values.required("casterProfileId")
+            val casterProfileRef = ProfileReference(
+                casterProfileId,
+                ntripCasterProfiles().firstOrNull { it.id == casterProfileId }?.name ?: casterProfileId,
+            )
+            saveNtripMountpointProfiles(
+                ntripMountpointProfiles().map { profile ->
+                    if (profile.id == target.id) {
+                        require(!profile.isProtected) { "Protected NTRIP mountpoint profiles cannot be edited." }
+                        profile.copy(
+                            name = newName,
+                            casterProfileId = casterProfileId,
+                            mountpoint = values.optional("mountpoint").orEmpty(),
+                            ggaUploadPolicy = values.optional("ggaUploadPolicy").orEmpty(),
+                            expectedFormat = values.optional("expectedFormat").orEmpty().ifBlank { "RTCM3" },
+                            remoteBaseRawAvailable = values.optional("remoteBaseRawAvailable").toBooleanStrictOrFalse(),
+                        )
+                    } else {
+                        profile
+                    }
+                },
+            )
+            val synchronizedSettings = settingsSets.map { set ->
+                if (set.ntripMountpointProfileRef?.id == target.id) {
+                    set.copy(ntripCasterProfileRef = casterProfileRef)
                 } else {
-                    profile
+                    set
                 }
-            },
-        ).also {
-            return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
+            }
+            return updateSettingsSetReferenceNames(synchronizedSettings, target.kind, target.id, newName)
         }
         ProfileKind.COMMANDS -> saveCommandProfiles(
             commandProfiles().map { profile ->
@@ -2642,12 +2664,13 @@ private fun buildDashboardStartIntent(
         id = settingsSet.usbBaudProfileRef.id,
         label = "USB/baud profile",
     )
-    val ntripCaster = settingsSet.ntripCasterProfileRef?.let { reference ->
-        profileStore.ntripCasterProfiles().findByReference(reference.id, "NTRIP caster profile")
-    }
-    val ntripMountpoint = settingsSet.ntripMountpointProfileRef?.let { reference ->
-        profileStore.ntripMountpointProfiles().findByReference(reference.id, "NTRIP mountpoint profile")
-    }
+    val ntripResolution = settingsSet.resolveNtripProfiles(
+        casterProfiles = profileStore.ntripCasterProfiles(),
+        mountpointProfiles = profileStore.ntripMountpointProfiles(),
+    )
+    val ntripCaster = ntripResolution.caster
+    val ntripMountpoint = ntripResolution.mountpoint
+    val resolvedSettingsSet = ntripResolution.settingsSet
     val recordingPolicy = profileStore.recordingPolicyProfiles().findByReference(
         id = settingsSet.recordingOutputProfileRef.id,
         label = "recording policy profile",
@@ -2685,7 +2708,7 @@ private fun buildDashboardStartIntent(
     val workflowUsesNtrip = workflowId.workflowUsesNtrip()
     val activeConfig = try {
         ActiveRecordingConfig.resolve(
-            settingsSet = settingsSet.copy(workflowId = workflowId),
+            settingsSet = resolvedSettingsSet.copy(workflowId = workflowId),
             commandProfile = commandProfile,
             usbBaudProfile = usbProfile,
             ntripCasterProfile = ntripCaster,
@@ -2786,7 +2809,7 @@ private fun buildDashboardStartIntent(
         )
         putExtra(RecordingForegroundService.EXTRA_BASE_POSITION_JSON, manualBasePositionJson)
         putStringArrayListExtra(RecordingForegroundService.EXTRA_EXPECTED_ARTIFACTS, ArrayList(activeConfig.expectedSessionArtifactNames))
-        putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, settingsSet.displayNameWithOverrides())
+        putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, resolvedSettingsSet.displayNameWithOverrides())
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_COMMAND_PROFILE_NAME, commandProfile.name)
         putExtra(
             RecordingForegroundService.EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME,
@@ -2806,16 +2829,17 @@ private fun buildNtripUpdateIntent(
 ): Intent? {
     val profileStore = ProfileStores(context)
     val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
-    val ntripCaster = settingsSet.ntripCasterProfileRef?.let { reference ->
-        profileStore.ntripCasterProfiles().findByReference(reference.id, "NTRIP caster profile")
-    }
-    val ntripMountpoint = settingsSet.ntripMountpointProfileRef?.let { reference ->
-        profileStore.ntripMountpointProfiles().findByReference(reference.id, "NTRIP mountpoint profile")
-    }
+    val ntripResolution = settingsSet.resolveNtripProfiles(
+        casterProfiles = profileStore.ntripCasterProfiles(),
+        mountpointProfiles = profileStore.ntripMountpointProfiles(),
+    )
+    val ntripCaster = ntripResolution.caster
+    val ntripMountpoint = ntripResolution.mountpoint
+    val resolvedSettingsSet = ntripResolution.settingsSet
     val activeConfig = try {
         val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
         ActiveRecordingConfig.resolve(
-            settingsSet = settingsSet.copy(workflowId = workflowId ?: settingsSet.workflowId),
+            settingsSet = resolvedSettingsSet.copy(workflowId = workflowId ?: resolvedSettingsSet.workflowId),
             commandProfile = profileStore.commandProfiles().findByReference(
                 id = settingsSet.commandProfileRef.id,
                 label = "command profile",
@@ -3271,10 +3295,17 @@ internal fun UsbBaudProfile.dashboardBaudLabel(): String =
 internal fun dashboardBaudLabel(profileName: String, targetBaud: Int): String =
     "$profileName · target $targetBaud baud"
 
+private fun ProfileStores.resolveSelectedNtripProfiles(selectedSettingsSetId: String): ResolvedNtripProfiles? {
+    val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return null
+    return settingsSet.resolveNtripProfiles(
+        casterProfiles = ntripCasterProfiles(),
+        mountpointProfiles = ntripMountpointProfiles(),
+    )
+}
+
 private fun ProfileStores.selectedNtripCasterProfileLabel(selectedSettingsSetId: String): String {
-    val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    val reference = settingsSet.ntripCasterProfileRef ?: return "n/a"
-    return ntripCasterProfiles().firstOrNull { it.id == reference.id }?.name ?: reference.name
+    val resolution = resolveSelectedNtripProfiles(selectedSettingsSetId) ?: return "n/a"
+    return resolution.caster?.name ?: resolution.settingsSet.ntripCasterProfileRef?.name ?: "n/a"
 }
 
 private fun ProfileStores.selectedRecordingOutputProfileLabel(selectedSettingsSetId: String): String {
@@ -3284,9 +3315,8 @@ private fun ProfileStores.selectedRecordingOutputProfileLabel(selectedSettingsSe
 }
 
 private fun ProfileStores.selectedCasterMountpoints(selectedSettingsSetId: String): List<String> {
-    val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return emptyList()
-    val casterId = settingsSet.ntripCasterProfileRef?.id ?: return emptyList()
-    return ntripCasterProfiles().firstOrNull { it.id == casterId }?.sourcetableMountpoints.orEmpty()
+    val resolution = resolveSelectedNtripProfiles(selectedSettingsSetId) ?: return emptyList()
+    return resolution.caster?.sourcetableMountpoints.orEmpty()
 }
 
 private fun ProfileStores.plannedDashboardState(

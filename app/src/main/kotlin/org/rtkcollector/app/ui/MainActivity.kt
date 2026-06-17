@@ -63,6 +63,7 @@ import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
 import org.rtkcollector.app.profile.displayMountpoint
+import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
@@ -234,6 +235,7 @@ fun RtkCollectorApp(
     var state by remember {
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
     }
+    var startInProgress by rememberSaveable { mutableStateOf(false) }
     var coordinateAveraging by remember { mutableStateOf(CoordinateAveragingState()) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
     LaunchedEffect(state.files.sessionLocation) {
@@ -434,9 +436,13 @@ fun RtkCollectorApp(
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     RecordingForegroundService.ACTION_STATE -> {
-                        state = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(
+                        val nextState = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(
                             profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId),
                         )
+                        state = nextState
+                        if (nextState.isRecording || nextState.lastError != null || nextState.errorSeverity != "NONE") {
+                            startInProgress = false
+                        }
                         if (screen == AppScreen.SESSIONS) {
                             refreshSessions()
                         }
@@ -537,8 +543,10 @@ fun RtkCollectorApp(
                 AppScreen.HOME -> HomeDashboard(
                     state = state,
                     layoutPreference = dashboardLayout,
+                    startInProgress = startInProgress,
                     onPrimaryAction = {
                         if (state.isRecording) {
+                            startInProgress = false
                             context.startService(RecordingForegroundService.stopIntent(context))
                         } else if (persistentReceiverWriteInProgress.get()) {
                             Toast.makeText(
@@ -554,6 +562,7 @@ fun RtkCollectorApp(
                                 selectedWorkflowId = selectedWorkflowId,
                                 manualBaseCoordinate = manualBaseCoordinate,
                             )?.let { intent ->
+                                startInProgress = true
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     context.startForegroundService(intent)
                                 } else {
@@ -1550,7 +1559,6 @@ fun RtkCollectorApp(
                                                     context = context,
                                                     targetId = target.id,
                                                     values = values,
-                                                    passwordLookup = secretStore::getPassword,
                                                     savePassword = secretStore::putPassword,
                                                     profileStore = profileStore,
                                                     onSuccess = { count ->
@@ -1576,6 +1584,7 @@ fun RtkCollectorApp(
                                                     casterProfileId = values["casterProfileId"].orEmpty(),
                                                     profileStore = profileStore,
                                                     passwordLookup = secretStore::getPassword,
+                                                    savePassword = secretStore::putPassword,
                                                     onSuccess = { count ->
                                                         refreshProfileUi()
                                                         Toast.makeText(context, "Fetched $count mountpoints.", Toast.LENGTH_LONG).show()
@@ -1882,7 +1891,6 @@ private fun refreshNtripCasterMountpoints(
     context: Context,
     targetId: String,
     values: Map<String, String>,
-    passwordLookup: (String) -> String?,
     savePassword: (String, String) -> Unit,
     profileStore: ProfileStores,
     onSuccess: (Int) -> Unit,
@@ -1905,17 +1913,9 @@ private fun refreshNtripCasterMountpoints(
         onFailure("NTRIP caster profile no longer exists.")
         return
     }
-    val secretId = when {
-        password.isNotBlank() && existing.secretId.isNotBlank() -> existing.secretId
-        password.isNotBlank() -> "ntrip:$host:$targetId:$username"
-        else -> existing.secretId
-    }
-    if (password.isNotBlank()) {
-        savePassword(secretId, password)
-    }
-    val resolvedPassword = password.ifBlank {
-        secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
-    }
+    val secretId = ntripCasterSecretId(targetId)
+    savePassword(secretId, password)
+    val resolvedPassword = password
     val credentials = username.takeIf(String::isNotBlank)?.let {
         NtripCredentials(username = it, password = resolvedPassword)
     }
@@ -1963,6 +1963,7 @@ private fun refreshNtripCasterMountpointsForProfileId(
     casterProfileId: String,
     profileStore: ProfileStores,
     passwordLookup: (String) -> String?,
+    savePassword: (String, String) -> Unit,
     onSuccess: (Int) -> Unit,
     onFailure: (String) -> Unit,
 ) {
@@ -1971,6 +1972,10 @@ private fun refreshNtripCasterMountpointsForProfileId(
         onFailure("Select an NTRIP caster profile first.")
         return
     }
+    val password = profile.secretId
+        .takeIf(String::isNotBlank)
+        ?.let(passwordLookup)
+        .orEmpty()
     refreshNtripCasterMountpoints(
         context = context,
         targetId = profile.id,
@@ -1978,10 +1983,9 @@ private fun refreshNtripCasterMountpointsForProfileId(
             "host" to profile.host,
             "port" to profile.port.toString(),
             "username" to profile.username,
-            "password" to "",
+            "password" to password,
         ),
-        passwordLookup = passwordLookup,
-        savePassword = { _, _ -> },
+        savePassword = savePassword,
         profileStore = profileStore,
         onSuccess = onSuccess,
         onFailure = onFailure,
@@ -2243,7 +2247,12 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("port", "Port", profile.port.toString()),
                     EditableProfileField("username", "Username", profile.username),
                     EditableProfileField("password", "Password", storedPassword, secret = true),
-                    EditableProfileField("protocolPolicy", "Protocol policy", profile.protocolPolicy),
+                    EditableProfileField(
+                        key = "protocolPolicy",
+                        label = "Protocol policy",
+                        value = profile.protocolPolicy,
+                        optionItems = NTRIP_PROTOCOL_POLICY_OPTIONS,
+                    ),
                     EditableProfileField(
                         key = "sourcetableMountpoints",
                         label = "Known mountpoints",
@@ -2421,15 +2430,9 @@ private fun ProfileStores.saveProfileEditorData(
             ntripCasterProfiles().map { profile ->
                 if (profile.id == target.id) {
                     require(!profile.isProtected) { "Protected NTRIP caster profiles cannot be edited." }
-                    val password = values.optional("password")
-                    val secretId = when {
-                        !password.isNullOrBlank() && profile.secretId.isNotBlank() -> profile.secretId
-                        !password.isNullOrBlank() -> "ntrip:${values.optional("host").orEmpty()}:${target.id}:${values.optional("username").orEmpty()}"
-                        else -> profile.secretId
-                    }
-                    if (!password.isNullOrBlank()) {
-                        savePassword(secretId, password)
-                    }
+                    val password = values.optional("password").orEmpty()
+                    val secretId = ntripCasterSecretId(target.id)
+                    savePassword(secretId, password)
                     profile.copy(
                         name = values.required("name"),
                         host = values.optional("host").orEmpty(),
@@ -2737,6 +2740,10 @@ private val PPP_NMEA_GGA_QUALITY_OPTIONS = listOf(
     EditableProfileOption("2", "2 - DGPS/DGNSS compatibility (default)"),
     EditableProfileOption("5", "5 - RTK float compatibility"),
     EditableProfileOption("9", "9 - GNSS fix compatibility"),
+)
+
+private val NTRIP_PROTOCOL_POLICY_OPTIONS = listOf(
+    EditableProfileOption("NTRIP_V2_PREFERRED_WITH_COMPATIBILITY", "NTRIP v2 preferred, v1 fallback"),
 )
 
 private const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"
@@ -3767,7 +3774,7 @@ private fun NtripMountpointProfile.profileRow(
         isProtected = isProtected,
         hasLocalOverrides = false,
         isSelected = isSelected,
-        summary = listOf(casterProfileId, mountpoint.ifBlank { "mountpoint not set" }).joinToString(" · "),
+        summary = listOf(caster?.name ?: casterProfileId, mountpoint.ifBlank { "mountpoint not set" }).joinToString(" · "),
         warningText = if (suspect) SuspectInvalidMountpointWarning else null,
     )
 }

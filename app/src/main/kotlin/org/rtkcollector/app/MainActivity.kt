@@ -30,6 +30,7 @@ import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.SavedRecordingDefaults
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
+import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.usb.UsbDeviceSummary
@@ -49,7 +50,6 @@ import org.rtkcollector.receiver.unicore.Um980CommandProfileRequest
 import org.rtkcollector.receiver.unicore.Um980CoordinateSource
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.receiver.unicore.Um980WorkflowMode
-import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var workflowSpinner: Spinner
@@ -629,13 +629,8 @@ class MainActivity : Activity() {
 
     private fun saveSelectedNtripCasterProfile(copy: Boolean) {
         val selected = selectedNtripCasterProfile() ?: return
-        val secretId = selected.secretId.ifBlank {
-            ntripCasterSecretRef(
-                ntripHostEdit.text.toString().trim(),
-                ntripUsernameEdit.text.toString().trim(),
-            )
-        }
-        if (secretId.isNotBlank() && ntripPasswordEdit.text.toString().isNotBlank()) {
+        val secretId = ntripCasterSecretId(selected.id)
+        if (ntripPasswordEdit.text.toString().isNotBlank()) {
             secretStore.putPassword(secretId, ntripPasswordEdit.text.toString())
         }
         val updated = selected.copy(
@@ -667,9 +662,7 @@ class MainActivity : Activity() {
             return
         }
         val username = ntripUsernameEdit.text.toString().trim()
-        val secretRef = selected.secretId.ifBlank {
-            ntripCasterSecretRef(host, username)
-        }
+        val secretRef = ntripCasterSecretId(selected.id)
         val password = resolveNtripPassword(secretRef)
         val credentials = username.takeIf(String::isNotBlank)?.let { NtripCredentials(it, password) }
         monitorText.text = "Fetching NTRIP sourcetable from $host:$port..."
@@ -908,8 +901,7 @@ class MainActivity : Activity() {
             return
         }
         val username = ntripUsernameEdit.text.toString().trim()
-        val secretRef = selectedNtripCasterProfile()?.secretId?.takeIf { it.isNotBlank() }
-            ?: ntripCasterSecretRef(host, username)
+        val secretRef = selectedNtripCasterProfile()?.let { ntripCasterSecretId(it.id) }.orEmpty()
         val runtimePassword = resolveNtripPassword(secretRef)
         saveRecordingDefaults(host, ntripPort, mountpoint, username, secretRef)
 
@@ -972,8 +964,7 @@ class MainActivity : Activity() {
             return
         }
         val username = ntripUsernameEdit.text.toString().trim()
-        val secretRef = selectedNtripCasterProfile()?.secretId?.takeIf { it.isNotBlank() }
-            ?: ntripCasterSecretRef(host, username)
+        val secretRef = selectedNtripCasterProfile()?.let { ntripCasterSecretId(it.id) }.orEmpty()
         val runtimePassword = resolveNtripPassword(secretRef)
         val intent = Intent(this, RecordingForegroundService::class.java).apply {
             action = RecordingForegroundService.ACTION_UPDATE_NTRIP
@@ -1118,13 +1109,6 @@ class MainActivity : Activity() {
 
     private fun WorkflowOption.requiresNtrip(): Boolean =
         um980Mode == Um980WorkflowMode.ROVER_NTRIP || um980Mode == Um980WorkflowMode.TEMPORARY_BASE_NTRIP
-
-    private fun ntripCasterSecretRef(host: String, username: String): String =
-        if (host.isBlank() || username.isBlank()) {
-            ""
-        } else {
-            "ntrip:${host.lowercase(Locale.US)}:caster:${username}"
-        }
 
     private fun hasPersistedSafWritePermission(treeUri: String): Boolean =
         contentResolver.persistedUriPermissions.any { permission ->

@@ -127,6 +127,36 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `ntrip runtime uses profile-bound secret and falls back to legacy stored password`() {
+        val lookedUpSecrets = mutableListOf<String>()
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile(
+                id = "caster",
+                name = "Caster",
+                host = "caster.example.org",
+                username = "user",
+                secretId = "legacy-shared-secret",
+            ),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "OLD"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { secretId ->
+                lookedUpSecrets += secretId
+                if (secretId == "legacy-shared-secret") "legacy-password" else null
+            },
+        )
+
+        assertEquals("ntrip-caster-profile:caster", config.ntrip.secretRef)
+        assertEquals("legacy-password", config.ntrip.password)
+        assertEquals(listOf("ntrip-caster-profile:caster", "legacy-shared-secret"), lookedUpSecrets)
+    }
+
+    @Test
     fun `temporary base config enables ntrip when workflow supports corrections`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "base-calibration"),

@@ -109,7 +109,8 @@ data class NtripCasterProfile(
     }
 
     fun copyProfile(id: String, name: String): NtripCasterProfile =
-        copy(id = id, name = name, isProtected = false).also(NtripCasterProfile::validate)
+        copy(id = id, name = name, secretId = ntripCasterSecretId(id), isProtected = false)
+            .also(NtripCasterProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -135,6 +136,11 @@ data class NtripCasterProfile(
             sourcetableMountpoints = json.optStringList("sourcetableMountpoints"),
         ).also(NtripCasterProfile::validate)
     }
+}
+
+fun ntripCasterSecretId(profileId: String): String {
+    require(profileId.isNotBlank()) { "NTRIP caster profile id must not be blank." }
+    return "ntrip-caster-profile:$profileId"
 }
 
 data class NtripMountpointProfile(

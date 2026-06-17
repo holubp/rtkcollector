@@ -82,11 +82,27 @@ data class ActiveRecordingConfig(
                 listOf("CONFIG COM1 $serialBaud")
             }
 
+            val profileOwnedNtripSecretRef = ntripCasterProfile
+                ?.let { ntripCasterSecretId(it.id) }
+                .orEmpty()
+            val legacyProfileNtripSecretRef = ntripCasterProfile?.secretId.orEmpty()
             val ntripSecretRef =
                 if (workflowUsesNtrip) {
-                    localNtripSecretRef ?: casterOverride?.secretId ?: ntripCasterProfile?.secretId.orEmpty()
+                    localNtripSecretRef ?: casterOverride?.secretId ?: profileOwnedNtripSecretRef
                 } else {
                     ""
+                }
+            val ntripPassword = ntripSecretRef
+                .takeIf { workflowUsesNtrip && it.isNotBlank() }
+                ?.let { secretRef ->
+                    passwordLookup(secretRef)
+                        ?: legacyProfileNtripSecretRef
+                            .takeIf { legacyRef ->
+                                secretRef == profileOwnedNtripSecretRef &&
+                                    legacyRef.isNotBlank() &&
+                                    legacyRef != profileOwnedNtripSecretRef
+                            }
+                            ?.let(passwordLookup)
                 }
 
             val ntrip = ActiveNtripConfig(
@@ -96,7 +112,7 @@ data class ActiveRecordingConfig(
                 mountpoint = localNtripMountpoint ?: mountOverride?.mountpoint ?: ntripMountpointProfile?.mountpoint.orEmpty(),
                 username = localNtripUsername ?: casterOverride?.username ?: ntripCasterProfile?.username.orEmpty(),
                 secretRef = ntripSecretRef.takeIf { it.isNotBlank() },
-                password = ntripSecretRef.takeIf { workflowUsesNtrip && it.isNotBlank() }?.let(passwordLookup),
+                password = ntripPassword,
                 stationId = mountOverride?.stationId,
                 baseLatDeg = mountOverride?.baseLatDeg,
                 baseLonDeg = mountOverride?.baseLonDeg,

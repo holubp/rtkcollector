@@ -84,6 +84,7 @@ private val SetupProfilesDashboardCardHeight = 160.dp
 fun HomeDashboard(
     state: DashboardState,
     layoutPreference: DashboardLayoutPreference = DashboardLayoutPreference.default,
+    startInProgress: Boolean = false,
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
@@ -155,7 +156,7 @@ fun HomeDashboard(
                     }
                 },
                 actions = {
-                    RecordingStateBadge(isRecording = state.isRecording)
+                    RecordingStateBadge(isRecording = state.isRecording, startInProgress = startInProgress)
                     Button(
                         onClick = onMenu,
                         colors = dashboardSecondaryButtonColors(),
@@ -168,6 +169,7 @@ fun HomeDashboard(
         bottomBar = {
             BottomActionBar(
                 state = state,
+                startInProgress = startInProgress,
                 onPrimaryAction = onPrimaryAction,
                 onNtrip = onNtrip,
                 onUsbPermission = onUsbPermission,
@@ -251,9 +253,20 @@ private fun dashboardContextLine(status: DashboardStatus): String =
         .ifBlank { "Setup required" }
 
 @Composable
-private fun RecordingStateBadge(isRecording: Boolean) {
-    val label = if (isRecording) "RECORDING" else "READY"
-    val background = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+private fun RecordingStateBadge(
+    isRecording: Boolean,
+    startInProgress: Boolean,
+) {
+    val label = when {
+        isRecording -> "RECORDING"
+        startInProgress -> "STARTING"
+        else -> "READY"
+    }
+    val background = when {
+        isRecording -> MaterialTheme.colorScheme.primary
+        startInProgress -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
     val foreground = if (isRecording) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         shape = MaterialTheme.shapes.small,
@@ -274,6 +287,7 @@ private fun RecordingStateBadge(isRecording: Boolean) {
 @Composable
 private fun BottomActionBar(
     state: DashboardState,
+    startInProgress: Boolean,
     onPrimaryAction: () -> Unit,
     onNtrip: () -> Unit,
     onUsbPermission: () -> Unit,
@@ -290,10 +304,11 @@ private fun BottomActionBar(
         ) {
             Button(
                 onClick = onPrimaryAction,
+                enabled = !startInProgress,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
-                    text = state.primaryAction.label,
+                    text = if (startInProgress) "Starting..." else state.primaryAction.label,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

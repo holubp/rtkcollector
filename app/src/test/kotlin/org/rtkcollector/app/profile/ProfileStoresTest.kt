@@ -201,6 +201,26 @@ class ProfileStoresTest {
     }
 
     @Test
+    fun `ntrip caster secret id is bound to caster profile id`() {
+        assertEquals("ntrip-caster-profile:caster-a", ntripCasterSecretId("caster-a"))
+        assertEquals("ntrip-caster-profile:caster-b", ntripCasterSecretId("caster-b"))
+        assertThrows(IllegalArgumentException::class.java) {
+            ntripCasterSecretId("")
+        }
+    }
+
+    @Test
+    fun `copying ntrip caster assigns independent profile-bound secret id`() {
+        val copied = NtripCasterProfile(
+            id = "source",
+            name = "Source",
+            secretId = ntripCasterSecretId("source"),
+        ).copyProfile(id = "copy", name = "Copy")
+
+        assertEquals("ntrip-caster-profile:copy", copied.secretId)
+    }
+
+    @Test
     fun `mountpoint display uses actual mountpoint not profile name`() {
         assertEquals(
             "n/a",

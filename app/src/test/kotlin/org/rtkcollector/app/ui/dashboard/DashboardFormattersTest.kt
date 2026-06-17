@@ -57,4 +57,21 @@ class DashboardFormattersTest {
         assertEquals("Unknown GGA 17", interpretGgaFixQuality(17))
         assertEquals("n/a", interpretGgaFixQuality(null))
     }
+
+    @Test
+    fun `utc display keeps fixed millisecond precision`() {
+        assertEquals("2026-06-17T12:34:56.000Z", displayUtcTime("2026-06-17T12:34:56Z"))
+        assertEquals("2026-06-17T12:34:56.050Z", displayUtcTime("2026-06-17T12:34:56.05Z"))
+        assertEquals("123456.000", displayUtcTime("123456"))
+        assertEquals("123456.050", displayUtcTime("123456.05"))
+        assertEquals("n/a", displayUtcTime(""))
+    }
+
+    @Test
+    fun `receiver frequency default follows selected receiver family`() {
+        assertEquals(DefaultUm980ReceiverFrequency, receiverFrequencyForFamily("um980-n4"))
+        assertEquals(DefaultUm980ReceiverFrequency, receiverFrequencyForFamily("Unicore N4"))
+        assertEquals(DefaultUbloxReceiverFrequency, receiverFrequencyForFamily("ublox-m8t"))
+        assertEquals(DefaultUm980ReceiverFrequency, receiverFrequencyForFamily(null))
+    }
 }

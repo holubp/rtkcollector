@@ -1,5 +1,10 @@
 package org.rtkcollector.app.ui.dashboard
 
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -48,5 +53,40 @@ fun interpretGgaFixQuality(quality: Int?): String =
         else -> "Unknown GGA $quality"
     }
 
+internal fun displayUtcTime(value: String?): String {
+    val trimmed = value?.trim().orEmpty()
+    if (trimmed.isBlank() || trimmed.equals("n/a", ignoreCase = true)) return "n/a"
+    formatNmeaUtcTime(trimmed)?.let { return it }
+    return runCatching {
+        FixedMillisUtcFormatter.format(Instant.parse(trimmed))
+    }.getOrDefault(trimmed)
+}
+
+internal fun receiverFrequencyForFamily(receiverFamily: String?): String =
+    when {
+        receiverFamily?.startsWith("ublox", ignoreCase = true) == true -> DefaultUbloxReceiverFrequency
+        else -> DefaultUm980ReceiverFrequency
+    }
+
 private fun Double.oneDecimal(): String =
     String.format(Locale.US, "%.1f", this)
+
+private val NmeaUtcPattern = Regex("""^(\d{6})(?:\.(\d+))?$""")
+
+private val FixedMillisUtcFormatter: DateTimeFormatter =
+    DateTimeFormatterBuilder()
+        .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+        .appendFraction(ChronoField.MILLI_OF_SECOND, 3, 3, true)
+        .appendLiteral('Z')
+        .toFormatter(Locale.US)
+        .withZone(ZoneOffset.UTC)
+
+private fun formatNmeaUtcTime(value: String): String? {
+    val match = NmeaUtcPattern.matchEntire(value) ?: return null
+    val base = match.groupValues[1]
+    val millis = match.groupValues.getOrNull(2)
+        .orEmpty()
+        .padEnd(3, '0')
+        .take(3)
+    return "$base.$millis"
+}

@@ -21,7 +21,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         latLon = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_LON) ?: "n/a",
         ellipsoidalHeight = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ELLIPSOIDAL_HEIGHT) ?: "n/a",
         altitude = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ALTITUDE) ?: "n/a",
-        utcTime = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UTC_TIME) ?: "n/a",
+        utcTime = displayUtcTime(intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UTC_TIME)),
         latError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_ERROR) ?: "n/a",
         lonError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LON_ERROR) ?: "n/a",
     )
@@ -41,9 +41,9 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         rtkStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_RTK_STATUS) ?: "n/a",
         receiverFrequency = run {
             val um980 = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_FREQUENCY)
-                ?: "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
+                ?: DefaultUm980ReceiverFrequency
             val ublox = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY)
-                ?: "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz"
+                ?: DefaultUbloxReceiverFrequency
             when {
                 receiverFamily.startsWith("ublox", ignoreCase = true) -> ublox
                 receiverFamily.startsWith("um980", ignoreCase = true) ||

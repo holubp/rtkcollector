@@ -121,6 +121,34 @@ class DashboardStateTest {
     }
 
     @Test
+    fun `stopped service state updates planned receiver frequency without clearing telemetry`() {
+        val serviceState = DashboardState.planned(
+            workflow = "Rover + NTRIP",
+            mountpoint = "TUBO00CZE0",
+            receiver = "UM980",
+            storage = "SAF folder",
+            position = PositionCardState(latLon = "50.087451234, 14.421253456"),
+            fix = FixCardState(
+                fixType = "DGPS",
+                receiverFrequency = DefaultUm980ReceiverFrequency,
+            ),
+        )
+        val planned = DashboardState.planned(
+            workflow = "Rover + NTRIP",
+            mountpoint = "TUBO00CZE0",
+            receiver = "u-blox M8T",
+            storage = "SAF folder",
+            fix = FixCardState(receiverFrequency = DefaultUbloxReceiverFrequency),
+        )
+
+        val merged = serviceState.withPlannedConfiguration(planned)
+
+        assertEquals("50.087451234, 14.421253456", merged.position.latLon)
+        assertEquals("DGPS", merged.fix.fixType)
+        assertEquals(DefaultUbloxReceiverFrequency, merged.fix.receiverFrequency)
+    }
+
+    @Test
     fun `card states have dashboard friendly defaults`() {
         assertEquals("n/a", PositionCardState().latLon)
         assertEquals("Not configured", FixCardState().rtklibStatus)

@@ -1456,7 +1456,7 @@ class RecordingForegroundService : Service() {
                     }
                 }
             }
-            broadcastState()
+            broadcastRoutineState()
         }
     }
 

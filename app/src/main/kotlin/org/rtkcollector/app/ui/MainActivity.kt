@@ -93,6 +93,7 @@ import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
 import org.rtkcollector.app.ui.dashboard.CoordinateAveragingState
 import org.rtkcollector.app.ui.dashboard.CoordinatePair
+import org.rtkcollector.app.ui.dashboard.FixCardState
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.addSample
@@ -101,6 +102,7 @@ import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.dashboard.ellipsoidalHeightMetersOrNull
 import org.rtkcollector.app.ui.dashboard.formatBytes
+import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
 import org.rtkcollector.app.ui.dashboard.startCoordinateAveraging
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
@@ -3510,11 +3512,17 @@ private fun ProfileStores.plannedDashboardState(
     val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
     val mountpointProfiles = ntripMountpointProfiles()
     val mountpoint = selected.selectedMountpointLabel(mountpointProfiles)
+    val selectedCommandProfile = selected?.commandProfileRef?.id?.let { id ->
+        commandProfiles().firstOrNull { it.id == id }
+    }
     return DashboardState.planned(
         workflow = selectedWorkflowId.workflowLabel(),
         mountpoint = mountpoint,
         receiver = selectedReceiverLabel(selectedSettingsSetId),
         storage = selectedStorageLabel(selectedSettingsSetId),
+        fix = FixCardState(
+            receiverFrequency = receiverFrequencyForFamily(selectedCommandProfile?.receiverFamily),
+        ),
         profiles = ProfilesCardState(
             settingsSet = selected?.displayNameWithOverrides() ?: "n/a",
             commandProfile = selectedReceiverLabel(selectedSettingsSetId),

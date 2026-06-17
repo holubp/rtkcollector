@@ -20,6 +20,7 @@ data class DashboardState(
         } else {
             copy(
                 status = planned.status,
+                fix = fix.copy(receiverFrequency = planned.fix.receiverFrequency),
                 profiles = planned.profiles,
             )
         }
@@ -112,6 +113,10 @@ data class DashboardStatus(
 )
 
 internal const val CompactDashboardTwoColumnMinWidthDp = 340
+internal const val DefaultUm980ReceiverFrequency =
+    "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
+internal const val DefaultUbloxReceiverFrequency =
+    "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz"
 
 internal fun compactDashboardCardColumnCount(availableWidthDp: Int): Int =
     if (availableWidthDp >= CompactDashboardTwoColumnMinWidthDp) 2 else 1
@@ -398,7 +403,7 @@ data class FixCardState(
     val pppStatus: String = "n/a",
     val rtkStatus: String = "n/a",
     val rtklibStatus: String = "Not configured",
-    val receiverFrequency: String = "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz",
+    val receiverFrequency: String = DefaultUm980ReceiverFrequency,
     val receiverMode: String = "n/a",
     val bestSolution: String = "n/a",
     val mockLocation: String = "Disabled",

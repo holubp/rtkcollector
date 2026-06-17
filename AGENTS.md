@@ -55,6 +55,11 @@ Before implementing non-trivial behaviour:
 5. Keep commits small and reviewable.
 6. Avoid broad rewrites unless the specification explicitly requires them.
 
+When a user or reviewer manually corrects the perceived status of a plan,
+validate that correction against repository evidence before accepting it. Check
+source files, tests, docs and known manual-test gaps, then update the shared
+plan tracker if the correction is accurate.
+
 Important docs:
 
 - `docs/workflows.md` for workflow concepts and validation rules.
@@ -64,6 +69,40 @@ Important docs:
 - `docs/receiver-driver-api.md` for receiver-driver boundaries.
 - `docs/ntrip-and-corrections.md` for correction routing.
 - `docs/android-background-operation.md` for Android robustness rules.
+- `docs/superpowers/plan-status.md` for the current cross-agent status of
+  larger Superpowers plans.
+
+Formal specifications and user-facing documentation have different audiences
+and must stay distinct. Formal specifications are for AI agents and contributors:
+they should be precise, stable, unambiguous and suitable for consistency checks
+and verification matrices. User-facing documentation is for operators: it should
+be friendly, task-oriented and readable by both new users and advanced power
+users. Superpowers brainstorming/spec/plan files are source material and
+traceability history; they are not a substitute for the canonical formal
+specification.
+
+## Plan Status Tracking
+
+`docs/superpowers/plan-status.md` is the GitHub-tracked source of truth for
+large-plan status. Keep it current when implementing, reviewing, validating or
+reclassifying work. It must stay plain Markdown so different AI agents and
+human contributors can update it through normal pull requests.
+
+Status updates must be evidence-based:
+
+- Mark `Done` only when functionality is present in code/docs and no specific
+  open work remains beyond normal regression testing.
+- Mark `Implemented, not field-tested` when code and tests exist but real
+  hardware, Android vendor behaviour, SAF provider behaviour or caster/provider
+  validation is still missing.
+- Mark `In progress` when current code or uncommitted work exists but behaviour
+  is not settled.
+- Mark `Open` when the work is planned or discussed but not implemented end to
+  end.
+
+Do not let plan status drift from reality. If implementation changes a plan's
+state, update the tracker in the same branch or explain why it was left
+unchanged.
 
 ## Receiver And Protocol Rules
 

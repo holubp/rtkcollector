@@ -20,6 +20,7 @@ internal interface RecordingSessionWriters : Closeable {
     fun appendReceiverRx(bytes: ByteArray)
     fun appendTxToReceiver(bytes: ByteArray)
     fun appendCorrectionInput(bytes: ByteArray)
+    fun appendBaseCasterUploadRtcm(bytes: ByteArray)
     fun appendEventJson(json: String)
     fun appendQualityLiveJson(json: String)
     fun appendReceiverSolutionNmea(sentence: String)
@@ -40,6 +41,7 @@ internal class PathRecordingSessionWriters private constructor(
     override fun appendReceiverRx(bytes: ByteArray) = delegate.appendReceiverRx(bytes)
     override fun appendTxToReceiver(bytes: ByteArray) = delegate.appendTxToReceiver(bytes)
     override fun appendCorrectionInput(bytes: ByteArray) = delegate.appendCorrectionInput(bytes)
+    override fun appendBaseCasterUploadRtcm(bytes: ByteArray) = delegate.appendBaseCasterUploadRtcm(bytes)
     override fun appendEventJson(json: String) = delegate.appendEventJson(json)
     override fun appendQualityLiveJson(json: String) = delegate.appendQualityLiveJson(json)
     override fun appendReceiverSolutionNmea(sentence: String) = delegate.appendReceiverSolutionNmea(sentence)
@@ -83,6 +85,7 @@ internal class SafRecordingSessionWriters private constructor(
     private val txToReceiver: OutputStream,
     private val correctionInput: OutputStream,
     private val correctionInputRtcm3: OutputStream?,
+    private val baseCasterUploadRtcm3: OutputStream,
     private val events: OutputStream,
     private val qualityLive: OutputStream,
     private val receiverSolutionNmea: OutputStream,
@@ -105,6 +108,10 @@ internal class SafRecordingSessionWriters private constructor(
     override fun appendCorrectionInput(bytes: ByteArray) {
         correctionInput.write(bytes)
         correctionInputRtcm3.writeBestEffort(bytes)
+    }
+
+    override fun appendBaseCasterUploadRtcm(bytes: ByteArray) {
+        baseCasterUploadRtcm3.write(bytes)
     }
 
     override fun appendEventJson(json: String) {
@@ -140,6 +147,7 @@ internal class SafRecordingSessionWriters private constructor(
         txToReceiver.flush()
         correctionInput.flush()
         correctionInputRtcm3.flushBestEffort()
+        baseCasterUploadRtcm3.flush()
         events.flush()
         qualityLive.flush()
         receiverSolutionNmea.flush()
@@ -178,6 +186,13 @@ internal class SafRecordingSessionWriters private constructor(
         closeOptionalStream(
             stream = correctionInputRtcm3,
             artifact = SessionArtifactFile.CORRECTION_INPUT_RTCM3,
+            category = SessionWriterIssueCategory.BINARY_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = baseCasterUploadRtcm3,
+            artifact = SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3,
             category = SessionWriterIssueCategory.BINARY_SIDECAR,
             severity = SessionWriterIssueSeverity.DEGRADED,
             issues = issues,
@@ -232,6 +247,7 @@ internal class SafRecordingSessionWriters private constructor(
         txToReceiver.close()
         correctionInput.close()
         correctionInputRtcm3.closeBestEffort()
+        baseCasterUploadRtcm3.close()
         events.close()
         qualityLive.close()
         receiverSolutionNmea.close()
@@ -295,6 +311,7 @@ internal class SafRecordingSessionWriters private constructor(
                 txToReceiver = appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName),
                 correctionInput = appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
                 correctionInputRtcm3 = tryAppendStream(SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName),
+                baseCasterUploadRtcm3 = appendStream(SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3.fileName),
                 events = appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
                 qualityLive = appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
                 receiverSolutionNmea = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),

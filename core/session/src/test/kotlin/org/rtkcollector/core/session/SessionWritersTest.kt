@@ -26,6 +26,8 @@ class SessionWritersTest {
         writers.appendTxToReceiver(byteArrayOf(0x11, 0x12))
         writers.appendCorrectionInput(byteArrayOf(0x20, 0x21))
         writers.appendCorrectionInput(byteArrayOf(0x22))
+        writers.appendBaseCasterUploadRtcm(byteArrayOf(0x30, 0x31))
+        writers.appendBaseCasterUploadRtcm(byteArrayOf(0x32))
         writers.appendEventJson("""{"event":"started"}""")
         writers.appendEventJson("""{"event":"stopped"}""")
         writers.appendQualityLiveJson("""{"fix":"float"}""")
@@ -42,6 +44,7 @@ class SessionWritersTest {
         assertArrayEquals(byteArrayOf(0x10, 0x11, 0x12), Files.readAllBytes(tempDir.resolve("tx-to-receiver.raw")))
         assertArrayEquals(byteArrayOf(0x20, 0x21, 0x22), Files.readAllBytes(tempDir.resolve("correction-input.raw")))
         assertArrayEquals(byteArrayOf(0x20, 0x21, 0x22), Files.readAllBytes(tempDir.resolve("correction-input.rtcm3")))
+        assertArrayEquals(byteArrayOf(0x30, 0x31, 0x32), Files.readAllBytes(tempDir.resolve("base-caster-upload.rtcm3")))
         assertEquals(
             listOf("""{"event":"started"}""", """{"event":"stopped"}"""),
             Files.readAllLines(tempDir.resolve("events.jsonl")),
@@ -149,8 +152,15 @@ class SessionWritersTest {
             storageProfileId = "app-private",
             storageKind = "APP_PRIVATE",
             coordinateSource = null,
+            baseCasterUploadEnabled = true,
+            baseCasterUploadHost = "upload.example",
+            baseCasterUploadPort = 2101,
+            baseCasterUploadMountpoint = "BASEOUT",
+            baseCasterUploadUsernamePresent = true,
+            baseCasterUploadSecretRef = "ntrip-caster-upload-profile/upload",
+            baseCasterUploadFinalStatus = "STREAMING",
             validationSummary = "valid",
-            expectedArtifacts = listOf("receiver-rx.raw", "tx-to-receiver.raw"),
+            expectedArtifacts = listOf("receiver-rx.raw", "tx-to-receiver.raw", "base-caster-upload.rtcm3"),
         )
 
         val exported = exportSessionMetadata(metadata)
@@ -165,6 +175,10 @@ class SessionWritersTest {
         assertTrue(exported.contains("NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"))
         assertTrue(exported.contains("AUTHORIZATION_FAILED"))
         assertTrue(exported.contains("tx-to-receiver.raw"))
+        assertTrue(exported.contains("upload.example"))
+        assertTrue(exported.contains("BASEOUT"))
+        assertTrue(exported.contains("ntrip-caster-upload-profile/upload"))
+        assertTrue(exported.contains("base-caster-upload.rtcm3"))
     }
 
     @Test

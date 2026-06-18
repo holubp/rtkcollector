@@ -309,6 +309,18 @@ class RecordingForegroundService : Service() {
                 baseCoordinateId = intent.getStringExtra(EXTRA_BASE_COORDINATE_ID),
                 baseCoordinateName = intent.getStringExtra(EXTRA_BASE_COORDINATE_NAME),
                 baseCoordinateMethod = intent.getStringExtra(EXTRA_BASE_COORDINATE_METHOD),
+                baseCasterUploadEnabled = intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_ENABLED, false),
+                baseCasterUploadHost = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_HOST),
+                baseCasterUploadPort = if (intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_ENABLED, false)) {
+                    intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)
+                } else {
+                    null
+                },
+                baseCasterUploadMountpoint = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT),
+                baseCasterUploadUsernamePresent =
+                    intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT, false),
+                baseCasterUploadSecretRef = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_SECRET_REF),
+                baseCasterUploadFinalStatus = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_FINAL_STATUS),
                 validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
                 expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
             )
@@ -2146,6 +2158,13 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BASE_COORDINATE_ID = "baseCoordinateId"
         const val EXTRA_BASE_COORDINATE_NAME = "baseCoordinateName"
         const val EXTRA_BASE_COORDINATE_METHOD = "baseCoordinateMethod"
+        const val EXTRA_BASE_CASTER_UPLOAD_ENABLED = "baseCasterUploadEnabled"
+        const val EXTRA_BASE_CASTER_UPLOAD_HOST = "baseCasterUploadHost"
+        const val EXTRA_BASE_CASTER_UPLOAD_PORT = "baseCasterUploadPort"
+        const val EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT = "baseCasterUploadMountpoint"
+        const val EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT = "baseCasterUploadUsernamePresent"
+        const val EXTRA_BASE_CASTER_UPLOAD_SECRET_REF = "baseCasterUploadSecretRef"
+        const val EXTRA_BASE_CASTER_UPLOAD_FINAL_STATUS = "baseCasterUploadFinalStatus"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
         const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"
         const val EXTRA_SETTINGS_SET_NAME = "settingsSetName"

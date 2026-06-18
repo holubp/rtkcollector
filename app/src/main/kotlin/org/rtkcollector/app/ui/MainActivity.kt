@@ -3507,6 +3507,18 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_NTRIP_STATION_ID, activeConfig.ntrip.stationId.orEmpty())
         activeConfig.ntrip.baseLatDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LAT, it) }
         activeConfig.ntrip.baseLonDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LON, it) }
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_ENABLED, activeConfig.casterUpload.enabled)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_HOST, activeConfig.casterUpload.host)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PORT, activeConfig.casterUpload.port)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT, activeConfig.casterUpload.mountpoint)
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT,
+            activeConfig.casterUpload.username.isNotBlank(),
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_SECRET_REF,
+            activeConfig.casterUpload.secretRef.orEmpty(),
+        )
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_ID, activeConfig.workflowId)
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_NAME, activeConfig.workflowName)
         putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, workflowId.receiverRoleForSession())

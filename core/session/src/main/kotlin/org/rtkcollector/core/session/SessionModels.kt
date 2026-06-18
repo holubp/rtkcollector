@@ -32,6 +32,13 @@ data class SessionMetadata(
     val baseCoordinateId: String? = null,
     val baseCoordinateName: String? = null,
     val baseCoordinateMethod: String? = null,
+    val baseCasterUploadEnabled: Boolean = false,
+    val baseCasterUploadHost: String? = null,
+    val baseCasterUploadPort: Int? = null,
+    val baseCasterUploadMountpoint: String? = null,
+    val baseCasterUploadUsernamePresent: Boolean = false,
+    val baseCasterUploadSecretRef: String? = null,
+    val baseCasterUploadFinalStatus: String? = null,
     val validationSummary: String? = null,
     val expectedArtifacts: List<String> = emptyList(),
 )

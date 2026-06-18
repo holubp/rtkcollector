@@ -15,6 +15,7 @@ class SessionWriters private constructor(
     private val txToReceiver: OutputStream,
     private val correctionInput: OutputStream,
     private val correctionInputRtcm3: OutputStream?,
+    private val baseCasterUploadRtcm3: OutputStream,
     private val events: OutputStream,
     private val qualityLive: OutputStream,
     private val receiverSolutionNmea: OutputStream,
@@ -40,6 +41,10 @@ class SessionWriters private constructor(
     fun appendCorrectionInput(bytes: ByteArray) {
         correctionInput.write(bytes)
         correctionInputRtcm3.writeBestEffort(bytes)
+    }
+
+    fun appendBaseCasterUploadRtcm(bytes: ByteArray) {
+        baseCasterUploadRtcm3.write(bytes)
     }
 
     fun appendEventJson(json: String) {
@@ -80,6 +85,7 @@ class SessionWriters private constructor(
         txToReceiver.flush()
         correctionInput.flush()
         correctionInputRtcm3.flushBestEffort()
+        baseCasterUploadRtcm3.flush()
         events.flush()
         qualityLive.flush()
         receiverSolutionNmea.flush()
@@ -93,6 +99,7 @@ class SessionWriters private constructor(
         txToReceiver.close()
         correctionInput.close()
         correctionInputRtcm3.closeBestEffort()
+        baseCasterUploadRtcm3.close()
         events.close()
         qualityLive.close()
         receiverSolutionNmea.close()
@@ -115,6 +122,7 @@ class SessionWriters private constructor(
                 txToReceiver = sessionDirectory.appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName),
                 correctionInput = sessionDirectory.appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
                 correctionInputRtcm3 = sessionDirectory.tryAppendStream(SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName),
+                baseCasterUploadRtcm3 = sessionDirectory.appendStream(SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3.fileName),
                 events = sessionDirectory.appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
                 qualityLive = sessionDirectory.appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
                 receiverSolutionNmea = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
@@ -196,6 +204,13 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
         appendJsonField("baseCoordinateId", metadata.baseCoordinateId)
         appendJsonField("baseCoordinateName", metadata.baseCoordinateName)
         appendJsonField("baseCoordinateMethod", metadata.baseCoordinateMethod)
+        appendJsonField("baseCasterUploadEnabled", metadata.baseCasterUploadEnabled)
+        appendJsonField("baseCasterUploadHost", metadata.baseCasterUploadHost)
+        appendJsonField("baseCasterUploadPort", metadata.baseCasterUploadPort)
+        appendJsonField("baseCasterUploadMountpoint", metadata.baseCasterUploadMountpoint)
+        appendJsonField("baseCasterUploadUsernamePresent", metadata.baseCasterUploadUsernamePresent)
+        appendJsonField("baseCasterUploadSecretRef", metadata.baseCasterUploadSecretRef)
+        appendJsonField("baseCasterUploadFinalStatus", metadata.baseCasterUploadFinalStatus)
         appendJsonField("validationSummary", metadata.validationSummary)
         appendJsonArrayField("expectedArtifacts", metadata.expectedArtifacts)
         metadata.ntrip?.let { appendNtripMetadata(it) }

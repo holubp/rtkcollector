@@ -105,8 +105,15 @@ class SessionMetadataTest {
             baseCoordinateId = "base-tubo-roof",
             baseCoordinateName = "TUBO roof base",
             baseCoordinateMethod = "STATIC_RTK",
+            baseCasterUploadEnabled = true,
+            baseCasterUploadHost = "rtk2go.example.org",
+            baseCasterUploadPort = 2101,
+            baseCasterUploadMountpoint = "ROOFBASE",
+            baseCasterUploadUsernamePresent = true,
+            baseCasterUploadSecretRef = "ntrip-caster-upload-profile:roof",
+            baseCasterUploadFinalStatus = "STOPPED",
             validationSummary = "valid",
-            expectedArtifacts = listOf("receiver-rx.raw", "rtcm-extracted.rtcm3"),
+            expectedArtifacts = listOf("receiver-rx.raw", "rtcm-extracted.rtcm3", "base-caster-upload.rtcm3"),
         )
 
         val json = exportSessionMetadata(metadata)
@@ -116,6 +123,10 @@ class SessionMetadataTest {
         assertEquals(true, json.contains("base-tubo-roof"))
         assertEquals(true, json.contains("TUBO roof base"))
         assertEquals(true, json.contains("STATIC_RTK"))
+        assertEquals(true, json.contains("rtk2go.example.org"))
+        assertEquals(true, json.contains("ROOFBASE"))
+        assertEquals(true, json.contains("ntrip-caster-upload-profile:roof"))
+        assertEquals(true, json.contains("base-caster-upload.rtcm3"))
         assertEquals(true, json.contains("ntrip/CORS01"))
         assertEquals(false, json.contains("password", ignoreCase = true))
         assertEquals(false, json.contains("secret-token"))

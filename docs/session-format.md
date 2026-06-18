@@ -9,6 +9,7 @@ session/
   tx-to-receiver.raw
   correction-input.raw
   correction-input.rtcm3
+  base-caster-upload.rtcm3 optional, fixed-base/base upload stream
   events.jsonl
   quality-live.jsonl
   receiver-solution.nmea optional, derived from receiver RX
@@ -61,6 +62,13 @@ Required fields:
 - `antenna`
 - `sessionUuid`
 - `linkedBaseSessionUuid`
+- `baseCasterUploadEnabled`
+- `baseCasterUploadHost`
+- `baseCasterUploadPort`
+- `baseCasterUploadMountpoint`
+- `baseCasterUploadUsernamePresent`
+- `baseCasterUploadSecretRef`
+- `baseCasterUploadFinalStatus`
 
 Workflow fields mirror the validated `WorkflowSpec` described in
 [Workflows](workflows.md). `correctionSource` metadata must exclude secrets.
@@ -105,6 +113,16 @@ correction input and session metadata unchanged. Filesystem-backed storage and
 SAF document-tree storage should both expose this workflow; SAF implementations
 must use stream-based reads and writes because document URIs are not filesystem
 paths.
+
+Fixed-base and temporary-base workflows that upload generated RTCM to an
+external NTRIP caster write the exact bytes offered to the caster to
+`base-caster-upload.rtcm3`. This file is separate from `receiver-rx.raw`,
+`tx-to-receiver.raw`, `correction-input.raw` and `rtcm-extracted.rtcm3` so that
+downstream tools can distinguish receiver output, app-to-receiver input,
+upstream correction intake and base-caster publication. The related
+`baseCasterUpload*` session metadata is redacted: it may include host, port,
+mountpoint, username-present flag, secret reference and final status, but must
+not include the caster upload password or token.
 
 `storageKind` records whether the session used app-private storage or a SAF
 tree. For SAF sessions, the UI-displayed session location may be a document URI

@@ -18,6 +18,7 @@ class ActiveRecordingConfigCasterUploadTest {
         assertEquals("BASEOUT", config.casterUpload.mountpoint)
         assertEquals("ntrip-caster-upload-profile:upload", config.casterUpload.secretRef)
         assertEquals("password", config.casterUpload.password)
+        assertTrue("BASE_CASTER_UPLOAD_RTCM3" in config.expectedSessionArtifactNames)
         config.validateForStart()
     }
 

@@ -21,7 +21,12 @@ data class ActiveRecordingConfig(
     val storage: ActiveStorageConfig,
 ) {
     val expectedSessionArtifactNames: List<String> by lazy {
-        recording.expectedSessionArtifacts.map(SessionArtifact::name).sorted()
+        buildSet {
+            addAll(recording.expectedSessionArtifacts)
+            if (casterUpload.enabled) {
+                add(SessionArtifact.BASE_CASTER_UPLOAD_RTCM3)
+            }
+        }.map(SessionArtifact::name).sorted()
     }
 
     fun validateForStart() {

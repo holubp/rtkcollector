@@ -23,6 +23,8 @@ It also provides the experimental real-recording controls:
   remembered USB identity;
 - NTRIP caster and mountpoint profiles, including typed mountpoint entry and
   stored Keystore-backed passwords;
+- NTRIP caster-upload profiles for base workflows that publish receiver-created
+  RTCM to an external caster;
 - recording policies for derived NMEA/JSONL exports, NTRIP correction input,
   optional remote-base raw observations where a source supports them, and an
   optional Android mock-location publisher (described below);
@@ -425,7 +427,17 @@ User flow:
    `base-position.json`.
 3. Verify frame/datum, epoch, antenna height and antenna reference point.
 4. Start fixed-base operation.
-5. Record base status and RTCM output/extracted RTCM where supported.
+5. Optionally select an NTRIP caster-upload profile if downstream publication
+   is needed.
+6. Record base status and RTCM output/extracted RTCM where supported.
+
+When caster upload is enabled, the selected command profile must emit minimum
+RTCM base data. The app rejects upload start if the command script has no
+base-position RTCM message or no MSM observation message. During recording,
+valid RTCM extracted from receiver RX is written to `base-caster-upload.rtcm3`
+and uploaded through a bounded background uploader. Caster outage or
+authentication failure degrades only upload; `receiver-rx.raw` recording
+continues.
 
 A fixed base must not start directly from a temporary-base recording. The base
 coordinate must be accepted first. The V1 UI rejects starts where manual

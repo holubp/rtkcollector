@@ -145,7 +145,8 @@ equivalent to static RTK or PPP/static processing.
 ### Fixed-Base Operation
 
 Purpose: use an already accepted coordinate to configure a receiver as a fixed
-base and optionally stream RTCM corrections later.
+base and optionally stream generated RTCM corrections to a downstream rover or
+external NTRIP caster.
 
 Required properties:
 
@@ -155,12 +156,18 @@ Required properties:
 - the accepted base position must be a manual coordinate, imported
   `base-position.json`, known station, or recorded-base-session candidate that
   has already been accepted;
-- RTCM output may be recorded or extracted;
-- NTRIP server upload and caster upload are later implementation tasks.
+- RTCM output may be recorded, extracted and, when explicitly configured,
+  uploaded to an external NTRIP caster;
+- caster upload requires a command profile that emits minimum RTCM base output
+  and must remain advisory to raw recording.
 
 Fixed-base operation must not start directly from a temporary-base preparation
 session. A base-position candidate must first be accepted as an explicit
 fixed-base coordinate or imported `base-position.json`.
+
+Base calibration with NTRIP can produce an accepted coordinate, but it must not
+upload base RTCM until the user starts a fixed-base/base workflow from that
+accepted coordinate.
 
 ### Replay/Test
 

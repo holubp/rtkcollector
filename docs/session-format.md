@@ -155,6 +155,13 @@ or deleted.
 
 ## `base-position.json`
 
+`base-position.json` is the canonical serialization for accepted base
+coordinates used by fixed-base workflows. Users do not need to hand-create this
+file before using the app: the UI can create accepted coordinates manually,
+import them from JSON, or promote temporary-base RTK/PPP/average candidates.
+When fixed-base recording starts, the accepted coordinate is written into the
+session as `base-position.json`.
+
 Required fields:
 
 - `latitudeDegrees`

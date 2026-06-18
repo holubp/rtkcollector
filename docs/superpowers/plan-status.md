@@ -1,6 +1,6 @@
 # Superpowers Plan Status
 
-Last reviewed: 2026-06-17
+Last reviewed: 2026-06-18
 
 This tracker summarises implementation status for the larger Superpowers plans.
 It is intentionally separate from the historical step-by-step plan files so
@@ -31,7 +31,8 @@ Status meanings:
 | u-blox M8T support and Android mock provider | `2026-06-13-ublox-m8t-and-mock-provider.md`, `2026-06-16-pr-1-ublox-mock-provider-integration.md` | Implemented, not field-tested | UBX framing/parser/profile code, solution arbitration and mock-location adapter exist with tests. Needs M8T hardware validation and broader M8P/F9P follow-up before marking done. |
 | SAF storage feature equivalence | `2026-06-08-field-test-hardening.md`, `2026-06-11-session-browser-archive.md`, `2026-06-14-session-nmea-export-error-expiry-and-dashboard-overflow.md` | Implemented, not field-tested | SAF browsing/actions, archive/restore/delete and NMEA re-export support are present. Needs provider-level validation across common Android document providers. |
 | PPP status and UM980 PPPNAV handling | `2026-06-11-um980-rtk-monitoring-and-editor-input.md` | Implemented, not field-tested | PPPNAV parsing and dashboard mapping distinguish unavailable telemetry, not started/no convergence, converging and converged states. Continue field regression with live PPP sessions. |
-| Temporary-base to fixed-base workflow | `2026-06-16-base-workflow-coordinate-actions.md` | In progress | Coordinate copying/averaging and fixed-base transition exist, including ellipsoidal-height enforcement. Accepted-coordinate persistence and field validation still need completion/review. |
+| Temporary-base to fixed-base workflow | `2026-06-16-base-workflow-coordinate-actions.md`, `2026-06-18-base-rtcm-ntrip-caster-upload.md` | Implemented, not field-tested | Coordinate copying/averaging, accepted-coordinate persistence, manual/imported coordinates and fixed-base transition exist with ellipsoidal-height enforcement. Needs real base workflow field validation. |
+| Base RTCM NTRIP caster upload | `2026-06-17-base-rtcm-ntrip-caster-upload-design.md`, `2026-06-18-base-rtcm-ntrip-caster-upload.md` | Implemented, not field-tested | Upload profiles, start validation, minimum RTCM command sanity checks, bounded upload controller, `base-caster-upload.rtcm3`, redacted metadata and dashboard status are implemented. Needs live caster/base hardware validation. |
 | Built-in UM980 command profiles | `2026-06-08-integrated-v1-usability-and-um980-telemetry.md`, `2026-06-11-um980-rtk-monitoring-and-editor-input.md` | Implemented, not field-tested | Protected built-in profiles exist for UM980 multi-Hz binary RTK+PPP, ASCII RTK+PPP variants and base use, with migration from legacy user profiles. Hardware validation remains required. |
 | In-phone RTKLIB real-time solution | `2026-06-06-rtkcollector-v1-workflows.md` | Open | V1 deliberately leaves RTKLIB real-time disabled. A dedicated plan is still needed before implementation, including RTKLIB+ architecture review and strict separation from receiver-internal solutions. |
 | Google Play readiness | `2026-06-14-google-play-readiness.md` | Open | Plan exists for privacy, permissions, security, foreground-service and publication documentation cleanup. It still needs a fresh implementation/status review before marking done. |

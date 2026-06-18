@@ -1,5 +1,13 @@
 package org.rtkcollector.app.ui.profiles
 
+import android.content.res.ColorStateList
+import android.graphics.Typeface
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.view.Gravity
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +17,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,20 +44,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 
 private val ActiveProfileBackground = Color(0xFFE8F5E9)
 private val ActiveProfileText = Color(0xFF145A18)
@@ -843,9 +848,7 @@ fun ProfileEditorScreen(
                                 onValueChange = { value ->
                                     values = values + (field.key to value)
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .keepHardwareArrowsInTextField(),
+                                modifier = Modifier.fillMaxWidth(),
                                 minLines = 1,
                                 readOnly = field.readOnly,
                                 singleLine = true,
@@ -890,31 +893,66 @@ private fun ScriptTextField(
     readOnly: Boolean,
     isError: Boolean = false,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    val backgroundColor = MaterialTheme.colorScheme.surface.toArgb()
+    val accentColor = if (isError) {
+        MaterialTheme.colorScheme.error.toArgb()
+    } else {
+        MaterialTheme.colorScheme.primary.toArgb()
+    }
+    AndroidView(
         modifier = Modifier
             .fillMaxWidth()
-            .keepHardwareArrowsInTextField(),
-        minLines = 4,
-        readOnly = readOnly,
-        isError = isError,
-        singleLine = false,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+            .heightIn(min = 112.dp),
+        factory = { context ->
+            EditText(context).apply {
+                val density = context.resources.displayMetrics.density
+                setPadding(
+                    (12 * density).toInt(),
+                    (10 * density).toInt(),
+                    (12 * density).toInt(),
+                    (10 * density).toInt(),
+                )
+                setText(value)
+                setSingleLine(false)
+                minLines = 4
+                gravity = Gravity.TOP or Gravity.START
+                inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                imeOptions = EditorInfo.IME_ACTION_NONE
+                typeface = Typeface.MONOSPACE
+                textSize = 14f
+                setHorizontallyScrolling(false)
+                isHorizontalScrollBarEnabled = false
+                addTextChangedListener(
+                    object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                        override fun afterTextChanged(s: Editable?) {
+                            val next = s?.toString().orEmpty()
+                            if (next != value) {
+                                latestOnValueChange(next)
+                            }
+                        }
+                    },
+                )
+            }
+        },
+        update = { view ->
+            view.setTextColor(textColor)
+            view.setBackgroundColor(backgroundColor)
+            view.backgroundTintList = ColorStateList.valueOf(accentColor)
+            view.isEnabled = !readOnly
+            if (view.text.toString() != value) {
+                val selection = view.selectionStart.coerceIn(0, value.length)
+                view.setText(value)
+                view.setSelection(selection)
+            }
+        },
     )
 }
-
-private fun Modifier.keepHardwareArrowsInTextField(): Modifier =
-    onKeyEvent { event -> event.shouldKeepArrowNavigationInsideTextField() }
-
-private fun KeyEvent.shouldKeepArrowNavigationInsideTextField(): Boolean =
-    type == KeyEventType.KeyDown &&
-        (
-            key == Key.DirectionLeft ||
-                key == Key.DirectionRight ||
-                key == Key.DirectionUp ||
-                key == Key.DirectionDown
-            )
 
 @Composable
 private fun ProfileFieldError(field: EditableProfileField) {

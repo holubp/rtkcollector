@@ -1156,7 +1156,7 @@ git commit -m "Add UM980 session gap analysis tool"
 - Modify: `docs/architecture.md`
 - Modify: `docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md` only if the implementation reveals a wording bug.
 
-- [ ] **Step 1: Update `AGENTS.md`**
+- [x] **Step 1: Update `AGENTS.md`**
 
 Add under Android implementation rules:
 
@@ -1171,7 +1171,7 @@ Add under Android implementation rules:
   and must run only when mock output is enabled.
 ```
 
-- [ ] **Step 2: Update `docs/architecture.md`**
+- [x] **Step 2: Update `docs/architecture.md`**
 
 Add a subsection after "Failure Isolation":
 
@@ -1185,7 +1185,7 @@ derived advisory state. They may be throttled, dropped or marked stale under
 pressure. They must not block USB reads or raw receiver recording.
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add AGENTS.md docs/architecture.md

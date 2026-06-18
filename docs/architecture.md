@@ -49,6 +49,14 @@ driver identification failures, quality-monitor failures, UI failures and NTRIP
 reconnect loops must be isolated from raw recording wherever the transport and
 storage path still operate.
 
+## Derived Telemetry Isolation
+
+The capture thread writes receiver bytes before advisory processing. Dashboard
+state, best-solution snapshots, Android mock-location output, coordinate
+averaging, message-frequency metrics and future RTKLIB-EX processing consume
+derived advisory state. They may be throttled, dropped or marked stale under
+pressure. They must not block USB reads or raw receiver recording.
+
 ## Workflow Execution
 
 Workflow rules are specified in [Workflows](workflows.md). The UI starts

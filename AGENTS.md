@@ -155,6 +155,14 @@ unchanged.
 - Do not broadcast full dashboard state from high-rate capture loops on every
   receiver read. Throttle routine UI state broadcasts; keep lifecycle, error,
   start, stop and reconnect state changes immediate.
+- Screen monitoring, Android mock-location publishing, coordinate averaging,
+  frequency measurement, future RTKLIB-EX processing and future caster upload
+  must not run on the raw capture path. They consume advisory snapshots or
+  bounded queues after `receiver-rx.raw` has already been appended.
+- For receivers with a documented best-navigation output such as UM980
+  `BESTNAV/BESTNAVB`, the primary monitoring solution must be a transparent
+  pass-through of that receiver solution. Mock-provider resampling is separate
+  and must run only when mock output is enabled.
 - Record receiver RX, app TX to receiver, correction input, events, quality and
   metadata as separate artifacts.
 - Validate workflow and command safety before sending receiver commands,

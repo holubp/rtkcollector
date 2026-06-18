@@ -3394,6 +3394,9 @@ private fun buildDashboardStartIntent(
     val ntripCaster = ntripResolution.caster
     val ntripMountpoint = ntripResolution.mountpoint
     val resolvedSettingsSet = ntripResolution.settingsSet
+    val ntripCasterUploadProfile = resolvedSettingsSet.ntripCasterUploadProfileRef?.id?.let { uploadProfileId ->
+        profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == uploadProfileId }
+    }
     val recordingPolicy = profileStore.recordingPolicyProfiles().findByReference(
         id = settingsSet.recordingOutputProfileRef.id,
         label = "recording policy profile",
@@ -3436,10 +3439,12 @@ private fun buildDashboardStartIntent(
             usbBaudProfile = usbProfile,
             ntripCasterProfile = ntripCaster,
             ntripMountpointProfile = ntripMountpoint,
+            ntripCasterUploadProfile = ntripCasterUploadProfile,
             recordingPolicyProfile = recordingPolicy,
             storageProfile = storageProfile,
             workflowName = workflowId.workflowName(),
             workflowUsesNtrip = workflowUsesNtrip,
+            hasAcceptedBaseCoordinate = selectedBaseCoordinate != null,
             passwordLookup = NtripSecretStore(context)::getPassword,
         )
     } catch (error: IllegalArgumentException) {

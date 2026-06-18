@@ -1,5 +1,6 @@
 package org.rtkcollector.app.profile
 
+import org.rtkcollector.core.correction.Um980RtcmBaseOutputSanity
 import org.rtkcollector.core.workflow.SessionArtifact
 
 data class ActiveRecordingConfig(
@@ -15,6 +16,7 @@ data class ActiveRecordingConfig(
     val modeCommands: List<String>,
     val shutdownCommands: List<String>,
     val ntrip: ActiveNtripConfig,
+    val casterUpload: ActiveCasterUploadConfig,
     val recording: ActiveRecordingOutputConfig,
     val storage: ActiveStorageConfig,
 ) {
@@ -28,6 +30,21 @@ data class ActiveRecordingConfig(
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
             require(ntrip.mountpoint.isNotBlank()) { "NTRIP mountpoint is required for ${workflowName}." }
         }
+        if (casterUpload.enabled) {
+            require(casterUpload.host.isNotBlank()) { "NTRIP caster upload host is required for ${workflowName}." }
+            require(casterUpload.port in 1..65535) { "NTRIP caster upload port must be 1..65535." }
+            require(casterUpload.mountpoint.isNotBlank()) { "NTRIP caster upload mountpoint is required for ${workflowName}." }
+            require(workflowId == WORKFLOW_FIXED_BASE || workflowId == WORKFLOW_BASE_CALIBRATION) {
+                "NTRIP caster upload is only available for base workflows."
+            }
+            require(casterUpload.hasAcceptedBaseCoordinate) {
+                "NTRIP caster upload requires an accepted base coordinate."
+            }
+            val sanity = Um980RtcmBaseOutputSanity.validateCommands(initCommands + baudSwitchCommands + modeCommands)
+            require(sanity.canUpload) {
+                "NTRIP caster upload requires base RTCM output: ${sanity.errors.joinToString(" ")}"
+            }
+        }
         if (workflowId == WORKFLOW_PLAIN_ROVER || workflowId == WORKFLOW_ROVER_NTRIP || workflowId == WORKFLOW_FIXED_BASE) {
             validateWorkflowModeCommandsForStart(workflowId, initCommands + baudSwitchCommands + modeCommands)
         }
@@ -40,10 +57,12 @@ data class ActiveRecordingConfig(
             usbBaudProfile: UsbBaudProfile,
             ntripCasterProfile: NtripCasterProfile?,
             ntripMountpointProfile: NtripMountpointProfile?,
+            ntripCasterUploadProfile: NtripCasterUploadProfile? = null,
             recordingPolicyProfile: RecordingPolicyProfile,
             storageProfile: StorageProfile,
             workflowName: String,
             workflowUsesNtrip: Boolean,
+            hasAcceptedBaseCoordinate: Boolean = false,
             passwordLookup: (String) -> String?,
             localInitCommands: String? = null,
             localShutdownCommands: String? = null,
@@ -61,6 +80,7 @@ data class ActiveRecordingConfig(
             usbBaudProfile.validate()
             ntripCasterProfile?.validate()
             ntripMountpointProfile?.validate()
+            ntripCasterUploadProfile?.validate()
             recordingPolicyProfile.validate()
             storageProfile.validate()
 
@@ -68,6 +88,7 @@ data class ActiveRecordingConfig(
             val baudOverride = settingsSet.overrides.usbBaud
             val casterOverride = settingsSet.overrides.ntripCaster
             val mountOverride = settingsSet.overrides.ntripMountpoint
+            val casterUploadOverride = settingsSet.overrides.ntripCasterUpload
             val recordingOverride = settingsSet.overrides.recordingOutput
             val storageOverride = settingsSet.overrides.storage
 
@@ -118,6 +139,40 @@ data class ActiveRecordingConfig(
                 baseLonDeg = mountOverride?.baseLonDeg,
             )
 
+            val profileOwnedUploadSecretRef = ntripCasterUploadProfile
+                ?.let { ntripCasterUploadSecretId(it.id) }
+                .orEmpty()
+            val legacyUploadSecretRef = ntripCasterUploadProfile?.secretId.orEmpty()
+            val casterUploadEnabled = ntripCasterUploadProfile != null &&
+                (settingsSet.baseCasterUploadEnabled || ntripCasterUploadProfile.enabledByDefault)
+            val casterUploadSecretRef = if (casterUploadEnabled) {
+                casterUploadOverride?.secretId ?: profileOwnedUploadSecretRef
+            } else {
+                ""
+            }
+            val casterUploadPassword = casterUploadSecretRef
+                .takeIf { casterUploadEnabled && it.isNotBlank() }
+                ?.let { secretRef ->
+                    passwordLookup(secretRef)
+                        ?: legacyUploadSecretRef
+                            .takeIf { legacyRef ->
+                                secretRef == profileOwnedUploadSecretRef &&
+                                    legacyRef.isNotBlank() &&
+                                    legacyRef != profileOwnedUploadSecretRef
+                            }
+                            ?.let(passwordLookup)
+                }
+            val casterUpload = ActiveCasterUploadConfig(
+                enabled = casterUploadEnabled,
+                host = casterUploadOverride?.host ?: ntripCasterUploadProfile?.host.orEmpty(),
+                port = casterUploadOverride?.port ?: ntripCasterUploadProfile?.port ?: 2101,
+                mountpoint = casterUploadOverride?.mountpoint ?: ntripCasterUploadProfile?.mountpoint.orEmpty(),
+                username = casterUploadOverride?.username ?: ntripCasterUploadProfile?.username.orEmpty(),
+                secretRef = casterUploadSecretRef.takeIf(String::isNotBlank),
+                password = casterUploadPassword,
+                hasAcceptedBaseCoordinate = hasAcceptedBaseCoordinate,
+            )
+
             val recordingOutput = ActiveRecordingOutputConfig(
                 recordTxToReceiver = recordingOverride?.recordTxToReceiver ?: recordingPolicyProfile.recordTxToReceiver,
                 recordNtripCorrectionInput = workflowUsesNtrip &&
@@ -155,12 +210,24 @@ data class ActiveRecordingConfig(
                 modeCommands = resolvedModeCommands,
                 shutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript).commandLines(),
                 ntrip = ntrip,
+                casterUpload = casterUpload,
                 recording = recordingOutput,
                 storage = storage,
             )
         }
     }
 }
+
+data class ActiveCasterUploadConfig(
+    val enabled: Boolean,
+    val host: String,
+    val port: Int,
+    val mountpoint: String,
+    val username: String,
+    val secretRef: String?,
+    val password: String?,
+    val hasAcceptedBaseCoordinate: Boolean,
+)
 
 data class ActiveNtripConfig(
     val enabled: Boolean,
@@ -247,4 +314,5 @@ internal fun validateWorkflowModeCommandsForStart(workflowId: String?, modeComma
 
 private const val WORKFLOW_PLAIN_ROVER = "plain-rover"
 private const val WORKFLOW_ROVER_NTRIP = "rover-ntrip"
+private const val WORKFLOW_BASE_CALIBRATION = "base-calibration"
 private const val WORKFLOW_FIXED_BASE = "fixed-base"

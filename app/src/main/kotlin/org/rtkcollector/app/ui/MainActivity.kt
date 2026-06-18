@@ -636,6 +636,24 @@ fun RtkCollectorApp(
                         )
                     },
                     onUseCurrentCoordinateAsManualBase = { candidate ->
+                        val acceptedCoordinate = candidate.toAcceptedBaseCoordinate(
+                            id = profileStore.duplicateId("base"),
+                            name = if (candidate.source == "AVERAGE") {
+                                "Temporary base average"
+                            } else {
+                                "Temporary base instant"
+                            },
+                        )
+                        if (acceptedCoordinate == null) {
+                            Toast.makeText(
+                                context,
+                                "Fixed base requires latitude, longitude and ellipsoidal height.",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            return@HomeDashboard
+                        }
+                        baseCoordinateStore.upsert(acceptedCoordinate)
+                        baseCoordinateStore.saveSelectedCoordinateId(acceptedCoordinate.id)
                         manualBaseCoordinate = candidate
                         selectedWorkflowId = WORKFLOW_FIXED_BASE
                         profileStore.saveSelectedWorkflowId(WORKFLOW_FIXED_BASE)
@@ -651,7 +669,7 @@ fun RtkCollectorApp(
                         refreshProfileUi(settingsSets)
                         Toast.makeText(
                             context,
-                            "Fixed-base workflow selected with base coordinate ${candidate.displayLabel()}.",
+                            "Fixed-base workflow selected with base coordinate ${acceptedCoordinate.displayLabel()}.",
                             Toast.LENGTH_LONG,
                         ).show()
                     },
@@ -4160,6 +4178,40 @@ private fun AcceptedBaseCoordinate.profileRow(isSelected: Boolean = false): Prof
             method,
         ),
     )
+
+private fun AcceptedBaseCoordinate.displayLabel(): String =
+    "%.10f, %.10f, h %.3f m".format(
+        java.util.Locale.US,
+        latDeg,
+        lonDeg,
+        ellipsoidalHeightM,
+    )
+
+private fun BaseCoordinateCandidate.toAcceptedBaseCoordinate(
+    id: String,
+    name: String,
+): AcceptedBaseCoordinate? {
+    val lat = coordinates.latDouble ?: return null
+    val lon = coordinates.lonDouble ?: return null
+    val transferSource = if (source == "AVERAGE") "TEMPORARY_BASE_AVERAGE" else "TEMPORARY_BASE_INSTANT"
+    return AcceptedBaseCoordinate(
+        id = id,
+        name = name,
+        latDeg = lat,
+        lonDeg = lon,
+        ellipsoidalHeightM = ellipsoidalHeightM,
+        frame = "UNKNOWN",
+        epoch = null,
+        method = if (source == "AVERAGE") "LONG_AVERAGE" else "UNKNOWN",
+        durationSeconds = sampleCount.takeIf { it > 0 }?.toLong(),
+        horizontalUncertaintyM = null,
+        verticalUncertaintyM = null,
+        antennaHeightM = null,
+        antennaReferencePoint = null,
+        sourceSessionId = null,
+        sourceDescription = transferSource,
+    )
+}
 
 private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
     ProfileListRow(

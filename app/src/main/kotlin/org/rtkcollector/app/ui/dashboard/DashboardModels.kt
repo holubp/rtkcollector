@@ -433,6 +433,11 @@ data class NtripCardState(
     val stationId: String = "n/a",
     val baseLatLon: String = "n/a",
     val rates: String = "n/a",
+    val uploadStatus: String = "Disabled",
+    val uploadUrl: String = "n/a",
+    val uploadBytes: String = "0 B",
+    val uploadDroppedBytes: String = "0 B",
+    val uploadLastError: String? = null,
 )
 
 data class FilesCardState(

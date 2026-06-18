@@ -409,6 +409,10 @@ class RecordingForegroundService : Service() {
                         message = config.mountpointUrl,
                     ),
                 )
+                state = state.copy(
+                    baseCasterUploadState = "CONNECTING",
+                    baseCasterUploadUrl = config.mountpointUrl,
+                )
             }
 
             state = state.copy(
@@ -1092,6 +1096,11 @@ class RecordingForegroundService : Service() {
             },
             rawRecordingActive = false,
             correctionsActive = false,
+            baseCasterUploadState = "Disabled",
+            baseCasterUploadUrl = "n/a",
+            baseCasterUploadBytes = 0,
+            baseCasterUploadDroppedBytes = 0,
+            baseCasterUploadLastError = null,
             ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
         ).clearBestSolutionFields(
             mockLocationState = "Disabled",
@@ -1392,6 +1401,9 @@ class RecordingForegroundService : Service() {
     }
 
     private fun broadcastState() {
+        casterUploadController?.snapshot()?.let { snapshot ->
+            state = state.withCasterUploadSnapshot(snapshot)
+        }
         sendBroadcast(
             Intent(ACTION_STATE).apply {
                 setPackage(packageName)
@@ -1417,6 +1429,11 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_NTRIP_RATES, state.ntripRates)
                 putExtra(EXTRA_STATE_NTRIP_STATION_ID, state.ntripStationId)
                 putExtra(EXTRA_STATE_NTRIP_BASE_LAT_LON, state.ntripBaseLatLon)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_STATE, state.baseCasterUploadState)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_URL, state.baseCasterUploadUrl)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES, state.baseCasterUploadBytes)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES, state.baseCasterUploadDroppedBytes)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR, state.baseCasterUploadLastError)
                 putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
                 putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
@@ -2103,6 +2120,24 @@ class RecordingForegroundService : Service() {
         )
     }
 
+    private fun RecordingServiceState.withCasterUploadSnapshot(
+        snapshot: NtripCasterUploadSnapshot,
+    ): RecordingServiceState {
+        val uploadHasProblem = !snapshot.lastError.isNullOrBlank() &&
+            snapshot.state != "STOPPED" &&
+            errorSeverity != RecordingErrorSeverity.FATAL
+        return copy(
+            baseCasterUploadState = snapshot.state,
+            baseCasterUploadUrl = snapshot.mountpointUrl.ifBlank { baseCasterUploadUrl },
+            baseCasterUploadBytes = snapshot.bytesUploaded,
+            baseCasterUploadDroppedBytes = snapshot.bytesDropped,
+            baseCasterUploadLastError = snapshot.lastError,
+            lastError = if (uploadHasProblem) snapshot.lastError else lastError,
+            errorCategory = if (uploadHasProblem) RecordingErrorCategory.NTRIP else errorCategory,
+            errorSeverity = if (uploadHasProblem) RecordingErrorSeverity.DEGRADED else errorSeverity,
+        )
+    }
+
     private fun String?.jsonStringOrNull(): String =
         if (this == null) "null" else "\"${jsonEscape()}\""
 
@@ -2285,6 +2320,11 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_NTRIP_RATES = "ntripRates"
         const val EXTRA_STATE_NTRIP_STATION_ID = "ntripStationId"
         const val EXTRA_STATE_NTRIP_BASE_LAT_LON = "ntripBaseLatLon"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_STATE = "baseCasterUploadState"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_URL = "baseCasterUploadUrl"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES = "baseCasterUploadBytes"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES = "baseCasterUploadDroppedBytes"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR = "baseCasterUploadLastError"
         const val EXTRA_STATE_GGA_FIX_QUALITY = "ggaFixQuality"
         const val EXTRA_STATE_BESTNAV_POSITION_TYPE = "bestnavPositionType"
         const val EXTRA_STATE_PPP_STATUS = "pppStatus"

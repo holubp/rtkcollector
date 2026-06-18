@@ -77,6 +77,16 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         stationId = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_STATION_ID) ?: "n/a",
         baseLatLon = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_BASE_LAT_LON) ?: "n/a",
         rates = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_RATES) ?: "n/a",
+        uploadStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_STATE)
+            ?: "Disabled",
+        uploadUrl = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_URL) ?: "n/a",
+        uploadBytes = formatBytes(
+            intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES, 0),
+        ),
+        uploadDroppedBytes = formatBytes(
+            intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES, 0),
+        ),
+        uploadLastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR),
     )
     val files = FilesCardState(
         sessionLocation = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SESSION_PATH) ?: "n/a",

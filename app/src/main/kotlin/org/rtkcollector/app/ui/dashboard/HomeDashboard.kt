@@ -75,7 +75,7 @@ private val DashboardMetricRowHeight = 16.dp
 private val DashboardSeparatorHeight = 4.dp
 private val PositionDashboardCardHeight = 180.dp
 private val FixDashboardCardHeight = 282.dp
-private val CorrectionsDashboardCardHeight = 226.dp
+private val CorrectionsDashboardCardHeight = 292.dp
 private val RecordingDashboardCardHeight = 162.dp
 private val SetupProfilesDashboardCardHeight = 160.dp
 
@@ -964,6 +964,16 @@ private fun CorrectionsCard(
         Metric("Sent to receiver", state.files.txToReceiverBytes)
         Metric("Correction bytes", state.files.ntripBytes)
         Metric("NTRIP transferred", state.ntrip.transferred)
+        if (!state.ntrip.uploadUrl.equals("n/a", ignoreCase = true)) {
+            DashedSeparator()
+            Metric("Upload", state.ntrip.uploadStatus)
+            Metric("Upload URL", state.ntrip.uploadUrl)
+            Metric("Uploaded", state.ntrip.uploadBytes)
+            Metric("Dropped upload", state.ntrip.uploadDroppedBytes)
+            state.ntrip.uploadLastError?.takeIf { it.isNotBlank() }?.let {
+                Metric("Upload error", it)
+            }
+        }
     }
 }
 

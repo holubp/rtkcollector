@@ -1199,7 +1199,7 @@ git commit -m "Document derived telemetry isolation rules"
 **Files:**
 - Review all files changed by Tasks 1-8.
 
-- [ ] **Step 1: Run whitespace check**
+- [x] **Step 1: Run whitespace check**
 
 Run:
 
@@ -1209,7 +1209,7 @@ git -c safe.directory=/storage/emulated/0/GitHub/rtkcollector diff --check
 
 Expected: no output, exit 0.
 
-- [ ] **Step 2: Run source compile**
+- [x] **Step 2: Run source compile**
 
 Run:
 
@@ -1219,7 +1219,7 @@ sh gradlew :app:compileDebugKotlin
 
 Expected in Termux: BUILD SUCCESSFUL.
 
-- [ ] **Step 3: Run pure module tests that do not require Android resources**
+- [x] **Step 3: Run pure module tests that do not require Android resources**
 
 Run:
 
@@ -1229,13 +1229,13 @@ sh gradlew :receiver:unicore-n4:test :core:solution:test :core:capture:test
 
 Expected: PASS.
 
-- [ ] **Step 4: Do not retry blocked Android app unit tests in Termux**
+- [x] **Step 4: Do not retry blocked Android app unit tests in Termux**
 
 If `:app:testDebugUnitTest` or `./gradlew test` fails in `:app:processDebugResources`
 with the known x86-64 `aapt2` Termux error, report it as environment-blocked.
 Do not keep retrying it.
 
-- [ ] **Step 5: Inspect for capture-path regressions**
+- [x] **Step 5: Inspect for capture-path regressions**
 
 Run:
 

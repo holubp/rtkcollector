@@ -1380,7 +1380,7 @@ class RecordingForegroundService : Service() {
                     record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x07.toByte() -> {
                         ubloxFrequencyTracker.record(UbloxMessageKind.NAV_PVT, nowMillis)
                         UbloxNavPvtParser.parse(record.bytes, nowMillis)?.toSolutionCandidate()?.let {
-                            solutionCandidates[it.sourceId] = it
+                            applyPrimaryScreenCandidate(it, nowMillis)
                         }
                     }
                     record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x15.toByte() ->
@@ -1397,7 +1397,7 @@ class RecordingForegroundService : Service() {
                 fixes.forEach { fix ->
                     ubloxFrequencyTracker.record(UbloxMessageKind.GGA, nowMillis)
                     fix.toCandidate("ublox", nowMillis)?.let {
-                        solutionCandidates[it.sourceId] = it
+                        applyPrimaryScreenCandidate(it, nowMillis)
                     }
                 }
             }
@@ -1471,6 +1471,16 @@ class RecordingForegroundService : Service() {
             formatMeters = ::metersDisplay,
             formatSatellites = ::satelliteDisplay,
         )
+    }
+
+    private fun applyPrimaryScreenCandidate(
+        candidate: org.rtkcollector.core.solution.SolutionCandidate,
+        nowMillis: Long,
+    ) {
+        if (candidate.isPrimaryScreenCandidateFor(activeReceiverFamily)) {
+            state = state.withSelectedSolution(candidate, nowMillis)
+        }
+        solutionCandidates[candidate.sourceId] = candidate
     }
 
     private fun configureMockLocation(enabled: Boolean) {
@@ -1638,7 +1648,7 @@ class RecordingForegroundService : Service() {
                                     )
                                     val now = System.currentTimeMillis()
                                     fix.toCandidate("um980", now)?.let {
-                                        solutionCandidates[it.sourceId] = it
+                                        applyPrimaryScreenCandidate(it, now)
                                     }
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
@@ -1711,7 +1721,7 @@ class RecordingForegroundService : Service() {
                                             ).withReceiverRtkAsciiSolution(solution)
                                             val now = System.currentTimeMillis()
                                             solution.toBestnavCandidate(now)?.let {
-                                                solutionCandidates[it.sourceId] = it
+                                                applyPrimaryScreenCandidate(it, now)
                                             }
                                         }
                                     }
@@ -1733,7 +1743,7 @@ class RecordingForegroundService : Service() {
                                         .withReceiverRtkTelemetry(telemetry)
                                     val now = System.currentTimeMillis()
                                     telemetry.toBestnavCandidate(now)?.let {
-                                        solutionCandidates[it.sourceId] = it
+                                        applyPrimaryScreenCandidate(it, now)
                                     }
                                 }
                                 Um980BinaryParser.parseAdrnavb(record.bytes)?.let { telemetry ->

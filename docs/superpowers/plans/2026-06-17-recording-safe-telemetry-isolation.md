@@ -492,7 +492,7 @@ git commit -m "Run best solution tick only for mock output"
 - Modify: `app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt`
 - Modify: `app/src/test/kotlin/org/rtkcollector/app/recording/RecordingServiceStateTest.kt`
 
-- [ ] **Step 1: Add helper in service to apply primary screen candidates**
+- [x] **Step 1: Add helper in service to apply primary screen candidates**
 
 In `RecordingForegroundService`, add:
 
@@ -505,7 +505,7 @@ private fun applyPrimaryScreenCandidate(candidate: org.rtkcollector.core.solutio
 }
 ```
 
-- [ ] **Step 2: Replace direct `solutionCandidates[...] = ...` for screen-capable candidates**
+- [x] **Step 2: Replace direct `solutionCandidates[...] = ...` for screen-capable candidates**
 
 In UM980 BESTNAV binary path, replace:
 
@@ -537,7 +537,7 @@ solutionCandidates[it.sourceId] = it
 
 because PPP diagnostics must not replace UM980 `BESTNAVB` as the primary screen source while PPP is only converging.
 
-- [ ] **Step 3: Compile**
+- [x] **Step 3: Compile**
 
 Run:
 
@@ -547,7 +547,7 @@ sh gradlew :app:compileDebugKotlin
 
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt \

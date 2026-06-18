@@ -151,6 +151,13 @@ data class PositionCardState(
     val utcTime: String = "n/a",
     val latError: String = "n/a",
     val lonError: String = "n/a",
+    val baseAverageSummary: String? = null,
+    val baseAverageWarning: String? = null,
+    val baseAverageActive: Boolean = false,
+    val baseAverageLatDeg: Double? = null,
+    val baseAverageLonDeg: Double? = null,
+    val baseAverageHeightM: Double? = null,
+    val baseAverageSampleCount: Int = 0,
 )
 
 data class CoordinatePair(
@@ -299,6 +306,16 @@ data class CoordinateAveragingState(
             else -> "Avg off"
         }
 }
+
+fun PositionCardState.serviceCoordinateAveragingState(): CoordinateAveragingState =
+    CoordinateAveragingState(
+        active = baseAverageActive,
+        sampleCount = baseAverageSampleCount,
+        meanLat = baseAverageLatDeg,
+        meanLon = baseAverageLonDeg,
+        meanEllipsoidalHeightM = baseAverageHeightM,
+        stoppedReason = baseAverageWarning,
+    )
 
 fun startCoordinateAveraging(
     sessionLocation: String?,

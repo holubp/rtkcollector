@@ -24,6 +24,16 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         utcTime = displayUtcTime(intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UTC_TIME)),
         latError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_ERROR) ?: "n/a",
         lonError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LON_ERROR) ?: "n/a",
+        baseAverageSummary = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_SUMMARY),
+        baseAverageWarning = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_WARNING),
+        baseAverageActive = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_ACTIVE, false),
+        baseAverageLatDeg = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_LAT),
+        baseAverageLonDeg = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_LON),
+        baseAverageHeightM = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_HEIGHT),
+        baseAverageSampleCount = intent.getIntExtra(
+            RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT,
+            0,
+        ),
     )
     val ggaFixQuality = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, -1).takeIf { it >= 0 }
     val bestnavPositionType = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE)
@@ -130,6 +140,9 @@ private fun mountpointFromUrl(url: String?): String =
         ?.substringAfterLast('/')
         ?.takeIf { it.isNotBlank() && it != url }
         ?: "n/a"
+
+private fun finiteDoubleExtra(intent: Intent, key: String): Double? =
+    intent.getDoubleExtra(key, Double.NaN).takeIf { it.isFinite() }
 
 private fun displayFixType(
     bestnavPositionType: String?,

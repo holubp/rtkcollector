@@ -91,19 +91,15 @@ import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
-import org.rtkcollector.app.ui.dashboard.CoordinateAveragingState
 import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.FixCardState
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
-import org.rtkcollector.app.ui.dashboard.addSample
-import org.rtkcollector.app.ui.dashboard.activeSessionLocationOrNull
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
-import org.rtkcollector.app.ui.dashboard.ellipsoidalHeightMetersOrNull
 import org.rtkcollector.app.ui.dashboard.formatBytes
 import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
-import org.rtkcollector.app.ui.dashboard.startCoordinateAveraging
+import org.rtkcollector.app.ui.dashboard.serviceCoordinateAveragingState
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
@@ -238,29 +234,7 @@ fun RtkCollectorApp(
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
     }
     var startInProgress by rememberSaveable { mutableStateOf(false) }
-    var coordinateAveraging by remember { mutableStateOf(CoordinateAveragingState()) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
-    LaunchedEffect(state.files.sessionLocation) {
-        val currentSession = state.files.sessionLocation.activeSessionLocationOrNull()
-        val averagingSession = coordinateAveraging.sessionLocation
-        if (averagingSession != null && currentSession != null && currentSession != averagingSession) {
-            coordinateAveraging = CoordinateAveragingState()
-        }
-    }
-    LaunchedEffect(state.position.latLon, state.position.ellipsoidalHeight, state.fix.fixType) {
-        if (coordinateAveraging.active) {
-            val updated = coordinateAveraging.addSample(
-                sessionLocation = state.files.sessionLocation,
-                fixType = state.fix.fixType,
-                coordinates = state.position.coordinatePairOrNull(),
-                ellipsoidalHeightM = state.position.ellipsoidalHeightMetersOrNull(),
-            )
-            coordinateAveraging = updated
-            if (!updated.active && updated.stoppedReason != null) {
-                Toast.makeText(context, "Coordinate averaging stopped: ${updated.stoppedReason}", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
     LaunchedEffect(externalIntent) {
         if (externalIntent != null) {
             settingsImportUriFromIntent(externalIntent)?.let { uri ->
@@ -608,28 +582,22 @@ fun RtkCollectorApp(
                         }
                     },
                     onMark = {},
-                    coordinateAveraging = coordinateAveraging,
-                    onStartCoordinateAveraging = { coordinates, ellipsoidalHeightM ->
-                        val started = startCoordinateAveraging(
-                            sessionLocation = if (state.isRecording) state.files.sessionLocation else null,
-                            fixType = state.fix.fixType,
-                            coordinates = coordinates,
-                            ellipsoidalHeightM = ellipsoidalHeightM,
-                        )
-                        coordinateAveraging = started
-                        val message = if (started.active) {
-                            "Coordinate averaging started for ${state.fix.fixType}."
+                    coordinateAveraging = state.position.serviceCoordinateAveragingState(),
+                    onStartCoordinateAveraging = { _, _ ->
+                        if (!state.isRecording) {
+                            Toast.makeText(context, "Start recording before averaging.", Toast.LENGTH_SHORT).show()
                         } else {
-                            "Cannot start averaging: ${started.stoppedReason ?: "no coordinate"}."
+                            context.startService(
+                                Intent(context, RecordingForegroundService::class.java)
+                                    .setAction(RecordingForegroundService.ACTION_START_COORDINATE_AVERAGING),
+                            )
                         }
-                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                     },
                     onStopCoordinateAveraging = {
-                        coordinateAveraging = coordinateAveraging.copy(
-                            active = false,
-                            stoppedReason = "Stopped",
+                        context.startService(
+                            Intent(context, RecordingForegroundService::class.java)
+                                .setAction(RecordingForegroundService.ACTION_STOP_COORDINATE_AVERAGING),
                         )
-                        Toast.makeText(context, "Coordinate averaging stopped.", Toast.LENGTH_SHORT).show()
                     },
                     onUseCurrentCoordinateAsManualBase = { candidate ->
                         manualBaseCoordinate = candidate

@@ -636,7 +636,7 @@ git commit -m "Display UM980 frequency from receiver time"
 - Modify: `app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardServiceMapper.kt`
 - Modify: `app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/HomeDashboard.kt`
 
-- [ ] **Step 1: Write failing tests for online averaging**
+- [x] **Step 1: Write failing tests for online averaging**
 
 Create `OnlineCoordinateAveragerTest.kt`:
 
@@ -688,7 +688,7 @@ class OnlineCoordinateAveragerTest {
 }
 ```
 
-- [ ] **Step 2: Implement online averager**
+- [x] **Step 2: Implement online averager**
 
 Create `OnlineCoordinateAverager.kt`:
 
@@ -774,7 +774,7 @@ class OnlineCoordinateAverager(
 }
 ```
 
-- [ ] **Step 3: Write failing tests for service-side averaging controller**
+- [x] **Step 3: Write failing tests for service-side averaging controller**
 
 Create `CoordinateAveragingControllerTest.kt`:
 
@@ -835,7 +835,7 @@ class CoordinateAveragingControllerTest {
 }
 ```
 
-- [ ] **Step 4: Implement service-side averaging controller**
+- [x] **Step 4: Implement service-side averaging controller**
 
 Create `CoordinateAveragingController.kt`:
 
@@ -894,7 +894,7 @@ internal class CoordinateAveragingController {
 }
 ```
 
-- [ ] **Step 5: Wire controller into selected-solution path**
+- [x] **Step 5: Wire controller into selected-solution path**
 
 In `RecordingServiceState.kt`, add fields to `RecordingServiceState` after
 `bestSolutionAgeMs`:
@@ -942,7 +942,7 @@ private fun Double.format(decimals: Int): String =
     "%.${decimals}f".format(java.util.Locale.US, this)
 ```
 
-- [ ] **Step 6: Broadcast and map averaging fields**
+- [x] **Step 6: Broadcast and map averaging fields**
 
 In `RecordingForegroundService`, add state extra constants:
 
@@ -973,7 +973,7 @@ baseAverageSummary = intent.getStringExtra(RecordingForegroundService.EXTRA_STAT
 baseAverageWarning = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_WARNING),
 ```
 
-- [ ] **Step 7: Remove coordinate statistics from Compose**
+- [x] **Step 7: Remove coordinate statistics from Compose**
 
 In `MainActivity.kt`, remove any `LaunchedEffect` or `remember` block that
 updates mean latitude, longitude or height from `state.position.latLon`.
@@ -990,7 +990,7 @@ state.position.baseAverageWarning?.let { warning ->
 Compose may format labels and send button actions, but it must not accumulate
 coordinate samples.
 
-- [ ] **Step 8: Run core solution tests**
+- [x] **Step 8: Run core solution tests**
 
 Run:
 
@@ -1000,7 +1000,7 @@ sh gradlew :core:solution:test --tests org.rtkcollector.core.solution.OnlineCoor
 
 Expected: PASS.
 
-- [ ] **Step 9: Run app compile**
+- [x] **Step 9: Run app compile**
 
 Run:
 
@@ -1010,7 +1010,7 @@ sh gradlew :app:compileDebugKotlin
 
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add core/solution/src/main/kotlin/org/rtkcollector/core/solution/OnlineCoordinateAverager.kt \

@@ -716,7 +716,17 @@ private fun PositionCard(
     onHelp: (HelpTopic) -> Unit,
 ) {
     val coordinates = state.position.coordinatePairOrNull()
-    val baseCandidate = coordinateAveraging.averageBaseCandidateOrNull()
+    val serviceAveraging = state.position.serviceCoordinateAveragingState()
+    val effectiveAveraging = if (
+        serviceAveraging.active ||
+        serviceAveraging.sampleCount > 0 ||
+        serviceAveraging.stoppedReason != null
+    ) {
+        serviceAveraging
+    } else {
+        coordinateAveraging
+    }
+    val baseCandidate = effectiveAveraging.averageBaseCandidateOrNull()
         ?: state.position.baseCoordinateCandidateOrNull()
     val ellipsoidalHeightM = state.position.ellipsoidalHeightMetersOrNull()
     val context = LocalContext.current
@@ -743,7 +753,7 @@ private fun PositionCard(
                 coordinates = coordinates,
                 baseCandidate = baseCandidate,
                 ellipsoidalHeightM = ellipsoidalHeightM,
-                averaging = coordinateAveraging,
+                averaging = effectiveAveraging,
                 onStartCoordinateAveraging = onStartCoordinateAveraging,
                 onStopCoordinateAveraging = onStopCoordinateAveraging,
                 onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,

@@ -86,6 +86,8 @@ import org.rtkcollector.receiver.ublox.UbloxNavPvtParser
 import org.rtkcollector.receiver.ublox.UbloxScriptCompiler
 import org.rtkcollector.receiver.ublox.UbloxStreamParser
 import org.rtkcollector.core.solution.BestSolutionSelector
+import org.rtkcollector.core.solution.CoordinateAverageAddResult
+import org.rtkcollector.core.solution.CoordinateAverageSummary
 import org.rtkcollector.core.solution.SolutionCandidate
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
@@ -148,6 +150,7 @@ class RecordingForegroundService : Service() {
     private val solutionCandidates =
         java.util.concurrent.ConcurrentHashMap<String, org.rtkcollector.core.solution.SolutionCandidate>()
     private var mockLocationPublisher: MockLocationPublisher? = null
+    private val coordinateAveragingController = CoordinateAveragingController()
 
     override fun onCreate() {
         super.onCreate()
@@ -167,6 +170,8 @@ class RecordingForegroundService : Service() {
             ACTION_UPDATE_NTRIP -> updateNtrip(intent)
             ACTION_DISABLE_NTRIP -> disableNtrip()
             ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG -> writePersistentReceiverConfig(intent)
+            ACTION_START_COORDINATE_AVERAGING -> startCoordinateAveraging()
+            ACTION_STOP_COORDINATE_AVERAGING -> stopCoordinateAveraging()
         }
         return START_NOT_STICKY
     }
@@ -1351,6 +1356,13 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_UM980_MODE, state.um980Mode)
                 putExtra(EXTRA_STATE_BEST_SOLUTION_SOURCE, state.bestSolutionSource)
                 putExtra(EXTRA_STATE_BEST_SOLUTION_FIX, state.bestSolutionFix)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_SUMMARY, state.baseAverageSummary)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_WARNING, state.baseAverageWarning)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_ACTIVE, state.baseAverageActive)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_LAT, state.baseAverageLatDeg ?: Double.NaN)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_LON, state.baseAverageLonDeg ?: Double.NaN)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_HEIGHT, state.baseAverageHeightM ?: Double.NaN)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT, state.baseAverageSampleCount)
                 putExtra(EXTRA_STATE_MOCK_LOCATION_STATE, state.mockLocationState)
                 putExtra(EXTRA_STATE_UBLOX_FREQUENCY, state.ubloxFrequency)
             },
@@ -1481,9 +1493,73 @@ class RecordingForegroundService : Service() {
     ) {
         if (candidate.isPrimaryScreenCandidateFor(activeReceiverFamily)) {
             state = state.withSelectedSolution(candidate, nowMillis)
+            if (coordinateAveragingController.active) {
+                val result = coordinateAveragingController.onSelectedSolution(candidate)
+                updateCoordinateAverageState(result)
+            }
         }
         solutionCandidates[candidate.sourceId] = candidate
     }
+
+    private fun startCoordinateAveraging() {
+        if (!running.get()) {
+            state = state.copy(
+                baseAverageActive = false,
+                baseAverageWarning = "Cannot start averaging: recording is not active.",
+            )
+            broadcastState()
+            return
+        }
+        val candidate = latestPrimaryScreenCandidate()
+        if (candidate == null) {
+            state = state.copy(
+                baseAverageActive = false,
+                baseAverageWarning = "Cannot start averaging: no selected receiver solution.",
+            )
+            broadcastState()
+            return
+        }
+        coordinateAveragingController.start(candidate.fixClass)
+        val result = coordinateAveragingController.onSelectedSolution(candidate)
+        updateCoordinateAverageState(result)
+        broadcastState()
+    }
+
+    private fun stopCoordinateAveraging() {
+        coordinateAveragingController.stop("Stopped")
+        updateCoordinateAverageState(null)
+        broadcastState()
+    }
+
+    private fun latestPrimaryScreenCandidate(): SolutionCandidate? =
+        solutionCandidates.values
+            .filter { it.isPrimaryScreenCandidateFor(activeReceiverFamily) }
+            .maxByOrNull { it.updatedAtMillis }
+
+    private fun updateCoordinateAverageState(result: CoordinateAverageAddResult?) {
+        val summary = coordinateAveragingController.summary()
+        val warning = when {
+            result != null && !result.accepted -> result.reason
+            coordinateAveragingController.lastStopReason != null -> coordinateAveragingController.lastStopReason
+            else -> null
+        }
+        state = state.copy(
+            baseAverageSummary = summary?.toDisplayText(),
+            baseAverageWarning = warning,
+            baseAverageActive = coordinateAveragingController.active,
+            baseAverageLatDeg = summary?.latMeanDeg,
+            baseAverageLonDeg = summary?.lonMeanDeg,
+            baseAverageHeightM = summary?.heightMeanM,
+            baseAverageSampleCount = summary?.sampleCount ?: 0,
+        )
+    }
+
+    private fun CoordinateAverageSummary.toDisplayText(): String =
+        "Avg ${latMeanDeg.formatFixed(9)}, ${lonMeanDeg.formatFixed(9)}, " +
+            "h=${heightMeanM.formatFixed(3)} m, n=$sampleCount"
+
+    private fun Double.formatFixed(decimals: Int): String =
+        "%.${decimals}f".format(java.util.Locale.US, this)
 
     private fun configureMockLocation(enabled: Boolean) {
         if (!enabled) {
@@ -2016,6 +2092,10 @@ class RecordingForegroundService : Service() {
         const val ACTION_DISABLE_NTRIP = "org.rtkcollector.app.recording.DISABLE_NTRIP"
         const val ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG =
             "org.rtkcollector.app.recording.WRITE_PERSISTENT_RECEIVER_CONFIG"
+        const val ACTION_START_COORDINATE_AVERAGING =
+            "org.rtkcollector.app.recording.START_COORDINATE_AVERAGING"
+        const val ACTION_STOP_COORDINATE_AVERAGING =
+            "org.rtkcollector.app.recording.STOP_COORDINATE_AVERAGING"
         const val ACTION_STATE = "org.rtkcollector.app.recording.STATE"
 
         const val EXTRA_USB_DEVICE = "usbDevice"
@@ -2124,6 +2204,13 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_UM980_MODE = "um980Mode"
         const val EXTRA_STATE_BEST_SOLUTION_SOURCE = "bestSolutionSource"
         const val EXTRA_STATE_BEST_SOLUTION_FIX = "bestSolutionFix"
+        const val EXTRA_STATE_BASE_AVERAGE_SUMMARY = "baseAverageSummary"
+        const val EXTRA_STATE_BASE_AVERAGE_WARNING = "baseAverageWarning"
+        const val EXTRA_STATE_BASE_AVERAGE_ACTIVE = "baseAverageActive"
+        const val EXTRA_STATE_BASE_AVERAGE_LAT = "baseAverageLatDeg"
+        const val EXTRA_STATE_BASE_AVERAGE_LON = "baseAverageLonDeg"
+        const val EXTRA_STATE_BASE_AVERAGE_HEIGHT = "baseAverageHeightM"
+        const val EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT = "baseAverageSampleCount"
         const val EXTRA_STATE_MOCK_LOCATION_STATE = "mockLocationState"
         const val EXTRA_STATE_UBLOX_FREQUENCY = "ubloxFrequency"
 

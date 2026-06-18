@@ -196,6 +196,11 @@ private data class PendingSettingsImport(
     val result: SettingsImportValidationResult,
 )
 
+private data class PendingStorageFolderSelection(
+    val target: ProfileEditorTarget,
+    val values: Map<String, String>,
+)
+
 @Composable
 fun RtkCollectorApp(
     externalIntent: Intent? = null,
@@ -225,6 +230,7 @@ fun RtkCollectorApp(
     var zipProgressText by remember { mutableStateOf<String?>(null) }
     var sessionProgressFraction by remember { mutableStateOf<Float?>(null) }
     var pendingSettingsImport by remember { mutableStateOf<PendingSettingsImport?>(null) }
+    var pendingStorageFolderSelection by remember { mutableStateOf<PendingStorageFolderSelection?>(null) }
     var settingsImportRequestId by remember { mutableStateOf(0) }
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
     var profileRevision by remember { mutableStateOf(0) }
@@ -349,6 +355,32 @@ fun RtkCollectorApp(
                 Toast.makeText(context, "Base coordinate imported.", Toast.LENGTH_LONG).show()
             }.onFailure { error ->
                 Toast.makeText(context, "Cannot import base coordinate: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val storageFolderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val pendingSelection = pendingStorageFolderSelection
+        pendingStorageFolderSelection = null
+        if (uri != null && pendingSelection != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+                profileStore.saveProfileEditorData(
+                    target = pendingSelection.target,
+                    values = pendingSelection.values +
+                        ("kind" to "SAF_TREE") +
+                        ("treeUri" to uri.toString()),
+                    settingsSets = settingsSets,
+                    savePassword = secretStore::putPassword,
+                )
+            }.onSuccess { updatedSettingsSets ->
+                refreshProfileUi(updatedSettingsSets)
+                screen = pendingSelection.target.kind.backScreen()
+                Toast.makeText(context, "Selected Android folder saved for recording storage.", Toast.LENGTH_LONG).show()
+            }.onFailure { error ->
+                Toast.makeText(context, "Cannot save Android folder: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -1797,6 +1829,18 @@ fun RtkCollectorApp(
                                         ),
                                     )
                                 }
+                                if (target.kind == ProfileKind.STORAGE) {
+                                    add(
+                                        ProfileEditorAction(
+                                            label = "Select Android folder",
+                                            onClick = {},
+                                            onClickWithValues = { values ->
+                                                pendingStorageFolderSelection = PendingStorageFolderSelection(target, values)
+                                                storageFolderLauncher.launch(null)
+                                            },
+                                        ),
+                                    )
+                                }
                                 profileEditorDeleteAction(target)?.let { deleteAction ->
                                     add(
                                         deleteAction,
@@ -2859,7 +2903,7 @@ private fun ProfileStores.profileEditorData(
                             EditableProfileOption("SAF_TREE", "Selected Android folder"),
                         ),
                     ),
-                    EditableProfileField("treeUri", "SAF tree URI", profile.treeUri.orEmpty()),
+                    EditableProfileField("treeUri", "Selected folder URI", profile.treeUri.orEmpty(), readOnly = true),
                 ),
             ).asProtectedProfileView(profile.isProtected)
         }

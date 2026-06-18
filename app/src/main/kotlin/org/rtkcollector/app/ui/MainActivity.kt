@@ -63,6 +63,7 @@ import org.rtkcollector.app.base.BaseCoordinateForm
 import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
+import org.rtkcollector.app.profile.NtripCasterUploadProfile
 import org.rtkcollector.app.profile.NtripCasterProfile
 import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.NtripMountpointOverride
@@ -77,6 +78,7 @@ import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
 import org.rtkcollector.app.profile.displayMountpoint
+import org.rtkcollector.app.profile.ntripCasterUploadSecretId
 import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
@@ -397,6 +399,10 @@ fun RtkCollectorApp(
                 val profiles = profileStore.ntripCasterProfiles()
                 profileStore.saveNtripCasterProfiles(profiles.filterNot { it.id == id && !it.isProtected })
             }
+            ProfileKind.NTRIP_CASTER_UPLOAD -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.ntripCasterUploadProfiles()
+                profileStore.saveNtripCasterUploadProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
             ProfileKind.NTRIP_MOUNTPOINT -> deleteProfileIfUnused(kind, id) {
                 val profiles = profileStore.ntripMountpointProfiles()
                 profileStore.saveNtripMountpointProfiles(profiles.filterNot { it.id == id && !it.isProtected })
@@ -423,6 +429,9 @@ fun RtkCollectorApp(
         val row = when (target.kind) {
             ProfileKind.SETTINGS_SET -> SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows.firstOrNull { it.id == target.id }
             ProfileKind.NTRIP_CASTER -> profileStore.ntripCasterProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.NTRIP_CASTER_UPLOAD -> profileStore.ntripCasterUploadProfiles()
+                .firstOrNull { it.id == target.id }
+                ?.profileRow()
             ProfileKind.NTRIP_MOUNTPOINT -> profileStore.ntripMountpointProfiles().firstOrNull { it.id == target.id }?.profileRow()
             ProfileKind.USB_BAUD -> profileStore.usbBaudProfiles().firstOrNull { it.id == target.id }?.profileRow()
             ProfileKind.COMMANDS -> profileStore.commandProfiles().firstOrNull { it.id == target.id }?.profileRow()
@@ -689,6 +698,7 @@ fun RtkCollectorApp(
                         dashboardLayoutLabel = dashboardLayout.displayName,
                         onDashboardLayout = { showDashboardLayoutDialog = true },
                         onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
+                        onNtripCasterUpload = { screen = AppScreen.NTRIP_CASTER_UPLOAD },
                         onNtripMountpoint = { screen = AppScreen.NTRIP_MOUNTPOINT_PROFILES },
                         onUsbBaud = { screen = AppScreen.USB_BAUD },
                         onCommands = { screen = AppScreen.COMMANDS },
@@ -826,6 +836,66 @@ fun RtkCollectorApp(
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                     supportsSelection = false,
+                )
+                AppScreen.NTRIP_CASTER_UPLOAD -> ProfileListScreen(
+                    title = "NTRIP caster upload",
+                    rows = profileStore.ntripCasterUploadProfiles().map {
+                        it.profileRow(
+                            isSelected = settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }
+                                ?.ntripCasterUploadProfileRef
+                                ?.id == it.id,
+                        )
+                    },
+                    onSelect = { id ->
+                        val profile = profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == id }
+                        if (profile != null) {
+                            val updated = settingsSets.map { set ->
+                                if (set.id == selectedSettingsSetId) {
+                                    set.copy(
+                                        ntripCasterUploadProfileRef = ProfileReference(profile.id, profile.name),
+                                        baseCasterUploadEnabled = true,
+                                    )
+                                } else {
+                                    set
+                                }
+                            }
+                            settingsSets = updated
+                            profileStore.saveSettingsSets(updated)
+                            refreshProfileUi(updated)
+                        }
+                    },
+                    onEdit = { id ->
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing caster upload profile.", Toast.LENGTH_LONG).show()
+                        } else {
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_CASTER_UPLOAD, id)
+                            screen = AppScreen.PROFILE_EDITOR
+                        }
+                    },
+                    onCopy = { id ->
+                        val profiles = profileStore.ntripCasterUploadProfiles()
+                        profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("caster-upload"), "${source.name} copy")
+                            profileStore.saveNtripCasterUploadProfiles(profiles + copy)
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_CASTER_UPLOAD, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
+                        }
+                    },
+                    onRename = { id, name -> renameProfile(ProfileKind.NTRIP_CASTER_UPLOAD, id, name) },
+                    onDelete = { id -> deleteProfile(ProfileKind.NTRIP_CASTER_UPLOAD, id) },
+                    onAdd = {
+                        val profile = NtripCasterUploadProfile(
+                            id = profileStore.duplicateId("caster-upload"),
+                            name = "New caster upload",
+                        )
+                        profileStore.saveNtripCasterUploadProfiles(profileStore.ntripCasterUploadProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.NTRIP_CASTER_UPLOAD, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onBack = { screen = AppScreen.SETTINGS },
+                    supportsSelection = true,
                 )
                 AppScreen.NTRIP_MOUNTPOINT_PROFILES -> ProfileListScreen(
                     title = "NTRIP mountpoints",
@@ -2166,6 +2236,7 @@ private fun importSettingsBackup(context: Context, backup: SettingsBackupFile) {
     profileStore.saveCommandProfiles(backup.commandProfiles)
     profileStore.saveUsbBaudProfiles(backup.usbBaudProfiles)
     profileStore.saveNtripCasterProfiles(backup.ntripCasterProfiles)
+    profileStore.saveNtripCasterUploadProfiles(backup.ntripCasterUploadProfiles)
     profileStore.saveNtripMountpointProfiles(backup.ntripMountpointProfiles)
     profileStore.saveRecordingPolicyProfiles(backup.recordingPolicyProfiles)
     profileStore.saveStorageProfiles(backup.storageProfiles)
@@ -2589,6 +2660,18 @@ private fun ProfileStores.profileEditorData(
                         optionItems = nullableProfileOptions(ntripMountpointProfiles().profileOptions(NtripMountpointProfile::id, NtripMountpointProfile::name)),
                     ),
                     EditableProfileField(
+                        key = "baseCasterUploadEnabled",
+                        label = "Enable base RTCM caster upload",
+                        value = set.baseCasterUploadEnabled.toString(),
+                        boolean = true,
+                    ),
+                    EditableProfileField(
+                        key = "ntripCasterUploadProfileId",
+                        label = "NTRIP caster upload profile",
+                        value = set.ntripCasterUploadProfileRef?.id.orEmpty(),
+                        optionItems = nullableProfileOptions(ntripCasterUploadProfiles().profileOptions(NtripCasterUploadProfile::id, NtripCasterUploadProfile::name)),
+                    ),
+                    EditableProfileField(
                         key = "recordingOutputProfileId",
                         label = "Recording output profile",
                         value = set.recordingOutputProfileRef.id,
@@ -2624,6 +2707,32 @@ private fun ProfileStores.profileEditorData(
                         label = "Known mountpoints",
                         value = "",
                         readOnlyList = profile.sourcetableMountpoints.ifEmpty { listOf("No cached mountpoints") },
+                    ),
+                ),
+            )
+        }
+        ProfileKind.NTRIP_CASTER_UPLOAD -> ntripCasterUploadProfiles().first { it.id == target.id }.let { profile ->
+            val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
+            ProfileEditorData(
+                title = "Edit NTRIP caster upload",
+                fields = listOf(
+                    EditableProfileField("name", "Name", profile.name),
+                    EditableProfileField("host", "Host", profile.host),
+                    EditableProfileField("port", "Port", profile.port.toString()),
+                    EditableProfileField("mountpoint", "Mountpoint", profile.mountpoint),
+                    EditableProfileField("username", "Username", profile.username),
+                    EditableProfileField("password", "Password", storedPassword, secret = true),
+                    EditableProfileField(
+                        key = "protocolPolicy",
+                        label = "Protocol policy",
+                        value = profile.protocolPolicy,
+                        optionItems = NTRIP_PROTOCOL_POLICY_OPTIONS,
+                    ),
+                    EditableProfileField(
+                        key = "enabledByDefault",
+                        label = "Enabled by default",
+                        value = profile.enabledByDefault.toString(),
+                        boolean = true,
                     ),
                 ),
             )
@@ -2781,6 +2890,10 @@ private fun ProfileStores.saveProfileEditorData(
                         ntripMountpointProfileRef = values.optional("ntripMountpointProfileId")?.let {
                             reference(it, ntripMountpointProfiles().map { profile -> profile.id to profile.name })
                         },
+                        ntripCasterUploadProfileRef = values.optional("ntripCasterUploadProfileId")?.let {
+                            reference(it, ntripCasterUploadProfiles().map { profile -> profile.id to profile.name })
+                        },
+                        baseCasterUploadEnabled = values.optional("baseCasterUploadEnabled").toBooleanStrictOrFalse(),
                         recordingOutputProfileRef = reference(
                             values.required("recordingOutputProfileId"),
                             recordingPolicyProfiles().map { it.id to it.name },
@@ -2813,6 +2926,32 @@ private fun ProfileStores.saveProfileEditorData(
                             ?.map(String::trim)
                             ?.filter(String::isNotBlank)
                             ?: profile.sourcetableMountpoints,
+                    )
+                } else {
+                    profile
+                }
+            },
+        ).also {
+            return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
+        }
+        ProfileKind.NTRIP_CASTER_UPLOAD -> saveNtripCasterUploadProfiles(
+            ntripCasterUploadProfiles().map { profile ->
+                if (profile.id == target.id) {
+                    require(!profile.isProtected) { "Protected NTRIP caster upload profiles cannot be edited." }
+                    val password = values.optional("password").orEmpty()
+                    val secretId = ntripCasterUploadSecretId(target.id)
+                    savePassword(secretId, password)
+                    profile.copy(
+                        name = values.required("name"),
+                        host = values.optional("host").orEmpty(),
+                        port = values.optional("port")?.toIntOrNull() ?: 2101,
+                        mountpoint = values.optional("mountpoint").orEmpty(),
+                        username = values.optional("username").orEmpty(),
+                        secretId = secretId,
+                        protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
+                            "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
+                        },
+                        enabledByDefault = values.optional("enabledByDefault").toBooleanStrictOrFalse(),
                     )
                 } else {
                     profile
@@ -2963,6 +3102,19 @@ private fun ProfileStores.renameProfileData(
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, kind, id, saveName)
         }
+        ProfileKind.NTRIP_CASTER_UPLOAD -> saveNtripCasterUploadProfiles(
+            renameProfile(
+                ntripCasterUploadProfiles(),
+                id,
+                saveName,
+                NtripCasterUploadProfile::id,
+                NtripCasterUploadProfile::isProtected,
+            ) { profile, newName ->
+                profile.copy(name = newName).also(NtripCasterUploadProfile::validate)
+            },
+        ).also {
+            return updateSettingsSetReferenceNames(settingsSets, kind, id, saveName)
+        }
         ProfileKind.NTRIP_MOUNTPOINT -> saveNtripMountpointProfiles(
             renameProfile(ntripMountpointProfiles(), id, saveName, NtripMountpointProfile::id, NtripMountpointProfile::isProtected) { profile, newName ->
                 profile.copy(name = newName).also(NtripMountpointProfile::validate)
@@ -3013,6 +3165,9 @@ private fun ProfileStores.updateSettingsSetReferenceNames(
             ProfileKind.COMMANDS -> set.copy(commandProfileRef = set.commandProfileRef.renameIfId(id, name))
             ProfileKind.USB_BAUD -> set.copy(usbBaudProfileRef = set.usbBaudProfileRef.renameIfId(id, name))
             ProfileKind.NTRIP_CASTER -> set.copy(ntripCasterProfileRef = set.ntripCasterProfileRef.renameNullableIfId(id, name))
+            ProfileKind.NTRIP_CASTER_UPLOAD -> set.copy(
+                ntripCasterUploadProfileRef = set.ntripCasterUploadProfileRef.renameNullableIfId(id, name),
+            )
             ProfileKind.NTRIP_MOUNTPOINT -> set.copy(ntripMountpointProfileRef = set.ntripMountpointProfileRef.renameNullableIfId(id, name))
             ProfileKind.RECORDING_OUTPUTS -> set.copy(recordingOutputProfileRef = set.recordingOutputProfileRef.renameIfId(id, name))
             ProfileKind.STORAGE -> set.copy(storageProfileRef = set.storageProfileRef.renameIfId(id, name))
@@ -3035,6 +3190,7 @@ private fun List<RecordingSettingsSet>.referenceProfile(kind: ProfileKind, id: S
             ProfileKind.COMMANDS -> set.commandProfileRef.id == id
             ProfileKind.USB_BAUD -> set.usbBaudProfileRef.id == id
             ProfileKind.NTRIP_CASTER -> set.ntripCasterProfileRef?.id == id
+            ProfileKind.NTRIP_CASTER_UPLOAD -> set.ntripCasterUploadProfileRef?.id == id
             ProfileKind.NTRIP_MOUNTPOINT -> set.ntripMountpointProfileRef?.id == id
             ProfileKind.RECORDING_OUTPUTS -> set.recordingOutputProfileRef.id == id
             ProfileKind.STORAGE -> set.storageProfileRef.id == id
@@ -3046,6 +3202,7 @@ private enum class AppScreen {
     HOME,
     SETTINGS,
     NTRIP_CASTER,
+    NTRIP_CASTER_UPLOAD,
     NTRIP_MOUNTPOINT,
     NTRIP_MOUNTPOINT_PROFILES,
     COMMANDS,
@@ -3122,6 +3279,8 @@ private val BASE_POSITION_METHOD_OPTIONS = listOf(
 
 private val NTRIP_PROTOCOL_POLICY_OPTIONS = listOf(
     EditableProfileOption("NTRIP_V2_PREFERRED_WITH_COMPATIBILITY", "NTRIP v2 preferred, v1 fallback"),
+    EditableProfileOption("NTRIP_V2_ONLY", "NTRIP v2 only"),
+    EditableProfileOption("NTRIP_V1_ONLY", "NTRIP v1 only"),
 )
 
 private const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"
@@ -3129,6 +3288,7 @@ private const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"
 private enum class ProfileKind {
     SETTINGS_SET,
     NTRIP_CASTER,
+    NTRIP_CASTER_UPLOAD,
     NTRIP_MOUNTPOINT,
     USB_BAUD,
     COMMANDS,
@@ -3182,6 +3342,7 @@ private fun ProfileKind.backScreen(): AppScreen =
     when (this) {
         ProfileKind.SETTINGS_SET -> AppScreen.SETTINGS_SETS
         ProfileKind.NTRIP_CASTER -> AppScreen.NTRIP_CASTER
+        ProfileKind.NTRIP_CASTER_UPLOAD -> AppScreen.NTRIP_CASTER_UPLOAD
         ProfileKind.NTRIP_MOUNTPOINT -> AppScreen.NTRIP_MOUNTPOINT_PROFILES
         ProfileKind.USB_BAUD -> AppScreen.USB_BAUD
         ProfileKind.COMMANDS -> AppScreen.COMMANDS
@@ -4143,6 +4304,20 @@ private fun NtripCasterProfile.profileRow(isSelected: Boolean = false): ProfileL
         hasLocalOverrides = false,
         isSelected = isSelected,
         summary = "$host:$port · $protocolPolicy",
+    )
+
+private fun NtripCasterUploadProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = listOf(
+            "${host.ifBlank { "host not set" }}:$port/${mountpoint.ifBlank { "mountpoint not set" }}",
+            protocolPolicy,
+            if (enabledByDefault) "enabled by default" else null,
+        ).filterNotNull().joinToString(" · "),
     )
 
 private fun NtripMountpointProfile.profileRow(isSelected: Boolean = false): ProfileListRow =

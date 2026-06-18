@@ -49,6 +49,7 @@ fun SettingsHub(
     dashboardLayoutLabel: String,
     onDashboardLayout: () -> Unit,
     onNtripCaster: () -> Unit,
+    onNtripCasterUpload: () -> Unit,
     onNtripMountpoint: () -> Unit,
     onUsbBaud: () -> Unit,
     onCommands: () -> Unit,
@@ -113,6 +114,8 @@ fun SettingsHub(
                     SettingsRow("N", "NTRIP casters", onNtripCaster)
                     SettingsDivider()
                     SettingsRow("M", "NTRIP mountpoints", onNtripMountpoint)
+                    SettingsDivider()
+                    SettingsRow("UP", "NTRIP caster upload", onNtripCasterUpload)
                 }
 
                 SettingsSection("Sessions") {
@@ -240,6 +243,7 @@ private fun SettingsHubPreview() {
             dashboardLayoutLabel = "Compact field dashboard",
             onDashboardLayout = {},
             onNtripCaster = {},
+            onNtripCasterUpload = {},
             onNtripMountpoint = {},
             onUsbBaud = {},
             onCommands = {},

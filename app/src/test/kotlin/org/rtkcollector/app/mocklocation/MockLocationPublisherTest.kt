@@ -76,14 +76,36 @@ class MockLocationPublisherTest {
     }
 
     @Test
-    fun `omits altitude when mslAltitudeM is null`() {
+    fun `publishes ellipsoidal height as Android location altitude`() {
         val sink = FakeMockLocationSink()
         val publisher = MockLocationPublisher(sink)
-        val noMsl = snapshot().copy(mslAltitudeM = null, ellipsoidalHeightM = 300.0)
 
-        publisher.publish(noMsl, enabled = true)
+        publisher.publish(snapshot(), enabled = true)
+
+        assertEquals(300.0, sink.locations.single().altitudeM)
+    }
+
+    @Test
+    fun `omits altitude when ellipsoidalHeightM is null`() {
+        val sink = FakeMockLocationSink()
+        val publisher = MockLocationPublisher(sink)
+        val noEllipsoid = snapshot().copy(mslAltitudeM = 250.0, ellipsoidalHeightM = null)
+
+        publisher.publish(noEllipsoid, enabled = true)
 
         assertNull(sink.locations.single().altitudeM)
+    }
+
+    @Test
+    fun `carries satellite counts as best effort mock location extras`() {
+        val sink = FakeMockLocationSink()
+        val publisher = MockLocationPublisher(sink)
+
+        publisher.publish(snapshot().copy(satellitesUsed = 12, satellitesInView = 18), enabled = true)
+
+        val update = sink.locations.single()
+        assertEquals(12, update.satellitesUsed)
+        assertEquals(18, update.satellitesInView)
     }
 
     private fun snapshot(): BestSolutionSnapshot =

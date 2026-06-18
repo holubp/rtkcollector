@@ -58,7 +58,11 @@ Android mock-location output is a recording-scoped option. When enabled, the
 foreground recording service publishes the current best fresh RtkCollector
 solution to Android's mock GPS provider. The app must be selected as the mock
 location app in Android Developer options. Mock-provider failure degrades only
-mock output; raw receiver recording continues.
+mock output; raw receiver recording continues. Android `Location.altitude` is
+published as ellipsoidal height. Satellite counts are attached as best-effort
+location extras when available, but Android's public mock-location API does not
+allow an ordinary app to inject full GNSS satellite status or satellite sky
+positions for other apps.
 
 Completed recordings can be selected individually, by group or all together.
 Sharing the full recording creates one temporary ZIP per selected session,

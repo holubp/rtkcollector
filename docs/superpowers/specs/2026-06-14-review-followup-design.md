@@ -180,9 +180,11 @@ selector's contract stays clean.
 - New `MockLocationPublishResult.NOT_PERMITTED` to distinguish the
   "RtkCollector is not the selected mock app" state from `DISABLED`.
 
-- Drop the `altitudeM = current.mslAltitudeM ?: current.ellipsoidalHeightM`
-  fallback. Use `mslAltitudeM` only. When null, the resulting `Location` has
-  `hasAltitude() == false`, which is the honest signal.
+- Android `Location.altitude` must use `ellipsoidalHeightM`, because Android
+  consumers interpret this field as height above the WGS84 ellipsoid. When
+  ellipsoidal height is null, the resulting `Location` has `hasAltitude() ==
+  false`, which is the honest signal. Do not substitute orthometric/MSL
+  altitude.
 
 - `MockLocationUpdate` removes the `provider: String` field — it was dead data
   (the sink uses its own `providerName` constructor arg). Tests are updated.

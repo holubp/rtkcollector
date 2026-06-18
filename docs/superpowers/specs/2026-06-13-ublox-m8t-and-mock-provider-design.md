@@ -258,11 +258,20 @@ location only while a recording/session foreground service is running.
 The mock provider must:
 
 - use `BestSolutionSnapshot`;
+- publish Android `Location.altitude` from ellipsoidal height when available,
+  not orthometric/MSL altitude;
 - publish only fresh valid solutions;
 - stop publishing when solutions go stale;
+- attach satellite used/in-view counts as best-effort `Location` extras when
+  available;
 - expose a clear user-facing error if Android mock-location setup is missing;
 - log mock-provider state/errors to events or quality sidecars;
 - never write mock-provider data into `receiver-rx.raw`.
+
+Android's public mock-location API publishes `Location` objects. It does not
+let an ordinary third-party app inject complete `GnssStatus` satellite lists or
+satellite sky positions into the platform GNSS provider. Any satellite-count
+extras are therefore advisory and consumer-dependent.
 
 Mock provider errors must not stop raw capture. If Android rejects a mock update,
 the app should stop mock publishing, surface the error, and continue recording.

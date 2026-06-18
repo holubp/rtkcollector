@@ -1,5 +1,6 @@
 package org.rtkcollector.app.mocklocation
 
+import android.os.Bundle
 import org.rtkcollector.core.solution.BestSolutionSelector
 import org.rtkcollector.core.solution.BestSolutionSnapshot
 
@@ -9,6 +10,8 @@ data class MockLocationUpdate(
     val altitudeM: Double?,
     val horizontalAccuracyM: Float?,
     val timeMillis: Long,
+    val satellitesUsed: Int?,
+    val satellitesInView: Int?,
 )
 
 interface MockLocationSink {
@@ -47,9 +50,11 @@ class MockLocationPublisher(
                 MockLocationUpdate(
                     latDeg = current.latDeg,
                     lonDeg = current.lonDeg,
-                    altitudeM = current.mslAltitudeM,
+                    altitudeM = current.ellipsoidalHeightM,
                     horizontalAccuracyM = current.horizontalAccuracyM?.toFloat(),
                     timeMillis = current.updatedAtMillis,
+                    satellitesUsed = current.satellitesUsed,
+                    satellitesInView = current.satellitesInView,
                 ),
             )
         }.fold(
@@ -75,9 +80,20 @@ class AndroidMockLocationSink(
             longitude = update.lonDeg
             update.altitudeM?.let { altitude = it }
             update.horizontalAccuracyM?.let { accuracy = it }
+            extras = mockLocationExtras(update)
             time = update.timeMillis
             elapsedRealtimeNanos = android.os.SystemClock.elapsedRealtimeNanos()
         }
         locationManager.setTestProviderLocation(providerName, location)
     }
+}
+
+private fun mockLocationExtras(update: MockLocationUpdate): Bundle? {
+    val extras = Bundle()
+    update.satellitesUsed?.let { used ->
+        extras.putInt("satellites", used)
+        extras.putInt("satellitesUsed", used)
+    }
+    update.satellitesInView?.let { extras.putInt("satellitesInView", it) }
+    return if (extras.isEmpty) null else extras
 }

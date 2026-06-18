@@ -48,14 +48,39 @@ storage still function.
 
 ### Fixed Base
 
-Fixed-base upload requires an accepted coordinate source:
+Fixed-base upload requires an accepted base coordinate. The coordinate may come
+from:
 
-- manual known coordinate;
+- manual known-coordinate entry in the Android UI;
 - imported `base-position.json`;
-- accepted temporary-base result.
+- accepted temporary-base result transferred by the app.
 
 The receiver must be configured as a fixed base where supported. RTCM output
 from the receiver can then be uploaded to the configured caster.
+
+`base-position.json` is the canonical serialization/import/export format for an
+accepted coordinate. It must not be treated as the only way for a user to reach
+fixed-base upload.
+
+### Base Coordinate Acquisition
+
+The implementation plan must add base-coordinate acquisition UI because manual
+entry does not exist yet.
+
+Required acquisition paths:
+
+- manual entry screen or dialog for latitude, longitude, ellipsoidal height,
+  frame/datum, antenna height and antenna reference point;
+- validation before accepting the coordinate;
+- "use current/averaged temporary-base coordinate as fixed base" action that
+  transfers the accepted candidate into the fixed-base workflow;
+- import existing `base-position.json` for externally processed coordinates;
+- persist accepted coordinates in the same internal model that can be exported
+  as `base-position.json`.
+
+Manual entry should be explicit and cautious: a mistyped base coordinate can
+make downstream rover positions consistently wrong while still appearing
+precise.
 
 ### Temporary Base
 
@@ -143,6 +168,8 @@ Main dashboard:
 - show upload URL/mountpoint, bytes uploaded, upload rate and last error;
 - provide a compact action to disable upload during recording;
 - do not expose upload controls in rover workflows.
+- fixed-base setup must provide a way to enter or select the accepted base
+  coordinate before upload can start.
 
 ## Runtime Architecture
 
@@ -246,6 +273,11 @@ The session should record:
 Required tests for future implementation:
 
 - fixed-base upload profile validation requires host, port and mountpoint;
+- manual base-coordinate entry validates required coordinate, frame/datum and
+  antenna fields before accepting;
+- accepted temporary-base coordinate can be transferred into fixed-base setup;
+- imported `base-position.json` and manually accepted coordinates produce the
+  same internal accepted-coordinate model;
 - plaintext passwords are excluded from `session.json`;
 - rover workflow rejects caster upload;
 - fixed-base workflow rejects upload without accepted base coordinates;
@@ -275,6 +307,7 @@ implementation plan must explicitly track:
 - whether RTCM comes from receiver RX extraction or another transport;
 - upload queue capacity and overflow policy;
 - exact worker lifecycle in foreground service;
+- manual coordinate entry UI and temporary-base-to-fixed-base transfer flow;
 - menu and settings-set integration;
 - session artifact additions;
 - field-test checklist for rtk2go/private caster.

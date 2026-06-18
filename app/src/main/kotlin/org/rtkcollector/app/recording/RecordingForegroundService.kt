@@ -1364,12 +1364,14 @@ class RecordingForegroundService : Service() {
     }
 
     private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980MessageFrequencyTracker) {
+        val now = System.currentTimeMillis()
+        val receiverNow = Um980BinaryParser.receiverTimestampMillis(frame)
         when (Um980BinaryParser.messageId(frame)) {
-            12, 138 -> frequencyTracker.record(Um980MessageKind.OBSVM, System.currentTimeMillis())
-            142 -> frequencyTracker.record(Um980MessageKind.ADRNAV, System.currentTimeMillis())
-            509 -> frequencyTracker.record(Um980MessageKind.RTKSTATUS, System.currentTimeMillis())
-            1026 -> frequencyTracker.record(Um980MessageKind.PPPNAV, System.currentTimeMillis())
-            2118 -> frequencyTracker.record(Um980MessageKind.BESTNAV, System.currentTimeMillis())
+            12, 138 -> frequencyTracker.record(Um980MessageKind.OBSVM, now, receiverNow)
+            142 -> frequencyTracker.record(Um980MessageKind.ADRNAV, now, receiverNow)
+            509 -> frequencyTracker.record(Um980MessageKind.RTKSTATUS, now, receiverNow)
+            1026 -> frequencyTracker.record(Um980MessageKind.PPPNAV, now, receiverNow)
+            2118 -> frequencyTracker.record(Um980MessageKind.BESTNAV, now, receiverNow)
         }
     }
 
@@ -1785,7 +1787,11 @@ class RecordingForegroundService : Service() {
                                 }
                             }
                         }
-                        state = state.copy(um980Frequency = frequencyTracker.display(System.currentTimeMillis()))
+                        val displayNow = System.currentTimeMillis()
+                        val receiverNow = Um980BinaryParser.receiverTimestampMillis(record.bytes)
+                        state = state.copy(
+                            um980Frequency = frequencyTracker.display(displayNow, receiverNow),
+                        )
                     }
                 },
                 AdvisoryConsumer("ublox-mixed-stream") { bytes ->

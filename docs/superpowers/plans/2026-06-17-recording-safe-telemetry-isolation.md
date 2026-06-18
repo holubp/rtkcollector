@@ -563,7 +563,7 @@ git commit -m "Drive dashboard selected solution from parser snapshots"
 - Modify: `app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt`
 - Modify: `receiver/unicore-n4/src/test/kotlin/org/rtkcollector/receiver/unicore/Um980MessageFrequencyTrackerTest.kt`
 
-- [ ] **Step 1: Modify binary frequency recording**
+- [x] **Step 1: Modify binary frequency recording**
 
 Change `recordBinaryFrequency` signature:
 
@@ -581,7 +581,7 @@ private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980Messa
 }
 ```
 
-- [ ] **Step 2: Modify frequency display call**
+- [x] **Step 2: Modify frequency display call**
 
 In the UM980 advisory parser loop, replace:
 
@@ -602,7 +602,7 @@ state = state.copy(
 For NMEA and ASCII records without receiver binary time, keep processing-time
 fallback by passing only `displayNow`.
 
-- [ ] **Step 3: Compile**
+- [x] **Step 3: Compile**
 
 Run:
 
@@ -612,7 +612,7 @@ sh gradlew :app:compileDebugKotlin
 
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt \

@@ -3511,6 +3511,7 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_HOST, activeConfig.casterUpload.host)
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PORT, activeConfig.casterUpload.port)
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT, activeConfig.casterUpload.mountpoint)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_USERNAME, activeConfig.casterUpload.username)
         putExtra(
             RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT,
             activeConfig.casterUpload.username.isNotBlank(),
@@ -3519,6 +3520,8 @@ private fun buildDashboardStartIntent(
             RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_SECRET_REF,
             activeConfig.casterUpload.secretRef.orEmpty(),
         )
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PASSWORD, activeConfig.casterUpload.password.orEmpty())
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY, activeConfig.casterUpload.protocolPolicy)
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_ID, activeConfig.workflowId)
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_NAME, activeConfig.workflowName)
         putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, workflowId.receiverRoleForSession())

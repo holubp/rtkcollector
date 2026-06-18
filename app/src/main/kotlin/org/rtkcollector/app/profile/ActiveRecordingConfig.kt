@@ -175,6 +175,7 @@ data class ActiveRecordingConfig(
                 username = casterUploadOverride?.username ?: ntripCasterUploadProfile?.username.orEmpty(),
                 secretRef = casterUploadSecretRef.takeIf(String::isNotBlank),
                 password = casterUploadPassword,
+                protocolPolicy = ntripCasterUploadProfile?.protocolPolicy ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
                 hasAcceptedBaseCoordinate = hasAcceptedBaseCoordinate,
             )
 
@@ -231,6 +232,7 @@ data class ActiveCasterUploadConfig(
     val username: String,
     val secretRef: String?,
     val password: String?,
+    val protocolPolicy: String,
     val hasAcceptedBaseCoordinate: Boolean,
 )
 

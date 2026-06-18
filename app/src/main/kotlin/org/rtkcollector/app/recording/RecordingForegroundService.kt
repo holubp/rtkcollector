@@ -34,7 +34,12 @@ import org.rtkcollector.core.capture.CaptureRuntime
 import org.rtkcollector.core.capture.RawRecorder
 import org.rtkcollector.core.correction.DefaultNtripRuntimeClient
 import org.rtkcollector.core.correction.NtripClient
+import org.rtkcollector.core.correction.NtripCasterUploadController
+import org.rtkcollector.core.correction.NtripCasterUploadRequest
+import org.rtkcollector.core.correction.NtripCasterUploadRuntimeConfig
+import org.rtkcollector.core.correction.NtripCasterUploadSnapshot
 import org.rtkcollector.core.correction.NtripCredentials
+import org.rtkcollector.core.correction.NtripProtocolVersion
 import org.rtkcollector.core.correction.NtripReconnectPolicy
 import org.rtkcollector.core.correction.NtripRequest
 import org.rtkcollector.core.correction.NtripRuntimeConfig
@@ -119,6 +124,7 @@ class RecordingForegroundService : Service() {
     private var activeUsbVid: Int? = null
     private var activeUsbPid: Int? = null
     private var ntripController: NtripRuntimeController? = null
+    private var casterUploadController: NtripCasterUploadController? = null
     private var activeWorkflowUsesNtrip: Boolean = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
@@ -337,6 +343,12 @@ class RecordingForegroundService : Service() {
             activeRecorder = recorder
             val eventSink = SessionEventSink(sessionWriters)
             activeEventSink = eventSink
+            val casterUploadConfig = casterUploadRuntimeConfig(intent)
+            val uploadController = casterUploadConfig?.let {
+                NtripCasterUploadController().also { controller ->
+                    casterUploadController = controller
+                }
+            }
             activeProfileBaud = profileBaud
             activeSerialBaud = profileBaud
             activeTargetBaud = serialBaud
@@ -354,6 +366,7 @@ class RecordingForegroundService : Service() {
                         ),
                     ),
                     exportJsonSolution = intent.getBooleanExtra(EXTRA_EXPORT_JSON_SOLUTION, true),
+                    casterUploadController = uploadController,
                 ),
                 eventSink = eventSink,
             )
@@ -387,6 +400,16 @@ class RecordingForegroundService : Service() {
             activeBaudPlan = baudPlan
             executeBaudTransition(baudPlan, captureRuntime, usbTransport)
             activeSerialBaud = serialBaud
+            casterUploadConfig?.let { config ->
+                uploadController?.start(config)
+                eventSink.recordEvent(
+                    CaptureEvent(
+                        timestamp = Instant.now().toString(),
+                        type = "base-caster-upload-started",
+                        message = config.mountpointUrl,
+                    ),
+                )
+            }
 
             state = state.copy(
                 running = true,
@@ -433,6 +456,8 @@ class RecordingForegroundService : Service() {
             captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
             maybeStartNtrip(intent, recorder)
         } catch (error: Throwable) {
+            runCatching { casterUploadController?.stop() }
+            casterUploadController = null
             state = state.copy(
                 running = false,
                 lifecycle = RecordingLifecycleState.FAILED,
@@ -660,6 +685,41 @@ class RecordingForegroundService : Service() {
         return NtripRuntimeConfig(
             request = request,
             ggaLines = listOfNotNull(intent.getStringExtra(EXTRA_NTRIP_GGA)?.takeIf { it.isNotBlank() }),
+        )
+    }
+
+    private fun casterUploadRuntimeConfig(intent: Intent): NtripCasterUploadRuntimeConfig? {
+        if (!intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_ENABLED, false)) {
+            return null
+        }
+        val host = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_HOST).orEmpty()
+        val mountpoint = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT).orEmpty()
+        if (host.isBlank() || mountpoint.isBlank()) {
+            state = state.copy(
+                lastError = "NTRIP caster upload host and mountpoint are required before connecting.",
+                errorCategory = RecordingErrorCategory.NTRIP,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return null
+        }
+        val username = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_USERNAME).orEmpty()
+        val password = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_PASSWORD).orEmpty()
+        val credentials = if (username.isNotBlank() || password.isNotEmpty()) {
+            NtripCredentials(username = username, password = password)
+        } else {
+            null
+        }
+        return NtripCasterUploadRuntimeConfig(
+            request = NtripCasterUploadRequest(
+                host = host,
+                port = validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
+                mountpoint = mountpoint,
+                credentials = credentials,
+                protocolVersion = uploadProtocolVersion(
+                    intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY),
+                ),
+            ),
         )
     }
 
@@ -952,10 +1012,22 @@ class RecordingForegroundService : Service() {
         runCatching { ntripController?.stop() }
         runCatching { captureThread?.join(1500) }
         runCatching { advisoryFanout?.close() }
+        val casterUploadSnapshot = casterUploadController?.snapshot()
+        runCatching { casterUploadController?.stop() }
+        casterUploadSnapshot?.let { snapshot ->
+            runCatching {
+                writers?.appendEventJson(
+                    """{"type":"base-caster-upload-final","state":"${snapshot.state.jsonEscape()}","uploadedBytes":${snapshot.bytesUploaded},"droppedBytes":${snapshot.bytesDropped},"url":"${snapshot.mountpointUrl.jsonEscape()}","lastError":${snapshot.lastError.jsonStringOrNull()}}""",
+                )
+            }
+        }
         synchronized(runtimeLock) {
             runCatching {
                 activeSessionMetadata
-                    ?.copy(stoppedAt = Instant.now().toString())
+                    ?.copy(
+                        stoppedAt = Instant.now().toString(),
+                        baseCasterUploadFinalStatus = casterUploadSnapshot?.state,
+                    )
                     ?.let { metadata ->
                         writers?.writeSessionJson(exportSessionMetadata(metadata))
                         activeSessionMetadata = metadata
@@ -1001,6 +1073,7 @@ class RecordingForegroundService : Service() {
         activeSerialBaud = 230400
         activeTargetBaud = 230400
         ntripController = null
+        casterUploadController = null
         activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
         teardownMockLocation()
@@ -1084,6 +1157,12 @@ class RecordingForegroundService : Service() {
         require(value in 1..65535) { "NTRIP port must be between 1 and 65535." }
         return value
     }
+
+    private fun uploadProtocolVersion(policy: String?): NtripProtocolVersion =
+        when (policy) {
+            "NTRIP_V1_ONLY" -> NtripProtocolVersion.NTRIP_V1
+            else -> NtripProtocolVersion.NTRIP_V2
+        }
 
     private fun ntripDisplayUrl(intent: Intent): String {
         val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
@@ -1695,6 +1774,7 @@ class RecordingForegroundService : Service() {
         exportNmea: Boolean,
         nmeaExportOptions: Um980NmeaExportOptions,
         exportJsonSolution: Boolean,
+        casterUploadController: NtripCasterUploadController?,
     ): AdvisoryFanout {
         val ggaParser = NmeaGgaParser()
         val gsaParser = NmeaGsaParser()
@@ -1892,11 +1972,17 @@ class RecordingForegroundService : Service() {
                 },
                 AdvisoryConsumer("rtcm3-extractor") { bytes ->
                     rtcmExtractor.accept(bytes).forEach { frame ->
+                        val baseUploadOffered = if (casterUploadController != null && frame.crcValid == true) {
+                            sessionWriters.appendBaseCasterUploadRtcm(frame.bytes)
+                            casterUploadController.offer(frame.bytes)
+                        } else {
+                            null
+                        }
                         if (frame.crcValid != false) {
                             sessionWriters.appendExtractedRtcm(frame.bytes)
                         }
                         sessionWriters.appendQualityLiveJson(
-                            """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"}}""",
+                            """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"},"baseCasterUploadOffered":${baseUploadOffered ?: "null"}}""",
                         )
                         val referenceStation = Rtcm3ReferenceStationParser.parse(frame)
                         state = if (referenceStation != null) {
@@ -2162,8 +2248,11 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BASE_CASTER_UPLOAD_HOST = "baseCasterUploadHost"
         const val EXTRA_BASE_CASTER_UPLOAD_PORT = "baseCasterUploadPort"
         const val EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT = "baseCasterUploadMountpoint"
+        const val EXTRA_BASE_CASTER_UPLOAD_USERNAME = "baseCasterUploadUsername"
         const val EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT = "baseCasterUploadUsernamePresent"
         const val EXTRA_BASE_CASTER_UPLOAD_SECRET_REF = "baseCasterUploadSecretRef"
+        const val EXTRA_BASE_CASTER_UPLOAD_PASSWORD = "baseCasterUploadPassword"
+        const val EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY = "baseCasterUploadProtocolPolicy"
         const val EXTRA_BASE_CASTER_UPLOAD_FINAL_STATUS = "baseCasterUploadFinalStatus"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
         const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"

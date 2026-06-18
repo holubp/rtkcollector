@@ -2684,7 +2684,7 @@ private fun ProfileStores.profileEditorData(
                         optionItems = storageProfiles().profileOptions(StorageProfile::id, StorageProfile::name),
                     ),
                 ),
-            )
+            ).asProtectedProfileView(set.isProtected)
         }
         ProfileKind.NTRIP_CASTER -> ntripCasterProfiles().first { it.id == target.id }.let { profile ->
             val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
@@ -2709,7 +2709,7 @@ private fun ProfileStores.profileEditorData(
                         readOnlyList = profile.sourcetableMountpoints.ifEmpty { listOf("No cached mountpoints") },
                     ),
                 ),
-            )
+            ).asProtectedProfileView(profile.isProtected)
         }
         ProfileKind.NTRIP_CASTER_UPLOAD -> ntripCasterUploadProfiles().first { it.id == target.id }.let { profile ->
             val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
@@ -2735,7 +2735,7 @@ private fun ProfileStores.profileEditorData(
                         boolean = true,
                     ),
                 ),
-            )
+            ).asProtectedProfileView(profile.isProtected)
         }
         ProfileKind.NTRIP_MOUNTPOINT -> ntripMountpointProfiles().first { it.id == target.id }.let { profile ->
             val mountpointOptionsByCaster = ntripCasterProfiles().associate { caster ->
@@ -2783,7 +2783,7 @@ private fun ProfileStores.profileEditorData(
                         boolean = true,
                     ),
                 ),
-            )
+            ).asProtectedProfileView(profile.isProtected)
         }
         ProfileKind.USB_BAUD -> usbBaudProfiles().first { it.id == target.id }.let { profile ->
             val profileUsbChoice = profile.usbDeviceChoice()
@@ -2811,7 +2811,7 @@ private fun ProfileStores.profileEditorData(
                         optionItems = usbOptions,
                     ),
                 ),
-            )
+            ).asProtectedProfileView(profile.isProtected)
         }
         ProfileKind.COMMANDS -> commandProfiles().first { it.id == target.id }.let { profile ->
             ProfileEditorData(
@@ -2822,7 +2822,7 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("runtimeScript", "Init script", profile.runtimeScript, multiline = true),
                     EditableProfileField("shutdownScript", "Shutdown script", profile.shutdownScript, multiline = true),
                 ),
-            )
+            ).asProtectedProfileView(profile.isProtected)
         }
         ProfileKind.RECORDING_OUTPUTS -> recordingPolicyProfiles().first { it.id == target.id }.let { profile ->
             ProfileEditorData(
@@ -2843,7 +2843,7 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("enableMockLocation", "Publish Android mock location while recording", profile.enableMockLocation.toString(), boolean = true),
                     EditableProfileField("recordRemoteBaseRaw", "Record remote base raw", profile.recordRemoteBaseRaw.toString(), boolean = true),
                 ),
-            )
+            ).asProtectedProfileView(profile.isProtected)
         }
         ProfileKind.STORAGE -> storageProfiles().first { it.id == target.id }.let { profile ->
             ProfileEditorData(
@@ -2861,8 +2861,18 @@ private fun ProfileStores.profileEditorData(
                     ),
                     EditableProfileField("treeUri", "SAF tree URI", profile.treeUri.orEmpty()),
                 ),
-            )
+            ).asProtectedProfileView(profile.isProtected)
         }
+    }
+
+private fun ProfileEditorData.asProtectedProfileView(isProtected: Boolean): ProfileEditorData =
+    if (!isProtected) {
+        this
+    } else {
+        copy(
+            title = title.replaceFirst("Edit", "View"),
+            readOnly = true,
+        )
     }
 
 private fun ProfileStores.saveProfileEditorData(

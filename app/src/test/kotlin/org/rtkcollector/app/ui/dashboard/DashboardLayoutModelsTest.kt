@@ -20,11 +20,17 @@ class DashboardLayoutModelsTest {
     }
 
     @Test
-    fun `compact dashboard uses two columns on standard phone portrait widths`() {
-        assertEquals(2, compactDashboardCardColumnCount(370))
-        assertEquals(2, compactDashboardCardColumnCount(340))
+    fun `compact dashboard uses two columns on standard wide widths`() {
+        assertEquals(2, compactDashboardCardColumnCount(370, 240))
+        assertEquals(2, compactDashboardCardColumnCount(340, 240))
         assertEquals(1, compactDashboardCardColumnCount(339))
         assertEquals(1, compactDashboardCardColumnCount(320))
+    }
+
+    @Test
+    fun `compact dashboard uses one card column in portrait`() {
+        assertEquals(1, compactDashboardCardColumnCount(370, 700))
+        assertEquals(1, compactDashboardCardColumnCount(700, 700))
     }
 
     @Test

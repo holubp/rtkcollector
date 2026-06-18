@@ -118,8 +118,17 @@ internal const val DefaultUm980ReceiverFrequency =
 internal const val DefaultUbloxReceiverFrequency =
     "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz"
 
-internal fun compactDashboardCardColumnCount(availableWidthDp: Int): Int =
-    if (availableWidthDp >= CompactDashboardTwoColumnMinWidthDp) 2 else 1
+internal fun compactDashboardCardColumnCount(
+    availableWidthDp: Int,
+    availableHeightDp: Int? = null,
+): Int =
+    if (availableHeightDp != null && availableHeightDp >= availableWidthDp) {
+        1
+    } else if (availableWidthDp >= CompactDashboardTwoColumnMinWidthDp) {
+        2
+    } else {
+        1
+    }
 
 internal fun shouldUseRailDashboard(
     layoutPreference: DashboardLayoutPreference,

@@ -205,6 +205,8 @@ fun HomeDashboard(
                     CompactDashboard(
                         state = state,
                         status = state.status,
+                        availableWidthDp = maxWidth.value.toInt(),
+                        availableHeightDp = maxHeight.value.toInt(),
                         onWorkflow = onWorkflow,
                         onSettingsSet = onSettingsSet,
                         onMountpoint = onNtrip,
@@ -350,6 +352,8 @@ private fun dashboardSecondaryButtonColors() = ButtonDefaults.buttonColors(
 private fun CompactDashboard(
     state: DashboardState,
     status: DashboardStatus,
+    availableWidthDp: Int,
+    availableHeightDp: Int,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onMountpoint: () -> Unit,
@@ -380,6 +384,8 @@ private fun CompactDashboard(
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
         DashboardCards(
             state = state,
+            availableWidthDp = availableWidthDp,
+            availableHeightDp = availableHeightDp,
             onSettingsSet = onSettingsSet,
             onHelp = onHelp,
             coordinateAveraging = coordinateAveraging,
@@ -648,6 +654,8 @@ private fun String.isMissingDashboardValue(): Boolean {
 private fun DashboardCards(
     state: DashboardState,
     modifier: Modifier = Modifier,
+    availableWidthDp: Int? = null,
+    availableHeightDp: Int? = null,
     onSettingsSet: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     coordinateAveraging: CoordinateAveragingState,
@@ -656,7 +664,10 @@ private fun DashboardCards(
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val useTwoColumns = compactDashboardCardColumnCount(maxWidth.value.toInt()) == 2
+        val useTwoColumns = compactDashboardCardColumnCount(
+            availableWidthDp = availableWidthDp ?: maxWidth.value.toInt(),
+            availableHeightDp = availableHeightDp,
+        ) == 2
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),

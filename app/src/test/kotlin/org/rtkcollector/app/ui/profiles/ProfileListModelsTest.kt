@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 
 class ProfileListModelsTest {
     @Test
-    fun `protected profile row is copy only`() {
+    fun `protected profile row is viewable and copyable`() {
         val row = ProfileListRow(
             id = "built-in",
             name = "Built-in",
@@ -19,12 +19,28 @@ class ProfileListModelsTest {
         )
 
         assertFalse(row.canEdit)
+        assertTrue(row.canViewDetails)
+        assertEquals("View", row.editActionLabel)
         assertTrue(row.canCopy)
         assertFalse(row.canRename)
         assertFalse(row.canDelete)
         assertFalse(row.isSelected)
         assertEquals("Built-in", row.displayName)
         assertEquals("", row.summary)
+    }
+
+    @Test
+    fun `editable profile row uses edit action label`() {
+        val row = ProfileListRow(
+            id = "custom",
+            name = "Custom",
+            isProtected = false,
+            hasLocalOverrides = false,
+        )
+
+        assertTrue(row.canEdit)
+        assertTrue(row.canViewDetails)
+        assertEquals("Edit", row.editActionLabel)
     }
 
     @Test

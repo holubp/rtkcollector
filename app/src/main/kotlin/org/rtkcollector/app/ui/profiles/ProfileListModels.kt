@@ -13,6 +13,8 @@ data class ProfileListRow(
 ) {
     val displayName: String = if (hasLocalOverrides) "$name + local changes" else name
     val canEdit: Boolean = !isProtected
+    val canViewDetails: Boolean = true
+    val editActionLabel: String = if (isProtected) "View" else "Edit"
     val canRename: Boolean = !isProtected
     val canCopy: Boolean = true
     val canDelete: Boolean = !isProtected || hasLocalOverrides
@@ -83,6 +85,7 @@ fun canSaveProfileEditor(fields: List<EditableProfileField>): Boolean =
 data class ProfileEditorData(
     val title: String,
     val fields: List<EditableProfileField>,
+    val readOnly: Boolean = false,
 )
 
 data class ProfileEditorAction(

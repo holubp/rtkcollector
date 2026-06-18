@@ -38,6 +38,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -265,7 +271,8 @@ private fun ProfileListItem(
                 CompactProfileActions(
                     showUse = showUse,
                     showEdit = showEdit,
-                    editEnabled = row.canEdit,
+                    editEnabled = row.canViewDetails,
+                    editLabel = row.editActionLabel,
                     showCopy = showCopy,
                     showRename = showRename,
                     showDelete = showDelete,
@@ -287,6 +294,7 @@ private fun CompactProfileActions(
     showUse: Boolean,
     showEdit: Boolean,
     editEnabled: Boolean,
+    editLabel: String,
     showCopy: Boolean,
     showRename: Boolean,
     showDelete: Boolean,
@@ -309,7 +317,7 @@ private fun CompactProfileActions(
         }
         if (showEdit) {
             OutlinedButton(onClick = onEdit, enabled = editEnabled) {
-                Text("Edit")
+                Text(editLabel)
             }
         }
         if (showCopy) {
@@ -561,8 +569,9 @@ fun ProfileEditorScreen(
     onSave: (Map<String, String>) -> Unit,
     actions: List<ProfileEditorAction> = emptyList(),
 ) {
-    val destructiveActions = actions.filter { it.destructive }
-    val utilityActions = actions.filterNot { it.destructive }
+    val activeActions = if (data.readOnly) emptyList() else actions
+    val destructiveActions = activeActions.filter { it.destructive }
+    val utilityActions = activeActions.filterNot { it.destructive }
     var values by remember {
         mutableStateOf(data.fields.associate { it.key to it.value })
     }
@@ -570,8 +579,10 @@ fun ProfileEditorScreen(
     var expandedOptions by remember { mutableStateOf(emptySet<String>()) }
     var showUnsavedPrompt by remember { mutableStateOf(false) }
     var pendingDestructiveAction by remember { mutableStateOf<ProfileEditorAction?>(null) }
-    val runtimeFields = data.fields.map { field -> field.withRuntimeProfileValidation(values) }
-    val editorCanSave = canSaveProfileEditor(runtimeFields)
+    val runtimeFields = data.fields
+        .map { field -> field.withRuntimeProfileValidation(values) }
+        .map { field -> if (data.readOnly) field.copy(readOnly = true) else field }
+    val editorCanSave = !data.readOnly && canSaveProfileEditor(runtimeFields)
     val savedFingerprint = remember(data.fields) {
         profileEditorFingerprint(data.fields.associate { it.key to it.value })
     }
@@ -585,7 +596,7 @@ fun ProfileEditorScreen(
         }
     }
     val leaveEditor = {
-        if (unsavedState.canLeaveWithoutPrompt) {
+        if (data.readOnly || unsavedState.canLeaveWithoutPrompt) {
             onBack()
         } else {
             showUnsavedPrompt = true
@@ -669,23 +680,25 @@ fun ProfileEditorScreen(
                         }
                     },
                     actions = {
-                        Button(
-                            onClick = saveValues,
-                            enabled = editorCanSave,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF2E7D32),
-                                contentColor = Color.White,
-                            ),
-                        ) {
-                            Text("Save")
-                        }
-                        TextButton(
-                            onClick = onBack,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                        ) {
-                            Text("Discard")
+                        if (!data.readOnly) {
+                            Button(
+                                onClick = saveValues,
+                                enabled = editorCanSave,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF2E7D32),
+                                    contentColor = Color.White,
+                                ),
+                            ) {
+                                Text("Save")
+                            }
+                            TextButton(
+                                onClick = onBack,
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                ),
+                            ) {
+                                Text("Discard")
+                            }
                         }
                         destructiveActions.forEach { action ->
                             TextButton(
@@ -750,6 +763,7 @@ fun ProfileEditorScreen(
                             onCheckedChange = { checked ->
                                 values = values + (field.key to checked.toString())
                             },
+                            enabled = !field.readOnly,
                         )
                         Text(field.label, modifier = Modifier.weight(1f))
                     }
@@ -829,7 +843,9 @@ fun ProfileEditorScreen(
                                 onValueChange = { value ->
                                     values = values + (field.key to value)
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .keepHardwareArrowsInTextField(),
                                 minLines = 1,
                                 readOnly = field.readOnly,
                                 singleLine = true,
@@ -878,7 +894,8 @@ private fun ScriptTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .keepHardwareArrowsInTextField(),
         minLines = 4,
         readOnly = readOnly,
         isError = isError,
@@ -886,6 +903,18 @@ private fun ScriptTextField(
         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
     )
 }
+
+private fun Modifier.keepHardwareArrowsInTextField(): Modifier =
+    onKeyEvent { event -> event.shouldKeepArrowNavigationInsideTextField() }
+
+private fun KeyEvent.shouldKeepArrowNavigationInsideTextField(): Boolean =
+    type == KeyEventType.KeyDown &&
+        (
+            key == Key.DirectionLeft ||
+                key == Key.DirectionRight ||
+                key == Key.DirectionUp ||
+                key == Key.DirectionDown
+            )
 
 @Composable
 private fun ProfileFieldError(field: EditableProfileField) {

@@ -21,16 +21,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +57,10 @@ import androidx.compose.ui.unit.dp
 import org.rtkcollector.app.console.DeviceConsoleController
 import org.rtkcollector.app.console.DeviceConsoleLineEnding
 import org.rtkcollector.app.console.DeviceConsoleState
+import org.rtkcollector.app.base.AcceptedBaseCoordinate
+import org.rtkcollector.app.base.AcceptedBaseCoordinateStore
+import org.rtkcollector.app.base.BaseCoordinateForm
+import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.NtripCasterProfile
@@ -139,6 +153,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -187,6 +202,7 @@ fun RtkCollectorApp(
     var screen by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf(AppScreen.HOME) }
     val context = LocalContext.current
     val profileStore = remember(context) { ProfileStores(context) }
+    val baseCoordinateStore = remember(context) { AcceptedBaseCoordinateStore(context) }
     val initialSelectedSettingsSetId = remember(profileStore) { profileStore.selectedSettingsSetId() }
     var settingsSets by remember {
         mutableStateOf(profileStore.settingsSetsWithRememberedMountpoint(initialSelectedSettingsSetId))
@@ -220,6 +236,7 @@ fun RtkCollectorApp(
     }
     var consoleLineEnding by rememberSaveable { mutableStateOf(DeviceConsoleLineEnding.CRLF) }
     var consoleController by remember { mutableStateOf<DeviceConsoleController?>(null) }
+    var baseCoordinateEditorId by rememberSaveable { mutableStateOf<String?>(null) }
     val secretStore = remember(context) { NtripSecretStore(context) }
     @Suppress("UNUSED_VARIABLE")
     val currentProfileRevision = profileRevision
@@ -311,6 +328,25 @@ fun RtkCollectorApp(
                 Toast.makeText(context, "Settings backup imported.", Toast.LENGTH_LONG).show()
             }.onFailure { error ->
                 Toast.makeText(context, "Cannot import settings backup: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val importBasePositionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Base-position JSON could not be read.")
+                val coordinate = BasePositionJsonCodec.decode(
+                    json = text,
+                    fallbackId = profileStore.duplicateId("base"),
+                    fallbackName = "Imported base coordinate",
+                )
+                baseCoordinateStore.upsert(coordinate)
+                baseCoordinateStore.saveSelectedCoordinateId(coordinate.id)
+                profileRevision++
+                Toast.makeText(context, "Base coordinate imported.", Toast.LENGTH_LONG).show()
+            }.onFailure { error ->
+                Toast.makeText(context, "Cannot import base coordinate: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -631,6 +667,7 @@ fun RtkCollectorApp(
                                 screen = AppScreen.HOME
                             }
                         },
+                        onBaseCoordinates = { screen = AppScreen.BASE_COORDINATES },
                         dashboardLayoutLabel = dashboardLayout.displayName,
                         onDashboardLayout = { showDashboardLayoutDialog = true },
                         onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
@@ -950,6 +987,95 @@ fun RtkCollectorApp(
                     onBack = { screen = AppScreen.SETTINGS },
                     supportsSelection = false,
                 )
+                AppScreen.BASE_COORDINATES -> BaseCoordinatesScreen(
+                    rows = baseCoordinateStore.coordinates().map { coordinate ->
+                        coordinate.profileRow(
+                            isSelected = coordinate.id == baseCoordinateStore.selectedCoordinateId(),
+                        )
+                    },
+                    onSelect = { id ->
+                        baseCoordinateStore.saveSelectedCoordinateId(id)
+                        profileRevision++
+                    },
+                    onAdd = {
+                        val coordinate = AcceptedBaseCoordinate(
+                            id = profileStore.duplicateId("base"),
+                            name = "New base coordinate",
+                            latDeg = 0.0,
+                            lonDeg = 0.0,
+                            ellipsoidalHeightM = 0.0,
+                            frame = "UNKNOWN",
+                            epoch = null,
+                            method = "MANUAL_KNOWN_POINT",
+                            durationSeconds = null,
+                            horizontalUncertaintyM = null,
+                            verticalUncertaintyM = null,
+                            antennaHeightM = null,
+                            antennaReferencePoint = null,
+                            sourceSessionId = null,
+                            sourceDescription = "Manual entry",
+                        )
+                        baseCoordinateStore.upsert(coordinate)
+                        baseCoordinateEditorId = coordinate.id
+                        screen = AppScreen.BASE_COORDINATE_EDITOR
+                    },
+                    onImport = {
+                        importBasePositionLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
+                    },
+                    onEdit = { id ->
+                        baseCoordinateEditorId = id
+                        screen = AppScreen.BASE_COORDINATE_EDITOR
+                    },
+                    onCopy = { id ->
+                        baseCoordinateStore.coordinates().firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copy(
+                                id = profileStore.duplicateId("base"),
+                                name = "${source.name} copy",
+                            )
+                            baseCoordinateStore.upsert(copy)
+                            baseCoordinateEditorId = copy.id
+                            screen = AppScreen.BASE_COORDINATE_EDITOR
+                        }
+                    },
+                    onRename = { id, name ->
+                        baseCoordinateStore.coordinates().firstOrNull { it.id == id }?.let { coordinate ->
+                            baseCoordinateStore.upsert(coordinate.copy(name = name.trim()))
+                            profileRevision++
+                            true
+                        } ?: false
+                    },
+                    onDelete = { id ->
+                        baseCoordinateStore.delete(id)
+                        profileRevision++
+                    },
+                    onBack = { screen = AppScreen.SETTINGS },
+                )
+                AppScreen.BASE_COORDINATE_EDITOR -> {
+                    val coordinate = baseCoordinateEditorId?.let { id ->
+                        baseCoordinateStore.coordinates().firstOrNull { it.id == id }
+                    }
+                    if (coordinate == null) {
+                        screen = AppScreen.BASE_COORDINATES
+                    } else {
+                        BaseCoordinateEditorScreen(
+                            coordinate = coordinate,
+                            onBack = { screen = AppScreen.BASE_COORDINATES },
+                            onSave = { updated ->
+                                runCatching {
+                                    updated.validate()
+                                    baseCoordinateStore.upsert(updated)
+                                    profileRevision++
+                                    screen = AppScreen.BASE_COORDINATES
+                                }.onFailure { error ->
+                                    Toast.makeText(context, "Cannot save base coordinate: ${error.message}", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            onExport = {
+                                shareBasePositionJson(context, coordinate)
+                            },
+                        )
+                    }
+                }
                 AppScreen.SETTINGS_SET_SELECTOR -> ProfileListScreen(
                     title = "Select workflow/settings",
                     rows = SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows,
@@ -2101,6 +2227,20 @@ private fun shareNmea(context: Context, nmeaFile: File) {
     scheduleTemporaryNmeaCleanup(listOf(nmeaFile))
 }
 
+private fun shareBasePositionJson(context: Context, coordinate: AcceptedBaseCoordinate) {
+    val directory = context.cacheDir.resolve("base-position-share")
+    directory.mkdirs()
+    val file = directory.resolve("${coordinate.id}.base-position.json")
+    file.writeText(BasePositionJsonCodec.encode(coordinate), StandardCharsets.UTF_8)
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/json"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share base position JSON"))
+}
+
 private fun scheduleTemporaryZipCleanup(zipFiles: List<File>) {
     Handler(Looper.getMainLooper()).postDelayed(
         {
@@ -2128,6 +2268,243 @@ private fun scheduleTemporaryNmeaCleanup(nmeaFiles: List<File>) {
             }
         },
         TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BaseCoordinatesScreen(
+    rows: List<ProfileListRow>,
+    onSelect: (String) -> Unit,
+    onAdd: () -> Unit,
+    onImport: () -> Unit,
+    onEdit: (String) -> Unit,
+    onCopy: (String) -> Unit,
+    onRename: (String, String) -> Boolean,
+    onDelete: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    var renameTarget by remember { mutableStateOf<ProfileListRow?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    renameTarget?.let { row ->
+        AlertDialog(
+            onDismissRequest = {
+                renameTarget = null
+                renameText = ""
+            },
+            title = { Text("Rename base coordinate") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Name") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (onRename(row.id, renameText)) {
+                            renameTarget = null
+                            renameText = ""
+                        }
+                    },
+                    enabled = renameText.trim().isNotBlank() && renameText.trim() != row.name,
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        renameTarget = null
+                        renameText = ""
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Base coordinates") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) {
+                        Text("Back")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onImport) {
+                        Text("Import")
+                    }
+                    TextButton(onClick = onAdd) {
+                        Text("Add")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        if (rows.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text("No accepted base coordinates yet.")
+                Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+                    Text("Add")
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(rows, key = { it.id }) { row ->
+                    BaseCoordinateRow(
+                        row = row,
+                        onSelect = { onSelect(row.id) },
+                        onEdit = { onEdit(row.id) },
+                        onCopy = { onCopy(row.id) },
+                        onRename = {
+                            renameTarget = row
+                            renameText = row.name
+                        },
+                        onDelete = { onDelete(row.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BaseCoordinateRow(
+    row: ProfileListRow,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onCopy: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (row.isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(row.displayName, style = MaterialTheme.typography.titleSmall)
+            Text(row.summary, style = MaterialTheme.typography.labelSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (!row.isSelected) {
+                    Button(onClick = onSelect) {
+                        Text("Use")
+                    }
+                }
+                TextButton(onClick = onEdit) {
+                    Text("Edit")
+                }
+                TextButton(onClick = onCopy) {
+                    Text("Copy")
+                }
+                TextButton(onClick = onRename) {
+                    Text("Rename")
+                }
+                TextButton(onClick = onDelete) {
+                    Text("Delete")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BaseCoordinateEditorScreen(
+    coordinate: AcceptedBaseCoordinate,
+    onBack: () -> Unit,
+    onSave: (AcceptedBaseCoordinate) -> Unit,
+    onExport: () -> Unit,
+) {
+    val data = ProfileEditorData(
+        title = "Edit base coordinate",
+        fields = listOf(
+            EditableProfileField("name", "Name", coordinate.name),
+            EditableProfileField("latDeg", "Latitude degrees", coordinate.latDeg.toString()),
+            EditableProfileField("lonDeg", "Longitude degrees", coordinate.lonDeg.toString()),
+            EditableProfileField("ellipsoidalHeightM", "Ellipsoidal height meters", coordinate.ellipsoidalHeightM.toString()),
+            EditableProfileField("frame", "Frame/datum", coordinate.frame),
+            EditableProfileField("epoch", "Epoch", coordinate.epoch.orEmpty()),
+            EditableProfileField(
+                key = "method",
+                label = "Method",
+                value = coordinate.method,
+                optionItems = BASE_POSITION_METHOD_OPTIONS,
+            ),
+            EditableProfileField("durationSeconds", "Duration seconds", coordinate.durationSeconds?.toString().orEmpty()),
+            EditableProfileField(
+                "horizontalUncertaintyM",
+                "Horizontal uncertainty meters",
+                coordinate.horizontalUncertaintyM?.toString().orEmpty(),
+            ),
+            EditableProfileField(
+                "verticalUncertaintyM",
+                "Vertical uncertainty meters",
+                coordinate.verticalUncertaintyM?.toString().orEmpty(),
+            ),
+            EditableProfileField("antennaHeightM", "Antenna height meters", coordinate.antennaHeightM?.toString().orEmpty()),
+            EditableProfileField("antennaReferencePoint", "Antenna reference point", coordinate.antennaReferencePoint.orEmpty()),
+            EditableProfileField("sourceSessionId", "Source session UUID", coordinate.sourceSessionId.orEmpty()),
+            EditableProfileField("sourceDescription", "Source description", coordinate.sourceDescription),
+        ),
+    )
+    ProfileEditorScreen(
+        data = data,
+        onBack = onBack,
+        onSave = { values ->
+            val form = BaseCoordinateForm(
+                id = coordinate.id,
+                name = values["name"].orEmpty(),
+                latDeg = values["latDeg"].orEmpty(),
+                lonDeg = values["lonDeg"].orEmpty(),
+                ellipsoidalHeightM = values["ellipsoidalHeightM"].orEmpty(),
+                frame = values["frame"].orEmpty(),
+                epoch = values["epoch"].orEmpty(),
+                method = values["method"].orEmpty(),
+                durationSeconds = values["durationSeconds"].orEmpty(),
+                horizontalUncertaintyM = values["horizontalUncertaintyM"].orEmpty(),
+                verticalUncertaintyM = values["verticalUncertaintyM"].orEmpty(),
+                antennaHeightM = values["antennaHeightM"].orEmpty(),
+                antennaReferencePoint = values["antennaReferencePoint"].orEmpty(),
+                sourceSessionId = values["sourceSessionId"].orEmpty(),
+                sourceDescription = values["sourceDescription"].orEmpty(),
+            )
+            form.toAcceptedBaseCoordinate()
+                .onSuccess(onSave)
+                .onFailure { error -> throw IllegalArgumentException(error.message ?: "Base coordinate is invalid.") }
+        },
+        actions = listOf(
+            ProfileEditorAction(
+                label = "Export JSON",
+                onClick = onExport,
+            ),
+        ),
     )
 }
 
@@ -2656,6 +3033,8 @@ private enum class AppScreen {
     USB_BAUD,
     RECORDING_OUTPUTS,
     STORAGE,
+    BASE_COORDINATES,
+    BASE_COORDINATE_EDITOR,
     SESSIONS,
     DEVICE_CONSOLE,
     SETTINGS_SETS,
@@ -2710,6 +3089,16 @@ private val PPP_NMEA_GGA_QUALITY_OPTIONS = listOf(
     EditableProfileOption("2", "2 - DGPS/DGNSS compatibility (default)"),
     EditableProfileOption("5", "5 - RTK float compatibility"),
     EditableProfileOption("9", "9 - GNSS fix compatibility"),
+)
+
+private val BASE_POSITION_METHOD_OPTIONS = listOf(
+    EditableProfileOption("MANUAL_KNOWN_POINT", "Manual / known point"),
+    EditableProfileOption("STATIC_RTK", "Static RTK"),
+    EditableProfileOption("PPP_STATIC", "PPP/static processing"),
+    EditableProfileOption("RECEIVER_PPP", "Receiver PPP"),
+    EditableProfileOption("LONG_AVERAGE", "Long average"),
+    EditableProfileOption("RECEIVER_SURVEY_IN", "Receiver survey-in"),
+    EditableProfileOption("EXTERNAL_BASE_POSITION_JSON", "External base-position.json"),
 )
 
 private val NTRIP_PROTOCOL_POLICY_OPTIONS = listOf(
@@ -2791,6 +3180,7 @@ private fun AppScreen.backScreen(editorTarget: ProfileEditorTarget?): AppScreen 
         AppScreen.COMMAND_SELECTOR,
         AppScreen.STORAGE_SELECTOR -> AppScreen.HOME
         AppScreen.PROFILE_EDITOR -> editorTarget?.kind?.backScreen() ?: AppScreen.SETTINGS
+        AppScreen.BASE_COORDINATE_EDITOR -> AppScreen.BASE_COORDINATES
         else -> AppScreen.SETTINGS
     }
 
@@ -3754,6 +4144,22 @@ private fun NtripMountpointProfile.profileRow(
         warningText = if (suspect) SuspectInvalidMountpointWarning else null,
     )
 }
+
+private fun AcceptedBaseCoordinate.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = false,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = "%.10f, %.10f · h %.3f m · %s".format(
+            java.util.Locale.US,
+            latDeg,
+            lonDeg,
+            ellipsoidalHeightM,
+            method,
+        ),
+    )
 
 private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
     ProfileListRow(

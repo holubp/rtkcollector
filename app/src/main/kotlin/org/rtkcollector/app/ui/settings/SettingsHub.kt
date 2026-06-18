@@ -45,6 +45,7 @@ import org.rtkcollector.app.ui.common.TidyColors
 fun SettingsHub(
     onSettingsSets: () -> Unit,
     onWorkflowSelection: () -> Unit,
+    onBaseCoordinates: () -> Unit,
     dashboardLayoutLabel: String,
     onDashboardLayout: () -> Unit,
     onNtripCaster: () -> Unit,
@@ -90,6 +91,8 @@ fun SettingsHub(
                     SettingsRow("◎", "Settings sets", onSettingsSets)
                     SettingsDivider()
                     SettingsRow("⇄", "Workflow selection", onWorkflowSelection)
+                    SettingsDivider()
+                    SettingsRow("⌖", "Base coordinates", onBaseCoordinates)
                     SettingsDivider()
                     SettingsRow("▤", "Dashboard layout", onDashboardLayout, subtitle = dashboardLayoutLabel)
                     SettingsDivider()
@@ -233,6 +236,7 @@ private fun SettingsHubPreview() {
         SettingsHub(
             onSettingsSets = {},
             onWorkflowSelection = {},
+            onBaseCoordinates = {},
             dashboardLayoutLabel = "Compact field dashboard",
             onDashboardLayout = {},
             onNtripCaster = {},

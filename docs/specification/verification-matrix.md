@@ -27,11 +27,17 @@
 | `ANDROID-CAPTURE-001` | Review + manual | Capture code review; background/minimised session | Needs review | UI/parser failures must remain advisory. |
 | `ANDROID-USB-001` | Automated + device | USB decision tests; Huawei P30 Pro smoke test | Needs field retest | Vendor Android edge case. |
 | `ANDROID-USB-002` | Automated + manual | Reconnect policy tests; disconnect/reconnect smoke test | Needs review | Must preserve existing session artifacts. |
+| `ANDROID-STORAGE-001` | Manual + review | SAF folder-picker storage profile and service start review | Needs provider testing | Verify persisted write permission on common Android document providers. |
+| `ANDROID-MOCK-001` | Automated + manual | Mock-location mapper tests; mock altitude smoke test | Needs review | `Location.altitude` must use ellipsoidal height. |
+| `ANDROID-MOCK-002` | Review | Android API limitation review; user-doc wording | Passing | Satellite counts may be extras; full `GnssStatus` injection is not promised. |
 | `SEC-SECRETS-001` | Automated + review | Session/settings export tests | Needs review | Include plaintext password export option. |
 | `SEC-SETTINGS-001` | Automated + manual | Settings export tests; export UI review | Needs review | Plaintext passwords must be opt-in. |
 | `SEC-IMPORT-001` | Automated + manual | Settings import validation tests; Android JSON open flow | Needs review | Reject malformed or unsafe imports. |
 | `UI-DASH-001` | Manual + review | Phone/tablet portrait/landscape screenshots | Needs review | Visual fidelity and nav-bar checks. |
 | `UI-DASH-002` | Manual + review | Live UM980 session screenshots/video | Needs review | No jumping cards. |
+| `UI-DASH-003` | Manual + review | Phone portrait dashboard screenshot | Needs review | Live-monitoring cards should switch to single column when needed. |
 | `UI-BASE-001` | Automated + manual | Dashboard state tests; temporary-base dashboard review | Needs review | Keep controls compact and explicit. |
+| `UI-PROFILE-001` | Automated + manual | Protected-profile tests; profile editor smoke test | Needs review | Built-ins are view-only and copyable. |
+| `UI-KEYBOARD-001` | Manual + review | Hardware keyboard command-editor smoke test | Needs field retest | Arrow keys stay inside native multiline editor; Tab/Shift+Tab traverse fields. |
+| `UI-STORAGE-001` | Manual + review | Storage profile folder-picker smoke test | Needs provider testing | Tree URI is picker-selected and display-only. |
 | `UI-DOCS-001` | Review | Docs review | Passing | Formal specs and user docs are separate. |
-

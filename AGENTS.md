@@ -150,6 +150,15 @@ unchanged.
 - Compose UI work must keep Menu and Start/Stop outside scrollable content so
   the recording controls remain visible across phone/tablet portrait and
   landscape layouts.
+- Profile editors must keep built-in app profiles viewable but read-only; users
+  copy built-ins before editing. Do not hide built-ins behind disabled Edit
+  buttons that prevent inspection.
+- Multiline init/shutdown command editing must preserve hardware-keyboard text
+  editing semantics. Arrow keys and arrow-key modifier combinations stay inside
+  the active text field; Tab and Shift+Tab are the cross-field navigation keys.
+- Android SAF storage locations must be selected with the system folder picker
+  and persisted read/write URI permission. Do not make users hand-enter SAF tree
+  URIs.
 - Keep raw capture independent from Compose, Activity lifecycle and advisory
   parsers.
 - Do not broadcast full dashboard state from high-rate capture loops on every
@@ -163,6 +172,9 @@ unchanged.
   `BESTNAV/BESTNAVB`, the primary monitoring solution must be a transparent
   pass-through of that receiver solution. Mock-provider resampling is separate
   and must run only when mock output is enabled.
+- Android mock `Location.altitude` must use ellipsoidal height. The public
+  mock-location API does not allow ordinary apps to inject complete GNSS
+  satellite status or satellite sky positions; expose those limits clearly.
 - Record receiver RX, app TX to receiver, correction input, events, quality and
   metadata as separate artifacts.
 - Validate workflow and command safety before sending receiver commands,

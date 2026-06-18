@@ -12,9 +12,10 @@ The Home screen uses a Compose dashboard that shows the effective session
 configuration and live telemetry in compact cards: Position, Fix, NTRIP and
 Files. Detailed profile editing is reached from Menu.
 The dashboard configuration tiles are intentionally lean selectors: Workflow
-selects a settings set, Mountpoint selects an NTRIP mountpoint profile, Receiver
-selects a receiver command profile and Storage selects a storage location
-profile. Full profile creation and editing belongs in Menu.
+selects the active workflow, Settings selects the active settings set,
+Mountpoint selects or overrides the active NTRIP mountpoint, Receiver selects a
+receiver command profile and Storage selects a storage location profile. Full
+profile creation and editing belongs in Menu.
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;
@@ -110,6 +111,12 @@ receiver RX stream.
 
 Runtime correction bytes are not command scripts. When implemented, they must
 share the receiver TX path and be recorded separately from receiver RX.
+
+Built-in init/shutdown command profiles open in view-only mode. Copy a built-in
+profile before editing it. Multiline command fields use a native Android text
+editor so hardware-keyboard arrows and modifier combinations navigate inside the
+field; Tab and Shift+Tab move between fields and restore each field's cursor
+position where possible.
 
 While a real session is active, the foreground service owns capture. The
 Activity only sends start/stop requests and observes service state.
@@ -355,11 +362,12 @@ files directory. This is the safest first test path because `session.json` uses
 the platform file API and can be replaced atomically.
 
 To write into a visible user folder, choose a storage profile and tap
-`Choose SAF recording folder`. Android shows the system folder picker and the
-app persists write permission for that tree. Recording start is blocked if the
-selected SAF profile has no tree URI or if Android no longer reports a persisted
-write permission. The app does not silently fall back to app-private storage
-after the user selected SAF.
+`Select Android folder`. Android shows the system folder picker and the app
+persists read/write permission for that tree. The stored URI field is
+display-only routing data, not a manually typed path. Recording start is blocked
+if the selected SAF profile has no tree URI or if Android no longer reports a
+persisted write permission. The app does not silently fall back to app-private
+storage after the user selected SAF.
 
 SAF sessions are created as new uniquely named folders. Receiver RX, receiver
 TX, NTRIP correction input, events, quality logs and derived solution sidecars

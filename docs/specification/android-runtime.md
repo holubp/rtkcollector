@@ -51,3 +51,45 @@ Verification:
 - Automated: reconnect policy tests where practical.
 - Manual: disconnect and reconnect receiver during recording.
 
+## Storage
+
+### ANDROID-STORAGE-001: SAF Tree Access Is Explicit And Persisted
+
+Status: Normative
+
+When a storage profile uses Android's Storage Access Framework, the app MUST
+obtain the tree URI through the system folder picker, persist read/write access
+where Android allows it, and verify that write access still exists before
+starting recording. If SAF access is missing or revoked, recording MUST fail
+with a storage-specific error before raw capture starts.
+
+Verification:
+- Manual: select a SAF folder, restart the app and start a recording.
+- Review: service start path validates SAF write access before session writers
+  are opened.
+
+## Mock Location
+
+### ANDROID-MOCK-001: Mock Location Uses Ellipsoidal Height
+
+Status: Normative
+
+When Android mock-location publishing is enabled, `Location.altitude` MUST be
+populated with the selected solution's ellipsoidal height, not orthometric/MSL
+altitude. Mock-provider failure MUST NOT stop receiver recording.
+
+Verification:
+- Automated: mock-location mapper tests.
+- Manual: compare mock altitude against dashboard ellipsoidal height.
+
+### ANDROID-MOCK-002: Satellite Status Is Best-Effort Metadata
+
+Status: Informative
+
+RtkCollector MAY attach satellite in-view/in-use counts as location extras
+where available, but an ordinary Android app cannot inject full GNSS satellite
+status or sky-position data for other apps through the public mock-location
+API.
+
+Verification:
+- Review: user docs and UI do not promise synthetic `GnssStatus` injection.

@@ -572,7 +572,7 @@ fun RtkCollectorApp(
                                 settingsSets = settingsSets,
                                 selectedSettingsSetId = selectedSettingsSetId,
                                 selectedWorkflowId = selectedWorkflowId,
-                                manualBaseCoordinate = manualBaseCoordinate,
+                                selectedBaseCoordinate = baseCoordinateStore.selectedCoordinate(),
                             )?.let { intent ->
                                 startInProgress = true
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -3213,7 +3213,7 @@ private fun buildDashboardStartIntent(
     settingsSets: List<RecordingSettingsSet>,
     selectedSettingsSetId: String,
     selectedWorkflowId: String?,
-    manualBaseCoordinate: BaseCoordinateCandidate?,
+    selectedBaseCoordinate: AcceptedBaseCoordinate?,
 ): Intent? {
     val profileStore = ProfileStores(context)
     val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
@@ -3245,16 +3245,16 @@ private fun buildDashboardStartIntent(
         Toast.makeText(context, "Cannot start: workflow is not selected.", Toast.LENGTH_LONG).show()
         return null
     }
-    if (workflowId == WORKFLOW_FIXED_BASE && manualBaseCoordinate == null) {
+    if (workflowId == WORKFLOW_FIXED_BASE && selectedBaseCoordinate == null) {
         Toast.makeText(
             context,
-            "Cannot start: fixed base requires an accepted base coordinate. Use Base on the Position card first.",
+            "Cannot start: fixed base requires an accepted base coordinate.",
             Toast.LENGTH_LONG,
         ).show()
         return null
     }
     val fixedBaseModeCommand = if (workflowId == WORKFLOW_FIXED_BASE) {
-        manualBaseCoordinate?.toUm980FixedBaseModeCommandOrNull()
+        selectedBaseCoordinate?.toFixedBaseModeCommand()
     } else {
         null
     }
@@ -3359,16 +3359,19 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_EXPORT_JSON_SOLUTION, activeConfig.recording.exportJsonSolution)
         putExtra(RecordingForegroundService.EXTRA_RECORD_REMOTE_BASE_RAW, activeConfig.recording.recordRemoteBaseRaw)
         putExtra(RecordingForegroundService.EXTRA_ENABLE_MOCK_LOCATION, activeConfig.recording.enableMockLocation)
-        val manualBasePositionJson = if (workflowId == WORKFLOW_FIXED_BASE) {
-            manualBaseCoordinate?.toManualBasePositionJsonOrNull().orEmpty()
+        val basePositionJson = if (workflowId == WORKFLOW_FIXED_BASE && selectedBaseCoordinate != null) {
+            BasePositionJsonCodec.encode(selectedBaseCoordinate)
         } else {
             ""
         }
         putExtra(
             RecordingForegroundService.EXTRA_COORDINATE_SOURCE,
-            if (manualBasePositionJson.isNotBlank()) "MANUAL" else "NONE",
+            if (basePositionJson.isNotBlank()) selectedBaseCoordinate?.sourceDescription.orEmpty() else "NONE",
         )
-        putExtra(RecordingForegroundService.EXTRA_BASE_POSITION_JSON, manualBasePositionJson)
+        putExtra(RecordingForegroundService.EXTRA_BASE_POSITION_JSON, basePositionJson)
+        putExtra(RecordingForegroundService.EXTRA_BASE_COORDINATE_ID, selectedBaseCoordinate?.id)
+        putExtra(RecordingForegroundService.EXTRA_BASE_COORDINATE_NAME, selectedBaseCoordinate?.name)
+        putExtra(RecordingForegroundService.EXTRA_BASE_COORDINATE_METHOD, selectedBaseCoordinate?.method)
         putStringArrayListExtra(RecordingForegroundService.EXTRA_EXPECTED_ARTIFACTS, ArrayList(activeConfig.expectedSessionArtifactNames))
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, resolvedSettingsSet.displayNameWithOverrides())
         putExtra(RecordingForegroundService.EXTRA_SETTINGS_COMMAND_PROFILE_NAME, commandProfile.name)

@@ -193,6 +193,9 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
         appendJsonField("storageProfileId", metadata.storageProfileId)
         appendJsonField("storageKind", metadata.storageKind)
         appendJsonField("coordinateSource", metadata.coordinateSource)
+        appendJsonField("baseCoordinateId", metadata.baseCoordinateId)
+        appendJsonField("baseCoordinateName", metadata.baseCoordinateName)
+        appendJsonField("baseCoordinateMethod", metadata.baseCoordinateMethod)
         appendJsonField("validationSummary", metadata.validationSummary)
         appendJsonArrayField("expectedArtifacts", metadata.expectedArtifacts)
         metadata.ntrip?.let { appendNtripMetadata(it) }

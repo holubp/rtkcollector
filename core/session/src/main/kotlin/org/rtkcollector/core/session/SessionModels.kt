@@ -29,6 +29,9 @@ data class SessionMetadata(
     val storageProfileId: String? = null,
     val storageKind: String? = null,
     val coordinateSource: String? = null,
+    val baseCoordinateId: String? = null,
+    val baseCoordinateName: String? = null,
+    val baseCoordinateMethod: String? = null,
     val validationSummary: String? = null,
     val expectedArtifacts: List<String> = emptyList(),
 )

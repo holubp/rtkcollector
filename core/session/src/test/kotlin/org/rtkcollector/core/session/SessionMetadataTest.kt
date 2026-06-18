@@ -102,6 +102,9 @@ class SessionMetadataTest {
             receiverRole = "FIXED_BASE",
             um980ProfileId = "um980-fixed-base-rtcm",
             coordinateSource = "IMPORTED_BASE_POSITION_JSON",
+            baseCoordinateId = "base-tubo-roof",
+            baseCoordinateName = "TUBO roof base",
+            baseCoordinateMethod = "STATIC_RTK",
             validationSummary = "valid",
             expectedArtifacts = listOf("receiver-rx.raw", "rtcm-extracted.rtcm3"),
         )
@@ -110,6 +113,9 @@ class SessionMetadataTest {
 
         assertEquals(true, json.contains("fixed-base-rtcm-output"))
         assertEquals(true, json.contains("IMPORTED_BASE_POSITION_JSON"))
+        assertEquals(true, json.contains("base-tubo-roof"))
+        assertEquals(true, json.contains("TUBO roof base"))
+        assertEquals(true, json.contains("STATIC_RTK"))
         assertEquals(true, json.contains("ntrip/CORS01"))
         assertEquals(false, json.contains("password", ignoreCase = true))
         assertEquals(false, json.contains("secret-token"))

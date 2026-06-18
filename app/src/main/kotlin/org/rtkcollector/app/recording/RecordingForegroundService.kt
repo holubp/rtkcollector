@@ -306,6 +306,9 @@ class RecordingForegroundService : Service() {
                 storageProfileId = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID),
                 storageKind = intent.getStringExtra(EXTRA_STORAGE_KIND),
                 coordinateSource = intent.getStringExtra(EXTRA_COORDINATE_SOURCE),
+                baseCoordinateId = intent.getStringExtra(EXTRA_BASE_COORDINATE_ID),
+                baseCoordinateName = intent.getStringExtra(EXTRA_BASE_COORDINATE_NAME),
+                baseCoordinateMethod = intent.getStringExtra(EXTRA_BASE_COORDINATE_METHOD),
                 validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
                 expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
             )
@@ -2140,6 +2143,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_ENABLE_MOCK_LOCATION = "enableMockLocation"
         const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
         const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
+        const val EXTRA_BASE_COORDINATE_ID = "baseCoordinateId"
+        const val EXTRA_BASE_COORDINATE_NAME = "baseCoordinateName"
+        const val EXTRA_BASE_COORDINATE_METHOD = "baseCoordinateMethod"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
         const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"
         const val EXTRA_SETTINGS_SET_NAME = "settingsSetName"

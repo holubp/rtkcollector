@@ -1034,7 +1034,7 @@ git commit -m "Move coordinate averaging off Compose state"
 - Create: `tools/analyze_um980_session_gaps.py`
 - Modify: `docs/contributor-onboarding.md`
 
-- [ ] **Step 1: Create the analysis script**
+- [x] **Step 1: Create the analysis script**
 
 Create `tools/analyze_um980_session_gaps.py`:
 
@@ -1112,7 +1112,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 2: Run the script on the known sample**
+- [x] **Step 2: Run the script on the known sample**
 
 Run:
 
@@ -1122,7 +1122,7 @@ python3 tools/analyze_um980_session_gaps.py samples/debug/session-2026-06-17T18-
 
 Expected: output includes `BESTNAVB` and reports gaps over 250 ms.
 
-- [ ] **Step 3: Document the script**
+- [x] **Step 3: Document the script**
 
 Append to `docs/contributor-onboarding.md` under the capture/advisory section:
 
@@ -1140,7 +1140,7 @@ hardware health by itself.
 ````
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tools/analyze_um980_session_gaps.py docs/contributor-onboarding.md

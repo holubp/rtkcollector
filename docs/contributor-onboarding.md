@@ -113,6 +113,17 @@ isolation rule expressed in code. `AsyncAdvisoryFanout` is the bounded-queue
 variant used by the foreground service so a slow parser cannot backpressure
 raw writes.
 
+For field reports where the dashboard frequency looks low, inspect the raw
+receiver timestamps rather than assuming a UI issue:
+
+```bash
+python3 tools/analyze_um980_session_gaps.py samples/debug/<session>.zip
+```
+
+The script reads `receiver-rx.raw` from the ZIP and reports UM980 binary
+receiver-time gaps. It is diagnostic only and does not validate receiver
+hardware health by itself.
+
 For TX: `CaptureRuntime.sendToReceiver()` writes to `tx-to-receiver.raw`
 before the transport write. `injectCorrectionBytes()` adds a duplicate write
 to `correction-input.raw`, with `correction-input.rtcm3` as a same-byte

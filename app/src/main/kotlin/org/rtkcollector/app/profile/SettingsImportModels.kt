@@ -11,6 +11,7 @@ data class SettingsImportSummary(
     val commandProfileCount: Int,
     val usbBaudProfileCount: Int,
     val ntripCasterProfileCount: Int,
+    val ntripCasterUploadProfileCount: Int,
     val ntripMountpointProfileCount: Int,
     val recordingPolicyProfileCount: Int,
     val storageProfileCount: Int,
@@ -91,6 +92,7 @@ fun validateSettingsImportJson(text: String): SettingsImportValidationResult {
             commandProfileCount = backup.commandProfiles.size,
             usbBaudProfileCount = backup.usbBaudProfiles.size,
             ntripCasterProfileCount = backup.ntripCasterProfiles.size,
+            ntripCasterUploadProfileCount = backup.ntripCasterUploadProfiles.size,
             ntripMountpointProfileCount = backup.ntripMountpointProfiles.size,
             recordingPolicyProfileCount = backup.recordingPolicyProfiles.size,
             storageProfileCount = backup.storageProfiles.size,
@@ -107,6 +109,7 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
     duplicateId("command profile", backup.commandProfiles.map { it.id })?.let { return it }
     duplicateId("USB/baud profile", backup.usbBaudProfiles.map { it.id })?.let { return it }
     duplicateId("NTRIP caster profile", backup.ntripCasterProfiles.map { it.id })?.let { return it }
+    duplicateId("NTRIP caster upload profile", backup.ntripCasterUploadProfiles.map { it.id })?.let { return it }
     duplicateId("NTRIP mountpoint profile", backup.ntripMountpointProfiles.map { it.id })?.let { return it }
     duplicateId("recording output profile", backup.recordingPolicyProfiles.map { it.id })?.let { return it }
     duplicateId("storage profile", backup.storageProfiles.map { it.id })?.let { return it }
@@ -115,6 +118,7 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
     val commandIds = backup.commandProfiles.mapTo(mutableSetOf()) { it.id }
     val usbBaudIds = backup.usbBaudProfiles.mapTo(mutableSetOf()) { it.id }
     val casterIds = backup.ntripCasterProfiles.mapTo(mutableSetOf()) { it.id }
+    val casterUploadIds = backup.ntripCasterUploadProfiles.mapTo(mutableSetOf()) { it.id }
     val mountpointIds = backup.ntripMountpointProfiles.mapTo(mutableSetOf()) { it.id }
     val recordingIds = backup.recordingPolicyProfiles.mapTo(mutableSetOf()) { it.id }
     val storageIds = backup.storageProfiles.mapTo(mutableSetOf()) { it.id }
@@ -131,6 +135,9 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
             ?.let { return it }
         settingsSet.ntripMountpointProfileRef?.id
             ?.let { missingReference(it, mountpointIds, settingsSet.name, "NTRIP mountpoint profile") }
+            ?.let { return it }
+        settingsSet.ntripCasterUploadProfileRef?.id
+            ?.let { missingReference(it, casterUploadIds, settingsSet.name, "NTRIP caster upload profile") }
             ?.let { return it }
         missingReference(
             settingsSet.recordingOutputProfileRef.id,
@@ -152,7 +159,9 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
     }
 
     val knownSecretIds = backup.ntripCasterProfiles.mapNotNullTo(mutableSetOf()) { it.secretId.takeIf(String::isNotBlank) }
+    backup.ntripCasterUploadProfiles.mapNotNullTo(knownSecretIds) { it.secretId.takeIf(String::isNotBlank) }
     backup.settingsSets.mapNotNullTo(knownSecretIds) { it.overrides.ntripCaster?.secretId?.takeIf(String::isNotBlank) }
+    backup.settingsSets.mapNotNullTo(knownSecretIds) { it.overrides.ntripCasterUpload?.secretId?.takeIf(String::isNotBlank) }
     backup.plaintextPasswordsBySecretId.keys.firstOrNull { it !in knownSecretIds }?.let { secretId ->
         return "Plaintext NTRIP password references unknown secret '$secretId'."
     }

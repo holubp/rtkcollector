@@ -2123,6 +2123,7 @@ private fun buildSettingsBackup(
         commandProfiles = profileStore.commandProfiles(),
         usbBaudProfiles = profileStore.usbBaudProfiles(),
         ntripCasterProfiles = profileStore.ntripCasterProfiles(),
+        ntripCasterUploadProfiles = profileStore.ntripCasterUploadProfiles(),
         ntripMountpointProfiles = profileStore.ntripMountpointProfiles(),
         recordingPolicyProfiles = profileStore.recordingPolicyProfiles(),
         storageProfiles = profileStore.storageProfiles(),

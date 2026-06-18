@@ -155,6 +155,7 @@ class SettingsImportModelsTest {
             commandProfiles = listOf(CommandProfile(id = "command", name = "Command")),
             usbBaudProfiles = listOf(UsbBaudProfile(id = "usb", name = "USB")),
             ntripCasterProfiles = listOf(NtripCasterProfile(id = "caster", name = "Caster", secretId = "secret")),
+            ntripCasterUploadProfiles = emptyList(),
             ntripMountpointProfiles = listOf(
                 NtripMountpointProfile(id = "mount", name = "Mount", casterProfileId = "caster"),
             ),

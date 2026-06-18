@@ -9,6 +9,7 @@ data class SettingsBackupFile(
     val commandProfiles: List<CommandProfile>,
     val usbBaudProfiles: List<UsbBaudProfile>,
     val ntripCasterProfiles: List<NtripCasterProfile>,
+    val ntripCasterUploadProfiles: List<NtripCasterUploadProfile>,
     val ntripMountpointProfiles: List<NtripMountpointProfile>,
     val recordingPolicyProfiles: List<RecordingPolicyProfile>,
     val storageProfiles: List<StorageProfile>,
@@ -24,6 +25,7 @@ data class SettingsBackupFile(
         .put("commandProfiles", commandProfiles.toJsonArray { it.toJson() })
         .put("usbBaudProfiles", usbBaudProfiles.toJsonArray { it.toJson() })
         .put("ntripCasterProfiles", ntripCasterProfiles.toJsonArray { it.toJson() })
+        .put("ntripCasterUploadProfiles", ntripCasterUploadProfiles.toJsonArray { it.toJson() })
         .put("ntripMountpointProfiles", ntripMountpointProfiles.toJsonArray { it.toJson() })
         .put("recordingPolicyProfiles", recordingPolicyProfiles.toJsonArray { it.toJson() })
         .put("storageProfiles", storageProfiles.toJsonArray { it.toJson() })
@@ -51,6 +53,7 @@ data class SettingsBackupFile(
             commandProfiles: List<CommandProfile>,
             usbBaudProfiles: List<UsbBaudProfile>,
             ntripCasterProfiles: List<NtripCasterProfile>,
+            ntripCasterUploadProfiles: List<NtripCasterUploadProfile>,
             ntripMountpointProfiles: List<NtripMountpointProfile>,
             recordingPolicyProfiles: List<RecordingPolicyProfile>,
             storageProfiles: List<StorageProfile>,
@@ -68,6 +71,7 @@ data class SettingsBackupFile(
                 commandProfiles = commandProfiles,
                 usbBaudProfiles = usbBaudProfiles,
                 ntripCasterProfiles = ntripCasterProfiles,
+                ntripCasterUploadProfiles = ntripCasterUploadProfiles,
                 ntripMountpointProfiles = ntripMountpointProfiles,
                 recordingPolicyProfiles = recordingPolicyProfiles,
                 storageProfiles = storageProfiles,
@@ -93,6 +97,9 @@ data class SettingsBackupFile(
                 commandProfiles = json.getJSONArray("commandProfiles").mapObjects(CommandProfile::fromJson),
                 usbBaudProfiles = json.getJSONArray("usbBaudProfiles").mapObjects(UsbBaudProfile::fromJson),
                 ntripCasterProfiles = json.getJSONArray("ntripCasterProfiles").mapObjects(NtripCasterProfile::fromJson),
+                ntripCasterUploadProfiles = json.optJSONArray("ntripCasterUploadProfiles")?.mapObjects(
+                    NtripCasterUploadProfile::fromJson,
+                ).orEmpty(),
                 ntripMountpointProfiles = json.getJSONArray("ntripMountpointProfiles").mapObjects(
                     NtripMountpointProfile::fromJson,
                 ),

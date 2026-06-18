@@ -76,6 +76,20 @@ data class NtripMountpointOverride(
     val baseLonDeg: Double? = null,
 )
 
+data class NtripCasterUploadOverride(
+    val host: String? = null,
+    val port: Int? = null,
+    val mountpoint: String? = null,
+    val username: String? = null,
+    val secretId: String? = null,
+    val password: String? = null,
+) {
+    fun validate() {
+        port?.let { require(it in 1..65535) { "NTRIP caster upload port override must be 1..65535." } }
+        require(password == null) { "Settings sets must not contain plaintext NTRIP caster upload passwords." }
+    }
+}
+
 data class RecordingOutputOverride(
     val recordTxToReceiver: Boolean? = null,
     val recordNtripCorrectionInput: Boolean? = null,
@@ -116,12 +130,14 @@ data class SettingsSetOverrides(
     val usbBaud: UsbBaudProfileOverride? = null,
     val ntripCaster: NtripCasterOverride? = null,
     val ntripMountpoint: NtripMountpointOverride? = null,
+    val ntripCasterUpload: NtripCasterUploadOverride? = null,
     val recordingOutput: RecordingOutputOverride? = null,
     val storage: StorageProfileOverride? = null,
 ) {
     fun validate() {
         usbBaud?.validate()
         ntripCaster?.validate()
+        ntripCasterUpload?.validate()
         recordingOutput?.validate()
         storage?.validate()
     }
@@ -131,6 +147,7 @@ data class SettingsSetOverrides(
             usbBaud != null ||
             ntripCaster != null ||
             ntripMountpoint != null ||
+            ntripCasterUpload != null ||
             recordingOutput != null ||
             storage != null
 }
@@ -145,6 +162,8 @@ data class RecordingSettingsSet(
     val usbBaudProfileRef: ProfileReference,
     val ntripCasterProfileRef: ProfileReference? = null,
     val ntripMountpointProfileRef: ProfileReference? = null,
+    val ntripCasterUploadProfileRef: ProfileReference? = null,
+    val baseCasterUploadEnabled: Boolean = false,
     val recordingOutputProfileRef: ProfileReference,
     val storageProfileRef: ProfileReference,
     val basePositionProfileRef: ProfileReference? = null,
@@ -165,6 +184,7 @@ data class RecordingSettingsSet(
         usbBaudProfileRef.validate()
         ntripCasterProfileRef?.validate()
         ntripMountpointProfileRef?.validate()
+        ntripCasterUploadProfileRef?.validate()
         recordingOutputProfileRef.validate()
         storageProfileRef.validate()
         basePositionProfileRef?.validate()
@@ -211,6 +231,7 @@ object SettingsSetJson {
     private const val KEY_USB_BAUD = "usbBaudProfile"
     private const val KEY_NTRIP_CASTER = "ntripCasterProfile"
     private const val KEY_NTRIP_MOUNTPOINT = "ntripMountpointProfile"
+    private const val KEY_NTRIP_CASTER_UPLOAD = "ntripCasterUploadProfile"
     private const val KEY_RECORDING_OUTPUT = "recordingOutputProfile"
     private const val KEY_STORAGE = "storageProfile"
     private const val KEY_BASE_POSITION = "basePositionProfile"
@@ -225,6 +246,8 @@ object SettingsSetJson {
         .put("usbBaudProfile", settingsSet.usbBaudProfileRef.toJson())
         .putNullable("ntripCasterProfile", settingsSet.ntripCasterProfileRef?.toJson())
         .putNullable("ntripMountpointProfile", settingsSet.ntripMountpointProfileRef?.toJson())
+        .putNullable("ntripCasterUploadProfile", settingsSet.ntripCasterUploadProfileRef?.toJson())
+        .put("baseCasterUploadEnabled", settingsSet.baseCasterUploadEnabled)
         .put("recordingOutputProfile", settingsSet.recordingOutputProfileRef.toJson())
         .put("storageProfile", settingsSet.storageProfileRef.toJson())
         .putNullable("basePositionProfile", settingsSet.basePositionProfileRef?.toJson())
@@ -244,6 +267,8 @@ object SettingsSetJson {
         usbBaudProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_USB_BAUD)),
         ntripCasterProfileRef = json.optJSONObject(KEY_NTRIP_CASTER)?.let(ProfileReference::fromJson),
         ntripMountpointProfileRef = json.optJSONObject(KEY_NTRIP_MOUNTPOINT)?.let(ProfileReference::fromJson),
+        ntripCasterUploadProfileRef = json.optJSONObject(KEY_NTRIP_CASTER_UPLOAD)?.let(ProfileReference::fromJson),
+        baseCasterUploadEnabled = json.optBoolean("baseCasterUploadEnabled", false),
         recordingOutputProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_RECORDING_OUTPUT)),
         storageProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_STORAGE)),
         basePositionProfileRef = json.optJSONObject(KEY_BASE_POSITION)?.let(ProfileReference::fromJson),
@@ -291,6 +316,17 @@ private fun SettingsSetOverrides.toJson(): JSONObject {
                 .putNullable("stationId", it.stationId)
                 .putNullable("baseLatDeg", it.baseLatDeg)
                 .putNullable("baseLonDeg", it.baseLonDeg),
+        )
+    }
+    ntripCasterUpload?.let {
+        json.put(
+            "ntripCasterUpload",
+            JSONObject()
+                .putNullable("host", it.host)
+                .putNullable("port", it.port)
+                .putNullable("mountpoint", it.mountpoint)
+                .putNullable("username", it.username)
+                .putNullable("secretId", it.secretId),
         )
     }
     recordingOutput?.let {
@@ -368,6 +404,23 @@ private object SettingsSetOverridesJson {
                     stationId = it.optNullableString("stationId"),
                     baseLatDeg = it.optDoubleOrNull("baseLatDeg"),
                     baseLonDeg = it.optDoubleOrNull("baseLonDeg"),
+                )
+            }
+        },
+        ntripCasterUpload = if (!json.has("ntripCasterUpload") && !json.has("ntripCasterUploadProfile")) {
+            null
+        } else {
+            json.optJSONObject("ntripCasterUpload")?.let {
+                require(!(it.has("password") && !it.isNull("password"))) {
+                    "Settings sets must not contain plaintext NTRIP caster upload passwords."
+                }
+                NtripCasterUploadOverride(
+                    host = it.optNullableString("host"),
+                    port = it.optIntOrNull("port"),
+                    mountpoint = it.optNullableString("mountpoint"),
+                    username = it.optNullableString("username"),
+                    secretId = it.optNullableString("secretId"),
+                    password = it.optNullableString("password"),
                 )
             }
         },

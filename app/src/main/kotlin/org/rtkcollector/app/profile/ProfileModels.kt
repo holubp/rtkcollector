@@ -143,6 +143,74 @@ fun ntripCasterSecretId(profileId: String): String {
     return "ntrip-caster-profile:$profileId"
 }
 
+data class NtripCasterUploadProfile(
+    val id: String,
+    val name: String,
+    val host: String = "",
+    val port: Int = 2101,
+    val mountpoint: String = "",
+    val username: String = "",
+    val secretId: String = "",
+    val protocolPolicy: String = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+    val enabledByDefault: Boolean = false,
+    val isProtected: Boolean = false,
+) {
+    fun validate() {
+        require(id.isNotBlank()) { "NTRIP caster upload profile id must not be blank." }
+        require(name.isNotBlank()) { "NTRIP caster upload profile name must not be blank." }
+        require(port in 1..65535) { "NTRIP caster upload port must be 1..65535." }
+        require(protocolPolicy in PROTOCOL_POLICIES) { "NTRIP caster upload protocol policy is invalid." }
+    }
+
+    fun validateForStart() {
+        validate()
+        require(host.isNotBlank()) { "NTRIP caster upload host is required." }
+        require(mountpoint.isNotBlank()) { "NTRIP caster upload mountpoint is required." }
+    }
+
+    fun copyProfile(id: String, name: String): NtripCasterUploadProfile =
+        copy(id = id, name = name, secretId = ntripCasterUploadSecretId(id), isProtected = false)
+            .also(NtripCasterUploadProfile::validate)
+
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("name", name)
+        .put("isProtected", isProtected)
+        .put("host", host)
+        .put("port", port)
+        .put("mountpoint", mountpoint)
+        .put("username", username)
+        .put("secretId", secretId)
+        .put("protocolPolicy", protocolPolicy)
+        .put("enabledByDefault", enabledByDefault)
+
+    companion object {
+        val PROTOCOL_POLICIES = setOf(
+            "NTRIP_V2_ONLY",
+            "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+            "NTRIP_V1_ONLY",
+        )
+
+        fun fromJson(json: JSONObject): NtripCasterUploadProfile = NtripCasterUploadProfile(
+            id = json.getString("id"),
+            name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
+            host = json.optString("host", ""),
+            port = json.optInt("port", 2101),
+            mountpoint = json.optString("mountpoint", ""),
+            username = json.optString("username", ""),
+            secretId = json.optString("secretId", ""),
+            protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
+            enabledByDefault = json.optBoolean("enabledByDefault", false),
+        ).also(NtripCasterUploadProfile::validate)
+    }
+}
+
+fun ntripCasterUploadSecretId(profileId: String): String {
+    require(profileId.isNotBlank()) { "NTRIP caster upload profile id must not be blank." }
+    return "ntrip-caster-upload-profile:$profileId"
+}
+
 data class NtripMountpointProfile(
     val id: String,
     val name: String,

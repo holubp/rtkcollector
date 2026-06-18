@@ -43,6 +43,20 @@ class ProfileStores(context: Context) {
     fun saveNtripCasterProfiles(profiles: List<NtripCasterProfile>) =
         writeProfiles("ntripCasterProfiles", profiles.onEach(NtripCasterProfile::validate).map(NtripCasterProfile::toJson))
 
+    fun ntripCasterUploadProfiles(): List<NtripCasterUploadProfile> =
+        readProfiles(
+            key = "ntripCasterUploadProfiles",
+            defaults = ::defaultNtripCasterUploadProfiles,
+            decode = NtripCasterUploadProfile::fromJson,
+            encode = NtripCasterUploadProfile::toJson,
+        )
+
+    fun saveNtripCasterUploadProfiles(profiles: List<NtripCasterUploadProfile>) =
+        writeProfiles(
+            "ntripCasterUploadProfiles",
+            profiles.onEach(NtripCasterUploadProfile::validate).map(NtripCasterUploadProfile::toJson),
+        )
+
     fun ntripMountpointProfiles(): List<NtripMountpointProfile> =
         readProfiles(
             key = "ntripMountpointProfiles",
@@ -227,6 +241,9 @@ class ProfileStores(context: Context) {
                 name = "NTRIP caster",
             ),
         )
+
+    private fun defaultNtripCasterUploadProfiles(): List<NtripCasterUploadProfile> =
+        emptyList()
 
     private fun defaultNtripMountpointProfiles(): List<NtripMountpointProfile> =
         emptyList()

@@ -12,6 +12,9 @@ class SettingsBackupModelsTest {
             commandProfiles = listOf(CommandProfile(id = "command", name = "Command")),
             usbBaudProfiles = listOf(UsbBaudProfile(id = "usb", name = "USB")),
             ntripCasterProfiles = listOf(NtripCasterProfile(id = "caster", name = "Caster", secretId = "secret")),
+            ntripCasterUploadProfiles = listOf(
+                NtripCasterUploadProfile(id = "upload", name = "Upload", secretId = "upload-secret"),
+            ),
             ntripMountpointProfiles = listOf(
                 NtripMountpointProfile(id = "mount", name = "Mount", casterProfileId = "caster", mountpoint = "BASE"),
             ),
@@ -33,6 +36,7 @@ class SettingsBackupModelsTest {
         assertEquals(listOf("command"), parsed.commandProfiles.map(CommandProfile::id))
         assertEquals(listOf("usb"), parsed.usbBaudProfiles.map(UsbBaudProfile::id))
         assertEquals(listOf("caster"), parsed.ntripCasterProfiles.map(NtripCasterProfile::id))
+        assertEquals(listOf("upload"), parsed.ntripCasterUploadProfiles.map(NtripCasterUploadProfile::id))
         assertEquals(listOf("mount"), parsed.ntripMountpointProfiles.map(NtripMountpointProfile::id))
         assertEquals(listOf("policy"), parsed.recordingPolicyProfiles.map(RecordingPolicyProfile::id))
         assertEquals(listOf("storage"), parsed.storageProfiles.map(StorageProfile::id))
@@ -48,6 +52,7 @@ class SettingsBackupModelsTest {
             commandProfiles = emptyList(),
             usbBaudProfiles = emptyList(),
             ntripCasterProfiles = listOf(NtripCasterProfile(id = "caster", name = "Caster", secretId = "secret")),
+            ntripCasterUploadProfiles = emptyList(),
             ntripMountpointProfiles = emptyList(),
             recordingPolicyProfiles = emptyList(),
             storageProfiles = emptyList(),
@@ -71,6 +76,9 @@ class SettingsBackupModelsTest {
             commandProfiles = emptyList(),
             usbBaudProfiles = emptyList(),
             ntripCasterProfiles = listOf(NtripCasterProfile(id = "caster", name = "Caster", secretId = "secret")),
+            ntripCasterUploadProfiles = listOf(
+                NtripCasterUploadProfile(id = "upload", name = "Upload", secretId = "upload-secret"),
+            ),
             ntripMountpointProfiles = emptyList(),
             recordingPolicyProfiles = emptyList(),
             storageProfiles = emptyList(),
@@ -78,13 +86,14 @@ class SettingsBackupModelsTest {
             selectedSettingsSetId = "settings",
             selectedWorkflowId = "rover-ntrip",
             lastActiveNtripMountpointProfileId = "mount",
-            passwordsBySecretId = mapOf("secret" to "secret-password"),
+            passwordsBySecretId = mapOf("secret" to "secret-password", "upload-secret" to ""),
             options = SettingsSetExportOptions(includePlaintextPasswords = true),
         )
 
         val parsed = SettingsBackupFile.fromJson(backup.toJson())
 
         assertEquals("secret-password", parsed.plaintextPasswordsBySecretId["secret"])
+        assertEquals("", parsed.plaintextPasswordsBySecretId["upload-secret"])
         assertTrue(backup.toJson().toString().contains("plaintextPasswords"))
     }
 }

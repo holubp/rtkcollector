@@ -75,6 +75,7 @@ private val DashboardMetricRowHeight = 16.dp
 private val DashboardSeparatorHeight = 4.dp
 private val PositionDashboardCardHeight = 180.dp
 private val FixDashboardCardHeight = 282.dp
+private val RtklibDashboardCardHeight = 206.dp
 private val CorrectionsDashboardCardHeight = 292.dp
 private val RecordingDashboardCardHeight = 162.dp
 private val SetupProfilesDashboardCardHeight = 160.dp
@@ -734,6 +735,7 @@ private fun DashboardCards(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         FixCard(state = state, onHelp = onHelp)
+                        state.rtklib?.let { RtklibCard(it) }
                         RecordingCard(state = state, onHelp = onHelp)
                     }
                 }
@@ -747,6 +749,7 @@ private fun DashboardCards(
                     onHelp = onHelp,
                 )
                 FixCard(state = state, onHelp = onHelp)
+                state.rtklib?.let { RtklibCard(it) }
                 CorrectionsCard(state = state, onHelp = onHelp)
                 RecordingCard(state = state, onHelp = onHelp)
             }
@@ -988,6 +991,30 @@ private fun FixCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+private fun RtklibCard(state: RtklibCardState) {
+    DashboardCard(
+        title = "RTKLIB",
+        cardHeight = RtklibDashboardCardHeight,
+        helpTopic = null,
+        onHelp = {},
+    ) {
+        MajorValue(state.state)
+        Metric("Fix", state.fixClass)
+        Metric("Age", state.age)
+        Metric("Route", state.routePlan)
+        Metric("Snapshot", state.snapshotId)
+        if (!state.lastError.equals("n/a", ignoreCase = true)) {
+            Metric("Error", state.lastError)
+        }
+        DashedSeparator()
+        Metric("Queue rover/corr", "${state.roverQueue} / ${state.correctionQueue}")
+        Metric("Dropped rover/corr", state.dropped)
+        Metric("Decoded", state.decoded)
+        Metric("Output", state.outputs)
     }
 }
 

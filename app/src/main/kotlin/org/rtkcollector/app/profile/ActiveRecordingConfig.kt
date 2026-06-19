@@ -1,6 +1,7 @@
 package org.rtkcollector.app.profile
 
 import org.rtkcollector.core.correction.Um980RtcmBaseOutputSanity
+import org.rtkcollector.core.rtklib.RtklibSnapshot
 import org.rtkcollector.core.workflow.SessionArtifact
 
 data class ActiveRecordingConfig(
@@ -41,12 +42,7 @@ data class ActiveRecordingConfig(
 
     fun validateForStart() {
         if (rtklib.enabled) {
-            require(ntrip.enabled && ntrip.isConfigured) {
-                "RTKLIB real-time MVP requires NTRIP RTCM3 corrections."
-            }
-            require(rtklib.outputNmea || rtklib.outputPos) {
-                "RTKLIB real-time requires NMEA or POS output."
-            }
+            require(rtklib.validationErrors.isEmpty()) { rtklib.validationErrors.joinToString(" ") }
         }
         if (ntrip.enabled) {
             require(ntrip.host.isNotBlank()) { "NTRIP host is required for ${workflowName}." }
@@ -198,10 +194,30 @@ data class ActiveRecordingConfig(
                 protocolPolicy = ntripCasterUploadProfile?.protocolPolicy ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
                 hasAcceptedBaseCoordinate = hasAcceptedBaseCoordinate,
             )
+            val resolvedModeCommands = commandProfile.runtimeScript.commandLines()
+                .ifEmpty { modeCommands }
+            val resolvedInitCommands = (localInitCommands ?: commandOverride?.initScript ?: commandProfile.initScript)
+                .commandLines()
+            val resolvedShutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript)
+                .commandLines()
+
+            val rtklibValidation = RtklibStartValidator.validate(
+                enabled = rtklibProfile?.enabled == true,
+                receiverProfileId = settingsSet.receiverProfileId,
+                commands = resolvedInitCommands + baudSwitchCommands + resolvedModeCommands,
+                ntripEnabled = workflowUsesNtrip,
+                ntripConfigured = ntrip.isConfigured,
+                outputNmea = rtklibProfile?.outputNmea ?: false,
+                outputPos = rtklibProfile?.outputPos ?: false,
+            )
             val rtklib = ActiveRtklibConfig(
                 enabled = rtklibProfile?.enabled == true,
                 profileId = rtklibProfile?.id,
                 preset = rtklibProfile?.preset ?: RtklibProfile.PRESET_ROVER_KINEMATIC_RTK,
+                snapshotId = RtklibSnapshot.ID,
+                routePlan = rtklibValidation.routePlan,
+                validationSummary = rtklibValidation.validationSummary,
+                validationErrors = rtklibValidation.errors,
                 outputNmea = rtklibProfile?.outputNmea ?: false,
                 outputPos = rtklibProfile?.outputPos ?: false,
                 maxRoverQueueBytes = rtklibProfile?.maxRoverQueueBytes ?: RtklibProfile.DEFAULT_MAX_ROVER_QUEUE_BYTES,
@@ -232,9 +248,6 @@ data class ActiveRecordingConfig(
                 treeUri = storageOverride?.treeUri ?: storageProfile.treeUri,
             )
 
-            val resolvedModeCommands = commandProfile.runtimeScript.commandLines()
-                .ifEmpty { modeCommands }
-
             return ActiveRecordingConfig(
                 workflowId = settingsSet.workflowId,
                 workflowName = workflowName,
@@ -243,10 +256,10 @@ data class ActiveRecordingConfig(
                 usbBaudProfileId = usbBaudProfile.id,
                 profileBaud = profileBaud,
                 serialBaud = serialBaud,
-                initCommands = (localInitCommands ?: commandOverride?.initScript ?: commandProfile.initScript).commandLines(),
+                initCommands = resolvedInitCommands,
                 baudSwitchCommands = baudSwitchCommands,
                 modeCommands = resolvedModeCommands,
-                shutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript).commandLines(),
+                shutdownCommands = resolvedShutdownCommands,
                 ntrip = ntrip,
                 casterUpload = casterUpload,
                 rtklib = rtklib,
@@ -261,6 +274,10 @@ data class ActiveRtklibConfig(
     val enabled: Boolean,
     val profileId: String?,
     val preset: String,
+    val snapshotId: String?,
+    val routePlan: String?,
+    val validationSummary: String?,
+    val validationErrors: List<String>,
     val outputNmea: Boolean,
     val outputPos: Boolean,
     val maxRoverQueueBytes: Int,

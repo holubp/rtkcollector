@@ -4,10 +4,18 @@ import java.io.Closeable
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 
-class RtklibOutputWriters(
-    private val nmeaOutput: OutputStream?,
-    private val posOutput: OutputStream?,
+class RtklibOutputWriters private constructor(
+    private val nmeaOutput: LineOutput?,
+    private val posOutput: LineOutput?,
 ) : Closeable {
+    constructor(
+        nmeaOutput: OutputStream?,
+        posOutput: OutputStream?,
+    ) : this(
+        nmeaOutput = nmeaOutput?.let(::StreamLineOutput),
+        posOutput = posOutput?.let(::StreamLineOutput),
+    )
+
     private var closed = false
 
     @Synchronized
@@ -36,10 +44,45 @@ class RtklibOutputWriters(
         }
     }
 
-    private fun OutputStream.writeLine(line: String) {
-        write(line.toByteArray(StandardCharsets.US_ASCII))
-        if (!line.endsWith("\n")) {
-            write('\n'.code)
+    private interface LineOutput : Closeable {
+        fun writeLine(line: String)
+        fun flush()
+    }
+
+    private class StreamLineOutput(private val output: OutputStream) : LineOutput {
+        override fun writeLine(line: String) {
+            output.write(line.toByteArray(StandardCharsets.US_ASCII))
+            if (!line.endsWith("\n")) {
+                output.write('\n'.code)
+            }
         }
+
+        override fun flush() {
+            output.flush()
+        }
+
+        override fun close() {
+            output.close()
+        }
+    }
+
+    private class CallbackLineOutput(private val appendLine: (String) -> Unit) : LineOutput {
+        override fun writeLine(line: String) {
+            appendLine(if (line.endsWith("\n")) line else "$line\n")
+        }
+
+        override fun flush() = Unit
+        override fun close() = Unit
+    }
+
+    companion object {
+        fun fromCallbacks(
+            appendNmeaLine: ((String) -> Unit)?,
+            appendPosLine: ((String) -> Unit)?,
+        ): RtklibOutputWriters =
+            RtklibOutputWriters(
+                nmeaOutput = appendNmeaLine?.let(::CallbackLineOutput),
+                posOutput = appendPosLine?.let(::CallbackLineOutput),
+            )
     }
 }

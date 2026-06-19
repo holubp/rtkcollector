@@ -41,7 +41,7 @@ __pycache__/
 samples/
 
 # Local RTKLIB-EX source checkout created by tools/update_rtklib_ex.py
-third_party/rtklib-ex/upstream/*
+third_party/rtklib-ex/upstream/
 
 # Keystore files
 *.jks

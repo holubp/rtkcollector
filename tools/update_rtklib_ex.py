@@ -62,7 +62,10 @@ def validate_ref(ref: str, allow_non_commit_ref: bool) -> None:
 
 
 def run_git(args: list[str], cwd: Path | None = None, dry_run: bool = False) -> str:
-    command = ["git", *args]
+    command = ["git"]
+    if cwd is not None:
+        command.extend(["-c", f"safe.directory={cwd.resolve()}"])
+    command.extend(args)
     if dry_run:
         location = f" (cwd={cwd})" if cwd else ""
         print("+ " + " ".join(command) + location)

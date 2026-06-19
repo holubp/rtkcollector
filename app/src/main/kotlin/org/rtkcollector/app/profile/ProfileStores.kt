@@ -198,6 +198,13 @@ class ProfileStores(context: Context) {
                 isProtected = true,
             ),
             CommandProfile(
+                id = "um980-binary-multihz-rtklib-obsvmb",
+                name = "UM980 multi-Hz binary RTKLIB OBSVMB",
+                receiverFamily = "um980-n4",
+                runtimeScript = UM980_BINARY_MULTI_HZ_RTKLIB_OBSVMB_SCRIPT,
+                isProtected = true,
+            ),
+            CommandProfile(
                 id = "um980-ascii-ppp-nmea",
                 name = "UM980 multi-Hz ASCII RTK+PPP",
                 receiverFamily = "um980-n4",
@@ -309,6 +316,7 @@ class ProfileStores(context: Context) {
     companion object {
         const val OLD_UM980_COMMAND_PROFILE_ID = "um980-default-commands"
         const val UM980_BINARY_MULTI_HZ_PROFILE_ID = "um980-binary-multihz"
+        const val UM980_BINARY_MULTI_HZ_RTKLIB_OBSVMB_PROFILE_ID = "um980-binary-multihz-rtklib-obsvmb"
         const val UM980_ASCII_PPP_NMEA_PROFILE_ID = "um980-ascii-ppp-nmea"
         const val UM980_ASCII_1HZ_RTK_PPP_PROFILE_ID = "um980-ascii-1hz-rtk-ppp"
         const val UM980_BASE_CONFIG_PROFILE_ID = "um980-base-config"
@@ -341,6 +349,40 @@ class ProfileStores(context: Context) {
             RTKSTATUSB COM1 1
             RTCMSTATUSB COM1 ONCHANGED
             OBSVMCMPB COM1 0.25
+            STADOPB COM1 1
+            GPSEPHB COM1 300
+            GLOEPHB COM1 300
+            GALEPHB COM1 300
+            BDSEPHB COM1 300
+            BD3EPHB COM1 300
+            QZSSEPHB COM1 300
+            GPSIONB ONCHANGED
+            BDSIONB ONCHANGED
+            BD3IONB ONCHANGED
+            GALIONB ONCHANGED
+            GPSUTCB ONCHANGED
+            BDSUTCB ONCHANGED
+            BD3UTCB ONCHANGED
+            GALUTCB ONCHANGED
+        """.trimIndent()
+
+        val UM980_BINARY_MULTI_HZ_RTKLIB_OBSVMB_SCRIPT: String = """
+            UNLOG COM1
+            MODE ROVER SURVEY
+            CONFIG MMP ENABLE
+            CONFIG RTK TIMEOUT 120
+            CONFIG RTK RELIABILITY 3 1
+            CONFIG PPP ENABLE E6-HAS
+            CONFIG PPP DATUM WGS84
+            CONFIG PPP TIMEOUT 120
+            CONFIG PPP CONVERGE 15 30
+            VERSIONB
+            BESTNAVB COM1 0.05
+            ADRNAVB COM1 1
+            PPPNAVB COM1 1
+            RTKSTATUSB COM1 1
+            RTCMSTATUSB COM1 ONCHANGED
+            OBSVMB COM1 0.25
             STADOPB COM1 1
             GPSEPHB COM1 300
             GLOEPHB COM1 300

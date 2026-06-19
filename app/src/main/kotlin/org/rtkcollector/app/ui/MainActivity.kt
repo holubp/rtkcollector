@@ -111,6 +111,7 @@ import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
 import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.FixCardState
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
+import org.rtkcollector.app.ui.dashboard.RtklibCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.MockGpsDashboardState
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
@@ -3709,8 +3710,16 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_PROFILE_ID, activeConfig.rtklib.profileId)
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_ENABLED, activeConfig.rtklib.enabled)
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_PRESET, activeConfig.rtklib.preset)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_SNAPSHOT_ID, activeConfig.rtklib.snapshotId)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_ROUTE_PLAN, activeConfig.rtklib.routePlan)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_VALIDATION_SUMMARY, activeConfig.rtklib.validationSummary)
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_OUTPUT_NMEA, activeConfig.rtklib.outputNmea)
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_OUTPUT_POS, activeConfig.rtklib.outputPos)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_MAX_ROVER_QUEUE_BYTES, activeConfig.rtklib.maxRoverQueueBytes)
+        putExtra(
+            RecordingForegroundService.EXTRA_RTKLIB_MAX_CORRECTION_QUEUE_BYTES,
+            activeConfig.rtklib.maxCorrectionQueueBytes,
+        )
         putExtra(RecordingForegroundService.EXTRA_STORAGE_PROFILE_ID, activeConfig.storage.id)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_KIND, activeConfig.storage.kind)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_TREE_URI, activeConfig.storage.treeUri)
@@ -4259,6 +4268,9 @@ private fun ProfileStores.plannedDashboardState(
     val recordingPolicyProfile = selected?.recordingOutputProfileRef?.id?.let { id ->
         recordingPolicyProfiles().firstOrNull { it.id == id }
     }
+    val rtklibProfile = selected?.rtklibProfileRef?.id?.let { id ->
+        rtklibProfiles().firstOrNull { it.id == id }
+    }
     val mockEnabled = selected?.overrides?.recordingOutput?.enableMockLocation
         ?: recordingPolicyProfile?.enableMockLocation
         ?: false
@@ -4273,6 +4285,19 @@ private fun ProfileStores.plannedDashboardState(
         fix = FixCardState(
             receiverFrequency = receiverFrequencyForFamily(selectedCommandProfile?.receiverFamily),
         ),
+        rtklib = rtklibProfile
+            ?.takeIf { it.enabled }
+            ?.let {
+                RtklibCardState(
+                    state = "Configured",
+                    routePlan = "validated when recording starts",
+                    snapshotId = "rtklib-ex-2.5.0",
+                    outputs = listOfNotNull(
+                        "NMEA".takeIf { rtklibProfile.outputNmea },
+                        "POS".takeIf { rtklibProfile.outputPos },
+                    ).ifEmpty { listOf("no output") }.joinToString(" / "),
+                )
+            },
         profiles = ProfilesCardState(
             settingsSet = selected?.displayNameWithOverrides() ?: "n/a",
             commandProfile = selectedReceiverLabel(selectedSettingsSetId),

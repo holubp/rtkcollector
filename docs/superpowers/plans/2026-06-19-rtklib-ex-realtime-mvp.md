@@ -322,9 +322,9 @@ sh gradlew :app:compileDebugKotlin
 
 ## Phase 4: Native Bridge Facade
 
-- [ ] Add `RtklibNativeBridge` as the only Kotlin class that loads the native
+- [x] Add `RtklibNativeBridge` as the only Kotlin class that loads the native
   library.
-- [ ] Do not call `System.loadLibrary(...)` from app startup or unrelated code.
+- [x] Do not call `System.loadLibrary(...)` from app startup or unrelated code.
   Load only when RTKLIB engine is constructed for an enabled workflow.
 - [ ] Add JNI functions:
   - create engine handle;
@@ -341,7 +341,7 @@ sh gradlew :app:compileDebugKotlin
   - Unicore OBSVMB -> RTKLIB `input_unicore`;
   - RTCM3 -> RTKLIB `input_rtcm3`;
   - converter route -> not implemented in this MVP except explicit error.
-- [ ] Native bridge must reject unsupported route kinds with structured error,
+- [x] Native bridge must reject unsupported route kinds with structured error,
   not crash.
 - [ ] Native bridge must not open files, serial devices, sockets or NTRIP
   streams.
@@ -375,24 +375,24 @@ On host/CI:
 
 ## Phase 5: Worker Isolation And Recording-Service Fanout
 
-- [ ] Add `RtklibWorker` using one dedicated worker thread.
-- [ ] Worker has bounded rover and correction queues.
-- [ ] Worker is started only when active workflow/config enables RTKLIB.
-- [ ] Worker receives bytes only after:
+- [x] Add `RtklibWorker` using one dedicated worker thread.
+- [x] Worker has bounded rover and correction queues.
+- [x] Worker is started only when active workflow/config enables RTKLIB.
+- [x] Worker receives bytes only after:
   - receiver RX bytes have been appended to `receiver-rx.raw`;
   - correction bytes have been appended to `correction-input.raw` /
     `correction-input.rtcm3`.
-- [ ] Worker must never hold locks used by USB reads, serial writes, NTRIP
+- [x] Worker must never hold locks used by USB reads, serial writes, NTRIP
   client, session writers or dashboard broadcast.
-- [ ] Worker state updates are throttled and exposed as snapshots.
-- [ ] Stop ordering:
+- [x] Worker state updates are throttled and exposed as snapshots.
+- [x] Stop ordering:
   - stop accepting new RTKLIB input;
   - drain or bounded-flush output lines;
   - close NMEA and POS writers syntactically if needed;
   - stop native engine;
   - release worker thread.
-- [ ] If RTKLIB throws a managed exception, mark RTKLIB failed and keep recording.
-- [ ] Native crash risk cannot be fully caught in-process. Mitigation for this
+- [x] If RTKLIB throws a managed exception, mark RTKLIB failed and keep recording.
+- [x] Native crash risk cannot be fully caught in-process. Mitigation for this
   MVP is lazy loading: if RTKLIB is disabled, native path is never activated.
 
 Checkpoint:
@@ -436,9 +436,9 @@ Manual review:
   - RTKLIB enabled;
   - RTKLIB preset;
   - output artifact names;
-- [ ] RTKLIB-EX snapshot id;
-- [ ] RTKLIB route plan;
-- [ ] validation result at start.
+- [x] RTKLIB-EX snapshot id;
+- [x] RTKLIB route plan;
+- [x] validation result at start.
 - [x] Never store NTRIP secrets in RTKLIB metadata.
 
 Checkpoint:
@@ -468,14 +468,14 @@ sh gradlew :app:compileDebugKotlin
   - enabled/disabled;
   - output NMEA/POS toggles;
   - queue/backlog defaults if exposed.
-- [ ] Do not add full RTKLIB option editor.
-- [ ] Workflow validation must reject RTKLIB start when:
+- [x] Do not add full RTKLIB option editor.
+- [x] Workflow validation must reject RTKLIB start when:
   - route plan unsupported;
   - correction source is not NTRIP RTCM3 for this MVP;
   - UM980 profile is OBSVMCMPB without converter;
   - required base/mountpoint context missing;
   - output artifacts cannot be opened.
-- [ ] Add or update built-in command profiles:
+- [x] Add or update built-in command profiles:
   - u-blox M8T raw RTKLIB profile already emits RAWX/SFRBX;
   - UM980 RTKLIB OBSVMB profile emits OBSVMB plus monitoring logs;
   - keep existing OBSVMCMPB profile for recording efficiency, but do not use it
@@ -508,8 +508,8 @@ Targeted tests:
 
 ## Phase 8: Dashboard RTKLIB Card
 
-- [ ] Add separate RTKLIB card/square shown only when RTKLIB is enabled.
-- [ ] Show compact fields:
+- [x] Add separate RTKLIB card/square shown only when RTKLIB is enabled.
+- [x] Show compact fields:
   - RTKLIB state;
   - fix class;
   - age;
@@ -517,13 +517,13 @@ Targeted tests:
   - backlog/dropped chunks;
   - output rate if available;
   - last warning/error.
-- [ ] Keep receiver solution card unchanged.
-- [ ] Do not merge receiver and RTKLIB fix states.
-- [ ] Do not automatically switch mock provider source based on perceived
+- [x] Keep receiver solution card unchanged.
+- [x] Do not merge receiver and RTKLIB fix states.
+- [x] Do not automatically switch mock provider source based on perceived
   quality.
-- [ ] If mock provider source selection is added, it must be explicit and
+- [x] If mock provider source selection is added, it must be explicit and
   user-controlled.
-- [ ] Ensure dashboard update throttling remains smooth and does not increase
+- [x] Ensure dashboard update throttling remains smooth and does not increase
   capture-path work.
 
 Checkpoint:
@@ -662,7 +662,7 @@ Final review checklist:
 - [ ] Forward-only mode only.
 - [ ] u-blox direct route tested.
 - [ ] UM980 OBSVMB direct route tested.
-- [ ] UM980 OBSVMCMPB rejected or converter-declared.
+- [x] UM980 OBSVMCMPB rejected or converter-declared.
 - [ ] Licence/NOTICE updated.
 - [ ] Plan status updated.
 

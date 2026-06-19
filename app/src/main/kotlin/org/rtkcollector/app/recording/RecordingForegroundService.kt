@@ -50,6 +50,11 @@ import org.rtkcollector.core.correction.NtripRuntimeState
 import org.rtkcollector.core.correction.Rtcm3Extractor
 import org.rtkcollector.core.correction.Rtcm3ReferenceStation
 import org.rtkcollector.core.correction.Rtcm3ReferenceStationParser
+import org.rtkcollector.core.rtklib.RtklibConfig
+import org.rtkcollector.core.rtklib.RtklibNativeBridge
+import org.rtkcollector.core.rtklib.RtklibOutputWriters
+import org.rtkcollector.core.rtklib.RtklibPreset
+import org.rtkcollector.core.rtklib.RtklibWorker
 import org.rtkcollector.core.session.AntennaMetadata
 import org.rtkcollector.core.session.NtripSessionMetadata
 import org.rtkcollector.core.session.SerialParameters
@@ -95,6 +100,13 @@ import org.rtkcollector.core.solution.BestSolutionSelector
 import org.rtkcollector.core.solution.CoordinateAverageAddResult
 import org.rtkcollector.core.solution.CoordinateAverageSummary
 import org.rtkcollector.core.solution.SolutionCandidate
+import org.rtkcollector.core.workflow.CorrectionFormat
+import org.rtkcollector.core.workflow.RtklibCorrectionInputRoute
+import org.rtkcollector.core.workflow.RtklibInputRoute
+import org.rtkcollector.core.workflow.RtklibInputRouteKind
+import org.rtkcollector.core.workflow.RtklibInputRoutePlan
+import org.rtkcollector.core.workflow.RtklibRoverInputFormat
+import org.rtkcollector.core.workflow.RtklibSolutionDirection
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import java.time.Instant
@@ -126,6 +138,7 @@ class RecordingForegroundService : Service() {
     private var activeUsbPid: Int? = null
     private var ntripController: NtripRuntimeController? = null
     private var casterUploadController: NtripCasterUploadController? = null
+    private var rtklibWorker: RtklibWorker? = null
     private var activeWorkflowUsesNtrip: Boolean = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
@@ -316,6 +329,9 @@ class RecordingForegroundService : Service() {
                 rtklibProfileId = intent.getStringExtra(EXTRA_RTKLIB_PROFILE_ID),
                 rtklibEnabled = intent.getBooleanExtra(EXTRA_RTKLIB_ENABLED, false),
                 rtklibPreset = intent.getStringExtra(EXTRA_RTKLIB_PRESET),
+                rtklibSnapshotId = intent.getStringExtra(EXTRA_RTKLIB_SNAPSHOT_ID),
+                rtklibRoutePlan = intent.getStringExtra(EXTRA_RTKLIB_ROUTE_PLAN),
+                rtklibValidationSummary = intent.getStringExtra(EXTRA_RTKLIB_VALIDATION_SUMMARY),
                 rtklibOutputNmea = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_NMEA, false),
                 rtklibOutputPos = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_POS, false),
                 storageProfileId = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID),
@@ -352,6 +368,7 @@ class RecordingForegroundService : Service() {
             activeRecorder = recorder
             val eventSink = SessionEventSink(sessionWriters)
             activeEventSink = eventSink
+            startRtklibWorkerIfEnabled(intent, sessionWriters)
             val casterUploadConfig = casterUploadRuntimeConfig(intent)
             val uploadController = casterUploadConfig?.let {
                 NtripCasterUploadController().also { controller ->
@@ -637,6 +654,11 @@ class RecordingForegroundService : Service() {
         rtcmExtractor: Rtcm3Extractor,
     ) {
         recorder.appendCorrectionInputBytes(bytes)
+        rtklibWorker?.offerCorrectionBytes(
+            bytes = bytes,
+            timestampMillis = System.currentTimeMillis(),
+            sessionOffsetBytes = recorder.correctionInputBytes,
+        )
         val frames = rtcmExtractor.accept(bytes)
         if (frames.isNotEmpty()) {
             state = state.copy(correctionInputRtcmAtMillis = android.os.SystemClock.elapsedRealtime())
@@ -667,6 +689,96 @@ class RecordingForegroundService : Service() {
             correctionsActive = snapshot.correctionsActive,
         )
         broadcastState()
+    }
+
+    private fun startRtklibWorkerIfEnabled(
+        intent: Intent,
+        sessionWriters: RecordingSessionWriters,
+    ) {
+        if (!intent.getBooleanExtra(EXTRA_RTKLIB_ENABLED, false)) {
+            state = state.copy(rtklibState = "Disabled")
+            return
+        }
+
+        val outputNmea = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_NMEA, false)
+        val outputPos = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_POS, false)
+        val routePlanText = intent.getStringExtra(EXTRA_RTKLIB_ROUTE_PLAN).orEmpty()
+        val config = RtklibConfig(
+            routePlan = rtklibRoutePlanFromText(routePlanText),
+            preset = rtklibPresetFrom(intent.getStringExtra(EXTRA_RTKLIB_PRESET)),
+            receiverProfileId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID).orEmpty(),
+            baseContextSummary = ntripDisplayUrl(intent).takeUnless { it == "n/a" } ?: "NTRIP RTCM3",
+            outputNmea = outputNmea,
+            outputPos = outputPos,
+            maxRoverQueueBytes = intent.getIntExtra(
+                EXTRA_RTKLIB_MAX_ROVER_QUEUE_BYTES,
+                RtklibConfig.DEFAULT_MAX_ROVER_QUEUE_BYTES,
+            ),
+            maxCorrectionQueueBytes = intent.getIntExtra(
+                EXTRA_RTKLIB_MAX_CORRECTION_QUEUE_BYTES,
+                RtklibConfig.DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+            ),
+        )
+        val worker = RtklibWorker(
+            backendFactory = RtklibNativeBridge(),
+            outputWriters = RtklibOutputWriters.fromCallbacks(
+                appendNmeaLine = if (outputNmea) sessionWriters::appendRtklibSolutionNmea else null,
+                appendPosLine = if (outputPos) sessionWriters::appendRtklibSolutionPos else null,
+            ),
+        )
+        val result = worker.start(config)
+        if (result.started) {
+            rtklibWorker = worker
+            state = state.copy(
+                rtklibState = "RUNNING",
+                rtklibRoutePlan = routePlanText,
+                rtklibSnapshotId = intent.getStringExtra(EXTRA_RTKLIB_SNAPSHOT_ID) ?: "n/a",
+                rtklibLastError = null,
+            )
+        } else {
+            worker.stop()
+            state = state.copy(
+                rtklibState = "FAILED",
+                rtklibRoutePlan = routePlanText,
+                rtklibSnapshotId = intent.getStringExtra(EXTRA_RTKLIB_SNAPSHOT_ID) ?: "n/a",
+                rtklibLastError = result.message,
+            )
+        }
+    }
+
+    private fun rtklibPresetFrom(value: String?): RtklibPreset =
+        runCatching { RtklibPreset.valueOf(value.orEmpty()) }
+            .getOrDefault(RtklibPreset.ROVER_KINEMATIC_RTK)
+
+    private fun rtklibRoutePlanFromText(text: String): RtklibInputRoutePlan {
+        val roverRoute = when {
+            text.contains("input_ubx") -> RtklibInputRoute(
+                kind = RtklibInputRouteKind.DIRECT_RTKLIB_DECODER,
+                format = RtklibRoverInputFormat.UBX_RXM_RAWX_SFRBX,
+                decoderId = "input_ubx",
+                reason = "App start validation selected u-blox RAWX/SFRBX direct RTKLIB route.",
+            )
+            text.contains("input_unicore") -> RtklibInputRoute(
+                kind = RtklibInputRouteKind.DIRECT_RTKLIB_DECODER,
+                format = RtklibRoverInputFormat.UNICORE_OBSVMB,
+                decoderId = "input_unicore",
+                reason = "App start validation selected Unicore OBSVMB direct RTKLIB route.",
+            )
+            else -> RtklibInputRoute(
+                kind = RtklibInputRouteKind.UNSUPPORTED,
+                reason = text.ifBlank { "RTKLIB rover input route is missing." },
+            )
+        }
+        return RtklibInputRoutePlan(
+            roverInput = roverRoute,
+            correctionInput = RtklibCorrectionInputRoute(
+                kind = RtklibInputRouteKind.DIRECT_RTKLIB_DECODER,
+                format = CorrectionFormat.RTCM3,
+                decoderId = "input_rtcm3",
+                reason = "NTRIP RTCM3 correction stream.",
+            ),
+            solutionDirection = RtklibSolutionDirection.FORWARD_ONLY,
+        )
     }
 
     private fun ntripRuntimeConfig(intent: Intent): NtripRuntimeConfig? {
@@ -1042,6 +1154,7 @@ class RecordingForegroundService : Service() {
         runCatching { ntripController?.stop() }
         runCatching { captureThread?.join(1500) }
         runCatching { advisoryFanout?.close() }
+        runCatching { rtklibWorker?.stop() }
         val casterUploadSnapshot = casterUploadController?.snapshot()
         runCatching { casterUploadController?.stop() }
         casterUploadSnapshot?.let { snapshot ->
@@ -1104,6 +1217,7 @@ class RecordingForegroundService : Service() {
         activeTargetBaud = 230400
         ntripController = null
         casterUploadController = null
+        rtklibWorker = null
         activeWorkflowUsesNtrip = false
         shutdownCommands = emptyList()
         teardownMockLocation()
@@ -1129,6 +1243,20 @@ class RecordingForegroundService : Service() {
             baseCasterUploadBytes = 0,
             baseCasterUploadDroppedBytes = 0,
             baseCasterUploadLastError = null,
+            rtklibState = "Disabled",
+            rtklibRoutePlan = "n/a",
+            rtklibSnapshotId = "n/a",
+            rtklibLastError = null,
+            rtklibFixClass = "n/a",
+            rtklibSolutionAgeMs = null,
+            rtklibRoverQueueBytes = 0,
+            rtklibCorrectionQueueBytes = 0,
+            rtklibDroppedRoverBytes = 0,
+            rtklibDroppedCorrectionBytes = 0,
+            rtklibDecodedRoverEpochs = 0,
+            rtklibDecodedCorrectionMessages = 0,
+            rtklibOutputNmeaLines = 0,
+            rtklibOutputPosLines = 0,
             ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
             mockLocationRateHz = mockLocationRateHz,
         ).clearBestSolutionFields(
@@ -1433,6 +1561,24 @@ class RecordingForegroundService : Service() {
         casterUploadController?.snapshot()?.let { snapshot ->
             state = state.withCasterUploadSnapshot(snapshot)
         }
+        rtklibWorker?.snapshot()?.let { snapshot ->
+            state = state.copy(
+                rtklibState = snapshot.state.name,
+                rtklibLastError = snapshot.lastError ?: state.rtklibLastError,
+                rtklibFixClass = snapshot.latestSolution?.fixClass?.name ?: state.rtklibFixClass,
+                rtklibSolutionAgeMs = snapshot.latestSolution?.timestampMillis?.let { timestamp ->
+                    (System.currentTimeMillis() - timestamp).coerceAtLeast(0L)
+                } ?: state.rtklibSolutionAgeMs,
+                rtklibRoverQueueBytes = snapshot.roverQueueBytes,
+                rtklibCorrectionQueueBytes = snapshot.correctionQueueBytes,
+                rtklibDroppedRoverBytes = snapshot.droppedRoverBytes,
+                rtklibDroppedCorrectionBytes = snapshot.droppedCorrectionBytes,
+                rtklibDecodedRoverEpochs = snapshot.decodedRoverEpochs,
+                rtklibDecodedCorrectionMessages = snapshot.decodedCorrectionMessages,
+                rtklibOutputNmeaLines = snapshot.outputNmeaLines,
+                rtklibOutputPosLines = snapshot.outputPosLines,
+            )
+        }
         sendBroadcast(
             Intent(ACTION_STATE).apply {
                 setPackage(packageName)
@@ -1463,6 +1609,20 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES, state.baseCasterUploadBytes)
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES, state.baseCasterUploadDroppedBytes)
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR, state.baseCasterUploadLastError)
+                putExtra(EXTRA_STATE_RTKLIB_STATE, state.rtklibState)
+                putExtra(EXTRA_STATE_RTKLIB_ROUTE_PLAN, state.rtklibRoutePlan)
+                putExtra(EXTRA_STATE_RTKLIB_SNAPSHOT_ID, state.rtklibSnapshotId)
+                putExtra(EXTRA_STATE_RTKLIB_LAST_ERROR, state.rtklibLastError)
+                putExtra(EXTRA_STATE_RTKLIB_FIX_CLASS, state.rtklibFixClass)
+                putExtra(EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS, state.rtklibSolutionAgeMs ?: -1L)
+                putExtra(EXTRA_STATE_RTKLIB_ROVER_QUEUE_BYTES, state.rtklibRoverQueueBytes)
+                putExtra(EXTRA_STATE_RTKLIB_CORRECTION_QUEUE_BYTES, state.rtklibCorrectionQueueBytes)
+                putExtra(EXTRA_STATE_RTKLIB_DROPPED_ROVER_BYTES, state.rtklibDroppedRoverBytes)
+                putExtra(EXTRA_STATE_RTKLIB_DROPPED_CORRECTION_BYTES, state.rtklibDroppedCorrectionBytes)
+                putExtra(EXTRA_STATE_RTKLIB_DECODED_ROVER_EPOCHS, state.rtklibDecodedRoverEpochs)
+                putExtra(EXTRA_STATE_RTKLIB_DECODED_CORRECTION_MESSAGES, state.rtklibDecodedCorrectionMessages)
+                putExtra(EXTRA_STATE_RTKLIB_OUTPUT_NMEA_LINES, state.rtklibOutputNmeaLines)
+                putExtra(EXTRA_STATE_RTKLIB_OUTPUT_POS_LINES, state.rtklibOutputPosLines)
                 putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
                 putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
@@ -1848,6 +2008,13 @@ class RecordingForegroundService : Service() {
         return AdvisoryFanout(
             eventSink = eventSink,
             consumers = listOf(
+                AdvisoryConsumer("rtklib-rover-input") { bytes ->
+                    rtklibWorker?.offerRoverBytes(
+                        bytes = bytes,
+                        timestampMillis = System.currentTimeMillis(),
+                        sessionOffsetBytes = activeRecorder?.receiverRxBytes,
+                    )
+                },
                 AdvisoryConsumer("um980-mixed-stream") { bytes ->
                     streamParser.accept(bytes).forEach { record ->
                         when (record.kind) {
@@ -2332,8 +2499,13 @@ class RecordingForegroundService : Service() {
         const val EXTRA_RTKLIB_PROFILE_ID = "rtklibProfileId"
         const val EXTRA_RTKLIB_ENABLED = "rtklibEnabled"
         const val EXTRA_RTKLIB_PRESET = "rtklibPreset"
+        const val EXTRA_RTKLIB_SNAPSHOT_ID = "rtklibSnapshotId"
+        const val EXTRA_RTKLIB_ROUTE_PLAN = "rtklibRoutePlan"
+        const val EXTRA_RTKLIB_VALIDATION_SUMMARY = "rtklibValidationSummary"
         const val EXTRA_RTKLIB_OUTPUT_NMEA = "rtklibOutputNmea"
         const val EXTRA_RTKLIB_OUTPUT_POS = "rtklibOutputPos"
+        const val EXTRA_RTKLIB_MAX_ROVER_QUEUE_BYTES = "rtklibMaxRoverQueueBytes"
+        const val EXTRA_RTKLIB_MAX_CORRECTION_QUEUE_BYTES = "rtklibMaxCorrectionQueueBytes"
         const val EXTRA_STORAGE_PROFILE_ID = "storageProfileId"
         const val EXTRA_STORAGE_KIND = "storageKind"
         const val EXTRA_STORAGE_TREE_URI = "storageTreeUri"
@@ -2395,6 +2567,20 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES = "baseCasterUploadBytes"
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES = "baseCasterUploadDroppedBytes"
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR = "baseCasterUploadLastError"
+        const val EXTRA_STATE_RTKLIB_STATE = "rtklibState"
+        const val EXTRA_STATE_RTKLIB_ROUTE_PLAN = "rtklibRoutePlan"
+        const val EXTRA_STATE_RTKLIB_SNAPSHOT_ID = "rtklibSnapshotId"
+        const val EXTRA_STATE_RTKLIB_LAST_ERROR = "rtklibLastError"
+        const val EXTRA_STATE_RTKLIB_FIX_CLASS = "rtklibFixClass"
+        const val EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS = "rtklibSolutionAgeMs"
+        const val EXTRA_STATE_RTKLIB_ROVER_QUEUE_BYTES = "rtklibRoverQueueBytes"
+        const val EXTRA_STATE_RTKLIB_CORRECTION_QUEUE_BYTES = "rtklibCorrectionQueueBytes"
+        const val EXTRA_STATE_RTKLIB_DROPPED_ROVER_BYTES = "rtklibDroppedRoverBytes"
+        const val EXTRA_STATE_RTKLIB_DROPPED_CORRECTION_BYTES = "rtklibDroppedCorrectionBytes"
+        const val EXTRA_STATE_RTKLIB_DECODED_ROVER_EPOCHS = "rtklibDecodedRoverEpochs"
+        const val EXTRA_STATE_RTKLIB_DECODED_CORRECTION_MESSAGES = "rtklibDecodedCorrectionMessages"
+        const val EXTRA_STATE_RTKLIB_OUTPUT_NMEA_LINES = "rtklibOutputNmeaLines"
+        const val EXTRA_STATE_RTKLIB_OUTPUT_POS_LINES = "rtklibOutputPosLines"
         const val EXTRA_STATE_GGA_FIX_QUALITY = "ggaFixQuality"
         const val EXTRA_STATE_BESTNAV_POSITION_TYPE = "bestnavPositionType"
         const val EXTRA_STATE_PPP_STATUS = "pppStatus"

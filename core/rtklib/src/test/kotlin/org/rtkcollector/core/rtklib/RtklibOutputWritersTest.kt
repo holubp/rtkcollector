@@ -22,4 +22,25 @@ class RtklibOutputWritersTest {
         assertEquals("\$GPGGA,rtklib\n", nmea.toString(Charsets.US_ASCII.name()))
         assertEquals("% pos header\n2026/01/01 00:00:00 50.0 14.0\n", pos.toString(Charsets.US_ASCII.name()))
     }
+
+    @Test
+    fun `callback writers append newline terminated lines`() {
+        val nmea = mutableListOf<String>()
+        val pos = mutableListOf<String>()
+        val writers = RtklibOutputWriters.fromCallbacks(
+            appendNmeaLine = nmea::add,
+            appendPosLine = pos::add,
+        )
+
+        writers.write(
+            RtklibNativeOutputBatch(
+                nmeaLines = listOf("\$GPGGA,rtklib"),
+                posLines = listOf("pos line\n"),
+            ),
+        )
+        writers.close()
+
+        assertEquals(listOf("\$GPGGA,rtklib\n"), nmea)
+        assertEquals(listOf("pos line\n"), pos)
+    }
 }

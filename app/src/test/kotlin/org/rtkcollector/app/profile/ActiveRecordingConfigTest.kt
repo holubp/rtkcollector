@@ -151,8 +151,9 @@ class ActiveRecordingConfigTest {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+                receiverProfileId = "um980-n4",
             ),
-            commandProfile = CommandProfile("commands", "Commands"),
+            commandProfile = CommandProfile("commands", "Commands", runtimeScript = "MODE ROVER\nOBSVMB COM1 0.25"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
@@ -172,8 +173,42 @@ class ActiveRecordingConfigTest {
 
         assertTrue(config.rtklib.enabled)
         assertEquals("ROVER_KINEMATIC_RTK", config.rtklib.preset)
+        assertEquals("rtklib-ex-2.5.0@8dfabc9a106b2e74c069bc80f0d7743f314e6ab4", config.rtklib.snapshotId)
+        assertEquals("valid; snapshot=rtklib-ex-2.5.0@8dfabc9a106b2e74c069bc80f0d7743f314e6ab4", config.rtklib.validationSummary)
+        assertTrue(config.rtklib.routePlan.orEmpty().contains("input_unicore(UNICORE_OBSVMB)"))
         assertTrue(config.expectedSessionArtifactNames.contains(SessionArtifact.RTKLIB_SOLUTION_NMEA.name))
         assertFalse(config.expectedSessionArtifactNames.contains(SessionArtifact.RTKLIB_SOLUTION_POS.name))
+    }
+
+    @Test
+    fun `enabled rtklib rejects UM980 compact OBSVMCMPB without converter`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+                receiverProfileId = "um980-n4",
+            ),
+            commandProfile = CommandProfile("commands", "Commands", runtimeScript = "MODE ROVER\nOBSVMCMPB COM1 0.25"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            rtklibProfile = RtklibProfile(
+                id = "rtklib-rover",
+                name = "RTKLIB rover",
+                enabled = true,
+                outputNmea = true,
+                outputPos = true,
+            ),
+            workflowName = "Rover + RTKLIB",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertTrue(error.message.orEmpty().contains("OBSVMCMPB requires a converter"))
+        assertTrue(config.rtklib.routePlan.orEmpty().contains("unsupported(UNICORE_OBSVMCMPB)"))
     }
 
     @Test
@@ -201,7 +236,7 @@ class ActiveRecordingConfigTest {
 
         val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
 
-        assertEquals("RTKLIB real-time MVP requires NTRIP RTCM3 corrections.", error.message)
+        assertTrue(error.message.orEmpty().contains("RTKLIB real-time MVP requires NTRIP RTCM3 corrections."))
     }
 
     @Test

@@ -95,6 +95,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         ),
         uploadLastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR),
     )
+    val rtklib = rtklibCardFrom(intent)
     val files = FilesCardState(
         sessionLocation = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SESSION_PATH) ?: "n/a",
         receiverRxBytes = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RX_BYTES, 0)),
@@ -127,6 +128,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             position = position,
             fix = fix,
             ntrip = ntrip,
+            rtklib = rtklib,
             files = files,
             profiles = profiles,
             mockGps = mockGps,
@@ -151,6 +153,37 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             errorSeverity = errorSeverity,
         )
     }
+}
+
+private fun rtklibCardFrom(intent: Intent): RtklibCardState? {
+    val state = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_STATE)
+        ?: "Disabled"
+    if (state.equals("Disabled", ignoreCase = true)) {
+        return null
+    }
+    return RtklibCardState(
+        state = state,
+        routePlan = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ROUTE_PLAN) ?: "n/a",
+        snapshotId = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_SNAPSHOT_ID) ?: "n/a",
+        lastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_LAST_ERROR) ?: "n/a",
+        fixClass = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_FIX_CLASS) ?: "n/a",
+        age = positiveLongExtra(intent, RecordingForegroundService.EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS)
+            ?.let { "${it} ms" }
+            ?: "n/a",
+        roverQueue = formatBytes(intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ROVER_QUEUE_BYTES, 0).toLong()),
+        correctionQueue = formatBytes(
+            intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_CORRECTION_QUEUE_BYTES, 0).toLong(),
+        ),
+        dropped = formatBytes(
+            intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DROPPED_ROVER_BYTES, 0),
+        ) + " / " + formatBytes(
+            intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DROPPED_CORRECTION_BYTES, 0),
+        ),
+        decoded = "${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DECODED_ROVER_EPOCHS, 0)} rover / " +
+            "${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DECODED_CORRECTION_MESSAGES, 0)} corr",
+        outputs = "${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_OUTPUT_NMEA_LINES, 0)} NMEA / " +
+            "${intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_OUTPUT_POS_LINES, 0)} POS",
+    )
 }
 
 internal fun frequencyLineHasMeasuredValues(line: String): Boolean =

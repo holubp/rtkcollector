@@ -342,6 +342,53 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `rtklib card is hidden when disabled`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_STATE, "Disabled")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals(null, state.rtklib)
+    }
+
+    @Test
+    fun `rtklib card maps worker counters and route details`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_STATE, "LAGGING")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ROUTE_PLAN, "rover=input_unicore(UNICORE_OBSVMB)")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_SNAPSHOT_ID, "rtklib-ex-2.5.0@commit")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_LAST_ERROR, "queue pressure")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_FIX_CLASS, "RTK_FLOAT")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS, 80L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ROVER_QUEUE_BYTES, 1536)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_CORRECTION_QUEUE_BYTES, 512)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DROPPED_ROVER_BYTES, 64L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DROPPED_CORRECTION_BYTES, 32L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DECODED_ROVER_EPOCHS, 12L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_DECODED_CORRECTION_MESSAGES, 34L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_OUTPUT_NMEA_LINES, 5L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_OUTPUT_POS_LINES, 6L)
+        }
+
+        val rtklib = dashboardStateFromRecordingIntent(intent).rtklib
+
+        assertEquals("LAGGING", rtklib?.state)
+        assertEquals("rover=input_unicore(UNICORE_OBSVMB)", rtklib?.routePlan)
+        assertEquals("rtklib-ex-2.5.0@commit", rtklib?.snapshotId)
+        assertEquals("queue pressure", rtklib?.lastError)
+        assertEquals("RTK_FLOAT", rtklib?.fixClass)
+        assertEquals("80 ms", rtklib?.age)
+        assertEquals("1.5 kB", rtklib?.roverQueue)
+        assertEquals("512 B", rtklib?.correctionQueue)
+        assertEquals("64 B / 32 B", rtklib?.dropped)
+        assertEquals("12 rover / 34 corr", rtklib?.decoded)
+        assertEquals("5 NMEA / 6 POS", rtklib?.outputs)
+    }
+
+    @Test
     fun `converged ppp is displayed as ppp fix`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

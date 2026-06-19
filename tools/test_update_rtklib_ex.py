@@ -78,3 +78,23 @@ def test_update_checkout_writes_metadata_for_existing_checkout(tmp_path: Path, m
     assert metadata.resolved_commit == "1" * 40
     assert '"resolvedCommit": "1111111111111111111111111111111111111111"' in metadata_path.read_text(encoding="utf-8")
     assert (["fetch", "--tags", "origin"], destination.resolve(), False) in calls
+
+
+def test_run_git_scopes_safe_directory_for_nested_checkout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    captured = {}
+
+    class Completed:
+        stdout = "ok\n"
+
+    def fake_run(command, cwd=None, check=False, text=False, stdout=None, stderr=None):
+        captured["command"] = command
+        captured["cwd"] = cwd
+        captured["check"] = check
+        return Completed()
+
+    monkeypatch.setattr("update_rtklib_ex.subprocess.run", fake_run)
+
+    result = __import__("update_rtklib_ex").run_git(["status", "--short"], cwd=tmp_path)
+
+    assert result == "ok"
+    assert captured["command"][:3] == ["git", "-c", f"safe.directory={tmp_path.resolve()}"]

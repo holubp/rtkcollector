@@ -6,6 +6,7 @@ data class DashboardState(
     val position: PositionCardState,
     val fix: FixCardState,
     val ntrip: NtripCardState,
+    val rtklib: RtklibCardState? = null,
     val files: FilesCardState,
     val profiles: ProfilesCardState,
     val mockGps: MockGpsDashboardState = MockGpsDashboardState(),
@@ -22,6 +23,7 @@ data class DashboardState(
             copy(
                 status = planned.status,
                 fix = fix.copy(receiverFrequency = planned.fix.receiverFrequency),
+                rtklib = planned.rtklib,
                 profiles = planned.profiles,
                 mockGps = planned.mockGps,
             )
@@ -36,6 +38,7 @@ data class DashboardState(
             position: PositionCardState = PositionCardState(),
             fix: FixCardState = FixCardState(),
             ntrip: NtripCardState = NtripCardState(),
+            rtklib: RtklibCardState? = null,
             files: FilesCardState = FilesCardState(),
             profiles: ProfilesCardState = ProfilesCardState(),
             mockGps: MockGpsDashboardState = MockGpsDashboardState(),
@@ -55,6 +58,7 @@ data class DashboardState(
                 position = position,
                 fix = fix,
                 ntrip = ntrip,
+                rtklib = rtklib,
                 files = files,
                 profiles = profiles,
                 mockGps = mockGps,
@@ -70,6 +74,7 @@ data class DashboardState(
             position: PositionCardState,
             fix: FixCardState,
             ntrip: NtripCardState,
+            rtklib: RtklibCardState? = null,
             files: FilesCardState,
             profiles: ProfilesCardState = ProfilesCardState(),
             mockGps: MockGpsDashboardState = MockGpsDashboardState(),
@@ -83,6 +88,7 @@ data class DashboardState(
                 position = position,
                 fix = fix,
                 ntrip = ntrip,
+                rtklib = rtklib,
                 files = files,
                 profiles = profiles,
                 mockGps = mockGps,
@@ -452,6 +458,20 @@ data class NtripCardState(
     val uploadBytes: String = "0 B",
     val uploadDroppedBytes: String = "0 B",
     val uploadLastError: String? = null,
+)
+
+data class RtklibCardState(
+    val state: String = "Disabled",
+    val routePlan: String = "n/a",
+    val snapshotId: String = "n/a",
+    val lastError: String = "n/a",
+    val fixClass: String = "n/a",
+    val age: String = "n/a",
+    val roverQueue: String = "0 B",
+    val correctionQueue: String = "0 B",
+    val dropped: String = "0 B / 0 B",
+    val decoded: String = "0 rover / 0 corr",
+    val outputs: String = "0 NMEA / 0 POS",
 )
 
 data class FilesCardState(

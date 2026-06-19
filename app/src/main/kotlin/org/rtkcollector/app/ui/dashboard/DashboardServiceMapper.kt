@@ -68,7 +68,14 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             val fixClass = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_FIX) ?: "n/a"
             "$fixClass from $source"
         },
-        mockLocation = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE) ?: "Disabled",
+        mockLocation = displayMockLocationMonitor(
+            state = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE) ?: "Disabled",
+            lastIntervalMs = positiveLongExtra(intent, RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS),
+            solutionAgeMs = positiveLongExtra(
+                intent,
+                RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_SOLUTION_AGE_MS,
+            ),
+        ),
     )
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",
@@ -153,6 +160,27 @@ private fun mountpointFromUrl(url: String?): String =
 
 private fun finiteDoubleExtra(intent: Intent, key: String): Double? =
     intent.getDoubleExtra(key, Double.NaN).takeIf { it.isFinite() }
+
+private fun positiveLongExtra(intent: Intent, key: String): Long? =
+    intent.getLongExtra(key, -1L).takeIf { it >= 0L }
+
+internal fun displayMockLocationMonitor(
+    state: String,
+    lastIntervalMs: Long?,
+    solutionAgeMs: Long?,
+): String {
+    val status = state.takeIf { it.isNotBlank() } ?: "Disabled"
+    if (!status.equals("PUBLISHED", ignoreCase = true)) {
+        return status
+    }
+    val parts = mutableListOf(status)
+    lastIntervalMs?.takeIf { it > 0L }?.let {
+        parts += "%.1f Hz".format(java.util.Locale.US, 1000.0 / it.toDouble())
+        parts += "last ${it} ms"
+    }
+    solutionAgeMs?.let { parts += "age ${it} ms" }
+    return parts.joinToString(" · ")
+}
 
 private fun displayFixType(
     bestnavPositionType: String?,

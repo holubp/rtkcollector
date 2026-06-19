@@ -63,7 +63,12 @@ mock output; raw receiver recording continues. Android `Location.altitude` is
 published as ellipsoidal height. Satellite counts are attached as best-effort
 location extras when available, but Android's public mock-location API does not
 allow an ordinary app to inject full GNSS satellite status or satellite sky
-positions for other apps.
+positions for other apps. The Fix card shows compact mock-provider monitoring
+when mock output is enabled, including publish state, effective publish rate,
+the millisecond interval between the last two successful mock updates and the
+age of the selected solution. V1 publishes mock locations at a fixed-rate
+default of `1 Hz`. This monitor reports RtkCollector's publishing cadence;
+downstream apps may still apply their own display smoothing or throttling.
 
 Completed recordings can be selected individually, by group or all together.
 Sharing the full recording creates one temporary ZIP per selected session,

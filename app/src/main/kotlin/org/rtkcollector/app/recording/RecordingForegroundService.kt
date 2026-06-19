@@ -146,6 +146,7 @@ class RecordingForegroundService : Service() {
     private var bestSolutionTicker: java.util.concurrent.ScheduledFuture<*>? = null
     private var lastMockPublishedAt: Long? = null
     private var lastMockPublishedIdentity: String? = null
+    private var lastMockPublishWallClockAtMillis: Long? = null
     private var previousMockResult: org.rtkcollector.app.mocklocation.MockLocationPublishResult? = null
     private var mockLocationRequested: Boolean = false
     private var ubloxStreamParser = UbloxStreamParser()
@@ -447,11 +448,14 @@ class RecordingForegroundService : Service() {
 
             lastMockPublishedAt = null
             lastMockPublishedIdentity = null
+            lastMockPublishWallClockAtMillis = null
             previousMockResult = null
             bestSolutionTicker = if (mockLocationRequested) {
                 bestSolutionExecutor.scheduleAtFixedRate(
                     { runBestSolutionTick() },
-                    1, 1, java.util.concurrent.TimeUnit.SECONDS,
+                    DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS,
+                    DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS,
+                    java.util.concurrent.TimeUnit.MILLISECONDS,
                 )
             } else {
                 null
@@ -1084,6 +1088,7 @@ class RecordingForegroundService : Service() {
         solutionCandidates.clear()
         lastMockPublishedAt = null
         lastMockPublishedIdentity = null
+        lastMockPublishWallClockAtMillis = null
         previousMockResult = null
         mockLocationRequested = false
         releaseWakeLock()
@@ -1467,6 +1472,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_UM980_MODE, state.um980Mode)
                 putExtra(EXTRA_STATE_BEST_SOLUTION_SOURCE, state.bestSolutionSource)
                 putExtra(EXTRA_STATE_BEST_SOLUTION_FIX, state.bestSolutionFix)
+                putExtra(EXTRA_STATE_MOCK_LOCATION_SOLUTION_AGE_MS, state.mockLocationSolutionAgeMs ?: -1L)
                 putExtra(EXTRA_STATE_BASE_AVERAGE_SUMMARY, state.baseAverageSummary)
                 putExtra(EXTRA_STATE_BASE_AVERAGE_WARNING, state.baseAverageWarning)
                 putExtra(EXTRA_STATE_BASE_AVERAGE_ACTIVE, state.baseAverageActive)
@@ -1475,6 +1481,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_BASE_AVERAGE_HEIGHT, state.baseAverageHeightM ?: Double.NaN)
                 putExtra(EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT, state.baseAverageSampleCount)
                 putExtra(EXTRA_STATE_MOCK_LOCATION_STATE, state.mockLocationState)
+                putExtra(EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS, state.mockLocationLastIntervalMs ?: -1L)
                 putExtra(EXTRA_STATE_UBLOX_FREQUENCY, state.ubloxFrequency)
             },
         )
@@ -1544,6 +1551,7 @@ class RecordingForegroundService : Service() {
                 mockProviderAvailable = mockLocationPublisher != null,
                 lastMockPublishedAt = lastMockPublishedAt,
                 lastMockPublishedIdentity = lastMockPublishedIdentity,
+                lastMockPublishWallClockAtMillis = lastMockPublishWallClockAtMillis,
                 previousMockResult = previousMockResult,
             )
             val tick = BestSolutionTickLogic.compute(tickInput)
@@ -1552,6 +1560,7 @@ class RecordingForegroundService : Service() {
                 PublishAction.None -> {
                     lastMockPublishedAt = tick.newLastMockPublishedAt
                     lastMockPublishedIdentity = tick.newLastMockPublishedIdentity
+                    lastMockPublishWallClockAtMillis = tick.newLastMockPublishWallClockAtMillis
                     previousMockResult = tick.newPreviousMockResult
                 }
                 is PublishAction.Publish -> {
@@ -1560,16 +1569,24 @@ class RecordingForegroundService : Service() {
                         previousMockResult = org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED
                         state = state.copy(mockLocationState = previousMockResult!!.name)
                     } else {
+                        val publishedWallClockAtMillis = System.currentTimeMillis()
                         val published = publisher.publish(action.snapshot, enabled = true)
                         val applied = BestSolutionTickLogic.applyPublishResult(
                             previous = tick,
                             publishedResult = published,
                             publishedAtMillis = action.snapshot.updatedAtMillis,
+                            publishedWallClockAtMillis = publishedWallClockAtMillis,
                         )
                         lastMockPublishedAt = applied.newLastMockPublishedAt
                         lastMockPublishedIdentity = applied.newLastMockPublishedIdentity
+                        lastMockPublishWallClockAtMillis = applied.newLastMockPublishWallClockAtMillis
                         previousMockResult = published
-                        state = state.copy(mockLocationState = published.name)
+                        state = state.copy(
+                            mockLocationState = published.name,
+                            mockLocationLastIntervalMs = applied.lastMockPublishIntervalMillis
+                                ?: state.mockLocationLastIntervalMs,
+                            mockLocationSolutionAgeMs = tick.stateDelta.bestSolutionAgeMs,
+                        )
                         if (applied.setLastError) {
                             state = state.copy(
                                 lastError = "Android mock-location update failed. " +
@@ -2358,6 +2375,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_UM980_MODE = "um980Mode"
         const val EXTRA_STATE_BEST_SOLUTION_SOURCE = "bestSolutionSource"
         const val EXTRA_STATE_BEST_SOLUTION_FIX = "bestSolutionFix"
+        const val EXTRA_STATE_MOCK_LOCATION_SOLUTION_AGE_MS = "mockLocationSolutionAgeMs"
         const val EXTRA_STATE_BASE_AVERAGE_SUMMARY = "baseAverageSummary"
         const val EXTRA_STATE_BASE_AVERAGE_WARNING = "baseAverageWarning"
         const val EXTRA_STATE_BASE_AVERAGE_ACTIVE = "baseAverageActive"
@@ -2366,6 +2384,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_BASE_AVERAGE_HEIGHT = "baseAverageHeightM"
         const val EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT = "baseAverageSampleCount"
         const val EXTRA_STATE_MOCK_LOCATION_STATE = "mockLocationState"
+        const val EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS = "mockLocationIntervalMs"
         const val EXTRA_STATE_UBLOX_FREQUENCY = "ubloxFrequency"
 
         private const val CHANNEL_ID = "rtkcollector-recording"
@@ -2373,6 +2392,7 @@ class RecordingForegroundService : Service() {
         private const val NOTIFICATION_UPDATE_INTERVAL_MILLIS = 1_000L
         private const val READ_BUFFER_BYTES = 16 * 1024
         private const val ROUTINE_STATE_BROADCAST_INTERVAL_MILLIS = 250L
+        internal const val DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS = 1_000L
         private const val PROFILE_DRAIN_MILLIS = 2000L
         private const val SAVE_CONFIG_OK_TIMEOUT_MILLIS = 3_000L
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =

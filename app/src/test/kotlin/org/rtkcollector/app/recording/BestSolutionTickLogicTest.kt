@@ -11,6 +11,11 @@ import org.rtkcollector.core.solution.SolutionEngine
 
 class BestSolutionTickLogicTest {
     @Test
+    fun `default mock location publish period is one hertz`() {
+        assertEquals(1_000L, RecordingForegroundService.DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS)
+    }
+
+    @Test
     fun `empty candidate set yields STALE and nothing to publish`() {
         val out = BestSolutionTickLogic.compute(
             input(candidates = emptyList(), mockEnabled = true),
@@ -119,6 +124,29 @@ class BestSolutionTickLogicTest {
             publishedAtMillis = (out.publishAction as PublishAction.Publish).snapshot.updatedAtMillis,
         )
         assertEquals("UM980-BESTNAV|test|DEVICE_INTERNAL", applied.newLastMockPublishedIdentity)
+    }
+
+    @Test
+    fun `successful publish reports wall clock interval between last two mock updates`() {
+        val candidate = candidate("UBX-NAV-PVT", FixClass.SINGLE, updatedAtMillis = 2_000L)
+        val previous = BestSolutionTickLogic.compute(
+            input(
+                candidates = listOf(candidate),
+                nowMillis = 2_100L,
+                mockEnabled = true,
+                lastMockPublishWallClockAtMillis = 5_000L,
+            ),
+        )
+
+        val applied = BestSolutionTickLogic.applyPublishResult(
+            previous = previous,
+            publishedResult = MockLocationPublishResult.PUBLISHED,
+            publishedAtMillis = 2_000L,
+            publishedWallClockAtMillis = 5_250L,
+        )
+
+        assertEquals(250L, applied.lastMockPublishIntervalMillis)
+        assertEquals(5_250L, applied.newLastMockPublishWallClockAtMillis)
     }
 
     @Test
@@ -234,6 +262,7 @@ class BestSolutionTickLogicTest {
         mockEnabled: Boolean,
         lastMockPublishedAt: Long? = null,
         lastMockPublishedIdentity: String? = null,
+        lastMockPublishWallClockAtMillis: Long? = null,
         previousMockResult: MockLocationPublishResult? = null,
         mockProviderAvailable: Boolean = true,
     ): BestSolutionTickInput = BestSolutionTickInput(
@@ -243,6 +272,7 @@ class BestSolutionTickLogicTest {
         mockProviderAvailable = mockProviderAvailable,
         lastMockPublishedAt = lastMockPublishedAt,
         lastMockPublishedIdentity = lastMockPublishedIdentity,
+        lastMockPublishWallClockAtMillis = lastMockPublishWallClockAtMillis,
         previousMockResult = previousMockResult,
     )
 

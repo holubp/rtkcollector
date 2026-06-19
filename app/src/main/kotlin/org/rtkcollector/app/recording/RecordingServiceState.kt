@@ -101,6 +101,8 @@ data class RecordingServiceState(
     val baseAverageHeightM: Double? = null,
     val baseAverageSampleCount: Int = 0,
     val mockLocationState: String = "Disabled",
+    val mockLocationLastIntervalMs: Long? = null,
+    val mockLocationSolutionAgeMs: Long? = null,
     val ubloxFrequency: String = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
     val latDeg: Double? = null,
     val lonDeg: Double? = null,
@@ -126,6 +128,8 @@ internal fun RecordingServiceState.clearBestSolutionFields(
     bestSolutionFix = "n/a",
     bestSolutionAgeMs = null,
     mockLocationState = mockLocationState,
+    mockLocationLastIntervalMs = null,
+    mockLocationSolutionAgeMs = null,
     ubloxFrequency = ubloxFrequency,
 )
 
@@ -142,6 +146,7 @@ internal fun RecordingServiceState.applyBestSolutionDisplayDelta(
             bestSolutionFix = "n/a",
             bestSolutionAgeMs = null,
             mockLocationState = delta.mockResult.name,
+            mockLocationLastIntervalMs = mockLocationLastIntervalMs,
             ubloxFrequency = ubloxFrequency,
         )
     }

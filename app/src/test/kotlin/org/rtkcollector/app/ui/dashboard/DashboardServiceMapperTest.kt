@@ -45,6 +45,33 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `maps mock provider monitor with last interval and solution age`() {
+        val intent = Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE, "PUBLISHED")
+            .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS, 250L)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_SOLUTION_AGE_MS, 80L)
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("PUBLISHED · 4.0 Hz · last 250 ms · age 80 ms", state.fix.mockLocation)
+    }
+
+    @Test
+    fun `mock provider monitor does not use primary dashboard solution age`() {
+        val intent = Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE, "PUBLISHED")
+            .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS, 1000L)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_SOLUTION_AGE_MS, 80L)
+            .putExtra("bestSolutionAgeMs", 900L)
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("PUBLISHED · 1.0 Hz · last 1000 ms · age 80 ms", state.fix.mockLocation)
+    }
+
+    @Test
     fun `default ublox frequency label does not hide live um980 frequency`() {
         val intent = Intent()
             .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

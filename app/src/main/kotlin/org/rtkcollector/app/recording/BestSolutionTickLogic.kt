@@ -12,6 +12,7 @@ data class BestSolutionTickInput(
     val mockProviderAvailable: Boolean = true,
     val lastMockPublishedAt: Long? = null,
     val lastMockPublishedIdentity: String? = null,
+    val lastMockPublishWallClockAtMillis: Long? = null,
     val previousMockResult: MockLocationPublishResult? = null,
     val maxAgeMillis: Long = BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS,
 )
@@ -41,6 +42,7 @@ data class BestSolutionTickOutput(
     val publishAction: PublishAction,
     val newLastMockPublishedAt: Long?,
     val newLastMockPublishedIdentity: String?,
+    val newLastMockPublishWallClockAtMillis: Long?,
     val newPreviousMockResult: MockLocationPublishResult?,
     val previousMockResult: MockLocationPublishResult?,
 )
@@ -50,6 +52,8 @@ data class PublishResultApplication(
     val setLastError: Boolean,
     val newLastMockPublishedAt: Long?,
     val newLastMockPublishedIdentity: String?,
+    val newLastMockPublishWallClockAtMillis: Long?,
+    val lastMockPublishIntervalMillis: Long?,
 )
 
 object BestSolutionTickLogic {
@@ -103,6 +107,7 @@ object BestSolutionTickLogic {
             publishAction = publishAction,
             newLastMockPublishedAt = input.lastMockPublishedAt,
             newLastMockPublishedIdentity = input.lastMockPublishedIdentity,
+            newLastMockPublishWallClockAtMillis = input.lastMockPublishWallClockAtMillis,
             newPreviousMockResult = mockResult,
             previousMockResult = input.previousMockResult,
         )
@@ -116,6 +121,7 @@ object BestSolutionTickLogic {
         previous: BestSolutionTickOutput,
         publishedResult: MockLocationPublishResult,
         publishedAtMillis: Long?,
+        publishedWallClockAtMillis: Long? = publishedAtMillis,
     ): PublishResultApplication {
         val transitionedIntoFailed =
             publishedResult == MockLocationPublishResult.FAILED &&
@@ -129,11 +135,26 @@ object BestSolutionTickLogic {
             MockLocationPublishResult.PUBLISHED -> publishedSnapshot?.publishIdentity()
             else -> previous.newLastMockPublishedIdentity
         }
+        val lastInterval = if (
+            publishedResult == MockLocationPublishResult.PUBLISHED &&
+            publishedWallClockAtMillis != null &&
+            previous.newLastMockPublishWallClockAtMillis != null
+        ) {
+            (publishedWallClockAtMillis - previous.newLastMockPublishWallClockAtMillis).coerceAtLeast(0L)
+        } else {
+            null
+        }
+        val newLastWallClockPublishedAt = when (publishedResult) {
+            MockLocationPublishResult.PUBLISHED -> publishedWallClockAtMillis
+            else -> previous.newLastMockPublishWallClockAtMillis
+        }
         return PublishResultApplication(
             mockResult = publishedResult,
             setLastError = transitionedIntoFailed,
             newLastMockPublishedAt = newLastPublishedAt,
             newLastMockPublishedIdentity = newLastPublishedIdentity,
+            newLastMockPublishWallClockAtMillis = newLastWallClockPublishedAt,
+            lastMockPublishIntervalMillis = lastInterval,
         )
     }
 

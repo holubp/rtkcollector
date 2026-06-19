@@ -93,3 +93,18 @@ API.
 
 Verification:
 - Review: user docs and UI do not promise synthetic `GnssStatus` injection.
+
+### ANDROID-MOCK-003: Mock Provider Publishing Is Observable
+
+Status: Normative
+
+When mock-location publishing is enabled, the runtime state SHOULD expose the
+latest mock publish result and, after at least two successful publishes, the
+wall-clock interval between the last two successful mock-provider updates. This
+monitoring MUST remain advisory and MUST NOT run on or block the raw receiver
+capture path. V1 mock publishing defaults to a fixed-rate `1 Hz` cadence.
+
+Verification:
+- Automated: mock publish tick logic and dashboard mapper tests.
+- Manual: enabled mock provider shows status/rate/last-interval on the Fix
+  card during recording.

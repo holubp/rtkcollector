@@ -53,18 +53,23 @@ Verification:
 
 ### RX-UM980-RTKLIB-001: UM980 RTKLIB Input Routing Is Message-Specific
 
-Status: Future
+Status: In progress
 
 UM980 RTKLIB routing MUST distinguish direct RTKLIB-EX compatible observation
 messages from compact or app-specific observation messages. OBSVMB MAY be
 treated as a direct RTKLIB-EX route when the selected receiver profile emits it
 and the RTKLIB-EX capability model declares `input_unicore` support. OBSVMCMPB
 MUST require a named converter or explicit RTKLIB-EX decoder support before it
-is accepted as RTKLIB input.
+is accepted as RTKLIB input. The current Android native build declares the
+named `rtkcollector-obsvmcmp-shim`, which patches the pinned RTKLIB-EX Unicore
+decoder to accept message id 138 through the OBSVMB decoder path. This remains
+field/replay-validation-sensitive until a debug capture with actual
+`OBSVMCMPB` observation frames is available.
 
 Verification:
-- Automated: RTKLIB input route tests for OBSVMB direct and OBSVMCMPB
-  converter-required cases.
+- Automated: RTKLIB input route tests for OBSVMB direct and named OBSVMCMPB
+  shim cases; sample-readiness tooling reports whether observation frames are
+  actually present.
 - Review: UM980 command profiles selected for RTKLIB live processing emit the
   format declared by the workflow route plan.
 

@@ -10,8 +10,11 @@ receiver controller and base-calibration workflow companion.
 Third-party dependencies must be documented in docs/third-party-licenses.md
 before release builds are distributed.
 
-RTKLIB-EX real-time integration is planned. This repository currently contains
-RTKLIB routing/API foundation code only; no RTKLIB-EX upstream source snapshot
-or native binary is bundled yet. A development helper can create a local pinned
-RTKLIB-EX checkout, but that checkout is not part of the distributed source
-tree unless explicitly added and documented in a later release.
+RTKLIB-EX real-time integration uses Android native build glue and a pinned
+local checkout created by tools/update_rtklib_ex.py. The current pinned
+development commit is 8dfabc9a106b2e74c069bc80f0d7743f314e6ab4 from
+https://github.com/rtklibexplorer/RTKLIB.git. The upstream checkout is ignored
+by Git, but Android release artifacts that include librtkcollector_rtklib.so
+must preserve the RTKLIB BSD 2-clause licence text, upstream copyright notices
+and the corresponding source/reproducibility information recorded under
+third_party/rtklib-ex/.

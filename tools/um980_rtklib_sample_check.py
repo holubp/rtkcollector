@@ -24,6 +24,8 @@ CRC_LEN = 4
 MAX_PAYLOAD_LEN = 1_048_576
 
 MESSAGE_LABELS = {
+    12: "OBSVMB",
+    138: "OBSVMCMPB",
     142: "ADRNAVB",
     509: "RTKSTATUSB",
     954: "STADOPB",
@@ -52,6 +54,10 @@ class Um980SampleReport:
     @property
     def direct_rtklib_ready(self) -> bool:
         return self.status == "direct-unicore-obsvmb"
+
+    @property
+    def observation_frame_count(self) -> int:
+        return self.message_counts.get(12, 0) + self.message_counts.get(138, 0)
 
 
 def iter_unicore_frames(data: bytes):
@@ -87,13 +93,19 @@ def classify_status(
     configured_obsvmcmpb: bool,
     receiver_rx_bytes: int,
     correction_bytes: int,
+    message_counts: dict[int, int] | None = None,
 ) -> str:
     if receiver_rx_bytes <= 0:
         return "missing-receiver-rx"
+    message_counts = message_counts or {}
+    has_obsvmb_frames = message_counts.get(12, 0) > 0
+    has_obsvmcmpb_frames = message_counts.get(138, 0) > 0
     if configured_obsvmb and correction_bytes > 0:
         return "direct-unicore-obsvmb"
     if configured_obsvmb:
         return "direct-unicore-obsvmb-missing-corrections"
+    if configured_obsvmcmpb and not has_obsvmcmpb_frames and not has_obsvmb_frames:
+        return "configured-obsvmcmpb-no-observation-frames"
     if configured_obsvmcmpb:
         return "converter-required-obsvmcmpb"
     return "no-direct-um980-observation-config"
@@ -145,7 +157,8 @@ def inspect_session(path: Path) -> Um980SampleReport:
     except json.JSONDecodeError:
         command_profile_id = ""
     configured_obsvmb, configured_obsvmcmpb = classify_init_script(init_script, command_profile_id)
-    status = classify_status(configured_obsvmb, configured_obsvmcmpb, len(rx), len(correction))
+    message_counts = count_unicore_messages(rx)
+    status = classify_status(configured_obsvmb, configured_obsvmcmpb, len(rx), len(correction), message_counts)
     return Um980SampleReport(
         path=path,
         status=status,
@@ -154,7 +167,7 @@ def inspect_session(path: Path) -> Um980SampleReport:
         correction_bytes=len(correction),
         configured_obsvmb=configured_obsvmb,
         configured_obsvmcmpb=configured_obsvmcmpb,
-        message_counts=count_unicore_messages(rx),
+        message_counts=message_counts,
     )
 
 
@@ -169,6 +182,7 @@ def format_report(report: Um980SampleReport) -> str:
         f"rx={report.receiver_rx_bytes}B; corrections={report.correction_bytes}B; "
         f"init_obsvmb={str(report.configured_obsvmb).lower()}; "
         f"init_obsvmcmpb={str(report.configured_obsvmcmpb).lower()}; "
+        f"obs_frames={report.observation_frame_count}; "
         f"frames={counts}"
     )
 

@@ -119,4 +119,4 @@ Initial V2 route expectations:
 Verification:
 - Review: no V1 feature requires RTKLIB to record, feed NTRIP or prepare a base.
 - Automated: RTKLIB input route tests cover direct u-blox, direct Unicore,
-  converter-required Unicore compact observations and RTCM3 corrections.
+  named converter/shim Unicore compact observations and RTCM3 corrections.

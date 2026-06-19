@@ -181,7 +181,7 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
-    fun `enabled rtklib rejects UM980 compact OBSVMCMPB without converter`() {
+    fun `enabled rtklib accepts UM980 compact OBSVMCMPB through decoder shim`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
@@ -205,10 +205,10 @@ class ActiveRecordingConfigTest {
             passwordLookup = { null },
         )
 
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+        config.validateForStart()
 
-        assertTrue(error.message.orEmpty().contains("OBSVMCMPB requires a converter"))
-        assertTrue(config.rtklib.routePlan.orEmpty().contains("unsupported(UNICORE_OBSVMCMPB)"))
+        assertTrue(config.rtklib.validationErrors.isEmpty())
+        assertTrue(config.rtklib.routePlan.orEmpty().contains("rtkcollector-obsvmcmp-shim(UNICORE_OBSVMCMPB)"))
     }
 
     @Test

@@ -5,6 +5,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
 import org.rtkcollector.core.workflow.RtklibInputRouter
+import org.rtkcollector.core.workflow.RtklibRoverInputFormat
 import org.rtkcollector.core.workflow.WorkflowExamples
 
 class RtklibConfigTest {
@@ -24,7 +25,7 @@ class RtklibConfigTest {
     @Test
     fun `unsupported UM980 compact route is rejected without converter`() {
         val workflow = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4())
-            .copy(rtklibPreferredRoverInputFormat = org.rtkcollector.core.workflow.RtklibRoverInputFormat.UNICORE_OBSVMCMPB)
+            .copy(rtklibPreferredRoverInputFormat = RtklibRoverInputFormat.UNICORE_OBSVMCMPB)
         val config = RtklibConfig(
             routePlan = RtklibInputRouter().plan(workflow),
             preset = RtklibPreset.ROVER_KINEMATIC_RTK,
@@ -36,6 +37,23 @@ class RtklibConfigTest {
 
         assertFalse(result.valid)
         assertTrue(result.errors.any { it.contains("Unsupported RTKLIB rover input route") })
+    }
+
+    @Test
+    fun `UM980 compact route is accepted with explicit RtkCollector OBSVMCMPB shim`() {
+        val workflow = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4())
+            .copy(
+                rtklibPreferredRoverInputFormat = RtklibRoverInputFormat.UNICORE_OBSVMCMPB,
+                rtklibRawConverterId = "rtkcollector-obsvmcmp-shim",
+            )
+        val config = RtklibConfig(
+            routePlan = RtklibInputRouter().plan(workflow),
+            preset = RtklibPreset.ROVER_KINEMATIC_RTK,
+            receiverProfileId = "um980-compact",
+            baseContextSummary = "NTRIP CORS01",
+        )
+
+        assertTrue(config.validate().valid)
     }
 
     @Test

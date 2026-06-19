@@ -764,6 +764,13 @@ class RecordingForegroundService : Service() {
                 decoderId = "input_unicore",
                 reason = "App start validation selected Unicore OBSVMB direct RTKLIB route.",
             )
+            text.contains("rtkcollector-obsvmcmp-shim") -> RtklibInputRoute(
+                kind = RtklibInputRouteKind.CONVERTER,
+                format = RtklibRoverInputFormat.UNICORE_OBSVMCMPB,
+                decoderId = "input_unicore",
+                converterId = "rtkcollector-obsvmcmp-shim",
+                reason = "App start validation selected RtkCollector OBSVMCMPB decoder shim.",
+            )
             else -> RtklibInputRoute(
                 kind = RtklibInputRouteKind.UNSUPPORTED,
                 reason = text.ifBlank { "RTKLIB rover input route is missing." },

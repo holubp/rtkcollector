@@ -19,9 +19,9 @@ def unicore_frame(message_id: int, payload_len: int = 0) -> bytes:
 
 
 def test_count_unicore_messages_resyncs_and_counts_known_frames():
-    data = b"noise" + unicore_frame(2118, 4) + b"x" + unicore_frame(2125)
+    data = b"noise" + unicore_frame(2118, 4) + b"x" + unicore_frame(2125) + unicore_frame(138)
 
-    assert count_unicore_messages(data) == {2118: 1, 2125: 1}
+    assert count_unicore_messages(data) == {2118: 1, 2125: 1, 138: 1}
 
 
 def test_classify_init_script_distinguishes_obsvmb_from_compact_obsvmcmpb():
@@ -56,7 +56,7 @@ def test_direct_obsvmb_requires_receiver_rx_bytes():
 def test_inspect_session_zip_reports_compact_obsvmcmpb_as_converter_required(tmp_path: Path):
     session_zip = tmp_path / "session.zip"
     with zipfile.ZipFile(session_zip, "w") as archive:
-        archive.writestr("receiver-rx.raw", unicore_frame(2118))
+        archive.writestr("receiver-rx.raw", unicore_frame(2118) + unicore_frame(138))
         archive.writestr("init-script.txt", "OBSVMCMPB COM1 0.25\n")
         archive.writestr("correction-input.raw", b"\xd3\x00\x00")
 
@@ -64,6 +64,20 @@ def test_inspect_session_zip_reports_compact_obsvmcmpb_as_converter_required(tmp
 
     assert report.status == "converter-required-obsvmcmpb"
     assert not report.direct_rtklib_ready
+    assert report.observation_frame_count == 1
+
+
+def test_inspect_session_zip_reports_configured_compact_profile_without_observation_frames(tmp_path: Path):
+    session_zip = tmp_path / "session.zip"
+    with zipfile.ZipFile(session_zip, "w") as archive:
+        archive.writestr("receiver-rx.raw", unicore_frame(2118))
+        archive.writestr("init-script.txt", "OBSVMCMPB COM1 0.25\n")
+        archive.writestr("correction-input.raw", b"\xd3\x00\x00")
+
+    report = inspect_session(session_zip)
+
+    assert report.status == "configured-obsvmcmpb-no-observation-frames"
+    assert report.observation_frame_count == 0
 
 
 def test_inspect_session_zip_uses_session_command_profile_hint(tmp_path: Path):
@@ -75,5 +89,5 @@ def test_inspect_session_zip_uses_session_command_profile_hint(tmp_path: Path):
 
     report = inspect_session(session_zip)
 
-    assert report.status == "converter-required-obsvmcmpb"
+    assert report.status == "configured-obsvmcmpb-no-observation-frames"
     assert report.configured_obsvmcmpb

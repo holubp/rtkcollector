@@ -64,10 +64,7 @@ internal object RtklibStartValidator {
         return when {
             isUblox -> RoverRoute("input_ubx(UBX_RXM_RAWX_SFRBX)")
             isUm980 && hasObsvmb -> RoverRoute("input_unicore(UNICORE_OBSVMB)")
-            isUm980 && hasObsvmcmpb -> RoverRoute(
-                summary = "unsupported(UNICORE_OBSVMCMPB)",
-                error = "UM980 OBSVMCMPB requires a converter before RTKLIB real-time processing.",
-            )
+            isUm980 && hasObsvmcmpb -> RoverRoute("converter:rtkcollector-obsvmcmp-shim(UNICORE_OBSVMCMPB)")
             isUm980 -> RoverRoute(
                 summary = "not_configured(UNICORE_OBSVMB)",
                 error = "UM980 RTKLIB real-time processing requires an OBSVMB command profile.",

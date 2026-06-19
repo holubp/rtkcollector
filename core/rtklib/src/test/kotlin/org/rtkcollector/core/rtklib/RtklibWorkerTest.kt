@@ -92,7 +92,10 @@ class RtklibWorkerTest {
     @Test
     fun `native bridge loads lazily only when a backend is created`() {
         var loads = 0
-        val bridge = RtklibNativeBridge(loadLibrary = { loads++ })
+        val bridge = RtklibNativeBridge(
+            loadLibrary = { loads++ },
+            nativeApi = FakeNativeApi(),
+        )
 
         assertEquals(0, loads)
         bridge.create()
@@ -140,5 +143,27 @@ class RtklibWorkerTest {
             RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
 
         override fun stop() = Unit
+    }
+
+    private class FakeNativeApi : RtklibNativeBridge.NativeApi {
+        override fun version(): String = "test"
+        override fun create(): Long = 1L
+        override fun start(
+            handle: Long,
+            preset: String,
+            roverFormat: String,
+            correctionFormat: String,
+            outputNmea: Boolean,
+            outputPos: Boolean,
+        ): String? = null
+
+        override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> =
+            arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
+
+        override fun snapshot(handle: Long): Array<String> =
+            arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
+
+        override fun stop(handle: Long) = Unit
+        override fun destroy(handle: Long) = Unit
     }
 }

@@ -1,7 +1,30 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+fun localSdkDir(): File? {
+    val localProperties = rootProject.file("local.properties")
+    if (localProperties.isFile) {
+        val properties = Properties()
+        localProperties.inputStream().use(properties::load)
+        properties.getProperty("sdk.dir")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return file(it) }
+    }
+    return sequenceOf("ANDROID_HOME", "ANDROID_SDK_ROOT")
+        .mapNotNull { System.getenv(it)?.takeIf(String::isNotBlank) }
+        .map(::file)
+        .firstOrNull { it.isDirectory }
+}
+
+val rtklibNativeBuildAvailable = localSdkDir()
+    ?.resolve("ndk")
+    ?.listFiles()
+    ?.any { it.resolve("source.properties").isFile }
+    ?: false
 
 android {
     namespace = "org.rtkcollector.app"
@@ -17,6 +40,14 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    if (rtklibNativeBuildAvailable) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+            }
+        }
     }
 }
 

@@ -172,7 +172,7 @@ class WorkflowValidatorTest {
 
     @Test
     fun `RTKLIB workflow with no compatible raw observations or converter is invalid`() {
-        val spec = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.ubloxM8p0())
+        val spec = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.genericNmeaRtcm())
 
         assertError(spec, "RTKLIB_REQUIRES_COMPATIBLE_RAW")
     }
@@ -360,6 +360,20 @@ class WorkflowValidatorTest {
         )
 
         assertError(spec, "CORRECTION_INPUT_RTCM3_ARTIFACT_REQUIRED")
+    }
+
+    @Test
+    fun `RTKLIB NMEA and POS artifacts are required when RTKLIB solution is recorded`() {
+        val baseline = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.um980N4())
+        val spec = baseline.copy(
+            recording = baseline.recording.copy(
+                expectedSessionArtifacts = baseline.recording.expectedSessionArtifacts -
+                    SessionArtifact.RTKLIB_SOLUTION_NMEA -
+                    SessionArtifact.RTKLIB_SOLUTION_POS,
+            ),
+        )
+
+        assertError(spec, "RTKLIB_ARTIFACTS_REQUIRED")
     }
 
     @Test

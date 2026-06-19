@@ -43,6 +43,12 @@ Hard non-goals:
   unrelated ad-hoc UI modes.
 - In-phone RTKLIB real-time solution is version 2 work. Do not make it required
   for V1 recording, NTRIP-to-receiver, temporary-base or fixed-base workflows.
+- RTKLIB-EX integration must be lazy and route-planned. Do not load native
+  RTKLIB libraries or start RTKLIB workers unless the validated workflow
+  explicitly enables RTKLIB. Direct supported routes are preferred, such as
+  u-blox RAWX/SFRBX to `input_ubx`, UM980 OBSVMB to `input_unicore`, and RTCM3
+  corrections to `input_rtcm3`; UM980 OBSVMCMPB requires a named converter or
+  explicit decoder support before use.
 
 ## Specification-First Workflow
 

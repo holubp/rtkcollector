@@ -89,6 +89,31 @@ In-phone RTKLIB real-time solution is not required for V1. When implemented, it
 MUST remain a separate solution engine from receiver-internal solution and MUST
 NOT become part of the raw capture path.
 
+RTKLIB-EX integration MUST use the library API through an in-process native
+adapter, not RTKLIB command-line tools. Live processing MUST be forward-only.
+Forward/backward or combined processing belongs to offline/post-processing.
+
+RTKLIB input routing MUST be explicit and format-aware. Receiver profiles MUST
+declare candidate RTKLIB rover-input formats, and the RTKLIB engine capability
+model MUST declare which formats can be consumed directly. Direct RTKLIB-EX
+routes SHOULD be used before converter routes when the direct route preserves
+the receiver data. Converter routes are allowed only when named explicitly.
+
+Initial V2 route expectations:
+
+- u-blox RAWX/SFRBX SHOULD route directly to RTKLIB-EX `input_ubx` when the
+  selected profile emits those messages.
+- Unicore/UM980 OBSVMB SHOULD route directly to RTKLIB-EX `input_unicore` when
+  the selected profile emits OBSVMB.
+- Unicore/UM980 OBSVMCMPB MUST NOT be treated as direct RTKLIB-compatible input
+  unless the RTKLIB-EX capability model explicitly declares direct support;
+  otherwise it requires a named converter or a focused decoder update.
+- RTCM3 correction/base-observation streams SHOULD route directly to
+  RTKLIB-EX `input_rtcm3`.
+- NMEA, BESTNAV, ADRNAV, PPPNAV and NAV-PVT are solution/monitoring data, not
+  RTKLIB raw-observation input.
+
 Verification:
 - Review: no V1 feature requires RTKLIB to record, feed NTRIP or prepare a base.
-
+- Automated: RTKLIB input route tests cover direct u-blox, direct Unicore,
+  converter-required Unicore compact observations and RTCM3 corrections.

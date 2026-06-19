@@ -100,6 +100,8 @@ class WorkflowValidator {
             return
         }
 
+        val rtklibRoutePlan = RtklibInputRouter().plan(spec)
+
         if (CorrectionTarget.RTKLIB !in spec.correctionTargets) {
             errors += error(
                 "RTKLIB_REQUIRES_CORRECTION_TARGET",
@@ -121,22 +123,24 @@ class WorkflowValidator {
             )
         }
 
-        if (!spec.correctionSource.supportsRtklibCorrectionInput(spec.rtklibRawConverterId)) {
+        if (!rtklibRoutePlan.correctionInput.supported) {
             errors += error(
                 "RTKLIB_REQUIRES_SUPPORTED_CORRECTION_FORMAT",
-                "RTKLIB real-time requires RTCM observation corrections or an explicit converter for the correction source format.",
+                "RTKLIB real-time requires RTCM observation corrections or an explicit converter for the correction source format. " +
+                    rtklibRoutePlan.correctionInput.reason,
             )
         }
 
-        if (!spec.hasRtklibCompatibleRawOrConverter()) {
+        if (!rtklibRoutePlan.roverInput.supported) {
             errors += error(
                 "RTKLIB_REQUIRES_COMPATIBLE_RAW",
-                "RTKLIB real-time requires RTKLIB-compatible raw observations or an explicit converter.",
+                "RTKLIB real-time requires RTKLIB-compatible raw observations or an explicit converter. " +
+                    rtklibRoutePlan.roverInput.reason,
             )
         }
 
         if (ObservationRequirement.RTKLIB_COMPATIBLE_REQUIRED == spec.observationRequirement &&
-            !spec.hasRtklibCompatibleRawOrConverter()
+            !rtklibRoutePlan.roverInput.supported
         ) {
             errors += error(
                 "RTKLIB_COMPATIBLE_REQUIRED_REQUIRES_CAPABILITY",
@@ -284,6 +288,16 @@ class WorkflowValidator {
             errors += error(
                 "PPP_ARTIFACT_REQUIRED",
                 "Receiver PPP solution recording requires receiver-ppp-solution.jsonl as an expected artifact.",
+            )
+        }
+
+        if (spec.recording.recordRtklibSolution &&
+            (SessionArtifact.RTKLIB_SOLUTION_NMEA !in spec.recording.expectedSessionArtifacts ||
+                SessionArtifact.RTKLIB_SOLUTION_POS !in spec.recording.expectedSessionArtifacts)
+        ) {
+            errors += error(
+                "RTKLIB_ARTIFACTS_REQUIRED",
+                "RTKLIB solution recording requires rtklib-solution.nmea and rtklib-solution.pos as expected artifacts.",
             )
         }
     }
@@ -546,11 +560,6 @@ class WorkflowValidator {
             spec.correctionSource is CorrectionSourceSpec.None &&
             SolutionEngine.RTKLIB_REALTIME !in spec.solutionEngines
 
-    private fun WorkflowSpec.hasRtklibCompatibleRawOrConverter(): Boolean =
-        receiverCapabilities.supportsRtklibCompatibleRaw ||
-            receiverCapabilities.supportsRtklibRawConverter ||
-            rtklibRawConverterId != null
-
     private fun CorrectionSourceSpec.isRtcmCorrectionSource(): Boolean =
         when (this) {
             is CorrectionSourceSpec.Ntrip -> true
@@ -560,20 +569,6 @@ class WorkflowValidator {
                 expectedCorrectionFormat == CorrectionFormat.RTCM_OBSERVATIONS
             CorrectionSourceSpec.None -> false
         }
-
-    private fun CorrectionSourceSpec.supportsRtklibCorrectionInput(rtklibRawConverterId: String?): Boolean =
-        when (this) {
-            is CorrectionSourceSpec.Ntrip -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
-            is CorrectionSourceSpec.LocalBaseStream -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
-            is CorrectionSourceSpec.ExternalSerialOrTcp -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
-            is CorrectionSourceSpec.FileReplay -> expectedCorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId)
-            CorrectionSourceSpec.None -> false
-        }
-
-    private fun CorrectionFormat.isRtklibInputCompatible(rtklibRawConverterId: String?): Boolean =
-        this == CorrectionFormat.RTCM3 ||
-            this == CorrectionFormat.RTCM_OBSERVATIONS ||
-            (this == CorrectionFormat.RECEIVER_NATIVE_RAW && rtklibRawConverterId != null)
 
     private fun BaseContextSpec.hasLocalOrRecordedBaseObservation(): Boolean =
         this is BaseContextSpec.LocalBaseStream || this is BaseContextSpec.RecordedBaseSession

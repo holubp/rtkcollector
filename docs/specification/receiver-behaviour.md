@@ -51,6 +51,23 @@ Verification:
 - Automated: profile store migration and protected-profile tests.
 - Review: built-in profiles are not directly editable in profile screens.
 
+### RX-UM980-RTKLIB-001: UM980 RTKLIB Input Routing Is Message-Specific
+
+Status: Future
+
+UM980 RTKLIB routing MUST distinguish direct RTKLIB-EX compatible observation
+messages from compact or app-specific observation messages. OBSVMB MAY be
+treated as a direct RTKLIB-EX route when the selected receiver profile emits it
+and the RTKLIB-EX capability model declares `input_unicore` support. OBSVMCMPB
+MUST require a named converter or explicit RTKLIB-EX decoder support before it
+is accepted as RTKLIB input.
+
+Verification:
+- Automated: RTKLIB input route tests for OBSVMB direct and OBSVMCMPB
+  converter-required cases.
+- Review: UM980 command profiles selected for RTKLIB live processing emit the
+  format declared by the workflow route plan.
+
 ## u-blox
 
 ### RX-UBLOX-M8T-001: M8T Is Raw/Timing/Post-Processing Receiver
@@ -64,3 +81,16 @@ Verification:
 - Automated: receiver capability tests.
 - Manual: M8T profile records UBX RAWX/SFRBX/TIM where configured.
 
+### RX-UBLOX-RTKLIB-001: u-blox Raw Input Is First-Class RTKLIB Input
+
+Status: Future
+
+u-blox profiles that emit UBX RXM-RAWX and RXM-SFRBX MUST be eligible for a
+direct RTKLIB-EX route through the UBX decoder. The route model MUST preserve
+u-blox-specific raw data instead of forcing it through a generic intermediate
+observation model unless a future validation shows a direct route is unsafe.
+
+Verification:
+- Automated: RTKLIB input route tests for u-blox RAWX/SFRBX direct routing.
+- Manual: M8T/M8P replay sessions produce RTKLIB observation epochs without
+  affecting receiver raw recording.

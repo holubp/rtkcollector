@@ -15,7 +15,9 @@ session/
   receiver-solution.nmea optional, derived from receiver RX
   receiver-solution.jsonl optional, derived from receiver RX
   receiver-ppp-solution.jsonl optional
-  rtklib-solution.jsonl optional, V2
+  rtklib-solution.nmea optional, V2 RTKLIB-EX output
+  rtklib-solution.pos optional, V2 RTKLIB-EX output
+  rtklib-status.jsonl optional, V2 RTKLIB-EX diagnostics
   init-script.txt
   receiver-profile.json
   base-position.json optional
@@ -82,6 +84,14 @@ receiver PPP solution and from future RTKLIB real-time solution. Temporary-base
 preparation sessions should record raw observations at `>= 1 Hz` where
 supported, record normal device solution and record receiver PPP solution where
 supported.
+
+When RTKLIB-EX real-time processing is enabled in V2, session metadata must
+record the RTKLIB preset, RTKLIB-EX snapshot id, forward-only route plan,
+receiver input route, correction input route and enabled output artifacts.
+RTKLIB solution artifacts are derived/advisory outputs and must stay separate
+from receiver-derived `receiver-solution.nmea` and `receiver-solution.jsonl`.
+The required user-facing RTKLIB outputs are `rtklib-solution.nmea` and
+`rtklib-solution.pos`; optional diagnostics belong in `rtklib-status.jsonl`.
 
 Experimental V1 writes `receiver-rx.raw`, `tx-to-receiver.raw`,
 `correction-input.raw`, `correction-input.rtcm3`, `events.jsonl`,

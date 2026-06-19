@@ -196,7 +196,20 @@ Future RTKLIB requirements remain:
 - receiver raw observations must be RTKLIB-compatible, or a converter must be
   configured.
 
-RTKLIB must not be assumed to consume every receiver-native binary stream.
+RTKLIB must not be assumed to consume every receiver-native binary stream. V2
+live processing is forward-only and must use RTKLIB-EX as a native library, not
+as command-line tools. The workflow model uses an explicit RTKLIB input-route
+plan:
+
+- prefer direct RTKLIB-EX decoders for supported receiver formats, such as
+  u-blox RAWX/SFRBX through `input_ubx`;
+- use direct Unicore routing only for exact Unicore messages declared as
+  supported by RTKLIB-EX, such as OBSVMB through `input_unicore`;
+- require a named converter or RTKLIB-EX decoder update for compact Unicore
+  OBSVMCMPB;
+- feed RTCM3 correction/base-observation streams through `input_rtcm3`;
+- never treat NMEA or receiver solution logs such as BESTNAV, ADRNAV, PPPNAV or
+  NAV-PVT as RTKLIB raw observations.
 
 ## Lifecycle
 

@@ -9,3 +9,7 @@ receiver controller and base-calibration workflow companion.
 
 Third-party dependencies must be documented in docs/third-party-licenses.md
 before release builds are distributed.
+
+RTKLIB-EX real-time integration is planned. This repository currently contains
+RTKLIB routing/API foundation code only; no RTKLIB-EX upstream source snapshot
+or native binary is bundled yet.

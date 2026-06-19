@@ -20,6 +20,17 @@ object ReceiverCapabilityFixtures {
             supportsReceiverPppSolution = true,
             supportsReceiverSurveyIn = true,
             supportsCustomInitCommands = true,
+            rtklibRoverInputCapabilities = listOf(
+                RtklibRoverInputCapability(
+                    format = RtklibRoverInputFormat.UNICORE_OBSVMB,
+                    description = "Unicore OBSVMB direct RTKLIB-EX rover observation input.",
+                    preferred = true,
+                ),
+                RtklibRoverInputCapability(
+                    format = RtklibRoverInputFormat.UNICORE_OBSVMCMPB,
+                    description = "Unicore compact observation input; requires converter or RTKLIB-EX decoder support.",
+                ),
+            ),
         )
 
     fun ubloxM8p0(): ReceiverWorkflowCapabilities =
@@ -28,6 +39,13 @@ object ReceiverCapabilityFixtures {
             supportsRtcmInput = true,
             supportsInternalRtk = true,
             supportsRawObservations = true,
+            rtklibRoverInputCapabilities = listOf(
+                RtklibRoverInputCapability(
+                    format = RtklibRoverInputFormat.UBX_RXM_RAWX_SFRBX,
+                    description = "u-blox UBX RXM-RAWX/RXM-SFRBX direct RTKLIB-EX rover observation input.",
+                    preferred = true,
+                ),
+            ),
         )
 
     fun ubloxM8p2(): ReceiverWorkflowCapabilities =
@@ -40,6 +58,13 @@ object ReceiverCapabilityFixtures {
             supportsInternalRtk = true,
             supportsRawObservations = true,
             supportsReceiverSurveyIn = true,
+            rtklibRoverInputCapabilities = listOf(
+                RtklibRoverInputCapability(
+                    format = RtklibRoverInputFormat.UBX_RXM_RAWX_SFRBX,
+                    description = "u-blox UBX RXM-RAWX/RXM-SFRBX direct RTKLIB-EX rover observation input.",
+                    preferred = true,
+                ),
+            ),
         )
 
     fun ubloxM8t(): ReceiverWorkflowCapabilities =
@@ -47,6 +72,13 @@ object ReceiverCapabilityFixtures {
             supportsBaseCalibrationMode = true,
             supportsRawObservations = true,
             supportsReceiverSurveyIn = true,
+            rtklibRoverInputCapabilities = listOf(
+                RtklibRoverInputCapability(
+                    format = RtklibRoverInputFormat.UBX_RXM_RAWX_SFRBX,
+                    description = "u-blox UBX RXM-RAWX/RXM-SFRBX direct RTKLIB-EX rover observation input.",
+                    preferred = true,
+                ),
+            ),
         )
 }
 
@@ -222,7 +254,8 @@ object WorkflowExamples {
                     SessionArtifact.CORRECTION_INPUT_RAW,
                     SessionArtifact.CORRECTION_INPUT_RTCM3,
                     SessionArtifact.EVENTS_JSONL,
-                    SessionArtifact.RTKLIB_SOLUTION_JSONL,
+                    SessionArtifact.RTKLIB_SOLUTION_NMEA,
+                    SessionArtifact.RTKLIB_SOLUTION_POS,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                 ),
             ),
@@ -257,7 +290,8 @@ object WorkflowExamples {
                     SessionArtifact.CORRECTION_INPUT_RTCM3,
                     SessionArtifact.EVENTS_JSONL,
                     SessionArtifact.DEVICE_SOLUTION_JSONL,
-                    SessionArtifact.RTKLIB_SOLUTION_JSONL,
+                    SessionArtifact.RTKLIB_SOLUTION_NMEA,
+                    SessionArtifact.RTKLIB_SOLUTION_POS,
                     SessionArtifact.QUALITY_LIVE_JSONL,
                 ),
             ),

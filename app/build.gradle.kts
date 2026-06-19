@@ -32,6 +32,7 @@ dependencies {
     implementation(project(":core:session"))
     implementation(project(":core:transport"))
     implementation(project(":core:workflow"))
+    implementation(project(":core:rtklib"))
     implementation(project(":receiver:api"))
     implementation(project(":receiver:unicore-n4"))
     implementation(project(":receiver:ublox-m8"))

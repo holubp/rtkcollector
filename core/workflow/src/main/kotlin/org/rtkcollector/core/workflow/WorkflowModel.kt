@@ -52,6 +52,85 @@ enum class CorrectionFormat {
     UNKNOWN,
 }
 
+enum class RtklibRoverInputFormat {
+    UBX_RXM_RAWX_SFRBX,
+    UNICORE_OBSVMB,
+    UNICORE_OBSVMCMPB,
+    RTCM3_OBSERVATIONS,
+    CONVERTED_OBSERVATION_EPOCHS,
+    UNKNOWN,
+}
+
+enum class RtklibInputRouteKind {
+    NOT_CONFIGURED,
+    DIRECT_RTKLIB_DECODER,
+    CONVERTER,
+    UNSUPPORTED,
+}
+
+data class RtklibRoverInputCapability(
+    val format: RtklibRoverInputFormat,
+    val description: String,
+    val preferred: Boolean = false,
+    val converterId: String? = null,
+)
+
+data class RtklibEngineCapabilities(
+    val id: String,
+    val directRoverInputFormats: Set<RtklibRoverInputFormat>,
+    val directCorrectionFormats: Set<CorrectionFormat>,
+)
+
+data class RtklibInputRoute(
+    val kind: RtklibInputRouteKind,
+    val format: RtklibRoverInputFormat? = null,
+    val decoderId: String? = null,
+    val converterId: String? = null,
+    val reason: String,
+) {
+    val supported: Boolean
+        get() = kind == RtklibInputRouteKind.DIRECT_RTKLIB_DECODER ||
+            kind == RtklibInputRouteKind.CONVERTER
+}
+
+data class RtklibCorrectionInputRoute(
+    val kind: RtklibInputRouteKind,
+    val format: CorrectionFormat? = null,
+    val decoderId: String? = null,
+    val converterId: String? = null,
+    val reason: String,
+) {
+    val supported: Boolean
+        get() = kind == RtklibInputRouteKind.DIRECT_RTKLIB_DECODER ||
+            kind == RtklibInputRouteKind.CONVERTER
+}
+
+data class RtklibInputRoutePlan(
+    val roverInput: RtklibInputRoute,
+    val correctionInput: RtklibCorrectionInputRoute,
+    val solutionDirection: RtklibSolutionDirection = RtklibSolutionDirection.FORWARD_ONLY,
+)
+
+enum class RtklibSolutionDirection {
+    FORWARD_ONLY,
+}
+
+object RtklibExCapabilities {
+    fun current(): RtklibEngineCapabilities =
+        RtklibEngineCapabilities(
+            id = "rtklib-ex-2.5.0",
+            directRoverInputFormats = setOf(
+                RtklibRoverInputFormat.UBX_RXM_RAWX_SFRBX,
+                RtklibRoverInputFormat.UNICORE_OBSVMB,
+                RtklibRoverInputFormat.RTCM3_OBSERVATIONS,
+            ),
+            directCorrectionFormats = setOf(
+                CorrectionFormat.RTCM3,
+                CorrectionFormat.RTCM_OBSERVATIONS,
+            ),
+        )
+}
+
 data class BasePosition(
     val latDeg: Double? = null,
     val lonDeg: Double? = null,
@@ -177,6 +256,7 @@ data class ReceiverWorkflowCapabilities(
     val supportsReceiverSurveyIn: Boolean = false,
     val supportsCustomInitCommands: Boolean = false,
     val supportsRtklibRawConverter: Boolean = false,
+    val rtklibRoverInputCapabilities: List<RtklibRoverInputCapability> = emptyList(),
 )
 
 enum class SessionArtifact {
@@ -188,7 +268,9 @@ enum class SessionArtifact {
     EVENTS_JSONL,
     DEVICE_SOLUTION_JSONL,
     RECEIVER_PPP_SOLUTION_JSONL,
-    RTKLIB_SOLUTION_JSONL,
+    RTKLIB_SOLUTION_NMEA,
+    RTKLIB_SOLUTION_POS,
+    RTKLIB_STATUS_JSONL,
     QUALITY_LIVE_JSONL,
     BASE_POSITION_JSON,
     RTCM_EXTRACTED_RTCM3,
@@ -252,6 +334,7 @@ data class WorkflowSpec(
     val basePositionCandidateGeneration: BasePositionCandidateGenerationSpec = BasePositionCandidateGenerationSpec(),
     val workflowSpecVersion: Int = 1,
     val rtklibRawConverterId: String? = null,
+    val rtklibPreferredRoverInputFormat: RtklibRoverInputFormat? = null,
     val customInitCommandsRequested: Boolean = false,
 )
 

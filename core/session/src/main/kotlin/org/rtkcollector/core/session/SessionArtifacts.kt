@@ -12,6 +12,9 @@ enum class SessionArtifactFile(val fileName: String) {
     RECEIVER_SOLUTION_NMEA("receiver-solution.nmea"),
     RECEIVER_SOLUTION_JSONL("receiver-solution.jsonl"),
     RECEIVER_PPP_SOLUTION_JSONL("receiver-ppp-solution.jsonl"),
+    RTKLIB_SOLUTION_NMEA("rtklib-solution.nmea"),
+    RTKLIB_SOLUTION_POS("rtklib-solution.pos"),
+    RTKLIB_STATUS_JSONL("rtklib-status.jsonl"),
     BASE_POSITION_JSON("base-position.json"),
     RTCM_EXTRACTED_RTCM3("rtcm-extracted.rtcm3"),
 }

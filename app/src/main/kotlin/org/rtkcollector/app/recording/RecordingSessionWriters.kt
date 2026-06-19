@@ -26,6 +26,9 @@ internal interface RecordingSessionWriters : Closeable {
     fun appendReceiverSolutionNmea(sentence: String)
     fun appendReceiverSolutionJson(json: String)
     fun appendReceiverPppSolutionJson(json: String)
+    fun appendRtklibSolutionNmea(sentence: String)
+    fun appendRtklibSolutionPos(line: String)
+    fun appendRtklibStatusJson(json: String)
     fun appendExtractedRtcm(bytes: ByteArray)
     fun writeBasePositionJson(json: String)
     fun flush()
@@ -47,6 +50,9 @@ internal class PathRecordingSessionWriters private constructor(
     override fun appendReceiverSolutionNmea(sentence: String) = delegate.appendReceiverSolutionNmea(sentence)
     override fun appendReceiverSolutionJson(json: String) = delegate.appendReceiverSolutionJson(json)
     override fun appendReceiverPppSolutionJson(json: String) = delegate.appendReceiverPppSolutionJson(json)
+    override fun appendRtklibSolutionNmea(sentence: String) = delegate.appendRtklibSolutionNmea(sentence)
+    override fun appendRtklibSolutionPos(line: String) = delegate.appendRtklibSolutionPos(line)
+    override fun appendRtklibStatusJson(json: String) = delegate.appendRtklibStatusJson(json)
     override fun appendExtractedRtcm(bytes: ByteArray) = delegate.appendExtractedRtcm(bytes)
     override fun writeBasePositionJson(json: String) = delegate.writeBasePositionJson(json)
     override fun flush() = delegate.flush()
@@ -91,6 +97,9 @@ internal class SafRecordingSessionWriters private constructor(
     private val receiverSolutionNmea: OutputStream,
     private val receiverSolution: OutputStream,
     private val receiverPppSolution: OutputStream,
+    private val rtklibSolutionNmea: OutputStream,
+    private val rtklibSolutionPos: OutputStream,
+    private val rtklibStatus: OutputStream,
     private val extractedRtcm: OutputStream,
 ) : RecordingSessionWriters {
     override fun writeSessionJson(json: String) {
@@ -134,6 +143,18 @@ internal class SafRecordingSessionWriters private constructor(
         receiverPppSolution.writeJsonLine(json)
     }
 
+    override fun appendRtklibSolutionNmea(sentence: String) {
+        rtklibSolutionNmea.write(sentence.toByteArray(StandardCharsets.US_ASCII))
+    }
+
+    override fun appendRtklibSolutionPos(line: String) {
+        rtklibSolutionPos.write(line.toByteArray(StandardCharsets.US_ASCII))
+    }
+
+    override fun appendRtklibStatusJson(json: String) {
+        rtklibStatus.writeJsonLine(json)
+    }
+
     override fun appendExtractedRtcm(bytes: ByteArray) {
         extractedRtcm.write(bytes)
     }
@@ -153,6 +174,9 @@ internal class SafRecordingSessionWriters private constructor(
         receiverSolutionNmea.flush()
         receiverSolution.flush()
         receiverPppSolution.flush()
+        rtklibSolutionNmea.flush()
+        rtklibSolutionPos.flush()
+        rtklibStatus.flush()
         extractedRtcm.flush()
     }
 
@@ -239,6 +263,27 @@ internal class SafRecordingSessionWriters private constructor(
             severity = SessionWriterIssueSeverity.DEGRADED,
             issues = issues,
         )
+        closeStream(
+            stream = rtklibSolutionNmea,
+            artifact = SessionArtifactFile.RTKLIB_SOLUTION_NMEA,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = rtklibSolutionPos,
+            artifact = SessionArtifactFile.RTKLIB_SOLUTION_POS,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
+        closeStream(
+            stream = rtklibStatus,
+            artifact = SessionArtifactFile.RTKLIB_STATUS_JSONL,
+            category = SessionWriterIssueCategory.LINE_SIDECAR,
+            severity = SessionWriterIssueSeverity.DEGRADED,
+            issues = issues,
+        )
         return SessionWriterCloseReport(issues)
     }
 
@@ -253,6 +298,9 @@ internal class SafRecordingSessionWriters private constructor(
         receiverSolutionNmea.close()
         receiverSolution.close()
         receiverPppSolution.close()
+        rtklibSolutionNmea.close()
+        rtklibSolutionPos.close()
+        rtklibStatus.close()
         extractedRtcm.close()
     }
 
@@ -317,6 +365,9 @@ internal class SafRecordingSessionWriters private constructor(
                 receiverSolutionNmea = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
                 receiverSolution = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_JSONL.fileName),
                 receiverPppSolution = appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL.fileName),
+                rtklibSolutionNmea = appendStream(SessionArtifactFile.RTKLIB_SOLUTION_NMEA.fileName),
+                rtklibSolutionPos = appendStream(SessionArtifactFile.RTKLIB_SOLUTION_POS.fileName),
+                rtklibStatus = appendStream(SessionArtifactFile.RTKLIB_STATUS_JSONL.fileName),
                 extractedRtcm = appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
             )
         }
@@ -380,5 +431,6 @@ private fun fileMimeType(fileName: String): String =
         fileName.endsWith(".jsonl") -> "application/x-ndjson"
         fileName.endsWith(".txt") -> "text/plain"
         fileName.endsWith(".nmea") -> "text/plain"
+        fileName.endsWith(".pos") -> "text/plain"
         else -> "application/octet-stream"
     }

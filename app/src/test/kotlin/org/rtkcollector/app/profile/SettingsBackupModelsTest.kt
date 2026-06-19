@@ -19,6 +19,7 @@ class SettingsBackupModelsTest {
                 NtripMountpointProfile(id = "mount", name = "Mount", casterProfileId = "caster", mountpoint = "BASE"),
             ),
             recordingPolicyProfiles = listOf(RecordingPolicyProfile(id = "policy", name = "Policy")),
+            rtklibProfiles = listOf(RtklibProfile(id = "rtklib", name = "RTKLIB", enabled = true)),
             storageProfiles = listOf(StorageProfile(id = "storage", name = "Storage")),
             settingsSets = listOf(RecordingSettingsSet.builtInRoverNtrip()),
             selectedSettingsSetId = "settings",
@@ -39,6 +40,7 @@ class SettingsBackupModelsTest {
         assertEquals(listOf("upload"), parsed.ntripCasterUploadProfiles.map(NtripCasterUploadProfile::id))
         assertEquals(listOf("mount"), parsed.ntripMountpointProfiles.map(NtripMountpointProfile::id))
         assertEquals(listOf("policy"), parsed.recordingPolicyProfiles.map(RecordingPolicyProfile::id))
+        assertEquals(listOf("rtklib"), parsed.rtklibProfiles.map(RtklibProfile::id))
         assertEquals(listOf("storage"), parsed.storageProfiles.map(StorageProfile::id))
         assertEquals(listOf("um980-rover-ntrip"), parsed.settingsSets.map(RecordingSettingsSet::id))
         assertEquals("settings", parsed.selectedSettingsSetId)

@@ -86,12 +86,16 @@ supported, record normal device solution and record receiver PPP solution where
 supported.
 
 When RTKLIB-EX real-time processing is enabled in V2, session metadata must
-record the RTKLIB preset, RTKLIB-EX snapshot id, forward-only route plan,
+record whether RTKLIB was enabled, the selected RTKLIB profile id, preset,
+RTKLIB-EX snapshot id once native code is bundled, forward-only route plan,
 receiver input route, correction input route and enabled output artifacts.
 RTKLIB solution artifacts are derived/advisory outputs and must stay separate
 from receiver-derived `receiver-solution.nmea` and `receiver-solution.jsonl`.
 The required user-facing RTKLIB outputs are `rtklib-solution.nmea` and
 `rtklib-solution.pos`; optional diagnostics belong in `rtklib-status.jsonl`.
+The current configuration metadata fields are `rtklibProfileId`,
+`rtklibEnabled`, `rtklibPreset`, `rtklibOutputNmea` and `rtklibOutputPos`.
+These fields must not contain NTRIP passwords, tokens or other secrets.
 
 Experimental V1 writes `receiver-rx.raw`, `tx-to-receiver.raw`,
 `correction-input.raw`, `correction-input.rtcm3`, `events.jsonl`,

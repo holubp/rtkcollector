@@ -68,6 +68,15 @@ The following routing foundation is expected before starting native work:
 Status: implemented as routing/API foundation. Native RTKLIB-EX code is still
 not bundled.
 
+Additional checkpoint: app-side RTKLIB profile/settings and session-artifact
+plumbing is implemented. `RtklibProfile` supports disabled, rover kinematic and
+temporary-base static presets; settings sets can reference a RTKLIB profile;
+settings export/import preserves RTKLIB profiles; active recording config
+declares RTKLIB artifacts only when the profile is enabled; app/session writers
+have separate append paths for `rtklib-solution.nmea`, `rtklib-solution.pos`
+and `rtklib-status.jsonl`. Native RTKLIB-EX source/JNI, service fanout and live
+dashboard card remain open.
+
 If these are not present in a future branch, implement them first using the
 already approved model:
 
@@ -404,11 +413,11 @@ Manual review:
 
 ## Phase 6: Session Outputs
 
-- [ ] Add session artifacts:
+- [x] Add session artifacts:
   - `rtklib-solution.nmea`
   - `rtklib-solution.pos`
   - optional `rtklib-status.jsonl`
-- [ ] Add `RtklibOutputWriters`.
+- [x] Add `RtklibOutputWriters`.
 - [ ] NMEA writer:
   - writes only RTKLIB-generated NMEA;
   - preserves sub-second time if RTKLIB emits it;
@@ -418,14 +427,14 @@ Manual review:
     RTKLIB bridge;
   - includes header if RTKLIB provides one;
   - flushes periodically and closes cleanly on stop.
-- [ ] Add session metadata fields:
+- [x] Add session metadata fields:
   - RTKLIB enabled;
   - RTKLIB preset;
-  - RTKLIB-EX snapshot id;
-  - RTKLIB route plan;
   - output artifact names;
-  - validation result at start.
-- [ ] Never store NTRIP secrets in RTKLIB metadata.
+- [ ] RTKLIB-EX snapshot id;
+- [ ] RTKLIB route plan;
+- [ ] validation result at start.
+- [x] Never store NTRIP secrets in RTKLIB metadata.
 
 Checkpoint:
 
@@ -445,11 +454,11 @@ sh gradlew :app:compileDebugKotlin
 
 ## Phase 7: Profiles, Settings And Workflow Activation
 
-- [ ] Add minimal RTKLIB profile/settings model:
+- [x] Add minimal RTKLIB profile/settings model:
   - disabled;
   - rover kinematic RTK;
   - temporary-base static RTK.
-- [ ] Add settings-set fields for:
+- [x] Add settings-set fields for:
   - selected RTKLIB preset;
   - enabled/disabled;
   - output NMEA/POS toggles;
@@ -466,7 +475,7 @@ sh gradlew :app:compileDebugKotlin
   - UM980 RTKLIB OBSVMB profile emits OBSVMB plus monitoring logs;
   - keep existing OBSVMCMPB profile for recording efficiency, but do not use it
     for RTKLIB live MVP.
-- [ ] Ensure non-RTKLIB workflows still do not load native RTKLIB.
+- [x] Ensure non-RTKLIB workflows still do not load native RTKLIB.
 
 Checkpoint:
 

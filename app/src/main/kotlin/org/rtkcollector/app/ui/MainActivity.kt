@@ -71,6 +71,7 @@ import org.rtkcollector.app.profile.ProfileStores
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.RtklibProfile
 import org.rtkcollector.app.profile.SettingsBackupFile
 import org.rtkcollector.app.profile.SettingsImportValidationResult
 import org.rtkcollector.app.profile.SettingsSetExportOptions
@@ -2278,6 +2279,7 @@ private fun buildSettingsBackup(
         ntripCasterUploadProfiles = profileStore.ntripCasterUploadProfiles(),
         ntripMountpointProfiles = profileStore.ntripMountpointProfiles(),
         recordingPolicyProfiles = profileStore.recordingPolicyProfiles(),
+        rtklibProfiles = profileStore.rtklibProfiles(),
         storageProfiles = profileStore.storageProfiles(),
         settingsSets = profileStore.settingsSets(),
         selectedSettingsSetId = profileStore.selectedSettingsSetId(),
@@ -3570,6 +3572,12 @@ private fun buildDashboardStartIntent(
         id = settingsSet.storageProfileRef.id,
         label = "storage location profile",
     )
+    val rtklibProfile = resolvedSettingsSet.rtklibProfileRef?.id?.let {
+        profileStore.rtklibProfiles().findByReference(
+            id = it,
+            label = "RTKLIB profile",
+        )
+    }
     val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
     if (workflowId.isNullOrBlank()) {
         Toast.makeText(context, "Cannot start: workflow is not selected.", Toast.LENGTH_LONG).show()
@@ -3607,6 +3615,7 @@ private fun buildDashboardStartIntent(
             ntripCasterUploadProfile = ntripCasterUploadProfile,
             recordingPolicyProfile = recordingPolicy,
             storageProfile = storageProfile,
+            rtklibProfile = rtklibProfile,
             workflowName = workflowId.workflowName(),
             workflowUsesNtrip = workflowUsesNtrip,
             hasAcceptedBaseCoordinate = selectedBaseCoordinate != null,
@@ -3697,6 +3706,11 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, ntripCaster?.id)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, ntripMountpoint?.id)
         putExtra(RecordingForegroundService.EXTRA_RECORDING_POLICY_ID, recordingPolicy.id)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_PROFILE_ID, activeConfig.rtklib.profileId)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_ENABLED, activeConfig.rtklib.enabled)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_PRESET, activeConfig.rtklib.preset)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_OUTPUT_NMEA, activeConfig.rtklib.outputNmea)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_OUTPUT_POS, activeConfig.rtklib.outputPos)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_PROFILE_ID, activeConfig.storage.id)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_KIND, activeConfig.storage.kind)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_TREE_URI, activeConfig.storage.treeUri)
@@ -4394,6 +4408,7 @@ private inline fun <reified T> List<T>.findByReference(id: String, label: String
             is NtripCasterProfile -> profile.id == id
             is NtripMountpointProfile -> profile.id == id
             is RecordingPolicyProfile -> profile.id == id
+            is RtklibProfile -> profile.id == id
             is StorageProfile -> profile.id == id
             else -> false
         }

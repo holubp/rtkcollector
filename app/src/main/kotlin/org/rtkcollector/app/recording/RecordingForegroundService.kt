@@ -313,6 +313,11 @@ class RecordingForegroundService : Service() {
                 ntripCasterProfileId = intent.getStringExtra(EXTRA_NTRIP_CASTER_PROFILE_ID),
                 ntripMountpointProfileId = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID),
                 recordingPolicyId = intent.getStringExtra(EXTRA_RECORDING_POLICY_ID),
+                rtklibProfileId = intent.getStringExtra(EXTRA_RTKLIB_PROFILE_ID),
+                rtklibEnabled = intent.getBooleanExtra(EXTRA_RTKLIB_ENABLED, false),
+                rtklibPreset = intent.getStringExtra(EXTRA_RTKLIB_PRESET),
+                rtklibOutputNmea = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_NMEA, false),
+                rtklibOutputPos = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_POS, false),
                 storageProfileId = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID),
                 storageKind = intent.getStringExtra(EXTRA_STORAGE_KIND),
                 coordinateSource = intent.getStringExtra(EXTRA_COORDINATE_SOURCE),
@@ -2324,6 +2329,11 @@ class RecordingForegroundService : Service() {
         const val EXTRA_NTRIP_CASTER_PROFILE_ID = "ntripCasterProfileId"
         const val EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID = "ntripMountpointProfileId"
         const val EXTRA_RECORDING_POLICY_ID = "recordingPolicyId"
+        const val EXTRA_RTKLIB_PROFILE_ID = "rtklibProfileId"
+        const val EXTRA_RTKLIB_ENABLED = "rtklibEnabled"
+        const val EXTRA_RTKLIB_PRESET = "rtklibPreset"
+        const val EXTRA_RTKLIB_OUTPUT_NMEA = "rtklibOutputNmea"
+        const val EXTRA_RTKLIB_OUTPUT_POS = "rtklibOutputPos"
         const val EXTRA_STORAGE_PROFILE_ID = "storageProfileId"
         const val EXTRA_STORAGE_KIND = "storageKind"
         const val EXTRA_STORAGE_TREE_URI = "storageTreeUri"

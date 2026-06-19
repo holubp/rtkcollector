@@ -58,6 +58,37 @@ class RecordingPolicyProfileTest {
     }
 
     @Test
+    fun `rtklib profile round trip preserves preset and outputs`() {
+        val profile = RtklibProfile(
+            id = "rtklib",
+            name = "RTKLIB rover",
+            enabled = true,
+            preset = "TEMPORARY_BASE_STATIC_RTK",
+            outputNmea = true,
+            outputPos = false,
+            maxRoverQueueBytes = 1234,
+            maxCorrectionQueueBytes = 5678,
+        )
+
+        val decoded = RtklibProfile.fromJson(profile.toJson())
+
+        assertEquals(profile, decoded)
+    }
+
+    @Test
+    fun `enabled rtklib profile requires at least one output`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            RtklibProfile(
+                id = "rtklib",
+                name = "RTKLIB",
+                enabled = true,
+                outputNmea = false,
+                outputPos = false,
+            ).validate()
+        }
+    }
+
+    @Test
     fun `recording policy rejects unsupported ppp nmea quality`() {
         assertThrows(IllegalArgumentException::class.java) {
             RecordingPolicyProfile(

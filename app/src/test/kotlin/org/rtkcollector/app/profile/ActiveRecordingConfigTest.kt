@@ -127,6 +127,84 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `rtklib disabled by default adds no rtklib artifacts`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "OLD"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        assertFalse(config.rtklib.enabled)
+        assertFalse(config.expectedSessionArtifactNames.contains(SessionArtifact.RTKLIB_SOLUTION_NMEA.name))
+        assertFalse(config.expectedSessionArtifactNames.contains(SessionArtifact.RTKLIB_SOLUTION_POS.name))
+    }
+
+    @Test
+    fun `enabled rtklib profile adds configured output artifacts`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+            ),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            rtklibProfile = RtklibProfile(
+                id = "rtklib-rover",
+                name = "RTKLIB rover",
+                enabled = true,
+                outputNmea = true,
+                outputPos = false,
+            ),
+            workflowName = "Rover + RTKLIB",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        assertTrue(config.rtklib.enabled)
+        assertEquals("ROVER_KINEMATIC_RTK", config.rtklib.preset)
+        assertTrue(config.expectedSessionArtifactNames.contains(SessionArtifact.RTKLIB_SOLUTION_NMEA.name))
+        assertFalse(config.expectedSessionArtifactNames.contains(SessionArtifact.RTKLIB_SOLUTION_POS.name))
+    }
+
+    @Test
+    fun `enabled rtklib profile requires ntrip corrections for this mvp`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "plain-rover",
+                rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+            ),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            rtklibProfile = RtklibProfile(
+                id = "rtklib-rover",
+                name = "RTKLIB rover",
+                enabled = true,
+            ),
+            workflowName = "Plain rover",
+            workflowUsesNtrip = false,
+            passwordLookup = { null },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertEquals("RTKLIB real-time MVP requires NTRIP RTCM3 corrections.", error.message)
+    }
+
+    @Test
     fun `ntrip runtime uses profile-bound secret and falls back to legacy stored password`() {
         val lookedUpSecrets = mutableListOf<String>()
         val config = ActiveRecordingConfig.resolve(

@@ -326,6 +326,61 @@ data class RecordingPolicyProfile(
     }
 }
 
+data class RtklibProfile(
+    val id: String,
+    val name: String,
+    val enabled: Boolean = false,
+    val preset: String = PRESET_ROVER_KINEMATIC_RTK,
+    val outputNmea: Boolean = true,
+    val outputPos: Boolean = true,
+    val maxRoverQueueBytes: Int = DEFAULT_MAX_ROVER_QUEUE_BYTES,
+    val maxCorrectionQueueBytes: Int = DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+    val isProtected: Boolean = false,
+) {
+    fun validate() {
+        require(id.isNotBlank()) { "RTKLIB profile id must not be blank." }
+        require(name.isNotBlank()) { "RTKLIB profile name must not be blank." }
+        require(preset in PRESETS) { "RTKLIB preset is invalid." }
+        require(maxRoverQueueBytes > 0) { "RTKLIB rover queue limit must be positive." }
+        require(maxCorrectionQueueBytes > 0) { "RTKLIB correction queue limit must be positive." }
+        require(!enabled || outputNmea || outputPos) { "Enabled RTKLIB profile must write NMEA or POS output." }
+    }
+
+    fun copyProfile(id: String, name: String): RtklibProfile =
+        copy(id = id, name = name, isProtected = false).also(RtklibProfile::validate)
+
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("name", name)
+        .put("isProtected", isProtected)
+        .put("enabled", enabled)
+        .put("preset", preset)
+        .put("outputNmea", outputNmea)
+        .put("outputPos", outputPos)
+        .put("maxRoverQueueBytes", maxRoverQueueBytes)
+        .put("maxCorrectionQueueBytes", maxCorrectionQueueBytes)
+
+    companion object {
+        const val PRESET_ROVER_KINEMATIC_RTK = "ROVER_KINEMATIC_RTK"
+        const val PRESET_TEMPORARY_BASE_STATIC_RTK = "TEMPORARY_BASE_STATIC_RTK"
+        const val DEFAULT_MAX_ROVER_QUEUE_BYTES = 1_048_576
+        const val DEFAULT_MAX_CORRECTION_QUEUE_BYTES = 262_144
+        val PRESETS = setOf(PRESET_ROVER_KINEMATIC_RTK, PRESET_TEMPORARY_BASE_STATIC_RTK)
+
+        fun fromJson(json: JSONObject): RtklibProfile = RtklibProfile(
+            id = json.getString("id"),
+            name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
+            enabled = json.optBoolean("enabled", false),
+            preset = json.optString("preset", PRESET_ROVER_KINEMATIC_RTK),
+            outputNmea = json.optBoolean("outputNmea", true),
+            outputPos = json.optBoolean("outputPos", true),
+            maxRoverQueueBytes = json.optInt("maxRoverQueueBytes", DEFAULT_MAX_ROVER_QUEUE_BYTES),
+            maxCorrectionQueueBytes = json.optInt("maxCorrectionQueueBytes", DEFAULT_MAX_CORRECTION_QUEUE_BYTES),
+        ).also(RtklibProfile::validate)
+    }
+}
+
 data class StorageProfile(
     val id: String,
     val name: String,

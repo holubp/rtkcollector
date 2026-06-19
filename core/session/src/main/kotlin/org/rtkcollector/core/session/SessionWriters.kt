@@ -21,6 +21,9 @@ class SessionWriters private constructor(
     private val receiverSolutionNmea: OutputStream,
     private val receiverSolution: OutputStream,
     private val receiverPppSolution: OutputStream,
+    private val rtklibSolutionNmea: OutputStream,
+    private val rtklibSolutionPos: OutputStream,
+    private val rtklibStatus: OutputStream,
     private val extractedRtcm: OutputStream,
 ) : Closeable {
     fun writeSessionJson(json: String) {
@@ -67,6 +70,18 @@ class SessionWriters private constructor(
         receiverPppSolution.writeJsonLine(json)
     }
 
+    fun appendRtklibSolutionNmea(sentence: String) {
+        rtklibSolutionNmea.write(sentence.toByteArray(StandardCharsets.US_ASCII))
+    }
+
+    fun appendRtklibSolutionPos(line: String) {
+        rtklibSolutionPos.write(line.toByteArray(StandardCharsets.US_ASCII))
+    }
+
+    fun appendRtklibStatusJson(json: String) {
+        rtklibStatus.writeJsonLine(json)
+    }
+
     fun appendExtractedRtcm(bytes: ByteArray) {
         extractedRtcm.write(bytes)
     }
@@ -91,6 +106,9 @@ class SessionWriters private constructor(
         receiverSolutionNmea.flush()
         receiverSolution.flush()
         receiverPppSolution.flush()
+        rtklibSolutionNmea.flush()
+        rtklibSolutionPos.flush()
+        rtklibStatus.flush()
         extractedRtcm.flush()
     }
 
@@ -105,6 +123,9 @@ class SessionWriters private constructor(
         receiverSolutionNmea.close()
         receiverSolution.close()
         receiverPppSolution.close()
+        rtklibSolutionNmea.close()
+        rtklibSolutionPos.close()
+        rtklibStatus.close()
         extractedRtcm.close()
     }
 
@@ -128,6 +149,9 @@ class SessionWriters private constructor(
                 receiverSolutionNmea = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
                 receiverSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_JSONL.fileName),
                 receiverPppSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL.fileName),
+                rtklibSolutionNmea = sessionDirectory.appendStream(SessionArtifactFile.RTKLIB_SOLUTION_NMEA.fileName),
+                rtklibSolutionPos = sessionDirectory.appendStream(SessionArtifactFile.RTKLIB_SOLUTION_POS.fileName),
+                rtklibStatus = sessionDirectory.appendStream(SessionArtifactFile.RTKLIB_STATUS_JSONL.fileName),
                 extractedRtcm = sessionDirectory.appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
             )
         }
@@ -198,6 +222,11 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
         appendJsonField("ntripCasterProfileId", metadata.ntripCasterProfileId)
         appendJsonField("ntripMountpointProfileId", metadata.ntripMountpointProfileId)
         appendJsonField("recordingPolicyId", metadata.recordingPolicyId)
+        appendJsonField("rtklibProfileId", metadata.rtklibProfileId)
+        appendJsonField("rtklibEnabled", metadata.rtklibEnabled)
+        appendJsonField("rtklibPreset", metadata.rtklibPreset)
+        appendJsonField("rtklibOutputNmea", metadata.rtklibOutputNmea)
+        appendJsonField("rtklibOutputPos", metadata.rtklibOutputPos)
         appendJsonField("storageProfileId", metadata.storageProfileId)
         appendJsonField("storageKind", metadata.storageKind)
         appendJsonField("coordinateSource", metadata.coordinateSource)

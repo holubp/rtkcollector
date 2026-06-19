@@ -17,6 +17,7 @@ data class ActiveRecordingConfig(
     val shutdownCommands: List<String>,
     val ntrip: ActiveNtripConfig,
     val casterUpload: ActiveCasterUploadConfig,
+    val rtklib: ActiveRtklibConfig,
     val recording: ActiveRecordingOutputConfig,
     val storage: ActiveStorageConfig,
 ) {
@@ -26,10 +27,27 @@ data class ActiveRecordingConfig(
             if (casterUpload.enabled) {
                 add(SessionArtifact.BASE_CASTER_UPLOAD_RTCM3)
             }
+            if (rtklib.enabled && rtklib.outputNmea) {
+                add(SessionArtifact.RTKLIB_SOLUTION_NMEA)
+            }
+            if (rtklib.enabled && rtklib.outputPos) {
+                add(SessionArtifact.RTKLIB_SOLUTION_POS)
+            }
+            if (rtklib.enabled) {
+                add(SessionArtifact.RTKLIB_STATUS_JSONL)
+            }
         }.map(SessionArtifact::name).sorted()
     }
 
     fun validateForStart() {
+        if (rtklib.enabled) {
+            require(ntrip.enabled && ntrip.isConfigured) {
+                "RTKLIB real-time MVP requires NTRIP RTCM3 corrections."
+            }
+            require(rtklib.outputNmea || rtklib.outputPos) {
+                "RTKLIB real-time requires NMEA or POS output."
+            }
+        }
         if (ntrip.enabled) {
             require(ntrip.host.isNotBlank()) { "NTRIP host is required for ${workflowName}." }
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
@@ -65,6 +83,7 @@ data class ActiveRecordingConfig(
             ntripCasterUploadProfile: NtripCasterUploadProfile? = null,
             recordingPolicyProfile: RecordingPolicyProfile,
             storageProfile: StorageProfile,
+            rtklibProfile: RtklibProfile? = null,
             workflowName: String,
             workflowUsesNtrip: Boolean,
             hasAcceptedBaseCoordinate: Boolean = false,
@@ -88,6 +107,7 @@ data class ActiveRecordingConfig(
             ntripCasterUploadProfile?.validate()
             recordingPolicyProfile.validate()
             storageProfile.validate()
+            rtklibProfile?.validate()
 
             val commandOverride = settingsSet.overrides.command
             val baudOverride = settingsSet.overrides.usbBaud
@@ -178,6 +198,16 @@ data class ActiveRecordingConfig(
                 protocolPolicy = ntripCasterUploadProfile?.protocolPolicy ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
                 hasAcceptedBaseCoordinate = hasAcceptedBaseCoordinate,
             )
+            val rtklib = ActiveRtklibConfig(
+                enabled = rtklibProfile?.enabled == true,
+                profileId = rtklibProfile?.id,
+                preset = rtklibProfile?.preset ?: RtklibProfile.PRESET_ROVER_KINEMATIC_RTK,
+                outputNmea = rtklibProfile?.outputNmea ?: false,
+                outputPos = rtklibProfile?.outputPos ?: false,
+                maxRoverQueueBytes = rtklibProfile?.maxRoverQueueBytes ?: RtklibProfile.DEFAULT_MAX_ROVER_QUEUE_BYTES,
+                maxCorrectionQueueBytes = rtklibProfile?.maxCorrectionQueueBytes
+                    ?: RtklibProfile.DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+            )
 
             val recordingOutput = ActiveRecordingOutputConfig(
                 recordTxToReceiver = recordingOverride?.recordTxToReceiver ?: recordingPolicyProfile.recordTxToReceiver,
@@ -219,12 +249,23 @@ data class ActiveRecordingConfig(
                 shutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript).commandLines(),
                 ntrip = ntrip,
                 casterUpload = casterUpload,
+                rtklib = rtklib,
                 recording = recordingOutput,
                 storage = storage,
             )
         }
     }
 }
+
+data class ActiveRtklibConfig(
+    val enabled: Boolean,
+    val profileId: String?,
+    val preset: String,
+    val outputNmea: Boolean,
+    val outputPos: Boolean,
+    val maxRoverQueueBytes: Int,
+    val maxCorrectionQueueBytes: Int,
+)
 
 data class ActiveCasterUploadConfig(
     val enabled: Boolean,

@@ -18,6 +18,7 @@ class SettingsSetModelsTest {
             usbBaudProfileRef = ProfileReference("um980-230400", "UM980 230400"),
             ntripCasterProfileRef = ProfileReference("caster", "EUREF"),
             ntripMountpointProfileRef = ProfileReference("mount", "TUBO00CZE0"),
+            rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
             recordingOutputProfileRef = ProfileReference("default-record-everything", "Default V1 recording outputs"),
             storageProfileRef = ProfileReference("app-private", "App-private external storage"),
             overrides = SettingsSetOverrides(
@@ -31,6 +32,7 @@ class SettingsSetModelsTest {
         assertEquals("field-car-roof", decoded.id)
         assertEquals("rover-ntrip", decoded.workflowId)
         assertEquals("um980-binary-multihz", decoded.commandProfileRef.id)
+        assertEquals("rtklib-rover", decoded.rtklibProfileRef?.id)
         assertEquals("UNLOG COM1", decoded.overrides.command?.initScript)
         assertTrue(decoded.hasLocalOverrides)
     }

@@ -87,6 +87,20 @@ class ProfileStores(context: Context) {
             profiles.onEach(RecordingPolicyProfile::validate).map(RecordingPolicyProfile::toJson),
         )
 
+    fun rtklibProfiles(): List<RtklibProfile> =
+        readProfiles(
+            key = "rtklibProfiles",
+            defaults = ::defaultRtklibProfiles,
+            decode = RtklibProfile::fromJson,
+            encode = RtklibProfile::toJson,
+        )
+
+    fun saveRtklibProfiles(profiles: List<RtklibProfile>) =
+        writeProfiles(
+            "rtklibProfiles",
+            profiles.onEach(RtklibProfile::validate).map(RtklibProfile::toJson),
+        )
+
     fun storageProfiles(): List<StorageProfile> =
         readProfiles(
             key = "storageProfiles",
@@ -256,6 +270,30 @@ class ProfileStores(context: Context) {
             ),
         )
 
+    private fun defaultRtklibProfiles(): List<RtklibProfile> =
+        listOf(
+            RtklibProfile(
+                id = RTKLIB_DISABLED_PROFILE_ID,
+                name = "RTKLIB disabled",
+                enabled = false,
+                isProtected = true,
+            ),
+            RtklibProfile(
+                id = RTKLIB_ROVER_KINEMATIC_PROFILE_ID,
+                name = "RTKLIB rover kinematic RTK",
+                enabled = true,
+                preset = RtklibProfile.PRESET_ROVER_KINEMATIC_RTK,
+                isProtected = true,
+            ),
+            RtklibProfile(
+                id = RTKLIB_TEMPORARY_BASE_STATIC_PROFILE_ID,
+                name = "RTKLIB temporary-base static RTK",
+                enabled = true,
+                preset = RtklibProfile.PRESET_TEMPORARY_BASE_STATIC_RTK,
+                isProtected = true,
+            ),
+        )
+
     private fun defaultStorageProfiles(): List<StorageProfile> =
         listOf(
             StorageProfile(
@@ -279,6 +317,9 @@ class ProfileStores(context: Context) {
         const val UBLOX_M8T_RAW_STATUS_MOCK_PROFILE_ID = "ublox-m8t-raw-status-mock"
         const val OLD_NTRIP_MOUNTPOINT_PROFILE_ID = "ntrip-mountpoint-default"
         const val DEFAULT_RECORDING_POLICY_ID = "default-record-everything"
+        const val RTKLIB_DISABLED_PROFILE_ID = "rtklib-disabled"
+        const val RTKLIB_ROVER_KINEMATIC_PROFILE_ID = "rtklib-rover-kinematic"
+        const val RTKLIB_TEMPORARY_BASE_STATIC_PROFILE_ID = "rtklib-temporary-base-static"
         const val DEFAULT_STORAGE_PROFILE_ID = "app-private"
         const val DEFAULT_USB_BAUD_PROFILE_ID = "um980-230400"
         const val DEFAULT_NTRIP_CASTER_PROFILE_ID = "ntrip-caster-default"

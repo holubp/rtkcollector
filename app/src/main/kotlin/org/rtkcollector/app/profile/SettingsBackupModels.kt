@@ -12,6 +12,7 @@ data class SettingsBackupFile(
     val ntripCasterUploadProfiles: List<NtripCasterUploadProfile>,
     val ntripMountpointProfiles: List<NtripMountpointProfile>,
     val recordingPolicyProfiles: List<RecordingPolicyProfile>,
+    val rtklibProfiles: List<RtklibProfile>,
     val storageProfiles: List<StorageProfile>,
     val settingsSets: List<RecordingSettingsSet>,
     val selectedSettingsSetId: String?,
@@ -28,6 +29,7 @@ data class SettingsBackupFile(
         .put("ntripCasterUploadProfiles", ntripCasterUploadProfiles.toJsonArray { it.toJson() })
         .put("ntripMountpointProfiles", ntripMountpointProfiles.toJsonArray { it.toJson() })
         .put("recordingPolicyProfiles", recordingPolicyProfiles.toJsonArray { it.toJson() })
+        .put("rtklibProfiles", rtklibProfiles.toJsonArray { it.toJson() })
         .put("storageProfiles", storageProfiles.toJsonArray { it.toJson() })
         .put("settingsSets", settingsSets.toJsonArray { it.toJson() })
         .putNullable("selectedSettingsSetId", selectedSettingsSetId)
@@ -56,6 +58,7 @@ data class SettingsBackupFile(
             ntripCasterUploadProfiles: List<NtripCasterUploadProfile>,
             ntripMountpointProfiles: List<NtripMountpointProfile>,
             recordingPolicyProfiles: List<RecordingPolicyProfile>,
+            rtklibProfiles: List<RtklibProfile> = emptyList(),
             storageProfiles: List<StorageProfile>,
             settingsSets: List<RecordingSettingsSet>,
             selectedSettingsSetId: String?,
@@ -74,6 +77,7 @@ data class SettingsBackupFile(
                 ntripCasterUploadProfiles = ntripCasterUploadProfiles,
                 ntripMountpointProfiles = ntripMountpointProfiles,
                 recordingPolicyProfiles = recordingPolicyProfiles,
+                rtklibProfiles = rtklibProfiles,
                 storageProfiles = storageProfiles,
                 settingsSets = settingsSets,
                 selectedSettingsSetId = selectedSettingsSetId,
@@ -106,6 +110,7 @@ data class SettingsBackupFile(
                 recordingPolicyProfiles = json.getJSONArray("recordingPolicyProfiles").mapObjects(
                     RecordingPolicyProfile::fromJson,
                 ),
+                rtklibProfiles = json.optJSONArray("rtklibProfiles")?.mapObjects(RtklibProfile::fromJson).orEmpty(),
                 storageProfiles = json.getJSONArray("storageProfiles").mapObjects(StorageProfile::fromJson),
                 settingsSets = json.getJSONArray("settingsSets").mapObjects(RecordingSettingsSet::fromJson),
                 selectedSettingsSetId = json.optNullableString("selectedSettingsSetId"),

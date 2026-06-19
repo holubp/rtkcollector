@@ -34,6 +34,9 @@ class SessionWritersTest {
         writers.appendQualityLiveJson("""{"fix":"rtk"}""")
         writers.appendReceiverSolutionJson("""{"source":"GGA"}""")
         writers.appendReceiverPppSolutionJson("""{"source":"PPP"}""")
+        writers.appendRtklibSolutionNmea("\$GPGGA,rtklib*00\r\n")
+        writers.appendRtklibSolutionPos("% pos header\n")
+        writers.appendRtklibStatusJson("""{"state":"RUNNING"}""")
         writers.appendExtractedRtcm(byteArrayOf(0xd3.toByte(), 0x00, 0x00, 0x47, 0x00, 0x00))
         writers.writeBasePositionJson("""{"frame":"ETRF2000"}""")
         writers.flush()
@@ -55,6 +58,9 @@ class SessionWritersTest {
         )
         assertEquals(listOf("""{"source":"GGA"}"""), Files.readAllLines(tempDir.resolve("receiver-solution.jsonl")))
         assertEquals(listOf("""{"source":"PPP"}"""), Files.readAllLines(tempDir.resolve("receiver-ppp-solution.jsonl")))
+        assertEquals("\$GPGGA,rtklib*00\r\n", Files.readString(tempDir.resolve("rtklib-solution.nmea")))
+        assertEquals("% pos header\n", Files.readString(tempDir.resolve("rtklib-solution.pos")))
+        assertEquals(listOf("""{"state":"RUNNING"}"""), Files.readAllLines(tempDir.resolve("rtklib-status.jsonl")))
         assertArrayEquals(
             byteArrayOf(0xd3.toByte(), 0x00, 0x00, 0x47, 0x00, 0x00),
             Files.readAllBytes(tempDir.resolve("rtcm-extracted.rtcm3")),

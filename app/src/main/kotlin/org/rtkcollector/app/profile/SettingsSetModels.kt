@@ -170,6 +170,7 @@ data class RecordingSettingsSet(
     val ntripMountpointProfileRef: ProfileReference? = null,
     val ntripCasterUploadProfileRef: ProfileReference? = null,
     val baseCasterUploadEnabled: Boolean = false,
+    val rtklibProfileRef: ProfileReference? = null,
     val recordingOutputProfileRef: ProfileReference,
     val storageProfileRef: ProfileReference,
     val basePositionProfileRef: ProfileReference? = null,
@@ -191,6 +192,7 @@ data class RecordingSettingsSet(
         ntripCasterProfileRef?.validate()
         ntripMountpointProfileRef?.validate()
         ntripCasterUploadProfileRef?.validate()
+        rtklibProfileRef?.validate()
         recordingOutputProfileRef.validate()
         storageProfileRef.validate()
         basePositionProfileRef?.validate()
@@ -238,6 +240,7 @@ object SettingsSetJson {
     private const val KEY_NTRIP_CASTER = "ntripCasterProfile"
     private const val KEY_NTRIP_MOUNTPOINT = "ntripMountpointProfile"
     private const val KEY_NTRIP_CASTER_UPLOAD = "ntripCasterUploadProfile"
+    private const val KEY_RTKLIB = "rtklibProfile"
     private const val KEY_RECORDING_OUTPUT = "recordingOutputProfile"
     private const val KEY_STORAGE = "storageProfile"
     private const val KEY_BASE_POSITION = "basePositionProfile"
@@ -254,6 +257,7 @@ object SettingsSetJson {
         .putNullable("ntripMountpointProfile", settingsSet.ntripMountpointProfileRef?.toJson())
         .putNullable("ntripCasterUploadProfile", settingsSet.ntripCasterUploadProfileRef?.toJson())
         .put("baseCasterUploadEnabled", settingsSet.baseCasterUploadEnabled)
+        .putNullable("rtklibProfile", settingsSet.rtklibProfileRef?.toJson())
         .put("recordingOutputProfile", settingsSet.recordingOutputProfileRef.toJson())
         .put("storageProfile", settingsSet.storageProfileRef.toJson())
         .putNullable("basePositionProfile", settingsSet.basePositionProfileRef?.toJson())
@@ -275,6 +279,7 @@ object SettingsSetJson {
         ntripMountpointProfileRef = json.optJSONObject(KEY_NTRIP_MOUNTPOINT)?.let(ProfileReference::fromJson),
         ntripCasterUploadProfileRef = json.optJSONObject(KEY_NTRIP_CASTER_UPLOAD)?.let(ProfileReference::fromJson),
         baseCasterUploadEnabled = json.optBoolean("baseCasterUploadEnabled", false),
+        rtklibProfileRef = json.optJSONObject(KEY_RTKLIB)?.let(ProfileReference::fromJson),
         recordingOutputProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_RECORDING_OUTPUT)),
         storageProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_STORAGE)),
         basePositionProfileRef = json.optJSONObject(KEY_BASE_POSITION)?.let(ProfileReference::fromJson),

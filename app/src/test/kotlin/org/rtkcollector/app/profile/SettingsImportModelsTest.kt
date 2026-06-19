@@ -19,6 +19,7 @@ class SettingsImportModelsTest {
         assertEquals(1, result.summary.ntripCasterProfileCount)
         assertEquals(1, result.summary.ntripMountpointProfileCount)
         assertEquals(1, result.summary.recordingPolicyProfileCount)
+        assertEquals(1, result.summary.rtklibProfileCount)
         assertEquals(1, result.summary.storageProfileCount)
         assertEquals(1, result.summary.settingsSetCount)
         assertTrue(result.summary.containsPlaintextPasswords)
@@ -140,6 +141,23 @@ class SettingsImportModelsTest {
     }
 
     @Test
+    fun `settings set referencing missing rtklib profile is rejected`() {
+        val json = sampleBackup(includePassword = false).toJson()
+        json.getJSONArray("settingsSets")
+            .getJSONObject(0)
+            .put("rtklibProfile", JSONObject().put("id", "missing-rtklib").put("name", "Missing RTKLIB"))
+
+        val result = validateSettingsImportJson(json.toString())
+
+        assertTrue(result is SettingsImportValidationResult.Invalid)
+        assertEquals(
+            "Settings set 'UM980 rover + NTRIP' references missing RTKLIB profile 'missing-rtklib'.",
+            result.message,
+        )
+    }
+
+
+    @Test
     fun `unknown plaintext password secret id is rejected`() {
         val json = sampleBackup(includePassword = false).toJson()
         json.put("plaintextPasswords", JSONObject().put("unknown-secret", "secret-password"))
@@ -160,6 +178,7 @@ class SettingsImportModelsTest {
                 NtripMountpointProfile(id = "mount", name = "Mount", casterProfileId = "caster"),
             ),
             recordingPolicyProfiles = listOf(RecordingPolicyProfile(id = "policy", name = "Policy")),
+            rtklibProfiles = listOf(RtklibProfile(id = "rtklib", name = "RTKLIB")),
             storageProfiles = listOf(StorageProfile(id = "storage", name = "Storage")),
             settingsSets = listOf(RecordingSettingsSet.builtInRoverNtrip()),
             selectedSettingsSetId = "settings",

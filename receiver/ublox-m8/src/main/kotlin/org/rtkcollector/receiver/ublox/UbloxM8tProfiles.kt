@@ -6,6 +6,7 @@ object UbloxM8tProfiles {
         !UBX CFG-MSG 2 21 0 0 0 1 0 0
         !UBX CFG-MSG 2 19 0 0 0 1 0 0
         !UBX CFG-MSG 13 3 0 0 0 1 0 0
+        !UBX CFG-MSG 1 7 0 0 0 1 0 0
         !UBX CFG-MSG 240 0 0 0 0 0 0 0
         !UBX CFG-MSG 240 1 0 0 0 0 0 0
         !UBX CFG-MSG 240 2 0 0 0 0 0 0

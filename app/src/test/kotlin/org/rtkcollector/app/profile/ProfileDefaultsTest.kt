@@ -22,4 +22,9 @@ class ProfileDefaultsTest {
     fun `m8t high rate profile contains cfg rate 5 hz`() {
         assertTrue(ProfileStores.UBLOX_M8T_RAW_5HZ_RTKLIB_EX_SCRIPT.contains("!UBX CFG-RATE 200 1 1"))
     }
+
+    @Test
+    fun `m8t safe raw profile enables nav pvt for monitoring`() {
+        assertTrue(ProfileStores.UBLOX_M8T_RAW_1HZ_SCRIPT.contains("!UBX CFG-MSG 1 7 0 0 0 1 0 0"))
+    }
 }

@@ -90,20 +90,7 @@ object BestSolutionTickLogic {
         }
 
         return BestSolutionTickOutput(
-            stateDelta = BestSolutionStateDelta(
-                bestSolutionSource = best?.sourceId ?: "n/a",
-                bestSolutionFix = best?.fixClass?.name ?: "n/a",
-                bestSolutionAgeMs = best?.ageMillis,
-                latDeg = best?.latDeg,
-                lonDeg = best?.lonDeg,
-                ellipsoidalHeightM = best?.ellipsoidalHeightM,
-                mslAltitudeM = best?.mslAltitudeM,
-                horizontalAccuracyM = best?.horizontalAccuracyM,
-                verticalAccuracyM = best?.verticalAccuracyM,
-                satellitesUsed = best?.satellitesUsed,
-                satellitesInView = best?.satellitesInView,
-                mockResult = mockResult,
-            ),
+            stateDelta = stateDeltaForSnapshot(best, mockResult),
             publishAction = publishAction,
             newLastMockPublishedAt = input.lastMockPublishedAt,
             newLastMockPublishedIdentity = input.lastMockPublishedIdentity,
@@ -112,6 +99,45 @@ object BestSolutionTickLogic {
             previousMockResult = input.previousMockResult,
         )
     }
+
+    fun stateDeltaForCandidate(
+        candidate: SolutionCandidate,
+        nowMillis: Long,
+        mockResult: MockLocationPublishResult,
+    ): BestSolutionStateDelta =
+        BestSolutionStateDelta(
+            bestSolutionSource = candidate.sourceId,
+            bestSolutionFix = candidate.fixClass.name,
+            bestSolutionAgeMs = (nowMillis - candidate.updatedAtMillis).coerceAtLeast(0L),
+            latDeg = candidate.latDeg,
+            lonDeg = candidate.lonDeg,
+            ellipsoidalHeightM = candidate.ellipsoidalHeightM,
+            mslAltitudeM = candidate.mslAltitudeM,
+            horizontalAccuracyM = candidate.horizontalAccuracyM,
+            verticalAccuracyM = candidate.verticalAccuracyM,
+            satellitesUsed = candidate.satellitesUsed,
+            satellitesInView = candidate.satellitesInView,
+            mockResult = mockResult,
+        )
+
+    private fun stateDeltaForSnapshot(
+        snapshot: BestSolutionSnapshot?,
+        mockResult: MockLocationPublishResult,
+    ): BestSolutionStateDelta =
+        BestSolutionStateDelta(
+            bestSolutionSource = snapshot?.sourceId ?: "n/a",
+            bestSolutionFix = snapshot?.fixClass?.name ?: "n/a",
+            bestSolutionAgeMs = snapshot?.ageMillis,
+            latDeg = snapshot?.latDeg,
+            lonDeg = snapshot?.lonDeg,
+            ellipsoidalHeightM = snapshot?.ellipsoidalHeightM,
+            mslAltitudeM = snapshot?.mslAltitudeM,
+            horizontalAccuracyM = snapshot?.horizontalAccuracyM,
+            verticalAccuracyM = snapshot?.verticalAccuracyM,
+            satellitesUsed = snapshot?.satellitesUsed,
+            satellitesInView = snapshot?.satellitesInView,
+            mockResult = mockResult,
+        )
 
     /**
      * Folds a publish result back into the tick output. Caller invokes the sink

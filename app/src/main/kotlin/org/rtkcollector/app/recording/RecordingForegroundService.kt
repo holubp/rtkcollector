@@ -1754,6 +1754,7 @@ class RecordingForegroundService : Service() {
                 previousMockResult = previousMockResult,
             )
             val tick = BestSolutionTickLogic.compute(tickInput)
+            applyTickStateDelta(tick.stateDelta, now)
 
             when (val action = tick.publishAction) {
                 PublishAction.None -> {
@@ -1820,6 +1821,17 @@ class RecordingForegroundService : Service() {
     ) {
         if (candidate.isPrimaryScreenCandidateFor(activeReceiverFamily)) {
             state = state.withSelectedSolution(candidate, nowMillis)
+            if (activeReceiverFamily.startsWith("ublox", ignoreCase = true)) {
+                val mockResult = previousMockResult ?: if (mockLocationRequested) {
+                    MockLocationPublishResult.STALE
+                } else {
+                    MockLocationPublishResult.DISABLED
+                }
+                applyTickStateDelta(
+                    BestSolutionTickLogic.stateDeltaForCandidate(candidate, nowMillis, mockResult),
+                    nowMillis,
+                )
+            }
             if (coordinateAveragingController.active) {
                 val result = coordinateAveragingController.onSelectedSolution(candidate)
                 updateCoordinateAverageState(result)

@@ -60,6 +60,33 @@ class BestSolutionTickLogicTest {
     }
 
     @Test
+    fun `candidate display delta carries position and quality for direct monitoring`() {
+        val candidate = candidate(
+            sourceId = "UBX-NAV-PVT",
+            fixClass = FixClass.SINGLE,
+            updatedAtMillis = 1_000L,
+            horizontalAccuracyM = 0.9,
+            satellitesInView = 14,
+        )
+
+        val delta = BestSolutionTickLogic.stateDeltaForCandidate(
+            candidate = candidate,
+            nowMillis = 1_250L,
+            mockResult = MockLocationPublishResult.DISABLED,
+        )
+
+        assertEquals("UBX-NAV-PVT", delta.bestSolutionSource)
+        assertEquals("SINGLE", delta.bestSolutionFix)
+        assertEquals(250L, delta.bestSolutionAgeMs)
+        assertEquals(50.0, delta.latDeg)
+        assertEquals(14.0, delta.lonDeg)
+        assertEquals(300.0, delta.ellipsoidalHeightM)
+        assertEquals(0.9, delta.horizontalAccuracyM)
+        assertEquals(12, delta.satellitesUsed)
+        assertEquals(14, delta.satellitesInView)
+    }
+
+    @Test
     fun `mock disabled computes no publish action and no required screen update`() {
         val candidate = candidate("UM980-BESTNAV", FixClass.RTK_FIXED, updatedAtMillis = 1_000L)
 

@@ -190,6 +190,82 @@ In this order, you will have a working mental model in roughly 90 minutes:
   pattern — anything you put inside `RecordingForegroundService` directly is
   essentially untestable.
 
+## Complete RTKLIB-EX Native Build
+
+RTKLIB-EX is built as an Android native library only when a valid Android NDK
+is installed. The app module owns the native packaging because Android expects
+shared libraries under the application APK; `core:rtklib` remains the pure
+Kotlin API and worker boundary.
+
+Required host setup:
+
+- JDK 17.
+- Android SDK platform 36.
+- Android NDK installed through Android Studio or `sdkmanager`, with
+  `source.properties` present under `$ANDROID_HOME/ndk/<version>/`.
+- CMake available through the Android SDK/NDK toolchain.
+- Network access only when refreshing the pinned RTKLIB-EX checkout.
+
+Prepare the pinned RTKLIB-EX checkout:
+
+```bash
+python3 tools/update_rtklib_ex.py \
+  --ref 8dfabc9a106b2e74c069bc80f0d7743f314e6ab4
+```
+
+This creates or refreshes `third_party/rtklib-ex/upstream/`. That directory is
+ignored by Git; do not commit it. The reproducibility record is
+`third_party/rtklib-ex/snapshot.json`.
+
+Make sure `local.properties` points at the Android SDK on the build host:
+
+```properties
+sdk.dir=/absolute/path/to/Android/Sdk
+```
+
+Then build the full debug APK with RTKLIB-EX native code:
+
+```bash
+./gradlew clean assembleDebug
+```
+
+Successful output should include `app/build/outputs/apk/debug/app-debug.apk`
+and the native build should produce `librtkcollector_rtklib.so` under the app
+build intermediates. If you want to inspect just the native step, run the app
+module external native build task listed by:
+
+```bash
+./gradlew :app:tasks --all | grep -i externalNativeBuild
+```
+
+The native build is intentionally conditional in `app/build.gradle.kts`: if no
+valid NDK is found, local Kotlin/JVM checks can still run, but the APK is not a
+complete RTKLIB-EX build. This is expected on some Termux/aarch64 setups where
+the Android SDK payload exists but native Linux build tools or a valid NDK are
+not runnable. In that environment, use these source-level checks instead and
+validate the APK on Android Studio, CI or another host with a working NDK:
+
+```bash
+python3 -m py_compile tools/update_rtklib_ex.py tools/um980_rtklib_sample_check.py tools/check_spec_requirements.py
+python3 -m pytest tools/test_*.py
+python3 tools/check_spec_requirements.py docs/specification
+clang++ -std=c++17 -Ithird_party/rtklib-ex/upstream/src \
+  -DENAGLO -DENAGAL -DENAQZS -DENACMP -DNFREQ=3 -DNEXOBS=3 \
+  -fsyntax-only app/src/main/cpp/rtklib_bridge.cpp
+sh gradlew :core:workflow:test :core:rtklib:test :core:session:test \
+  :receiver:unicore-n4:test :receiver:ublox-m8:test :app:compileDebugKotlin
+```
+
+Do not mark RTKLIB-EX native integration as fully validated until
+`assembleDebug` has run on a host with a working NDK and at least one suitable
+replay or field session has exercised the selected rover observation route.
+Current UM980 debug samples may show `OBSVMCMPB` in the init profile while
+containing no actual `OBSVMB`/`OBSVMCMPB` observation frames; check that with:
+
+```bash
+python3 tools/um980_rtklib_sample_check.py samples/session-*
+```
+
 ## Spec-first workflow
 
 This repo is spec-first. The plumbing for it:

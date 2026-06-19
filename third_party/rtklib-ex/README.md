@@ -34,5 +34,10 @@ not have a runnable NDK/native toolchain; in that case Kotlin/JVM checks remain
 valid, but the native `.so` must be validated on Android Studio, CI or another
 host with a working NDK.
 
+For complete build steps, including Android SDK/NDK prerequisites and
+validation commands, see
+[`docs/contributor-onboarding.md`](../../docs/contributor-onboarding.md)
+section "Complete RTKLIB-EX Native Build".
+
 `snapshot.json` is intentionally not ignored: it is the small reproducibility
 record that should be reviewed and committed with the native build integration.

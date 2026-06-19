@@ -66,9 +66,13 @@ allow an ordinary app to inject full GNSS satellite status or satellite sky
 positions for other apps. The Fix card shows compact mock-provider monitoring
 when mock output is enabled, including publish state, effective publish rate,
 the millisecond interval between the last two successful mock updates and the
-age of the selected solution. V1 publishes mock locations at a fixed-rate
-default of `1 Hz`. This monitor reports RtkCollector's publishing cadence;
-downstream apps may still apply their own display smoothing or throttling.
+age of the selected solution. The Home screen also has a compact `Mock GPS`
+chip next to the `READY`/`RECORDING` state chip. Tapping it selects `Off` or a
+fixed publish rate of `1 Hz`, `2 Hz`, `5 Hz` or `10 Hz`. The default is `Off`
+unless the selected recording-output profile enables mock publishing; enabled
+profiles default to `1 Hz` unless another supported rate is selected. This
+monitor reports RtkCollector's publishing cadence; downstream apps may still
+apply their own display smoothing or throttling.
 
 Completed recordings can be selected individually, by group or all together.
 Sharing the full recording creates one temporary ZIP per selected session,

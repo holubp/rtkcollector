@@ -66,10 +66,15 @@ class DashboardStateTest {
         assertEquals(
             listOf(
                 DashboardAction("NTRIP", DashboardActionKind.NTRIP),
-                DashboardAction("Mark", DashboardActionKind.MARK),
             ),
             state.secondaryActions,
         )
+    }
+
+    @Test
+    fun `mock gps dashboard label shows off and fixed rate states`() {
+        assertEquals("Mock GPS off", MockGpsDashboardState().label)
+        assertEquals("Mock GPS 5 Hz", MockGpsDashboardState(enabled = true, rateHz = 5).label)
     }
 
     @Test
@@ -95,6 +100,7 @@ class DashboardStateTest {
         assertEquals("n/a", merged.status.mountpoint)
         assertEquals("UM980", merged.status.receiver)
         assertEquals("App-private external storage", merged.status.storage)
+        assertEquals(planned.mockGps, merged.mockGps)
         assertEquals("content://session/current", merged.files.sessionLocation)
         assertEquals("123 B", merged.files.receiverRxBytes)
     }

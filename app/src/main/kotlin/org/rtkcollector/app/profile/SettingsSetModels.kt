@@ -99,11 +99,17 @@ data class RecordingOutputOverride(
     val exportGpx: Boolean? = null,
     val recordRemoteBaseRaw: Boolean? = null,
     val enableMockLocation: Boolean? = null,
+    val mockLocationRateHz: Int? = null,
 ) {
     fun validate() {
         pppNmeaGgaQuality?.let {
             require(it in RecordingPolicyProfile.ALLOWED_PPP_NMEA_GGA_QUALITIES) {
                 "PPP NMEA GGA quality override must be one of ${RecordingPolicyProfile.ALLOWED_PPP_NMEA_GGA_QUALITIES.joinToString()}."
+            }
+        }
+        mockLocationRateHz?.let {
+            require(it in RecordingPolicyProfile.ALLOWED_MOCK_LOCATION_RATES_HZ) {
+                "Mock location rate override must be one of ${RecordingPolicyProfile.ALLOWED_MOCK_LOCATION_RATES_HZ.joinToString()} Hz."
             }
         }
     }
@@ -340,7 +346,8 @@ private fun SettingsSetOverrides.toJson(): JSONObject {
                 .putNullable("exportJsonSolution", it.exportJsonSolution)
                 .putNullable("exportGpx", it.exportGpx)
                 .putNullable("recordRemoteBaseRaw", it.recordRemoteBaseRaw)
-                .putNullable("enableMockLocation", it.enableMockLocation),
+                .putNullable("enableMockLocation", it.enableMockLocation)
+                .putNullable("mockLocationRateHz", it.mockLocationRateHz),
         )
     }
     storage?.let {
@@ -437,6 +444,7 @@ private object SettingsSetOverridesJson {
                     exportGpx = it.optBooleanOrNull("exportGpx"),
                     recordRemoteBaseRaw = it.optBooleanOrNull("recordRemoteBaseRaw"),
                     enableMockLocation = it.optBooleanOrNull("enableMockLocation"),
+                    mockLocationRateHz = it.optIntOrNull("mockLocationRateHz"),
                 )
             }
         },

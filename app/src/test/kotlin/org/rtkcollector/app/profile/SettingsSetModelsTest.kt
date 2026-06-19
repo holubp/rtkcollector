@@ -139,13 +139,14 @@ class SettingsSetModelsTest {
             name = "Mock location override",
             isProtected = false,
             overrides = SettingsSetOverrides(
-                recordingOutput = RecordingOutputOverride(enableMockLocation = true),
+                recordingOutput = RecordingOutputOverride(enableMockLocation = true, mockLocationRateHz = 10),
             ),
         )
 
         val decoded = RecordingSettingsSet.fromJson(settingsSet.toJson())
 
         assertEquals(true, decoded.overrides.recordingOutput?.enableMockLocation)
+        assertEquals(10, decoded.overrides.recordingOutput?.mockLocationRateHz)
     }
 
     @Test
@@ -153,6 +154,15 @@ class SettingsSetModelsTest {
         assertThrows(IllegalArgumentException::class.java) {
             SettingsSetOverrides(
                 recordingOutput = RecordingOutputOverride(pppNmeaGgaQuality = 4),
+            ).validate()
+        }
+    }
+
+    @Test
+    fun `settings set rejects invalid mock location rate override`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            SettingsSetOverrides(
+                recordingOutput = RecordingOutputOverride(mockLocationRateHz = 3),
             ).validate()
         }
     }

@@ -89,11 +89,11 @@ fun HomeDashboard(
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
     onUsbPermission: () -> Unit,
+    onMockGps: () -> Unit,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onReceiver: () -> Unit,
     onStorage: () -> Unit,
-    onMark: () -> Unit,
     coordinateAveraging: CoordinateAveragingState = CoordinateAveragingState(),
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit = { _, _ -> },
     onStopCoordinateAveraging: () -> Unit = {},
@@ -156,6 +156,10 @@ fun HomeDashboard(
                     }
                 },
                 actions = {
+                    MockGpsStatusChip(
+                        state = state.mockGps,
+                        onClick = onMockGps,
+                    )
                     RecordingStateBadge(isRecording = state.isRecording, startInProgress = startInProgress)
                     Button(
                         onClick = onMenu,
@@ -173,7 +177,6 @@ fun HomeDashboard(
                 onPrimaryAction = onPrimaryAction,
                 onNtrip = onNtrip,
                 onUsbPermission = onUsbPermission,
-                onMark = onMark,
             )
         },
     ) { padding ->
@@ -287,13 +290,50 @@ private fun RecordingStateBadge(
 }
 
 @Composable
+private fun MockGpsStatusChip(
+    state: MockGpsDashboardState,
+    onClick: () -> Unit,
+) {
+    val background = if (state.enabled) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val foreground = if (state.enabled) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = background,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .padding(end = 4.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = state.label
+            }
+            .clickable(onClick = onClick),
+    ) {
+        Text(
+            text = state.label,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = foreground,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun BottomActionBar(
     state: DashboardState,
     startInProgress: Boolean,
     onPrimaryAction: () -> Unit,
     onNtrip: () -> Unit,
     onUsbPermission: () -> Unit,
-    onMark: () -> Unit,
 ) {
     Surface(shadowElevation = 3.dp) {
         Row(
@@ -318,7 +358,6 @@ private fun BottomActionBar(
             state.secondaryActions
                 .filter { action ->
                     action.kind == DashboardActionKind.NTRIP ||
-                        action.kind == DashboardActionKind.MARK ||
                         action.kind == DashboardActionKind.USB_PERMISSION
                 }
                 .forEach { action ->
@@ -326,7 +365,6 @@ private fun BottomActionBar(
                         onClick = when (action.kind) {
                             DashboardActionKind.NTRIP -> onNtrip
                             DashboardActionKind.USB_PERMISSION -> onUsbPermission
-                            DashboardActionKind.MARK -> onMark
                             else -> onPrimaryAction
                         },
                         colors = dashboardSecondaryButtonColors(),
@@ -1170,11 +1208,11 @@ private fun HomeDashboardPortraitPreview() {
             onMenu = {},
             onNtrip = {},
             onUsbPermission = {},
+            onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
             onStorage = {},
-            onMark = {},
         )
     }
 }
@@ -1189,11 +1227,11 @@ private fun HomeDashboardReadyMissingPreview() {
             onMenu = {},
             onNtrip = {},
             onUsbPermission = {},
+            onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
             onStorage = {},
-            onMark = {},
         )
     }
 }
@@ -1208,11 +1246,11 @@ private fun HomeDashboardLandscapePreview() {
             onMenu = {},
             onNtrip = {},
             onUsbPermission = {},
+            onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
             onStorage = {},
-            onMark = {},
         )
     }
 }
@@ -1228,11 +1266,11 @@ private fun HomeDashboardRailPreview() {
             onMenu = {},
             onNtrip = {},
             onUsbPermission = {},
+            onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
             onStorage = {},
-            onMark = {},
         )
     }
 }

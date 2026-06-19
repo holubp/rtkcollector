@@ -192,6 +192,8 @@ data class ActiveRecordingConfig(
                 recordRemoteBaseRaw = workflowUsesNtrip &&
                     (recordingOverride?.recordRemoteBaseRaw ?: recordingPolicyProfile.recordRemoteBaseRaw),
                 enableMockLocation = recordingOverride?.enableMockLocation ?: recordingPolicyProfile.enableMockLocation,
+                mockLocationRateHz = recordingOverride?.mockLocationRateHz
+                    ?: recordingPolicyProfile.mockLocationRateHz,
             )
 
             val storage = ActiveStorageConfig(
@@ -260,6 +262,7 @@ data class ActiveRecordingOutputConfig(
     val exportGpx: Boolean,
     val recordRemoteBaseRaw: Boolean,
     val enableMockLocation: Boolean,
+    val mockLocationRateHz: Int,
     val expectedSessionArtifacts: Set<SessionArtifact> = buildSessionArtifacts(
         recordTxToReceiver,
         recordNtripCorrectionInput,

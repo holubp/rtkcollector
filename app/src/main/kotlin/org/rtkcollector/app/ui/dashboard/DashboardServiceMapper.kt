@@ -103,6 +103,12 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         nmeaBytes = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_NMEA_BYTES, 0)),
         zipShareEnabled = !running,
     )
+    val mockLocationState = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE)
+        ?: "Disabled"
+    val mockGps = MockGpsDashboardState(
+        enabled = running && !mockLocationState.equals("Disabled", ignoreCase = true),
+        rateHz = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_RATE_HZ, 1),
+    )
     val profiles = ProfilesCardState(
         settingsSet = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_SET_LABEL) ?: "n/a",
         commandProfile = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_COMMAND_PROFILE_LABEL) ?: "n/a",
@@ -123,6 +129,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             ntrip = ntrip,
             files = files,
             profiles = profiles,
+            mockGps = mockGps,
             lastError = lastError,
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
@@ -138,6 +145,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             ntrip = ntrip,
             files = files,
             profiles = profiles,
+            mockGps = mockGps,
             lastError = lastError,
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,

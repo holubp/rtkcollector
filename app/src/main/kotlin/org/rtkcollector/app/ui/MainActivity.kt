@@ -111,6 +111,7 @@ import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.FixCardState
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
+import org.rtkcollector.app.ui.dashboard.MockGpsDashboardState
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.dashboard.formatBytes
@@ -225,6 +226,7 @@ fun RtkCollectorApp(
         mutableStateOf(DashboardLayoutPreference.default)
     }
     var showDashboardLayoutDialog by remember { mutableStateOf(false) }
+    var showMockGpsDialog by remember { mutableStateOf(false) }
     var showSettingsExportDialog by remember { mutableStateOf(false) }
     var includePlaintextPasswordsInBackup by remember { mutableStateOf(false) }
     var zipProgressText by remember { mutableStateOf<String?>(null) }
@@ -322,6 +324,32 @@ fun RtkCollectorApp(
         val planned = profileStore.plannedDashboardState(updatedSettingsSets, selectedSettingsSetId, selectedWorkflowId)
         state = state.withPlannedConfiguration(planned)
         profileRevision++
+    }
+    fun updateMockGpsSelection(enabled: Boolean, rateHz: Int) {
+        val updated = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+            val current = set.overrides.recordingOutput
+            set.copy(
+                overrides = set.overrides.copy(
+                    recordingOutput = (current ?: org.rtkcollector.app.profile.RecordingOutputOverride()).copy(
+                        enableMockLocation = enabled,
+                        mockLocationRateHz = rateHz,
+                    ),
+                ),
+            )
+        }
+        settingsSets = updated
+        profileStore.saveSettingsSets(updated)
+        refreshProfileUi(updated)
+        if (state.isRecording) {
+            state = state.copy(mockGps = MockGpsDashboardState(enabled = enabled, rateHz = rateHz))
+            context.startService(
+                RecordingForegroundService.mockLocationUpdateIntent(
+                    context = context,
+                    enabled = enabled,
+                    rateHz = rateHz,
+                ),
+            )
+        }
     }
     val importSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -630,6 +658,7 @@ fun RtkCollectorApp(
                         requestSelectedUsbPermission(context, selectedSettingsSetId)
                         profileRevision++
                     },
+                    onMockGps = { showMockGpsDialog = true },
                     onSettingsSet = {
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing settings set.", Toast.LENGTH_LONG).show()
@@ -658,7 +687,6 @@ fun RtkCollectorApp(
                             dashboardSelector = DashboardSelector.STORAGE
                         }
                     },
-                    onMark = {},
                     coordinateAveraging = state.position.serviceCoordinateAveragingState(),
                     onStartCoordinateAveraging = { _, _ ->
                         if (!state.isRecording) {
@@ -1936,6 +1964,16 @@ fun RtkCollectorApp(
                     onDismiss = { dashboardSelector = null },
                 )
             }
+            if (showMockGpsDialog) {
+                MockGpsSelectorDialog(
+                    selected = state.mockGps,
+                    onSelect = { enabled, rateHz ->
+                        updateMockGpsSelection(enabled = enabled, rateHz = rateHz)
+                        showMockGpsDialog = false
+                    },
+                    onDismiss = { showMockGpsDialog = false },
+                )
+            }
             if (showDashboardLayoutDialog) {
                 DashboardLayoutDialog(
                     selected = dashboardLayout,
@@ -2885,6 +2923,12 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("exportJsonSolution", "Export JSON solution", profile.exportJsonSolution.toString(), boolean = true),
                     EditableProfileField("exportGpx", "Export GPX", profile.exportGpx.toString(), boolean = true),
                     EditableProfileField("enableMockLocation", "Publish Android mock location while recording", profile.enableMockLocation.toString(), boolean = true),
+                    EditableProfileField(
+                        key = "mockLocationRateHz",
+                        label = "Mock location update rate",
+                        value = profile.mockLocationRateHz.toString(),
+                        optionItems = MOCK_GPS_RATE_OPTIONS,
+                    ),
                     EditableProfileField("recordRemoteBaseRaw", "Record remote base raw", profile.recordRemoteBaseRaw.toString(), boolean = true),
                 ),
             ).asProtectedProfileView(profile.isProtected)
@@ -2918,6 +2962,67 @@ private fun ProfileEditorData.asProtectedProfileView(isProtected: Boolean): Prof
             readOnly = true,
         )
     }
+
+@Composable
+private fun MockGpsSelectorDialog(
+    selected: MockGpsDashboardState,
+    onSelect: (enabled: Boolean, rateHz: Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mock GPS") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Publish the selected receiver solution through Android mock location while recording.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                MockGpsOptionButton(
+                    label = "Off",
+                    selected = !selected.enabled,
+                    onClick = { onSelect(false, RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ) },
+                )
+                MOCK_GPS_RATE_OPTIONS.forEach { option ->
+                    val rateHz = option.value.toInt()
+                    MockGpsOptionButton(
+                        label = option.label,
+                        selected = selected.enabled && selected.rateHz == rateHz,
+                        onClick = { onSelect(true, rateHz) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Composable
+private fun MockGpsOptionButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        colors = if (selected) {
+            androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        } else {
+            androidx.compose.material3.ButtonDefaults.buttonColors()
+        },
+    ) {
+        Text(if (selected) "$label · Active" else label)
+    }
+}
 
 private fun ProfileStores.saveProfileEditorData(
     target: ProfileEditorTarget,
@@ -3080,6 +3185,8 @@ private fun ProfileStores.saveProfileEditorData(
                         exportGpx = values.optional("exportGpx").toBooleanStrictOrFalse(),
                         recordRemoteBaseRaw = values.optional("recordRemoteBaseRaw").toBooleanStrictOrFalse(),
                         enableMockLocation = values.optional("enableMockLocation").toBooleanStrictOrFalse(),
+                        mockLocationRateHz = values.optional("mockLocationRateHz")?.toIntOrNull()
+                            ?: RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ,
                     )
                 } else {
                     profile
@@ -3320,6 +3427,10 @@ private val PPP_NMEA_GGA_QUALITY_OPTIONS = listOf(
     EditableProfileOption("5", "5 - RTK float compatibility"),
     EditableProfileOption("9", "9 - GNSS fix compatibility"),
 )
+
+private val MOCK_GPS_RATE_OPTIONS = RecordingPolicyProfile.ALLOWED_MOCK_LOCATION_RATES_HZ
+    .sorted()
+    .map { rateHz -> EditableProfileOption(rateHz.toString(), "$rateHz Hz") }
 
 private val BASE_POSITION_METHOD_OPTIONS = listOf(
     EditableProfileOption("MANUAL_KNOWN_POINT", "Manual / known point"),
@@ -3595,6 +3706,7 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_EXPORT_JSON_SOLUTION, activeConfig.recording.exportJsonSolution)
         putExtra(RecordingForegroundService.EXTRA_RECORD_REMOTE_BASE_RAW, activeConfig.recording.recordRemoteBaseRaw)
         putExtra(RecordingForegroundService.EXTRA_ENABLE_MOCK_LOCATION, activeConfig.recording.enableMockLocation)
+        putExtra(RecordingForegroundService.EXTRA_MOCK_LOCATION_RATE_HZ, activeConfig.recording.mockLocationRateHz)
         val basePositionJson = if (workflowId == WORKFLOW_FIXED_BASE && selectedBaseCoordinate != null) {
             BasePositionJsonCodec.encode(selectedBaseCoordinate)
         } else {
@@ -4130,6 +4242,15 @@ private fun ProfileStores.plannedDashboardState(
     val selectedCommandProfile = selected?.commandProfileRef?.id?.let { id ->
         commandProfiles().firstOrNull { it.id == id }
     }
+    val recordingPolicyProfile = selected?.recordingOutputProfileRef?.id?.let { id ->
+        recordingPolicyProfiles().firstOrNull { it.id == id }
+    }
+    val mockEnabled = selected?.overrides?.recordingOutput?.enableMockLocation
+        ?: recordingPolicyProfile?.enableMockLocation
+        ?: false
+    val mockRateHz = selected?.overrides?.recordingOutput?.mockLocationRateHz
+        ?: recordingPolicyProfile?.mockLocationRateHz
+        ?: RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
     return DashboardState.planned(
         workflow = selectedWorkflowId.workflowLabel(),
         mountpoint = mountpoint,
@@ -4146,6 +4267,7 @@ private fun ProfileStores.plannedDashboardState(
             recordingOutputProfile = selectedRecordingOutputProfileLabel(selectedSettingsSetId),
             storageLocationProfile = selectedStorageLabel(selectedSettingsSetId),
         ),
+        mockGps = MockGpsDashboardState(enabled = mockEnabled, rateHz = mockRateHz),
     )
 }
 

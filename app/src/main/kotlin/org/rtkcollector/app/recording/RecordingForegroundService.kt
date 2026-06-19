@@ -17,6 +17,7 @@ import org.rtkcollector.app.mocklocation.AndroidMockLocationSink
 import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
+import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
@@ -149,6 +150,7 @@ class RecordingForegroundService : Service() {
     private var lastMockPublishWallClockAtMillis: Long? = null
     private var previousMockResult: org.rtkcollector.app.mocklocation.MockLocationPublishResult? = null
     private var mockLocationRequested: Boolean = false
+    private var mockLocationRateHz: Int = RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
     private var ubloxStreamParser = UbloxStreamParser()
     private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
     private val routineStateBroadcastRateLimiter =
@@ -176,6 +178,7 @@ class RecordingForegroundService : Service() {
             }
             ACTION_UPDATE_NTRIP -> updateNtrip(intent)
             ACTION_DISABLE_NTRIP -> disableNtrip()
+            ACTION_UPDATE_MOCK_LOCATION -> updateMockLocation(intent)
             ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG -> writePersistentReceiverConfig(intent)
             ACTION_START_COORDINATE_AVERAGING -> startCoordinateAveraging()
             ACTION_STOP_COORDINATE_AVERAGING -> stopCoordinateAveraging()
@@ -387,6 +390,7 @@ class RecordingForegroundService : Service() {
             sharedNmeaGgaParser = NmeaGgaParser()
             val enableMockLocation = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
             mockLocationRequested = enableMockLocation
+            mockLocationRateHz = intent.mockLocationRateHz()
             configureMockLocation(enableMockLocation)
             val configuredMode = Um980ModeParser.configuredMode(
                 (initCommands + baudSwitchCommands + modeCommands).joinToString("\n"),
@@ -439,6 +443,7 @@ class RecordingForegroundService : Service() {
                 rawRecordingActive = true,
                 correctionsActive = false,
                 um980Mode = configuredMode?.let { "Commanded $it" } ?: "n/a",
+                mockLocationRateHz = mockLocationRateHz,
             )
             ntripRateWindowStartedAtMillis = System.currentTimeMillis()
             ntripRateWindowCorrectionBytes = 0L
@@ -450,16 +455,7 @@ class RecordingForegroundService : Service() {
             lastMockPublishedIdentity = null
             lastMockPublishWallClockAtMillis = null
             previousMockResult = null
-            bestSolutionTicker = if (mockLocationRequested) {
-                bestSolutionExecutor.scheduleAtFixedRate(
-                    { runBestSolutionTick() },
-                    DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS,
-                    DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS,
-                    java.util.concurrent.TimeUnit.MILLISECONDS,
-                )
-            } else {
-                null
-            }
+            startBestSolutionTicker()
 
             captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
             maybeStartNtrip(intent, recorder)
@@ -797,6 +793,27 @@ class RecordingForegroundService : Service() {
         broadcastState()
     }
 
+    private fun updateMockLocation(intent: Intent) {
+        if (!running.get()) {
+            return
+        }
+        mockLocationRequested = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
+        mockLocationRateHz = intent.mockLocationRateHz()
+        lastMockPublishedAt = null
+        lastMockPublishedIdentity = null
+        lastMockPublishWallClockAtMillis = null
+        previousMockResult = null
+        state = state.copy(
+            mockLocationRateHz = mockLocationRateHz,
+            mockLocationLastIntervalMs = null,
+            mockLocationSolutionAgeMs = null,
+            mockLocationState = if (mockLocationRequested) "Enabled" else "Disabled",
+        )
+        configureMockLocation(mockLocationRequested)
+        startBestSolutionTicker()
+        broadcastState()
+    }
+
     private fun writePersistentReceiverConfig(intent: Intent) {
         if (!running.get()) {
             state = state.copy(
@@ -1091,6 +1108,7 @@ class RecordingForegroundService : Service() {
         lastMockPublishWallClockAtMillis = null
         previousMockResult = null
         mockLocationRequested = false
+        mockLocationRateHz = RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
         releaseWakeLock()
         state = state.copy(
             running = false,
@@ -1107,6 +1125,7 @@ class RecordingForegroundService : Service() {
             baseCasterUploadDroppedBytes = 0,
             baseCasterUploadLastError = null,
             ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+            mockLocationRateHz = mockLocationRateHz,
         ).clearBestSolutionFields(
             mockLocationState = "Disabled",
             ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
@@ -1482,6 +1501,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT, state.baseAverageSampleCount)
                 putExtra(EXTRA_STATE_MOCK_LOCATION_STATE, state.mockLocationState)
                 putExtra(EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS, state.mockLocationLastIntervalMs ?: -1L)
+                putExtra(EXTRA_STATE_MOCK_LOCATION_RATE_HZ, state.mockLocationRateHz)
                 putExtra(EXTRA_STATE_UBLOX_FREQUENCY, state.ubloxFrequency)
             },
         )
@@ -2191,6 +2211,27 @@ class RecordingForegroundService : Service() {
     private fun Intent.optionalDoubleExtra(name: String): Double? =
         if (hasExtra(name)) getDoubleExtra(name, Double.NaN).takeUnless { it.isNaN() } else null
 
+    private fun Intent.mockLocationRateHz(): Int =
+        sanitizeMockLocationRateHz(
+            getIntExtra(
+                EXTRA_MOCK_LOCATION_RATE_HZ,
+                RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ,
+            ),
+        )
+
+    private fun startBestSolutionTicker() {
+        bestSolutionTicker?.cancel(false)
+        bestSolutionTicker = null
+        if (!mockLocationRequested) return
+        val periodMillis = mockLocationPublishPeriodMillis(mockLocationRateHz)
+        bestSolutionTicker = bestSolutionExecutor.scheduleAtFixedRate(
+            { runBestSolutionTick() },
+            periodMillis,
+            periodMillis,
+            java.util.concurrent.TimeUnit.MILLISECONDS,
+        )
+    }
+
     private class SessionRawRecorder(
         private val writers: RecordingSessionWriters,
         private val recordCorrectionInput: Boolean,
@@ -2243,6 +2284,7 @@ class RecordingForegroundService : Service() {
         const val ACTION_QUERY = "org.rtkcollector.app.recording.QUERY"
         const val ACTION_UPDATE_NTRIP = "org.rtkcollector.app.recording.UPDATE_NTRIP"
         const val ACTION_DISABLE_NTRIP = "org.rtkcollector.app.recording.DISABLE_NTRIP"
+        const val ACTION_UPDATE_MOCK_LOCATION = "org.rtkcollector.app.recording.UPDATE_MOCK_LOCATION"
         const val ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG =
             "org.rtkcollector.app.recording.WRITE_PERSISTENT_RECEIVER_CONFIG"
         const val ACTION_START_COORDINATE_AVERAGING =
@@ -2291,6 +2333,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_EXPORT_JSON_SOLUTION = "exportJsonSolution"
         const val EXTRA_RECORD_REMOTE_BASE_RAW = "recordRemoteBaseRaw"
         const val EXTRA_ENABLE_MOCK_LOCATION = "enableMockLocation"
+        const val EXTRA_MOCK_LOCATION_RATE_HZ = "mockLocationRateHz"
         const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
         const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
         const val EXTRA_BASE_COORDINATE_ID = "baseCoordinateId"
@@ -2385,6 +2428,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT = "baseAverageSampleCount"
         const val EXTRA_STATE_MOCK_LOCATION_STATE = "mockLocationState"
         const val EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS = "mockLocationIntervalMs"
+        const val EXTRA_STATE_MOCK_LOCATION_RATE_HZ = "mockLocationRateHz"
         const val EXTRA_STATE_UBLOX_FREQUENCY = "ubloxFrequency"
 
         private const val CHANNEL_ID = "rtkcollector-recording"
@@ -2402,6 +2446,16 @@ class RecordingForegroundService : Service() {
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)
+
+        fun mockLocationUpdateIntent(
+            context: Context,
+            enabled: Boolean,
+            rateHz: Int,
+        ): Intent =
+            Intent(context, RecordingForegroundService::class.java)
+                .setAction(ACTION_UPDATE_MOCK_LOCATION)
+                .putExtra(EXTRA_ENABLE_MOCK_LOCATION, enabled)
+                .putExtra(EXTRA_MOCK_LOCATION_RATE_HZ, sanitizeMockLocationRateHz(rateHz))
     }
 
     private data class OpenedRecordingSession(
@@ -2413,6 +2467,16 @@ class RecordingForegroundService : Service() {
 private const val RTCM_STATUS_RECENT_MILLIS = 10_000L
 private const val RTK_EVIDENCE_RECENT_MILLIS = 10_000L
 private const val RTK_STALE_DIFFERENTIAL_AGE_SECONDS = 5.0
+
+internal fun sanitizeMockLocationRateHz(rateHz: Int): Int =
+    if (rateHz in RecordingPolicyProfile.ALLOWED_MOCK_LOCATION_RATES_HZ) {
+        rateHz
+    } else {
+        RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
+    }
+
+internal fun mockLocationPublishPeriodMillis(rateHz: Int): Long =
+    RecordingForegroundService.DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS / sanitizeMockLocationRateHz(rateHz)
 
 internal fun receiverRtkStatusAfterRtcmDecoded(
     previousStatus: String,

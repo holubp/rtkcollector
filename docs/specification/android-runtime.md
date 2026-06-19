@@ -102,9 +102,13 @@ When mock-location publishing is enabled, the runtime state SHOULD expose the
 latest mock publish result and, after at least two successful publishes, the
 wall-clock interval between the last two successful mock-provider updates. This
 monitoring MUST remain advisory and MUST NOT run on or block the raw receiver
-capture path. V1 mock publishing defaults to a fixed-rate `1 Hz` cadence.
+capture path. V1 mock publishing defaults to a fixed-rate `1 Hz` cadence and
+MAY be switched by the user to one of the supported fixed rates: `1 Hz`, `2 Hz`,
+`5 Hz` or `10 Hz`. Unsupported rates MUST be rejected or normalised back to
+`1 Hz`.
 
 Verification:
 - Automated: mock publish tick logic and dashboard mapper tests.
 - Manual: enabled mock provider shows status/rate/last-interval on the Fix
-  card during recording.
+  card during recording and the top dashboard chip shows Off or the selected
+  rate.

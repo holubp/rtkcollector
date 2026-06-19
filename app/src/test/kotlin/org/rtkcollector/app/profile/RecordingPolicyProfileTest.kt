@@ -39,19 +39,22 @@ class RecordingPolicyProfileTest {
         )
 
         assertEquals(false, decoded.enableMockLocation)
+        assertEquals(1, decoded.mockLocationRateHz)
     }
 
     @Test
-    fun `recording policy round trip preserves mock location publishing`() {
+    fun `recording policy round trip preserves mock location publishing and rate`() {
         val profile = RecordingPolicyProfile(
             id = "recording",
             name = "Recording",
             enableMockLocation = true,
+            mockLocationRateHz = 5,
         )
 
         val decoded = RecordingPolicyProfile.fromJson(profile.toJson())
 
         assertEquals(true, decoded.enableMockLocation)
+        assertEquals(5, decoded.mockLocationRateHz)
     }
 
     @Test
@@ -61,6 +64,17 @@ class RecordingPolicyProfileTest {
                 id = "bad",
                 name = "Bad",
                 pppNmeaGgaQuality = 4,
+            ).validate()
+        }
+    }
+
+    @Test
+    fun `recording policy rejects unsupported mock location rate`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            RecordingPolicyProfile(
+                id = "bad",
+                name = "Bad",
+                mockLocationRateHz = 3,
             ).validate()
         }
     }

@@ -16,6 +16,15 @@ class BestSolutionTickLogicTest {
     }
 
     @Test
+    fun `mock location publish period follows supported rate and sanitizes unsupported rates`() {
+        assertEquals(1_000L, mockLocationPublishPeriodMillis(1))
+        assertEquals(500L, mockLocationPublishPeriodMillis(2))
+        assertEquals(200L, mockLocationPublishPeriodMillis(5))
+        assertEquals(100L, mockLocationPublishPeriodMillis(10))
+        assertEquals(1_000L, mockLocationPublishPeriodMillis(3))
+    }
+
+    @Test
     fun `empty candidate set yields STALE and nothing to publish`() {
         val out = BestSolutionTickLogic.compute(
             input(candidates = emptyList(), mockEnabled = true),

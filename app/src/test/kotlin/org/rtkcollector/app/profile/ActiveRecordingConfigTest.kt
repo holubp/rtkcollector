@@ -203,7 +203,12 @@ class ActiveRecordingConfigTest {
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
-            recordingPolicyProfile = RecordingPolicyProfile("record", "Record", enableMockLocation = true),
+            recordingPolicyProfile = RecordingPolicyProfile(
+                "record",
+                "Record",
+                enableMockLocation = true,
+                mockLocationRateHz = 5,
+            ),
             storageProfile = StorageProfile("storage", "Storage"),
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
@@ -212,14 +217,19 @@ class ActiveRecordingConfigTest {
         val overrideConfig = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
                 overrides = SettingsSetOverrides(
-                    recordingOutput = RecordingOutputOverride(enableMockLocation = false),
+                    recordingOutput = RecordingOutputOverride(enableMockLocation = false, mockLocationRateHz = 10),
                 ),
             ),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
-            recordingPolicyProfile = RecordingPolicyProfile("record", "Record", enableMockLocation = true),
+            recordingPolicyProfile = RecordingPolicyProfile(
+                "record",
+                "Record",
+                enableMockLocation = true,
+                mockLocationRateHz = 5,
+            ),
             storageProfile = StorageProfile("storage", "Storage"),
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
@@ -227,7 +237,9 @@ class ActiveRecordingConfigTest {
         )
 
         assertEquals(true, policyConfig.recording.enableMockLocation)
+        assertEquals(5, policyConfig.recording.mockLocationRateHz)
         assertEquals(false, overrideConfig.recording.enableMockLocation)
+        assertEquals(10, overrideConfig.recording.mockLocationRateHz)
     }
 
     @Test

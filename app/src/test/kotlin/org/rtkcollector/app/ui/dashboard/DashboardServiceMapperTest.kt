@@ -51,10 +51,12 @@ class DashboardServiceMapperTest {
             .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE, "PUBLISHED")
             .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS, 250L)
             .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_SOLUTION_AGE_MS, 80L)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_RATE_HZ, 5)
 
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("PUBLISHED · 4.0 Hz · last 250 ms · age 80 ms", state.fix.mockLocation)
+        assertEquals(MockGpsDashboardState(enabled = true, rateHz = 5), state.mockGps)
     }
 
     @Test

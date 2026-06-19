@@ -269,6 +269,7 @@ data class RecordingPolicyProfile(
     val exportGpx: Boolean = false,
     val recordRemoteBaseRaw: Boolean = false,
     val enableMockLocation: Boolean = false,
+    val mockLocationRateHz: Int = DEFAULT_MOCK_LOCATION_RATE_HZ,
     val isProtected: Boolean = false,
 ) {
     fun validate() {
@@ -277,6 +278,9 @@ data class RecordingPolicyProfile(
         require(recordReceiverRx) { "Device receiver RX recording is required." }
         require(pppNmeaGgaQuality in ALLOWED_PPP_NMEA_GGA_QUALITIES) {
             "PPP NMEA GGA quality must be one of ${ALLOWED_PPP_NMEA_GGA_QUALITIES.joinToString()}."
+        }
+        require(mockLocationRateHz in ALLOWED_MOCK_LOCATION_RATES_HZ) {
+            "Mock location rate must be one of ${ALLOWED_MOCK_LOCATION_RATES_HZ.joinToString()} Hz."
         }
     }
 
@@ -296,10 +300,13 @@ data class RecordingPolicyProfile(
         .put("exportGpx", exportGpx)
         .put("recordRemoteBaseRaw", recordRemoteBaseRaw)
         .put("enableMockLocation", enableMockLocation)
+        .put("mockLocationRateHz", mockLocationRateHz)
 
     companion object {
         const val DEFAULT_PPP_NMEA_GGA_QUALITY = 2
+        const val DEFAULT_MOCK_LOCATION_RATE_HZ = 1
         val ALLOWED_PPP_NMEA_GGA_QUALITIES: Set<Int> = setOf(2, 5, 9)
+        val ALLOWED_MOCK_LOCATION_RATES_HZ: Set<Int> = setOf(1, 2, 5, 10)
 
         fun fromJson(json: JSONObject): RecordingPolicyProfile = RecordingPolicyProfile(
             id = json.getString("id"),
@@ -314,6 +321,7 @@ data class RecordingPolicyProfile(
             exportGpx = json.optBoolean("exportGpx", false),
             recordRemoteBaseRaw = json.optBoolean("recordRemoteBaseRaw", false),
             enableMockLocation = json.optBoolean("enableMockLocation", false),
+            mockLocationRateHz = json.optInt("mockLocationRateHz", DEFAULT_MOCK_LOCATION_RATE_HZ),
         ).also(RecordingPolicyProfile::validate)
     }
 }

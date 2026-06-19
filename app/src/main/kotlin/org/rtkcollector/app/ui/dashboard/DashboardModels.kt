@@ -8,6 +8,7 @@ data class DashboardState(
     val ntrip: NtripCardState,
     val files: FilesCardState,
     val profiles: ProfilesCardState,
+    val mockGps: MockGpsDashboardState = MockGpsDashboardState(),
     val primaryAction: DashboardAction,
     val secondaryActions: List<DashboardAction>,
     val lastError: String? = null,
@@ -22,6 +23,7 @@ data class DashboardState(
                 status = planned.status,
                 fix = fix.copy(receiverFrequency = planned.fix.receiverFrequency),
                 profiles = planned.profiles,
+                mockGps = planned.mockGps,
             )
         }
 
@@ -36,6 +38,7 @@ data class DashboardState(
             ntrip: NtripCardState = NtripCardState(),
             files: FilesCardState = FilesCardState(),
             profiles: ProfilesCardState = ProfilesCardState(),
+            mockGps: MockGpsDashboardState = MockGpsDashboardState(),
             lastError: String? = null,
             errorCategory: String = "NONE",
             errorSeverity: String = "NONE",
@@ -54,6 +57,7 @@ data class DashboardState(
                 ntrip = ntrip,
                 files = files,
                 profiles = profiles,
+                mockGps = mockGps,
                 primaryAction = DashboardAction("Start", DashboardActionKind.START),
                 secondaryActions = listOf(DashboardAction("USB access", DashboardActionKind.USB_PERMISSION)),
                 lastError = lastError,
@@ -68,6 +72,7 @@ data class DashboardState(
             ntrip: NtripCardState,
             files: FilesCardState,
             profiles: ProfilesCardState = ProfilesCardState(),
+            mockGps: MockGpsDashboardState = MockGpsDashboardState(),
             lastError: String? = null,
             errorCategory: String = "NONE",
             errorSeverity: String = "NONE",
@@ -80,10 +85,10 @@ data class DashboardState(
                 ntrip = ntrip,
                 files = files,
                 profiles = profiles,
+                mockGps = mockGps,
                 primaryAction = DashboardAction("Stop", DashboardActionKind.STOP),
                 secondaryActions = listOf(
                     DashboardAction("NTRIP", DashboardActionKind.NTRIP),
-                    DashboardAction("Mark", DashboardActionKind.MARK),
                 ),
                 lastError = lastError,
                 errorCategory = errorCategory,
@@ -477,6 +482,14 @@ data class ProfilesCardState(
     val storageLocationProfile: String = "n/a",
 )
 
+data class MockGpsDashboardState(
+    val enabled: Boolean = false,
+    val rateHz: Int = 1,
+) {
+    val label: String
+        get() = if (enabled) "Mock GPS ${rateHz} Hz" else "Mock GPS off"
+}
+
 data class DashboardAction(
     val label: String,
     val kind: DashboardActionKind,
@@ -486,7 +499,6 @@ enum class DashboardActionKind {
     START,
     STOP,
     NTRIP,
-    MARK,
     USB_PERMISSION,
     MENU,
     SHARE_ZIP,

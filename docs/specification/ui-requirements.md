@@ -39,6 +39,21 @@ Verification:
 - Manual: live UM980 session with high-rate position updates.
 - Review: fixed/minimum card dimensions and compact formatting.
 
+### UI-DASH-004: Mock GPS Control Is A First-Class Dashboard Chip
+
+Status: Normative
+
+The dashboard MUST expose Android mock-location output as a compact control
+near the recording state chip. The control MUST show `Off` or the selected
+publish frequency and MUST allow the user to select only supported fixed rates
+without opening a full profile editor. Event-marker placeholders MUST NOT be
+shown as active controls until event marking is implemented.
+
+Verification:
+- Automated: dashboard state/action tests and profile/config rate tests.
+- Manual: top chip can switch between Off, `1 Hz`, `2 Hz`, `5 Hz` and `10 Hz`
+  before recording and during recording.
+
 ### UI-BASE-001: Base Coordinate Actions Are Compact And Explicit
 
 Status: Normative

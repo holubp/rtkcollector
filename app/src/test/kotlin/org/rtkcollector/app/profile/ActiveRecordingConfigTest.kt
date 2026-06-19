@@ -46,6 +46,36 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `command receiver family follows selected command profile`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "plain-rover",
+                receiverProfileId = "um980-n4",
+                ntripCasterProfileRef = null,
+                ntripMountpointProfileRef = null,
+            ),
+            commandProfile = CommandProfile(
+                id = "ublox-m8t-raw-safe",
+                name = "u-blox M8T raw 1Hz safe",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = "!UBX CFG-RATE 1000 1 1",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud", profileBaud = 230400, serialBaud = 230400),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Plain rover recording",
+            workflowUsesNtrip = false,
+            passwordLookup = { error("Password must not be requested for non-NTRIP workflow") },
+        )
+
+        assertEquals("ublox-m8t", config.commandReceiverFamily)
+        assertEquals(listOf("!UBX CFG-RATE 1000 1 1"), config.modeCommands)
+        config.validateForStart()
+    }
+
+    @Test
     fun `ntrip config uses profile and local overrides and secret lookup`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(

@@ -928,6 +928,7 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_RECEIVER_PROFILE_ID, workflow.receiverProfileId)
             putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, um980Mode.name)
             putExtra(RecordingForegroundService.EXTRA_COMMAND_PROFILE_ID, selectedCommandProfile()?.id)
+            putExtra(RecordingForegroundService.EXTRA_COMMAND_RECEIVER_FAMILY, selectedCommandProfile()?.receiverFamily)
             putExtra(RecordingForegroundService.EXTRA_USB_BAUD_PROFILE_ID, selectedUsbBaudProfile()?.id)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, selectedNtripCasterProfile()?.id)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, selectedNtripMountpointProfile()?.id)

@@ -141,6 +141,9 @@ unchanged.
   goal is coordinate determination from another base, PPP or raw/static
   post-processing. Fixed-base workflows must not use command profiles that put
   the receiver in `MODE ROVER`.
+- Receiver command validation and compilation must follow the selected command
+  profile receiver family. Do not infer UM980 command syntax from a stale or
+  unset receiver selector when a u-blox command profile is selected.
 - Dashboard coordinate actions are intentionally compact: tapping coordinates
   copies them, `Base` moves toward fixed-base use of the current coordinate,
   and `Avg` starts a live average that must stop if the fix type changes.

@@ -263,7 +263,10 @@ class RecordingForegroundService : Service() {
             val serialBaud = validateBaud(intent.getIntExtra(EXTRA_SERIAL_BAUD, 230400), "serial baud")
             val profileBaud = validateBaud(intent.getIntExtra(EXTRA_PROFILE_BAUD, serialBaud), "profile baud")
             val workflowUsesNtrip = intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)
-            activeReceiverFamily = receiverFamilyFromDriverId(intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID))
+            activeReceiverFamily = recordingReceiverFamily(
+                receiverProfileId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID),
+                commandReceiverFamily = intent.getStringExtra(EXTRA_COMMAND_RECEIVER_FAMILY),
+            )
             val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
@@ -1984,16 +1987,6 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun receiverFamilyFromDriverId(driverId: String?): String {
-        if (driverId.isNullOrBlank()) return ""
-        val normalized = driverId.lowercase()
-        return when {
-            normalized.startsWith("ublox") -> "ublox"
-            normalized.startsWith("um980") || normalized.startsWith("unicore") -> "um980"
-            else -> normalized.substringBefore('-')
-        }
-    }
-
     private fun buildAdvisoryFanout(
         sessionWriters: RecordingSessionWriters,
         eventSink: CaptureEventSink,
@@ -2499,6 +2492,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_RECEIVER_PROFILE_ID = "receiverProfileId"
         const val EXTRA_UM980_PROFILE_ID = "um980ProfileId"
         const val EXTRA_COMMAND_PROFILE_ID = "commandProfileId"
+        const val EXTRA_COMMAND_RECEIVER_FAMILY = "commandReceiverFamily"
         const val EXTRA_USB_BAUD_PROFILE_ID = "usbBaudProfileId"
         const val EXTRA_NTRIP_CASTER_PROFILE_ID = "ntripCasterProfileId"
         const val EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID = "ntripMountpointProfileId"
@@ -2680,6 +2674,17 @@ internal fun sanitizeMockLocationRateHz(rateHz: Int): Int =
 
 internal fun mockLocationPublishPeriodMillis(rateHz: Int): Long =
     RecordingForegroundService.DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS / sanitizeMockLocationRateHz(rateHz)
+
+internal fun recordingReceiverFamily(receiverProfileId: String?, commandReceiverFamily: String?): String {
+    val id = commandReceiverFamily?.takeIf { it.isNotBlank() } ?: receiverProfileId
+    if (id.isNullOrBlank()) return ""
+    val normalized = id.lowercase()
+    return when {
+        normalized.startsWith("ublox") -> "ublox"
+        normalized.startsWith("um980") || normalized.startsWith("unicore") -> "um980"
+        else -> normalized.substringBefore('-')
+    }
+}
 
 internal fun receiverRtkStatusAfterRtcmDecoded(
     previousStatus: String,

@@ -3703,6 +3703,7 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_RECEIVER_PROFILE_ID, activeConfig.receiverProfileId)
         putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, activeConfig.commandProfileId)
         putExtra(RecordingForegroundService.EXTRA_COMMAND_PROFILE_ID, activeConfig.commandProfileId)
+        putExtra(RecordingForegroundService.EXTRA_COMMAND_RECEIVER_FAMILY, activeConfig.commandReceiverFamily)
         putExtra(RecordingForegroundService.EXTRA_USB_BAUD_PROFILE_ID, activeConfig.usbBaudProfileId)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, ntripCaster?.id)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, ntripMountpoint?.id)

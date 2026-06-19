@@ -15,6 +15,7 @@ data class UbloxTelemetry(
     val horizontalAccuracyM: Double? = null,
     val verticalAccuracyM: Double? = null,
     val satellitesUsed: Int? = null,
+    val utcTime: String? = null,
     val rawObservationsPresent: Boolean = false,
 ) {
     fun toSolutionCandidate(): SolutionCandidate? {
@@ -35,6 +36,7 @@ data class UbloxTelemetry(
             verticalAccuracyM = verticalAccuracyM,
             satellitesUsed = satellitesUsed,
             satellitesInView = null,
+            utcTime = utcTime,
         )
     }
 }

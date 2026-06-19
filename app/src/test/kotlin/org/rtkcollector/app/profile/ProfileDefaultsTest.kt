@@ -27,4 +27,9 @@ class ProfileDefaultsTest {
     fun `m8t safe raw profile enables nav pvt for monitoring`() {
         assertTrue(ProfileStores.UBLOX_M8T_RAW_1HZ_SCRIPT.contains("!UBX CFG-MSG 1 7 0 0 0 1 0 0"))
     }
+
+    @Test
+    fun `m8t mock profile enables timing marker output`() {
+        assertTrue(ProfileStores.UBLOX_M8T_RAW_STATUS_MOCK_SCRIPT.contains("!UBX CFG-MSG 13 3 0 0 0 1 0 0"))
+    }
 }

@@ -2,6 +2,7 @@ package org.rtkcollector.receiver.ublox
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.rtkcollector.core.solution.FixClass
 import java.nio.ByteBuffer
@@ -13,6 +14,13 @@ class UbloxNavPvtParserTest {
         val payload = ByteArray(92)
         ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN).apply {
             putInt(0, 123456)
+            putShort(4, 2026)
+            put(6, 6)
+            put(7, 19)
+            put(8, 21)
+            put(9, 0)
+            put(10, 48)
+            put(11, 0x03)
             put(20, 0x03)
             put(21, 0x03)
             put(23, 14)
@@ -36,6 +44,27 @@ class UbloxNavPvtParserTest {
         assertEquals(0.8, telemetry.horizontalAccuracyM!!, 0.001)
         assertEquals(1.2, telemetry.verticalAccuracyM!!, 0.001)
         assertEquals(14, telemetry.satellitesUsed)
+        assertEquals("2026-06-19T21:00:48Z", telemetry.utcTime)
+    }
+
+    @Test
+    fun `does not export utc time when nav pvt date time validity flags are unset`() {
+        val payload = ByteArray(92)
+        ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putShort(4, 2026)
+            put(6, 6)
+            put(7, 19)
+            put(8, 21)
+            put(9, 0)
+            put(10, 48)
+            put(11, 0x00)
+        }
+        val frame = UbloxFrame.build(0x01, 0x07, payload)
+
+        val telemetry = UbloxNavPvtParser.parse(frame, nowMillis = 10_000L)
+
+        assertNotNull(telemetry)
+        assertNull(telemetry!!.utcTime)
     }
 
     @Test

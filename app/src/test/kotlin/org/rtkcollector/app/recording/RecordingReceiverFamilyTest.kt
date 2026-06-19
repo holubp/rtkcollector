@@ -18,4 +18,14 @@ class RecordingReceiverFamilyTest {
     fun `empty command receiver family falls back to receiver profile`() {
         assertEquals("um980", recordingReceiverFamily(receiverProfileId = "unicore-n4", commandReceiverFamily = ""))
     }
+
+    @Test
+    fun `session receiver driver id uses command family over stale receiver profile`() {
+        assertEquals("ublox-m8t", sessionReceiverDriverId(receiverProfileId = "um980-n4", commandReceiverFamily = "ublox-m8t"))
+    }
+
+    @Test
+    fun `session receiver driver id falls back to receiver profile`() {
+        assertEquals("um980-n4", sessionReceiverDriverId(receiverProfileId = "um980-n4", commandReceiverFamily = ""))
+    }
 }

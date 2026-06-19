@@ -94,8 +94,10 @@ import org.rtkcollector.receiver.api.ReceiverCommand
 import org.rtkcollector.receiver.ublox.UbloxMessageFrequencyTracker
 import org.rtkcollector.receiver.ublox.UbloxMessageKind
 import org.rtkcollector.receiver.ublox.UbloxNavPvtParser
+import org.rtkcollector.receiver.ublox.UbloxNmeaExporter
 import org.rtkcollector.receiver.ublox.UbloxScriptCompiler
 import org.rtkcollector.receiver.ublox.UbloxStreamParser
+import org.rtkcollector.receiver.ublox.UbloxTelemetry
 import org.rtkcollector.core.solution.BestSolutionSelector
 import org.rtkcollector.core.solution.CoordinateAverageAddResult
 import org.rtkcollector.core.solution.CoordinateAverageSummary
@@ -267,6 +269,10 @@ class RecordingForegroundService : Service() {
                 receiverProfileId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID),
                 commandReceiverFamily = intent.getStringExtra(EXTRA_COMMAND_RECEIVER_FAMILY),
             )
+            val receiverDriverId = sessionReceiverDriverId(
+                receiverProfileId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID),
+                commandReceiverFamily = intent.getStringExtra(EXTRA_COMMAND_RECEIVER_FAMILY),
+            )
             val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
@@ -307,7 +313,7 @@ class RecordingForegroundService : Service() {
                 appVersion = "0.1.0",
                 androidDeviceModel = Build.MODEL ?: "unknown",
                 androidVersion = Build.VERSION.RELEASE ?: "unknown",
-                receiverDriverId = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID) ?: "um980-n4",
+                receiverDriverId = receiverDriverId,
                 receiverIdentification = null,
                 usbVid = usbDevice.vendorId,
                 usbPid = usbDevice.productId,
@@ -1704,14 +1710,31 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun parseUbloxAdvisory(bytes: ByteArray, nowMillis: Long) {
+    private fun parseUbloxAdvisory(
+        bytes: ByteArray,
+        nowMillis: Long,
+        sessionWriters: RecordingSessionWriters,
+        exportNmea: Boolean,
+        exportJsonSolution: Boolean,
+    ) {
         ubloxStreamParser.accept(bytes).forEach { record ->
             if (record.kind == "ubx") {
                 when {
                     record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x07.toByte() -> {
                         ubloxFrequencyTracker.record(UbloxMessageKind.NAV_PVT, nowMillis)
-                        UbloxNavPvtParser.parse(record.bytes, nowMillis)?.toSolutionCandidate()?.let {
-                            applyPrimaryScreenCandidate(it, nowMillis)
+                        UbloxNavPvtParser.parse(record.bytes, nowMillis)?.let { telemetry ->
+                            if (exportJsonSolution) {
+                                sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
+                            }
+                            if (exportNmea) {
+                                UbloxNmeaExporter.exportGga(telemetry)?.let { sentence ->
+                                    sessionWriters.appendReceiverSolutionNmea(sentence)
+                                    activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
+                                }
+                            }
+                            telemetry.toSolutionCandidate()?.let {
+                                applyPrimaryScreenCandidate(it, nowMillis)
+                            }
                         }
                     }
                     record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x15.toByte() ->
@@ -2032,6 +2055,9 @@ class RecordingForegroundService : Service() {
                     )
                 },
                 AdvisoryConsumer("um980-mixed-stream") { bytes ->
+                    if (activeReceiverFamily.startsWith("ublox", ignoreCase = true)) {
+                        return@AdvisoryConsumer
+                    }
                     streamParser.accept(bytes).forEach { record ->
                         when (record.kind) {
                             "nmea" -> {
@@ -2209,20 +2235,27 @@ class RecordingForegroundService : Service() {
                 },
                 AdvisoryConsumer("ublox-mixed-stream") { bytes ->
                     if (activeReceiverFamily.startsWith("ublox", ignoreCase = true)) {
-                        parseUbloxAdvisory(bytes, System.currentTimeMillis())
+                        parseUbloxAdvisory(
+                            bytes = bytes,
+                            nowMillis = System.currentTimeMillis(),
+                            sessionWriters = sessionWriters,
+                            exportNmea = exportNmea,
+                            exportJsonSolution = exportJsonSolution,
+                        )
                     }
                 },
                 AdvisoryConsumer("rtcm3-extractor") { bytes ->
                     rtcmExtractor.accept(bytes).forEach { frame ->
+                        if (frame.crcValid != true) {
+                            return@forEach
+                        }
                         val baseUploadOffered = if (casterUploadController != null && frame.crcValid == true) {
                             sessionWriters.appendBaseCasterUploadRtcm(frame.bytes)
                             casterUploadController.offer(frame.bytes)
                         } else {
                             null
                         }
-                        if (frame.crcValid != false) {
-                            sessionWriters.appendExtractedRtcm(frame.bytes)
-                        }
+                        sessionWriters.appendExtractedRtcm(frame.bytes)
                         sessionWriters.appendQualityLiveJson(
                             """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"},"baseCasterUploadOffered":${baseUploadOffered ?: "null"}}""",
                         )
@@ -2246,6 +2279,9 @@ class RecordingForegroundService : Service() {
 
     private fun Um980Telemetry.toJson(): String =
         """{"type":"um980-binary-telemetry","source":"${source.jsonEscape()}","solutionStatus":${solutionStatus.jsonStringOrNull()},"positionType":${positionType.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"altitudeM":${altitudeM ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"latErrorM":${latErrorM ?: "null"},"lonErrorM":${lonErrorM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesInView":${satellitesInView ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"satellitesTracked":${satellitesTracked ?: "null"},"gdop":${gdop ?: "null"},"pdop":${pdop ?: "null"},"tdop":${tdop ?: "null"},"hdop":${hdop ?: "null"},"vdop":${vdop ?: "null"},"ndop":${ndop ?: "null"},"edop":${edop ?: "null"},"differentialAgeS":${differentialAgeS ?: "null"},"baselineLengthM":${baselineLengthM ?: "null"},"stationId":${stationId.jsonStringOrNull()},"utcTime":${utcTime.jsonStringOrNull()},"rtkPositionType":${rtkPositionType.jsonStringOrNull()},"rtkCalculateStatus":${rtkCalculateStatus ?: "null"},"rtkCalculateStatusDescription":${rtkCalculateStatusDescription.jsonStringOrNull()},"ionDetected":${ionDetected ?: "null"},"adrNumber":${adrNumber ?: "null"},"gpsSource":${gpsSource ?: "null"},"bdsSource1":${bdsSource1 ?: "null"},"bdsSource2":${bdsSource2 ?: "null"},"gloSource":${gloSource ?: "null"},"galSource1":${galSource1 ?: "null"},"galSource2":${galSource2 ?: "null"},"qzssSource":${qzssSource ?: "null"},"rtcmMessageId":${rtcmMessageId ?: "null"},"rtcmMessageCount":${rtcmMessageCount ?: "null"},"rtcmBaseId":${rtcmBaseId ?: "null"},"rtcmSatelliteCount":${rtcmSatelliteCount ?: "null"},"rtcmObservableCounts":[${rtcmObservableCounts.joinToString(",")}]}"""
+
+    private fun UbloxTelemetry.toJson(): String =
+        """{"type":"ublox-nav-pvt","source":"${source.jsonEscape()}","utcTime":${utcTime.jsonStringOrNull()},"fixClass":${fixClass?.name.jsonStringOrNull()},"latDeg":${latDeg ?: "null"},"lonDeg":${lonDeg ?: "null"},"ellipsoidalHeightM":${ellipsoidalHeightM ?: "null"},"altitudeM":${mslAltitudeM ?: "null"},"horizontalAccuracyM":${horizontalAccuracyM ?: "null"},"verticalAccuracyM":${verticalAccuracyM ?: "null"},"satellitesUsed":${satellitesUsed ?: "null"},"rawObservationsPresent":$rawObservationsPresent}"""
 
     private fun RecordingServiceState.withUm980Telemetry(telemetry: Um980Telemetry): RecordingServiceState =
         copy(
@@ -2700,6 +2736,12 @@ internal fun recordingReceiverFamily(receiverProfileId: String?, commandReceiver
         normalized.startsWith("um980") || normalized.startsWith("unicore") -> "um980"
         else -> normalized.substringBefore('-')
     }
+}
+
+internal fun sessionReceiverDriverId(receiverProfileId: String?, commandReceiverFamily: String?): String {
+    val commandFamily = commandReceiverFamily?.takeIf { it.isNotBlank() }
+    val receiverProfile = receiverProfileId?.takeIf { it.isNotBlank() }
+    return commandFamily ?: receiverProfile ?: "unknown"
 }
 
 internal fun receiverRtkStatusAfterRtcmDecoded(

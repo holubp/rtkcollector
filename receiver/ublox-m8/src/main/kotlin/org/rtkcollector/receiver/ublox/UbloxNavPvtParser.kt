@@ -15,6 +15,7 @@ object UbloxNavPvtParser {
         val flags = payload.get(21).toInt() and 0xff
         val fixClass = fixClass(fixType, flags)
         val satellites = payload.get(23).toInt() and 0xff
+        val utcTime = utcTime(payload)
         return UbloxTelemetry(
             source = "UBX-NAV-PVT",
             updatedAtMillis = nowMillis,
@@ -26,7 +27,23 @@ object UbloxNavPvtParser {
             horizontalAccuracyM = payload.getInt(40) / 1000.0,
             verticalAccuracyM = payload.getInt(44) / 1000.0,
             satellitesUsed = satellites,
+            utcTime = utcTime,
         )
+    }
+
+    private fun utcTime(payload: ByteBuffer): String? {
+        val validFlags = payload.get(11).toInt() and 0xff
+        val dateAndTimeValid = validFlags and 0x03 == 0x03
+        if (!dateAndTimeValid) return null
+        val year = payload.getShort(4).toInt() and 0xffff
+        val month = payload.get(6).toInt() and 0xff
+        val day = payload.get(7).toInt() and 0xff
+        val hour = payload.get(8).toInt() and 0xff
+        val minute = payload.get(9).toInt() and 0xff
+        val second = payload.get(10).toInt() and 0xff
+        if (year !in 1980..2099 || month !in 1..12 || day !in 1..31) return null
+        if (hour !in 0..23 || minute !in 0..59 || second !in 0..60) return null
+        return "%04d-%02d-%02dT%02d:%02d:%02dZ".format(year, month, day, hour, minute, second)
     }
 
     private fun fixClass(fixType: Int, flags: Int): FixClass {

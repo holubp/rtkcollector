@@ -92,6 +92,9 @@ NOT become part of the raw capture path.
 RTKLIB-EX integration MUST use the library API through an in-process native
 adapter, not RTKLIB command-line tools. Live processing MUST be forward-only.
 Forward/backward or combined processing belongs to offline/post-processing.
+The RTKLIB-EX source used by Android builds MUST be pinned to an exact
+reviewed upstream commit; automatic tracking of upstream HEAD, tags or moving
+branches is not acceptable for reproducible field builds.
 
 RTKLIB input routing MUST be explicit and format-aware. Receiver profiles MUST
 declare candidate RTKLIB rover-input formats, and the RTKLIB engine capability

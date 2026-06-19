@@ -204,17 +204,22 @@ python3 tools/check_spec_requirements.py docs/specification
 
 ## Phase 2: Pin RTKLIB-EX Snapshot And Native Build Shell
 
-- [ ] Add `third_party/rtklib-ex/README.md` with:
+- [x] Add `third_party/rtklib-ex/README.md` with:
   - upstream URL;
-  - exact commit hash;
+  - exact commit hash requirement;
   - licence;
   - local patch policy;
   - refresh procedure;
   - statement that automatic tracking of upstream HEAD is forbidden.
+- [x] Add `tools/update_rtklib_ex.py` to create/update a local pinned checkout
+  and write `snapshot.json`.
 - [ ] Add the pinned RTKLIB-EX snapshot under `third_party/rtklib-ex/upstream`.
-  Use a clean copy or submodule only if repository policy allows it.
-- [ ] Add `third_party/rtklib-ex/patches/README.md` even if no patches exist.
-- [ ] Add minimal CMake build for RTKLIB-EX sources needed by the bridge.
+  Use a clean copy or submodule only if repository policy allows it. Current
+  checkpoint keeps the local checkout ignored until the exact snapshot is
+  selected.
+- [x] Add `third_party/rtklib-ex/patches/README.md` even if no patches exist.
+- [x] Add native-build shell placeholder for RTKLIB-EX sources needed by the
+  bridge. Full source list remains open until the pinned snapshot is selected.
 - [ ] Prefer compiling RTKLIB-EX as a static native library linked into
   `rtkcollector_rtklib`.
 - [ ] Define compile flags explicitly:
@@ -543,7 +548,10 @@ Manual smoke:
 
 ## Phase 9: Replay And Reference-Recording Validation
 
-- [ ] Add file/replay support for RTKLIB tests without USB hardware.
+- [x] Add UM980 session-readiness checker for local ZIP/directory captures
+  without USB hardware.
+- [ ] Add full file/replay support that can feed RTKLIB-EX once the native
+  backend exists.
 - [ ] Use local debug recordings under `samples/debug/` only as local evidence;
   do not commit captures.
 - [ ] When the user provides canonical M8T and UM980 recordings, either:

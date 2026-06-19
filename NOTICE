@@ -12,4 +12,6 @@ before release builds are distributed.
 
 RTKLIB-EX real-time integration is planned. This repository currently contains
 RTKLIB routing/API foundation code only; no RTKLIB-EX upstream source snapshot
-or native binary is bundled yet.
+or native binary is bundled yet. A development helper can create a local pinned
+RTKLIB-EX checkout, but that checkout is not part of the distributed source
+tree unless explicitly added and documented in a later release.

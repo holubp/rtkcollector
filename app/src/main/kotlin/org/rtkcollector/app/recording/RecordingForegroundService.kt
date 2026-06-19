@@ -445,14 +445,18 @@ class RecordingForegroundService : Service() {
                 )
             }
 
+            val commandProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_COMMAND_PROFILE_NAME)
+                ?: intent.getStringExtra(EXTRA_COMMAND_PROFILE_ID)
+                ?: intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID)
+                ?: "n/a"
             state = state.copy(
                 running = true,
                 lifecycle = RecordingLifecycleState.RECORDING,
                 workflowLabel = intent.getStringExtra(EXTRA_WORKFLOW_NAME) ?: intent.getStringExtra(EXTRA_WORKFLOW_ID) ?: "n/a",
-                receiverLabel = intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID) ?: "n/a",
+                receiverLabel = commandProfileLabel,
                 storageLabel = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID) ?: intent.getStringExtra(EXTRA_STORAGE_KIND) ?: "n/a",
                 settingsSetLabel = intent.getStringExtra(EXTRA_SETTINGS_SET_NAME) ?: "n/a",
-                settingsCommandProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_COMMAND_PROFILE_NAME) ?: "n/a",
+                settingsCommandProfileLabel = commandProfileLabel,
                 settingsBaudProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME) ?: "n/a",
                 settingsNtripCasterProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_NTRIP_CASTER_PROFILE_NAME) ?: "n/a",
                 settingsRecordingOutputProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_RECORDING_OUTPUT_PROFILE_NAME) ?: "n/a",

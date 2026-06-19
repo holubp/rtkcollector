@@ -76,6 +76,35 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `ublox command profile generates ubx baud switch when initial and target baud differ`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "plain-rover",
+                receiverProfileId = "um980-n4",
+                ntripCasterProfileRef = null,
+                ntripMountpointProfileRef = null,
+            ),
+            commandProfile = CommandProfile(
+                id = "ublox-m8t-raw-safe",
+                name = "u-blox M8T raw 1Hz safe",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = "!UBX CFG-RATE 1000 1 1",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud", profileBaud = 9600, serialBaud = 230400),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Plain rover recording",
+            workflowUsesNtrip = false,
+            passwordLookup = { error("Password must not be requested for non-NTRIP workflow") },
+        )
+
+        assertEquals(listOf("!UBX CFG-PRT 1 0 0 2256 230400 7 3 0 0"), config.baudSwitchCommands)
+        config.validateForStart()
+    }
+
+    @Test
     fun `ntrip config uses profile and local overrides and secret lookup`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(

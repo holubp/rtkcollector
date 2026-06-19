@@ -3,6 +3,7 @@ package org.rtkcollector.app.profile
 import org.rtkcollector.core.correction.Um980RtcmBaseOutputSanity
 import org.rtkcollector.core.rtklib.RtklibSnapshot
 import org.rtkcollector.core.workflow.SessionArtifact
+import org.rtkcollector.receiver.ublox.UbloxBaudCommands
 
 data class ActiveRecordingConfig(
     val workflowId: String,
@@ -116,11 +117,11 @@ data class ActiveRecordingConfig(
 
             val profileBaud = localProfileBaud ?: baudOverride?.profileBaud ?: usbBaudProfile.profileBaud
             val serialBaud = localSerialBaud ?: baudOverride?.serialBaud ?: usbBaudProfile.serialBaud
-            val baudSwitchCommands = if (
-                profileBaud == serialBaud ||
-                commandProfile.receiverFamily.startsWith("ublox", ignoreCase = true)
-            ) {
+            val isUblox = commandProfile.receiverFamily.startsWith("ublox", ignoreCase = true)
+            val baudSwitchCommands = if (profileBaud == serialBaud) {
                 emptyList()
+            } else if (isUblox) {
+                listOf(UbloxBaudCommands.uart1BaudCommand(serialBaud))
             } else {
                 listOf("CONFIG COM1 $serialBaud")
             }

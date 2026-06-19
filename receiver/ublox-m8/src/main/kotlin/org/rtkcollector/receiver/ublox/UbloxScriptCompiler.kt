@@ -4,6 +4,7 @@ import org.rtkcollector.receiver.api.ReceiverCommand
 
 object UbloxScriptCompiler {
     private val supportedMessages = mapOf(
+        "CFG-PRT" to Pair(0x06, 0x00),
         "CFG-MSG" to Pair(0x06, 0x01),
         "CFG-GNSS" to Pair(0x06, 0x3E),
         "CFG-NAV5" to Pair(0x06, 0x24),
@@ -40,12 +41,27 @@ object UbloxScriptCompiler {
 
     private fun payload(commandName: String, lineNumber: Int, args: List<Long>): ByteArray =
         when (commandName) {
+            "CFG-PRT" -> packCfgPrt(lineNumber, args)
             "CFG-MSG" -> packCfgMsg(lineNumber, args)
             "CFG-GNSS" -> packCfgGnss(lineNumber, args)
             "CFG-NAV5" -> packCfgNav5(lineNumber, args)
             "CFG-RATE" -> packCfgRate(lineNumber, args)
             else -> throw IllegalArgumentException("Unsupported !UBX command on line $lineNumber: $commandName")
         }
+
+    private fun packCfgPrt(lineNumber: Int, args: List<Long>): ByteArray {
+        require(args.size == 9) {
+            "CFG-PRT on line $lineNumber requires portID, reserved1, txReady, mode, baudRate, inProtoMask, outProtoMask, flags and reserved2."
+        }
+        return byteArrayOf(u8(lineNumber, args[0]), u8(lineNumber, args[1])) +
+            u16(lineNumber, args[2]) +
+            u32(lineNumber, args[3]) +
+            u32(lineNumber, args[4]) +
+            u16(lineNumber, args[5]) +
+            u16(lineNumber, args[6]) +
+            u16(lineNumber, args[7]) +
+            u16(lineNumber, args[8])
+    }
 
     private fun packCfgMsg(lineNumber: Int, args: List<Long>): ByteArray {
         require(args.size == 8) { "CFG-MSG on line $lineNumber requires 8 integer fields." }

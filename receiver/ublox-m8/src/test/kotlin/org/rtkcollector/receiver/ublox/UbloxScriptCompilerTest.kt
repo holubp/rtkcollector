@@ -18,6 +18,21 @@ class UbloxScriptCompilerTest {
     }
 
     @Test
+    fun `compiles cfg prt uart1 baud command`() {
+        val commands = UbloxScriptCompiler.compile(UbloxBaudCommands.uart1BaudCommand(230400))
+
+        val frame = commands.single().payload
+        assertTrue(UbloxFrame.isValid(frame))
+        assertEquals("UBX CFG-PRT", commands.single().label)
+        assertEquals(20, commands.single().payloadLength())
+        assertEquals(0x06.toByte(), frame[2])
+        assertEquals(0x00.toByte(), frame[3])
+        assertEquals(1.toByte(), frame[6])
+        val baudOffset = 6 + 8
+        assertArrayEquals(byteArrayOf(0x00, 0x84.toByte(), 0x03, 0x00), frame.copyOfRange(baudOffset, baudOffset + 4))
+    }
+
+    @Test
     fun `compiles cfg msg rawx usb enable command`() {
         val commands = UbloxScriptCompiler.compile("!UBX CFG-MSG 2 21 0 0 0 1 0 0")
 

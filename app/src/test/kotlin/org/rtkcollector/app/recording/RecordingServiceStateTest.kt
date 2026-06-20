@@ -25,10 +25,10 @@ class RecordingServiceStateTest {
             bestSolutionFix = "SINGLE",
             bestSolutionAgeMs = 500L,
             mockLocationState = "PUBLISHED",
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 1/1/1/1/1 Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/1/1/1/1 Hz",
         ).clearBestSolutionFields(
             mockLocationState = "Disabled",
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
         )
 
         assertNull(cleared.latDeg)
@@ -45,7 +45,7 @@ class RecordingServiceStateTest {
         assertEquals("n/a", cleared.bestSolutionFix)
         assertNull(cleared.bestSolutionAgeMs)
         assertEquals("Disabled", cleared.mockLocationState)
-        assertEquals("Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz", cleared.ubloxFrequency)
+        assertEquals("Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz", cleared.ubloxFrequency)
     }
 
     @Test

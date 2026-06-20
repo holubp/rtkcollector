@@ -94,6 +94,7 @@ import org.rtkcollector.receiver.api.ReceiverCommand
 import org.rtkcollector.receiver.ublox.UbloxMessageFrequencyTracker
 import org.rtkcollector.receiver.ublox.UbloxMessageKind
 import org.rtkcollector.receiver.ublox.UbloxNavPvtParser
+import org.rtkcollector.receiver.ublox.UbloxNavSatParser
 import org.rtkcollector.receiver.ublox.UbloxNmeaExporter
 import org.rtkcollector.receiver.ublox.UbloxScriptCompiler
 import org.rtkcollector.receiver.ublox.UbloxStreamParser
@@ -168,6 +169,7 @@ class RecordingForegroundService : Service() {
     private var mockLocationRateHz: Int = RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
     private var ubloxStreamParser = UbloxStreamParser()
     private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
+    private var lastUbloxNavSatAtMillis: Long? = null
     private val routineStateBroadcastRateLimiter =
         StateBroadcastRateLimiter(ROUTINE_STATE_BROADCAST_INTERVAL_MILLIS)
     private var sharedNmeaGgaParser: NmeaGgaParser = NmeaGgaParser()
@@ -1277,11 +1279,11 @@ class RecordingForegroundService : Service() {
             rtklibDecodedCorrectionMessages = 0,
             rtklibOutputNmeaLines = 0,
             rtklibOutputPosLines = 0,
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
             mockLocationRateHz = mockLocationRateHz,
         ).clearBestSolutionFields(
             mockLocationState = "Disabled",
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
         )
         stopping.set(false)
         broadcastState()
@@ -1732,7 +1734,7 @@ class RecordingForegroundService : Service() {
                                     activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
                                 }
                             }
-                            telemetry.toSolutionCandidate()?.let {
+                            telemetry.toSolutionCandidate(satellitesInView = freshUbloxSatellitesInView(nowMillis))?.let {
                                 applyPrimaryScreenCandidate(it, nowMillis)
                             }
                         }
@@ -1743,6 +1745,17 @@ class RecordingForegroundService : Service() {
                         ubloxFrequencyTracker.record(UbloxMessageKind.SFRBX, nowMillis)
                     record.bytes.getOrNull(2) == 0x0D.toByte() && record.bytes.getOrNull(3) == 0x03.toByte() ->
                         ubloxFrequencyTracker.record(UbloxMessageKind.TM2, nowMillis)
+                    record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x35.toByte() -> {
+                        ubloxFrequencyTracker.record(UbloxMessageKind.NAV_SAT, nowMillis)
+                        UbloxNavSatParser.parse(record.bytes, nowMillis)?.let { telemetry ->
+                            lastUbloxNavSatAtMillis = nowMillis
+                            state = state.copy(
+                                satellitesUsed = telemetry.satellitesUsed,
+                                satellitesInView = telemetry.satellitesInView,
+                                satellites = satelliteDisplay(telemetry.satellitesUsed, telemetry.satellitesInView),
+                            )
+                        }
+                    }
                 }
             }
             if (record.kind == "nmea") {
@@ -1756,6 +1769,12 @@ class RecordingForegroundService : Service() {
                 }
             }
         }
+    }
+
+    private fun freshUbloxSatellitesInView(nowMillis: Long): Int? {
+        val updatedAt = lastUbloxNavSatAtMillis ?: return null
+        return state.satellitesInView
+            ?.takeIf { nowMillis - updatedAt <= UBLOX_NAV_SAT_FRESH_MILLIS }
     }
 
     private fun runBestSolutionTick() {
@@ -2691,7 +2710,8 @@ class RecordingForegroundService : Service() {
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =
             "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
         private const val DEFAULT_UBLOX_FREQUENCY_DISPLAY =
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz"
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz"
+        private const val UBLOX_NAV_SAT_FRESH_MILLIS = 5_000L
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)

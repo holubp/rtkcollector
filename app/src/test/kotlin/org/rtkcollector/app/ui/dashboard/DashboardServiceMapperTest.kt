@@ -84,7 +84,7 @@ class DashboardServiceMapperTest {
             )
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
-                "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
             )
 
         val state = dashboardStateFromRecordingIntent(intent)
@@ -106,13 +106,13 @@ class DashboardServiceMapperTest {
             )
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
-                "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 1/1/-/5/- Hz",
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/-/5/-/- Hz",
             )
 
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals(
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 1/1/-/5/- Hz",
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/-/5/-/- Hz",
             state.fix.receiverFrequency,
         )
     }
@@ -128,7 +128,7 @@ class DashboardServiceMapperTest {
             )
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
-                "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 1/1/-/5/- Hz",
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/-/5/-/- Hz",
             )
 
         val state = dashboardStateFromRecordingIntent(intent)
@@ -198,6 +198,21 @@ class DashboardServiceMapperTest {
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals("DGPS", state.fix.fixType)
+    }
+
+    @Test
+    fun `ublox best solution fix is shown when gga and bestnav fields are absent`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_FAMILY, "ublox")
+            putExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_SOURCE, "UBX-NAV-PVT")
+            putExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_FIX, "DGPS")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("DGPS", state.fix.fixType)
+        assertEquals("DGPS from UBX-NAV-PVT", state.fix.bestSolution)
     }
 
     @Test

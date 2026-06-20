@@ -7,6 +7,7 @@ object UbloxM8tProfiles {
         !UBX CFG-MSG 2 19 0 0 0 1 0 0
         !UBX CFG-MSG 13 3 0 0 0 1 0 0
         !UBX CFG-MSG 1 7 0 0 0 1 0 0
+        !UBX CFG-MSG 1 53 0 0 0 1 0 0
         !UBX CFG-MSG 240 0 0 0 0 0 0 0
         !UBX CFG-MSG 240 1 0 0 0 0 0 0
         !UBX CFG-MSG 240 2 0 0 0 0 0 0
@@ -20,6 +21,8 @@ object UbloxM8tProfiles {
         !UBX CFG-MSG 2 21 0 0 0 1 0 0
         !UBX CFG-MSG 2 19 0 0 0 1 0 0
         !UBX CFG-MSG 13 3 0 0 0 1 0 0
+        !UBX CFG-MSG 1 7 0 0 0 1 0 0
+        !UBX CFG-MSG 1 53 0 0 0 1 0 0
         !UBX CFG-GNSS 0 32 32 1 0 8 16 0 65537
         !UBX CFG-GNSS 0 32 32 1 1 1 3 0 65537
         !UBX CFG-GNSS 0 32 32 1 2 4 8 0 65537
@@ -44,6 +47,7 @@ object UbloxM8tProfiles {
         !UBX CFG-MSG 2 19 0 0 0 1 0 0
         !UBX CFG-MSG 13 3 0 0 0 1 0 0
         !UBX CFG-MSG 1 7 0 0 0 1 0 0
+        !UBX CFG-MSG 1 53 0 0 0 1 0 0
         !UBX CFG-MSG 240 0 0 0 0 0 0 0
         !UBX CFG-MSG 240 1 0 0 0 0 0 0
         !UBX CFG-MSG 240 2 0 0 0 0 0 0

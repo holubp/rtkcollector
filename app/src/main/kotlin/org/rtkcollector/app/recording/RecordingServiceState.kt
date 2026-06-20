@@ -118,7 +118,7 @@ data class RecordingServiceState(
     val mockLocationLastIntervalMs: Long? = null,
     val mockLocationSolutionAgeMs: Long? = null,
     val mockLocationRateHz: Int = 1,
-    val ubloxFrequency: String = "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
+    val ubloxFrequency: String = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
     val latDeg: Double? = null,
     val lonDeg: Double? = null,
     val ntripBaseLatDeg: Double? = null,

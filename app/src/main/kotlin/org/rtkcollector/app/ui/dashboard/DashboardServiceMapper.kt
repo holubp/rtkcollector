@@ -38,8 +38,10 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val ggaFixQuality = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_GGA_FIX_QUALITY, -1).takeIf { it >= 0 }
     val bestnavPositionType = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BESTNAV_POSITION_TYPE)
     val pppStatus = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PPP_STATUS)
+    val bestSolutionSource = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_SOURCE) ?: "n/a"
+    val bestSolutionFix = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_FIX) ?: "n/a"
     val fix = FixCardState(
-        fixType = displayFixType(bestnavPositionType, ggaFixQuality),
+        fixType = displayFixType(bestnavPositionType, ggaFixQuality, bestSolutionFix),
         satellites = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITES) ?: "n/a",
         pdop = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_PDOP) ?: "n/a",
         hdopVdop = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_HDOP_VDOP) ?: "n/a",
@@ -63,11 +65,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             }
         },
         receiverMode = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UM980_MODE) ?: "n/a",
-        bestSolution = run {
-            val source = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_SOURCE) ?: "n/a"
-            val fixClass = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BEST_SOLUTION_FIX) ?: "n/a"
-            "$fixClass from $source"
-        },
+        bestSolution = "$bestSolutionFix from $bestSolutionSource",
         mockLocation = displayMockLocationMonitor(
             state = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_STATE) ?: "Disabled",
             lastIntervalMs = positiveLongExtra(intent, RecordingForegroundService.EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS),
@@ -226,6 +224,7 @@ internal fun displayMockLocationMonitor(
 private fun displayFixType(
     bestnavPositionType: String?,
     ggaFixQuality: Int?,
+    bestSolutionFix: String?,
 ): String {
     if (bestnavPositionType.equals("PPP_CONVERGING", ignoreCase = true)) {
         interpretGgaFixQuality(ggaFixQuality)
@@ -238,6 +237,8 @@ private fun displayFixType(
         ?.takeIf(::isMeaningfulSolutionStatus)
     return bestnav
         ?: interpretGgaFixQuality(ggaFixQuality)
+            .takeIf(::isMeaningfulSolutionStatus)
+        ?: displayFixClass(bestSolutionFix)
 }
 
 private fun displayPppStatus(pppStatus: String?): String =
@@ -265,4 +266,15 @@ private fun displayBestnavPositionType(positionType: String): String =
         "PPP" -> "PPP"
         "PPP_CONVERGING" -> "PPP converging"
         else -> positionType
+    }
+
+private fun displayFixClass(fixClass: String?): String =
+    when (fixClass?.trim()?.uppercase()) {
+        "SINGLE" -> "Single"
+        "DGPS", "SBAS" -> "DGPS"
+        "RTK_FLOAT" -> "RTK float"
+        "RTK_FIXED" -> "RTK fix"
+        "PPP_CONVERGED" -> "PPP"
+        "PPP_CONVERGING" -> "PPP converging"
+        else -> "n/a"
     }

@@ -5,14 +5,14 @@ import org.junit.jupiter.api.Test
 
 class UbloxMessageFrequencyTrackerTest {
     @Test
-    fun `formats compact frequency line for one second window`() {
+    fun `formats compact smoothed frequency line`() {
         val tracker = UbloxMessageFrequencyTracker()
         tracker.record(UbloxMessageKind.RAWX, 2_100L)
         tracker.record(UbloxMessageKind.RAWX, 2_600L)
         tracker.record(UbloxMessageKind.NAV_PVT, 2_500L)
 
         assertEquals(
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA 2/-/-/1/- Hz",
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 2/-/-/-/-/- Hz",
             tracker.display(nowMillis = 3_000L),
         )
     }
@@ -25,20 +25,32 @@ class UbloxMessageFrequencyTrackerTest {
 
         val line = tracker.display(nowMillis = 0L)
 
-        assertEquals("Frequency $expectedHeader -/-/-/-/- Hz", line)
+        assertEquals("Frequency $expectedHeader -/-/-/-/-/- Hz", line)
     }
 
     @Test
-    fun `excludes samples at or beyond window boundary`() {
+    fun `smooths bursty message rates over a longer window`() {
+        val tracker = UbloxMessageFrequencyTracker()
+        repeat(21) { index ->
+            tracker.record(UbloxMessageKind.SFRBX, 1_000L + index * 200L)
+        }
+
+        assertEquals(
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/5/-/-/-/- Hz",
+            tracker.display(nowMillis = 5_000L),
+        )
+    }
+
+    @Test
+    fun `excludes samples outside smoothing window`() {
         val tracker = UbloxMessageFrequencyTracker()
         tracker.record(UbloxMessageKind.GGA, 1_000L)
         tracker.record(UbloxMessageKind.GGA, 2_000L)
 
-        // window=1000; at nowMillis=3000 the only included GGA sample is the one
-        // at 2000 (3000 - 2000 = 1000 is NOT < 1000). So GGA count is zero.
+        // window=5000; at nowMillis=7001 both samples are outside the window.
         assertEquals(
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/GGA -/-/-/-/- Hz",
-            tracker.display(nowMillis = 3_000L),
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
+            tracker.display(nowMillis = 7_001L),
         )
     }
 }

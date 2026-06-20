@@ -173,6 +173,9 @@ unchanged.
 - Do not broadcast full dashboard state from high-rate capture loops on every
   receiver read. Throttle routine UI state broadcasts; keep lifecycle, error,
   start, stop and reconnect state changes immediate.
+- Do not read, migrate or normalise profile stores from high-rate service
+  broadcast handlers. Cache planned dashboard configuration and refresh it only
+  after explicit settings/profile changes.
 - Screen monitoring, Android mock-location publishing, coordinate averaging,
   frequency measurement, future RTKLIB-EX processing and future caster upload
   must not run on the raw capture path. They consume advisory snapshots or

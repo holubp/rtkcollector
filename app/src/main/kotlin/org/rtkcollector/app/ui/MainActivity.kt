@@ -261,9 +261,10 @@ fun RtkCollectorApp(
         profileStore.saveSelectedWorkflowId(initialWorkflowId)
         mutableStateOf(initialWorkflowId)
     }
-    var state by remember {
+    var plannedState by remember {
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
     }
+    var state by remember { mutableStateOf(plannedState) }
     var startInProgress by rememberSaveable { mutableStateOf(false) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
     LaunchedEffect(externalIntent) {
@@ -326,6 +327,7 @@ fun RtkCollectorApp(
     fun refreshProfileUi(updatedSettingsSets: List<RecordingSettingsSet> = settingsSets) {
         settingsSets = updatedSettingsSets
         val planned = profileStore.plannedDashboardState(updatedSettingsSets, selectedSettingsSetId, selectedWorkflowId)
+        plannedState = planned
         state = state.withPlannedConfiguration(planned)
         profileRevision++
     }
@@ -531,9 +533,7 @@ fun RtkCollectorApp(
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     RecordingForegroundService.ACTION_STATE -> {
-                        val nextState = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(
-                            profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId),
-                        )
+                        val nextState = dashboardStateFromRecordingIntent(intent).withPlannedConfiguration(plannedState)
                         state = nextState
                         if (nextState.isRecording || nextState.lastError != null || nextState.errorSeverity != "NONE") {
                             startInProgress = false
@@ -605,13 +605,13 @@ fun RtkCollectorApp(
                                     settingsSets = updatedSettingsSets
                                     selectedSettingsSetId = updatedSelectedSettingsSetId
                                     selectedWorkflowId = updatedSelectedWorkflowId
-                                    state = state.withPlannedConfiguration(
-                                        profileStore.plannedDashboardState(
-                                            updatedSettingsSets,
-                                            updatedSelectedSettingsSetId,
-                                            updatedSelectedWorkflowId,
-                                        ),
+                                    val planned = profileStore.plannedDashboardState(
+                                        updatedSettingsSets,
+                                        updatedSelectedSettingsSetId,
+                                        updatedSelectedWorkflowId,
                                     )
+                                    plannedState = planned
+                                    state = state.withPlannedConfiguration(planned)
                                     profileRevision++
                                     pendingSettingsImport = null
                                     screen = AppScreen.HOME

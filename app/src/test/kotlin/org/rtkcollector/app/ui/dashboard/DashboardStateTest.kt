@@ -155,6 +155,39 @@ class DashboardStateTest {
     }
 
     @Test
+    fun `running service state ignores planned configuration during live broadcasts`() {
+        val serviceState = DashboardState.running(
+            status = DashboardStatus(
+                workflow = "Recording workflow",
+                mountpoint = "TUBO00CZE0",
+                receiver = "UM980 runtime",
+                storage = "Session folder",
+            ),
+            position = PositionCardState(latLon = "50.087451234, 14.421253456"),
+            fix = FixCardState(fixType = "RTK fixed", receiverFrequency = "live 20 Hz"),
+            ntrip = NtripCardState(status = "STREAMING"),
+            files = FilesCardState(receiverRxBytes = "128 KiB"),
+        )
+        val planned = DashboardState.planned(
+            workflow = "Planned workflow",
+            mountpoint = "n/a",
+            receiver = "Planned receiver",
+            storage = "Planned storage",
+            fix = FixCardState(receiverFrequency = DefaultUbloxReceiverFrequency),
+        )
+
+        val merged = serviceState.withPlannedConfiguration(planned)
+
+        assertEquals("Recording workflow", merged.status.workflow)
+        assertEquals("TUBO00CZE0", merged.status.mountpoint)
+        assertEquals("UM980 runtime", merged.status.receiver)
+        assertEquals("50.087451234, 14.421253456", merged.position.latLon)
+        assertEquals("RTK fixed", merged.fix.fixType)
+        assertEquals("live 20 Hz", merged.fix.receiverFrequency)
+        assertEquals("128 KiB", merged.files.receiverRxBytes)
+    }
+
+    @Test
     fun `card states have dashboard friendly defaults`() {
         assertEquals("n/a", PositionCardState().latLon)
         assertEquals("Not configured", FixCardState().rtklibStatus)

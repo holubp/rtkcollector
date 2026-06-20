@@ -4,6 +4,7 @@ import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 
 class RecordingPolicyProfileTest {
     @Test
@@ -86,6 +87,20 @@ class RecordingPolicyProfileTest {
                 outputPos = false,
             ).validate()
         }
+    }
+
+    @Test
+    fun `solution policy profile round trip preserves source preferences`() {
+        val profile = SolutionPolicyProfile(
+            id = "manual-rtklib",
+            name = "Manual RTKLIB",
+            screenPolicy = SolutionSourcePolicy.DEVICE_INTERNAL_ONLY,
+            mockPolicy = SolutionSourcePolicy.RTKLIB_ONLY,
+        )
+
+        val decoded = SolutionPolicyProfile.fromJson(profile.toJson())
+
+        assertEquals(profile, decoded)
     }
 
     @Test

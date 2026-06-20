@@ -81,6 +81,20 @@ Verification:
 
 ## Future In-Phone Solution
 
+### WF-SOLUTION-001: Device And RTKLIB Solutions Stay Separately Selectable
+
+Status: Normative
+
+When both receiver-internal and RTKLIB solution sources are available, the app
+MUST keep them distinguishable in session artifacts, dashboard monitoring and
+mock-location source selection. Automatic best-solution selection MAY be the
+default, but users MUST be able to select device-only, RTKLIB-only or disabled
+solution output policies where the relevant engine exists.
+
+Verification:
+- Automated: best-solution selector and recording tick-policy tests.
+- Review: session metadata records screen and mock-location source policy.
+
 ### WF-RTKLIB-001: In-Phone RTKLIB Is Future Work
 
 Status: Future

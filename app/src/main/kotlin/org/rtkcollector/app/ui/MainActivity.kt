@@ -75,6 +75,7 @@ import org.rtkcollector.app.profile.RtklibProfile
 import org.rtkcollector.app.profile.SettingsBackupFile
 import org.rtkcollector.app.profile.SettingsImportValidationResult
 import org.rtkcollector.app.profile.SettingsSetExportOptions
+import org.rtkcollector.app.profile.SolutionPolicyProfile
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
@@ -84,6 +85,7 @@ import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.app.receiver.PersistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
 import org.rtkcollector.app.receiver.isUm980CommandOkResponse
@@ -477,6 +479,14 @@ fun RtkCollectorApp(
                 val profiles = profileStore.recordingPolicyProfiles()
                 profileStore.saveRecordingPolicyProfiles(profiles.filterNot { it.id == id && !it.isProtected })
             }
+            ProfileKind.RTKLIB -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.rtklibProfiles()
+                profileStore.saveRtklibProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
+            ProfileKind.SOLUTION_POLICY -> deleteProfileIfUnused(kind, id) {
+                val profiles = profileStore.solutionPolicyProfiles()
+                profileStore.saveSolutionPolicyProfiles(profiles.filterNot { it.id == id && !it.isProtected })
+            }
             ProfileKind.STORAGE -> deleteProfileIfUnused(kind, id) {
                 val profiles = profileStore.storageProfiles()
                 profileStore.saveStorageProfiles(profiles.filterNot { it.id == id && !it.isProtected })
@@ -498,6 +508,8 @@ fun RtkCollectorApp(
             ProfileKind.USB_BAUD -> profileStore.usbBaudProfiles().firstOrNull { it.id == target.id }?.profileRow()
             ProfileKind.COMMANDS -> profileStore.commandProfiles().firstOrNull { it.id == target.id }?.profileRow()
             ProfileKind.RECORDING_OUTPUTS -> profileStore.recordingPolicyProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.RTKLIB -> profileStore.rtklibProfiles().firstOrNull { it.id == target.id }?.profileRow()
+            ProfileKind.SOLUTION_POLICY -> profileStore.solutionPolicyProfiles().firstOrNull { it.id == target.id }?.profileRow()
             ProfileKind.STORAGE -> profileStore.storageProfiles().firstOrNull { it.id == target.id }?.profileRow()
         } ?: return null
         if (!row.canDelete) return null
@@ -747,6 +759,16 @@ fun RtkCollectorApp(
                 )
                 AppScreen.SETTINGS ->
                     SettingsHub(
+                        activeSettingsSetLabel = settingsSets.firstOrNull { it.id == selectedSettingsSetId }?.displayNameWithOverrides()
+                            ?: "n/a",
+                        activeWorkflowLabel = (selectedWorkflowId ?: profileStore.selectedWorkflowId()).workflowLabel(),
+                        onActiveSettingsSet = {
+                            if (state.isRecording) {
+                                Toast.makeText(context, "Stop recording before loading a different settings set.", Toast.LENGTH_LONG).show()
+                            } else {
+                                screen = AppScreen.SETTINGS_SET_SELECTOR
+                            }
+                        },
                         onSettingsSets = { screen = AppScreen.SETTINGS_SETS },
                         onWorkflowSelection = {
                             if (state.isRecording) {
@@ -773,6 +795,8 @@ fun RtkCollectorApp(
                             }
                         },
                         onRecordingOutputs = { screen = AppScreen.RECORDING_OUTPUTS },
+                        onRtklibProfiles = { screen = AppScreen.RTKLIB_PROFILES },
+                        onSolutionPolicy = { screen = AppScreen.SOLUTION_POLICIES },
                         onStorage = { screen = AppScreen.STORAGE },
                         onSessions = {
                             refreshSessions()
@@ -1063,6 +1087,72 @@ fun RtkCollectorApp(
                         )
                         profileStore.saveRecordingPolicyProfiles(profileStore.recordingPolicyProfiles() + profile)
                         profileEditorTarget = ProfileEditorTarget(ProfileKind.RECORDING_OUTPUTS, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onBack = { screen = AppScreen.SETTINGS },
+                    supportsSelection = false,
+                )
+                AppScreen.RTKLIB_PROFILES -> ProfileListScreen(
+                    title = "RTKLIB profiles",
+                    rows = profileStore.rtklibProfiles().map { it.profileRow() },
+                    onSelect = {},
+                    onEdit = { id ->
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.RTKLIB, id)
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onCopy = { id ->
+                        val profiles = profileStore.rtklibProfiles()
+                        profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("rtklib"), "${source.name} copy")
+                            profileStore.saveRtklibProfiles(profiles + copy)
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.RTKLIB, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
+                        }
+                    },
+                    onRename = { id, name -> renameProfile(ProfileKind.RTKLIB, id, name) },
+                    onDelete = { id -> deleteProfile(ProfileKind.RTKLIB, id) },
+                    onAdd = {
+                        val profile = RtklibProfile(
+                            id = profileStore.duplicateId("rtklib"),
+                            name = "New RTKLIB profile",
+                        )
+                        profileStore.saveRtklibProfiles(profileStore.rtklibProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.RTKLIB, profile.id)
+                        profileRevision++
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onBack = { screen = AppScreen.SETTINGS },
+                    supportsSelection = false,
+                )
+                AppScreen.SOLUTION_POLICIES -> ProfileListScreen(
+                    title = "Solution and mock policy",
+                    rows = profileStore.solutionPolicyProfiles().map { it.profileRow() },
+                    onSelect = {},
+                    onEdit = { id ->
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.SOLUTION_POLICY, id)
+                        screen = AppScreen.PROFILE_EDITOR
+                    },
+                    onCopy = { id ->
+                        val profiles = profileStore.solutionPolicyProfiles()
+                        profiles.firstOrNull { it.id == id }?.let { source ->
+                            val copy = source.copyProfile(profileStore.duplicateId("solution"), "${source.name} copy")
+                            profileStore.saveSolutionPolicyProfiles(profiles + copy)
+                            profileEditorTarget = ProfileEditorTarget(ProfileKind.SOLUTION_POLICY, copy.id)
+                            profileRevision++
+                            screen = AppScreen.PROFILE_EDITOR
+                        }
+                    },
+                    onRename = { id, name -> renameProfile(ProfileKind.SOLUTION_POLICY, id, name) },
+                    onDelete = { id -> deleteProfile(ProfileKind.SOLUTION_POLICY, id) },
+                    onAdd = {
+                        val profile = SolutionPolicyProfile(
+                            id = profileStore.duplicateId("solution"),
+                            name = "New solution policy",
+                        )
+                        profileStore.saveSolutionPolicyProfiles(profileStore.solutionPolicyProfiles() + profile)
+                        profileEditorTarget = ProfileEditorTarget(ProfileKind.SOLUTION_POLICY, profile.id)
                         profileRevision++
                         screen = AppScreen.PROFILE_EDITOR
                     },
@@ -2281,6 +2371,7 @@ private fun buildSettingsBackup(
         ntripMountpointProfiles = profileStore.ntripMountpointProfiles(),
         recordingPolicyProfiles = profileStore.recordingPolicyProfiles(),
         rtklibProfiles = profileStore.rtklibProfiles(),
+        solutionPolicyProfiles = profileStore.solutionPolicyProfiles(),
         storageProfiles = profileStore.storageProfiles(),
         settingsSets = profileStore.settingsSets(),
         selectedSettingsSetId = profileStore.selectedSettingsSetId(),
@@ -2757,6 +2848,18 @@ private fun ProfileStores.profileEditorData(
                         optionItems = nullableProfileOptions(ntripCasterUploadProfiles().profileOptions(NtripCasterUploadProfile::id, NtripCasterUploadProfile::name)),
                     ),
                     EditableProfileField(
+                        key = "rtklibProfileId",
+                        label = "RTKLIB profile",
+                        value = set.rtklibProfileRef?.id.orEmpty(),
+                        optionItems = nullableProfileOptions(rtklibProfiles().profileOptions(RtklibProfile::id, RtklibProfile::name)),
+                    ),
+                    EditableProfileField(
+                        key = "solutionPolicyProfileId",
+                        label = "Solution and mock policy",
+                        value = set.solutionPolicyProfileRef?.id.orEmpty(),
+                        optionItems = nullableProfileOptions(solutionPolicyProfiles().profileOptions(SolutionPolicyProfile::id, SolutionPolicyProfile::name)),
+                    ),
+                    EditableProfileField(
                         key = "recordingOutputProfileId",
                         label = "Recording output profile",
                         value = set.recordingOutputProfileRef.id,
@@ -2936,6 +3039,51 @@ private fun ProfileStores.profileEditorData(
                 ),
             ).asProtectedProfileView(profile.isProtected)
         }
+        ProfileKind.RTKLIB -> rtklibProfiles().first { it.id == target.id }.let { profile ->
+            ProfileEditorData(
+                title = "Edit RTKLIB profile",
+                fields = listOf(
+                    EditableProfileField("name", "Name", profile.name),
+                    EditableProfileField("enabled", "Enable RTKLIB real-time solution", profile.enabled.toString(), boolean = true),
+                    EditableProfileField(
+                        key = "preset",
+                        label = "RTKLIB preset",
+                        value = profile.preset,
+                        optionItems = listOf(
+                            EditableProfileOption(RtklibProfile.PRESET_ROVER_KINEMATIC_RTK, "Rover kinematic RTK"),
+                            EditableProfileOption(RtklibProfile.PRESET_TEMPORARY_BASE_STATIC_RTK, "Temporary-base static RTK"),
+                        ),
+                    ),
+                    EditableProfileField("outputNmea", "Write RTKLIB NMEA", profile.outputNmea.toString(), boolean = true),
+                    EditableProfileField("outputPos", "Write RTKLIB POS", profile.outputPos.toString(), boolean = true),
+                    EditableProfileField("maxRoverQueueBytes", "Rover input queue bytes", profile.maxRoverQueueBytes.toString()),
+                    EditableProfileField("maxCorrectionQueueBytes", "Correction input queue bytes", profile.maxCorrectionQueueBytes.toString()),
+                ),
+            ).asProtectedProfileView(profile.isProtected)
+        }
+        ProfileKind.SOLUTION_POLICY -> solutionPolicyProfiles().first { it.id == target.id }.let { profile ->
+            val options = SolutionSourcePolicy.entries.map { policy ->
+                EditableProfileOption(policy.name, policy.name.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase))
+            }
+            ProfileEditorData(
+                title = "Edit solution policy",
+                fields = listOf(
+                    EditableProfileField("name", "Name", profile.name),
+                    EditableProfileField(
+                        key = "screenPolicy",
+                        label = "Dashboard solution source",
+                        value = profile.screenPolicy.name,
+                        optionItems = options,
+                    ),
+                    EditableProfileField(
+                        key = "mockPolicy",
+                        label = "Mock GPS solution source",
+                        value = profile.mockPolicy.name,
+                        optionItems = options,
+                    ),
+                ),
+            ).asProtectedProfileView(profile.isProtected)
+        }
         ProfileKind.STORAGE -> storageProfiles().first { it.id == target.id }.let { profile ->
             ProfileEditorData(
                 title = "Edit storage location profile",
@@ -3054,6 +3202,12 @@ private fun ProfileStores.saveProfileEditorData(
                         },
                         ntripCasterUploadProfileRef = values.optional("ntripCasterUploadProfileId")?.let {
                             reference(it, ntripCasterUploadProfiles().map { profile -> profile.id to profile.name })
+                        },
+                        rtklibProfileRef = values.optional("rtklibProfileId")?.let {
+                            reference(it, rtklibProfiles().map { profile -> profile.id to profile.name })
+                        },
+                        solutionPolicyProfileRef = values.optional("solutionPolicyProfileId")?.let {
+                            reference(it, solutionPolicyProfiles().map { profile -> profile.id to profile.name })
                         },
                         baseCasterUploadEnabled = values.optional("baseCasterUploadEnabled").toBooleanStrictOrFalse(),
                         recordingOutputProfileRef = reference(
@@ -3198,6 +3352,46 @@ private fun ProfileStores.saveProfileEditorData(
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
         }
+        ProfileKind.RTKLIB -> saveRtklibProfiles(
+            rtklibProfiles().map { profile ->
+                if (profile.id == target.id) {
+                    require(!profile.isProtected) { "Protected RTKLIB profiles cannot be edited." }
+                    profile.copy(
+                        name = values.required("name"),
+                        enabled = values.optional("enabled").toBooleanStrictOrFalse(),
+                        preset = values.required("preset"),
+                        outputNmea = values.optional("outputNmea").toBooleanStrictOrFalse(),
+                        outputPos = values.optional("outputPos").toBooleanStrictOrFalse(),
+                        maxRoverQueueBytes = values.optional("maxRoverQueueBytes")?.toIntOrNull()
+                            ?: RtklibProfile.DEFAULT_MAX_ROVER_QUEUE_BYTES,
+                        maxCorrectionQueueBytes = values.optional("maxCorrectionQueueBytes")?.toIntOrNull()
+                            ?: RtklibProfile.DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+                    )
+                } else {
+                    profile
+                }
+            },
+        ).also {
+            return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
+        }
+        ProfileKind.SOLUTION_POLICY -> saveSolutionPolicyProfiles(
+            solutionPolicyProfiles().map { profile ->
+                if (profile.id == target.id) {
+                    require(!profile.isProtected) { "Protected solution policy profiles cannot be edited." }
+                    profile.copy(
+                        name = values.required("name"),
+                        screenPolicy = values.optional("screenPolicy")?.let(SolutionSourcePolicy::valueOf)
+                            ?: SolutionSourcePolicy.AUTO_BEST,
+                        mockPolicy = values.optional("mockPolicy")?.let(SolutionSourcePolicy::valueOf)
+                            ?: SolutionSourcePolicy.AUTO_BEST,
+                    )
+                } else {
+                    profile
+                }
+            },
+        ).also {
+            return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
+        }
         ProfileKind.STORAGE -> saveStorageProfiles(
             storageProfiles().map { profile ->
                 if (profile.id == target.id) {
@@ -3300,6 +3494,20 @@ private fun ProfileStores.renameProfileData(
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, kind, id, saveName)
         }
+        ProfileKind.RTKLIB -> saveRtklibProfiles(
+            renameProfile(rtklibProfiles(), id, saveName, RtklibProfile::id, RtklibProfile::isProtected) { profile, newName ->
+                profile.copy(name = newName).also(RtklibProfile::validate)
+            },
+        ).also {
+            return updateSettingsSetReferenceNames(settingsSets, kind, id, saveName)
+        }
+        ProfileKind.SOLUTION_POLICY -> saveSolutionPolicyProfiles(
+            renameProfile(solutionPolicyProfiles(), id, saveName, SolutionPolicyProfile::id, SolutionPolicyProfile::isProtected) { profile, newName ->
+                profile.copy(name = newName).also(SolutionPolicyProfile::validate)
+            },
+        ).also {
+            return updateSettingsSetReferenceNames(settingsSets, kind, id, saveName)
+        }
         ProfileKind.STORAGE -> saveStorageProfiles(
             renameProfile(storageProfiles(), id, saveName, StorageProfile::id, StorageProfile::isProtected) { profile, newName ->
                 profile.copy(name = newName).also(StorageProfile::validate)
@@ -3334,6 +3542,8 @@ private fun ProfileStores.updateSettingsSetReferenceNames(
             )
             ProfileKind.NTRIP_MOUNTPOINT -> set.copy(ntripMountpointProfileRef = set.ntripMountpointProfileRef.renameNullableIfId(id, name))
             ProfileKind.RECORDING_OUTPUTS -> set.copy(recordingOutputProfileRef = set.recordingOutputProfileRef.renameIfId(id, name))
+            ProfileKind.RTKLIB -> set.copy(rtklibProfileRef = set.rtklibProfileRef.renameNullableIfId(id, name))
+            ProfileKind.SOLUTION_POLICY -> set.copy(solutionPolicyProfileRef = set.solutionPolicyProfileRef.renameNullableIfId(id, name))
             ProfileKind.STORAGE -> set.copy(storageProfileRef = set.storageProfileRef.renameIfId(id, name))
             ProfileKind.SETTINGS_SET -> set
         }.also(RecordingSettingsSet::validate)
@@ -3357,6 +3567,8 @@ private fun List<RecordingSettingsSet>.referenceProfile(kind: ProfileKind, id: S
             ProfileKind.NTRIP_CASTER_UPLOAD -> set.ntripCasterUploadProfileRef?.id == id
             ProfileKind.NTRIP_MOUNTPOINT -> set.ntripMountpointProfileRef?.id == id
             ProfileKind.RECORDING_OUTPUTS -> set.recordingOutputProfileRef.id == id
+            ProfileKind.RTKLIB -> set.rtklibProfileRef?.id == id
+            ProfileKind.SOLUTION_POLICY -> set.solutionPolicyProfileRef?.id == id
             ProfileKind.STORAGE -> set.storageProfileRef.id == id
             ProfileKind.SETTINGS_SET -> false
         }
@@ -3372,6 +3584,8 @@ private enum class AppScreen {
     COMMANDS,
     USB_BAUD,
     RECORDING_OUTPUTS,
+    RTKLIB_PROFILES,
+    SOLUTION_POLICIES,
     STORAGE,
     BASE_COORDINATES,
     BASE_COORDINATE_EDITOR,
@@ -3461,6 +3675,8 @@ private enum class ProfileKind {
     USB_BAUD,
     COMMANDS,
     RECORDING_OUTPUTS,
+    RTKLIB,
+    SOLUTION_POLICY,
     STORAGE,
 }
 
@@ -3515,6 +3731,8 @@ private fun ProfileKind.backScreen(): AppScreen =
         ProfileKind.USB_BAUD -> AppScreen.USB_BAUD
         ProfileKind.COMMANDS -> AppScreen.COMMANDS
         ProfileKind.RECORDING_OUTPUTS -> AppScreen.RECORDING_OUTPUTS
+        ProfileKind.RTKLIB -> AppScreen.RTKLIB_PROFILES
+        ProfileKind.SOLUTION_POLICY -> AppScreen.SOLUTION_POLICIES
         ProfileKind.STORAGE -> AppScreen.STORAGE
     }
 
@@ -3579,6 +3797,12 @@ private fun buildDashboardStartIntent(
             label = "RTKLIB profile",
         )
     }
+    val solutionPolicyProfile = resolvedSettingsSet.solutionPolicyProfileRef?.id?.let {
+        profileStore.solutionPolicyProfiles().findByReference(
+            id = it,
+            label = "solution policy profile",
+        )
+    }
     val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
     if (workflowId.isNullOrBlank()) {
         Toast.makeText(context, "Cannot start: workflow is not selected.", Toast.LENGTH_LONG).show()
@@ -3617,6 +3841,7 @@ private fun buildDashboardStartIntent(
             recordingPolicyProfile = recordingPolicy,
             storageProfile = storageProfile,
             rtklibProfile = rtklibProfile,
+            solutionPolicyProfile = solutionPolicyProfile,
             workflowName = workflowId.workflowName(),
             workflowUsesNtrip = workflowUsesNtrip,
             hasAcceptedBaseCoordinate = selectedBaseCoordinate != null,
@@ -3731,6 +3956,9 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_RECORD_REMOTE_BASE_RAW, activeConfig.recording.recordRemoteBaseRaw)
         putExtra(RecordingForegroundService.EXTRA_ENABLE_MOCK_LOCATION, activeConfig.recording.enableMockLocation)
         putExtra(RecordingForegroundService.EXTRA_MOCK_LOCATION_RATE_HZ, activeConfig.recording.mockLocationRateHz)
+        putExtra(RecordingForegroundService.EXTRA_SOLUTION_POLICY_PROFILE_ID, activeConfig.solutionPolicy.profileId)
+        putExtra(RecordingForegroundService.EXTRA_SOLUTION_SCREEN_POLICY, activeConfig.solutionPolicy.screenPolicy.name)
+        putExtra(RecordingForegroundService.EXTRA_SOLUTION_MOCK_POLICY, activeConfig.solutionPolicy.mockPolicy.name)
         val basePositionJson = if (workflowId == WORKFLOW_FIXED_BASE && selectedBaseCoordinate != null) {
             BasePositionJsonCodec.encode(selectedBaseCoordinate)
         } else {
@@ -3794,6 +4022,12 @@ private fun buildNtripUpdateIntent(
                 id = settingsSet.storageProfileRef.id,
                 label = "storage location profile",
             ),
+            solutionPolicyProfile = resolvedSettingsSet.solutionPolicyProfileRef?.id?.let {
+                profileStore.solutionPolicyProfiles().findByReference(
+                    id = it,
+                    label = "solution policy profile",
+                )
+            },
             workflowName = workflowId.workflowLabel(),
             workflowUsesNtrip = workflowId?.workflowUsesNtrip() == true,
             passwordLookup = NtripSecretStore(context)::getPassword,
@@ -4645,6 +4879,34 @@ private fun RecordingPolicyProfile.profileRow(isSelected: Boolean = false): Prof
             if (exportGpx) add("GPX")
             if (recordRemoteBaseRaw) add("remote base raw")
         }.ifEmpty { listOf("receiver RX only") }.joinToString(" · "),
+    )
+
+private fun RtklibProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = if (enabled) {
+            buildList {
+                add(preset)
+                if (outputNmea) add("NMEA")
+                if (outputPos) add("POS")
+            }.joinToString(" · ")
+        } else {
+            "disabled"
+        },
+    )
+
+private fun SolutionPolicyProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(
+        id = id,
+        name = name,
+        isProtected = isProtected,
+        hasLocalOverrides = false,
+        isSelected = isSelected,
+        summary = "screen ${screenPolicy.name} · mock ${mockPolicy.name}",
     )
 
 private fun StorageProfile.profileRow(isSelected: Boolean = false): ProfileListRow =

@@ -7,6 +7,13 @@ enum class SolutionEngine {
     GENERIC_NMEA,
 }
 
+enum class SolutionSourcePolicy {
+    AUTO_BEST,
+    DEVICE_INTERNAL_ONLY,
+    RTKLIB_ONLY,
+    OFF,
+}
+
 enum class FixClass(val rank: Int) {
     NONE(0),
     PPP_CONVERGING(1),

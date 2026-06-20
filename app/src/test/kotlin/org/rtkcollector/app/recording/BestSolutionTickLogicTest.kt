@@ -8,6 +8,7 @@ import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.core.solution.FixClass
 import org.rtkcollector.core.solution.SolutionCandidate
 import org.rtkcollector.core.solution.SolutionEngine
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 
 class BestSolutionTickLogicTest {
     @Test
@@ -57,6 +58,31 @@ class BestSolutionTickLogicTest {
         assertEquals(12, out.stateDelta.satellitesUsed)
         assertTrue(out.publishAction is PublishAction.Publish)
         assertEquals(1_000L, (out.publishAction as PublishAction.Publish).snapshot.updatedAtMillis)
+    }
+
+    @Test
+    fun `screen and mock policy can select different solution sources`() {
+        val device = candidate("UM980-BESTNAV", FixClass.DGPS, updatedAtMillis = 1_000L)
+        val rtklib = candidate(
+            sourceId = "RTKLIB",
+            fixClass = FixClass.RTK_FIXED,
+            updatedAtMillis = 1_000L,
+            engine = SolutionEngine.RTKLIB_REALTIME,
+        )
+
+        val out = BestSolutionTickLogic.compute(
+            input(
+                candidates = listOf(device, rtklib),
+                nowMillis = 1_500L,
+                mockEnabled = true,
+            ).copy(
+                screenPolicy = SolutionSourcePolicy.DEVICE_INTERNAL_ONLY,
+                mockPolicy = SolutionSourcePolicy.RTKLIB_ONLY,
+            ),
+        )
+
+        assertEquals("UM980-BESTNAV", out.stateDelta.bestSolutionSource)
+        assertEquals("RTKLIB", (out.publishAction as PublishAction.Publish).snapshot.sourceId)
     }
 
     @Test
@@ -336,10 +362,11 @@ class BestSolutionTickLogicTest {
         updatedAtMillis: Long,
         horizontalAccuracyM: Double? = null,
         satellitesInView: Int? = null,
+        engine: SolutionEngine = SolutionEngine.DEVICE_INTERNAL,
     ): SolutionCandidate = SolutionCandidate(
         sourceId = sourceId,
         receiverFamily = "test",
-        engine = SolutionEngine.DEVICE_INTERNAL,
+        engine = engine,
         fixClass = fixClass,
         updatedAtMillis = updatedAtMillis,
         latDeg = 50.0,

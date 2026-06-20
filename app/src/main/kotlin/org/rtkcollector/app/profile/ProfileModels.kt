@@ -1,6 +1,7 @@
 package org.rtkcollector.app.profile
 
 import org.json.JSONObject
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 
 data class CommandProfile(
     val id: String,
@@ -381,6 +382,39 @@ data class RtklibProfile(
     }
 }
 
+data class SolutionPolicyProfile(
+    val id: String,
+    val name: String,
+    val screenPolicy: SolutionSourcePolicy = SolutionSourcePolicy.AUTO_BEST,
+    val mockPolicy: SolutionSourcePolicy = SolutionSourcePolicy.AUTO_BEST,
+    val isProtected: Boolean = false,
+) {
+    fun validate() {
+        require(id.isNotBlank()) { "Solution policy profile id must not be blank." }
+        require(name.isNotBlank()) { "Solution policy profile name must not be blank." }
+    }
+
+    fun copyProfile(id: String, name: String): SolutionPolicyProfile =
+        copy(id = id, name = name, isProtected = false).also(SolutionPolicyProfile::validate)
+
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("name", name)
+        .put("isProtected", isProtected)
+        .put("screenPolicy", screenPolicy.name)
+        .put("mockPolicy", mockPolicy.name)
+
+    companion object {
+        fun fromJson(json: JSONObject): SolutionPolicyProfile = SolutionPolicyProfile(
+            id = json.getString("id"),
+            name = json.getString("name"),
+            isProtected = json.optProtectedFlag(),
+            screenPolicy = json.optSolutionSourcePolicy("screenPolicy"),
+            mockPolicy = json.optSolutionSourcePolicy("mockPolicy"),
+        ).also(SolutionPolicyProfile::validate)
+    }
+}
+
 data class StorageProfile(
     val id: String,
     val name: String,
@@ -514,3 +548,8 @@ private fun JSONObject.optStringList(name: String): List<String> {
     val array = optJSONArray(name) ?: return emptyList()
     return (0 until array.length()).mapNotNull { index -> array.optString(index).takeIf(String::isNotBlank) }
 }
+
+private fun JSONObject.optSolutionSourcePolicy(name: String): SolutionSourcePolicy =
+    runCatching {
+        SolutionSourcePolicy.valueOf(optString(name, SolutionSourcePolicy.AUTO_BEST.name))
+    }.getOrDefault(SolutionSourcePolicy.AUTO_BEST)

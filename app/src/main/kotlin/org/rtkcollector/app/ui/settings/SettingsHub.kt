@@ -43,6 +43,9 @@ import org.rtkcollector.app.ui.common.TidyColors
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsHub(
+    activeSettingsSetLabel: String,
+    activeWorkflowLabel: String,
+    onActiveSettingsSet: () -> Unit,
     onSettingsSets: () -> Unit,
     onWorkflowSelection: () -> Unit,
     onBaseCoordinates: () -> Unit,
@@ -55,6 +58,8 @@ fun SettingsHub(
     onCommands: () -> Unit,
     onReceiverProfile: () -> Unit,
     onRecordingOutputs: () -> Unit,
+    onRtklibProfiles: () -> Unit,
+    onSolutionPolicy: () -> Unit,
     onStorage: () -> Unit,
     onSessions: () -> Unit,
     onExportSettings: () -> Unit,
@@ -88,6 +93,15 @@ fun SettingsHub(
                     .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                SettingsSection("Active setup") {
+                    SettingsRow(
+                        icon = "◎",
+                        label = activeSettingsSetLabel,
+                        onClick = onActiveSettingsSet,
+                        subtitle = "Workflow: $activeWorkflowLabel",
+                    )
+                }
+
                 SettingsSection("Session setup") {
                     SettingsRow("◎", "Settings sets", onSettingsSets)
                     SettingsDivider()
@@ -98,6 +112,10 @@ fun SettingsHub(
                     SettingsRow("▤", "Dashboard layout", onDashboardLayout, subtitle = dashboardLayoutLabel)
                     SettingsDivider()
                     SettingsRow("●", "Recording outputs", onRecordingOutputs)
+                    SettingsDivider()
+                    SettingsRow("RTK", "RTKLIB profiles", onRtklibProfiles)
+                    SettingsDivider()
+                    SettingsRow("★", "Solution and mock policy", onSolutionPolicy)
                     SettingsDivider()
                     SettingsRow("▣", "Storage location profiles", onStorage)
                 }
@@ -237,6 +255,9 @@ private fun SettingsDivider() {
 private fun SettingsHubPreview() {
     MaterialTheme {
         SettingsHub(
+            activeSettingsSetLabel = "UM980 rover + NTRIP",
+            activeWorkflowLabel = "Rover + NTRIP",
+            onActiveSettingsSet = {},
             onSettingsSets = {},
             onWorkflowSelection = {},
             onBaseCoordinates = {},
@@ -249,6 +270,8 @@ private fun SettingsHubPreview() {
             onCommands = {},
             onReceiverProfile = {},
             onRecordingOutputs = {},
+            onRtklibProfiles = {},
+            onSolutionPolicy = {},
             onStorage = {},
             onSessions = {},
             onExportSettings = {},

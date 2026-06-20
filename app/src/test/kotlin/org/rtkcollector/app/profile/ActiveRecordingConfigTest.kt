@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.workflow.SessionArtifact
 
 class ActiveRecordingConfigTest {
@@ -412,6 +413,32 @@ class ActiveRecordingConfigTest {
         assertEquals(5, policyConfig.recording.mockLocationRateHz)
         assertEquals(false, overrideConfig.recording.enableMockLocation)
         assertEquals(10, overrideConfig.recording.mockLocationRateHz)
+    }
+
+    @Test
+    fun `recording config resolves solution policy profile`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            solutionPolicyProfile = SolutionPolicyProfile(
+                id = "solution-rtklib",
+                name = "RTKLIB solution",
+                screenPolicy = SolutionSourcePolicy.DEVICE_INTERNAL_ONLY,
+                mockPolicy = SolutionSourcePolicy.RTKLIB_ONLY,
+            ),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        assertEquals("solution-rtklib", config.solutionPolicy.profileId)
+        assertEquals(SolutionSourcePolicy.DEVICE_INTERNAL_ONLY, config.solutionPolicy.screenPolicy)
+        assertEquals(SolutionSourcePolicy.RTKLIB_ONLY, config.solutionPolicy.mockPolicy)
     }
 
     @Test

@@ -171,9 +171,11 @@ data class RecordingSettingsSet(
     val ntripCasterUploadProfileRef: ProfileReference? = null,
     val baseCasterUploadEnabled: Boolean = false,
     val rtklibProfileRef: ProfileReference? = null,
+    val solutionPolicyProfileRef: ProfileReference? = null,
     val recordingOutputProfileRef: ProfileReference,
     val storageProfileRef: ProfileReference,
     val basePositionProfileRef: ProfileReference? = null,
+    val optionPolicies: SettingsSetOptionPolicies = SettingsSetOptionPolicies.defaults(),
     val overrides: SettingsSetOverrides = SettingsSetOverrides(),
     val isProtected: Boolean = false,
 ) {
@@ -193,6 +195,7 @@ data class RecordingSettingsSet(
         ntripMountpointProfileRef?.validate()
         ntripCasterUploadProfileRef?.validate()
         rtklibProfileRef?.validate()
+        solutionPolicyProfileRef?.validate()
         recordingOutputProfileRef.validate()
         storageProfileRef.validate()
         basePositionProfileRef?.validate()
@@ -241,6 +244,7 @@ object SettingsSetJson {
     private const val KEY_NTRIP_MOUNTPOINT = "ntripMountpointProfile"
     private const val KEY_NTRIP_CASTER_UPLOAD = "ntripCasterUploadProfile"
     private const val KEY_RTKLIB = "rtklibProfile"
+    private const val KEY_SOLUTION_POLICY = "solutionPolicyProfile"
     private const val KEY_RECORDING_OUTPUT = "recordingOutputProfile"
     private const val KEY_STORAGE = "storageProfile"
     private const val KEY_BASE_POSITION = "basePositionProfile"
@@ -258,9 +262,11 @@ object SettingsSetJson {
         .putNullable("ntripCasterUploadProfile", settingsSet.ntripCasterUploadProfileRef?.toJson())
         .put("baseCasterUploadEnabled", settingsSet.baseCasterUploadEnabled)
         .putNullable("rtklibProfile", settingsSet.rtklibProfileRef?.toJson())
+        .putNullable("solutionPolicyProfile", settingsSet.solutionPolicyProfileRef?.toJson())
         .put("recordingOutputProfile", settingsSet.recordingOutputProfileRef.toJson())
         .put("storageProfile", settingsSet.storageProfileRef.toJson())
         .putNullable("basePositionProfile", settingsSet.basePositionProfileRef?.toJson())
+        .put("optionPolicies", settingsSet.optionPolicies.toJson())
         .put("isProtected", settingsSet.isProtected)
         .put("overrides", settingsSet.overrides.toJson())
 
@@ -280,12 +286,39 @@ object SettingsSetJson {
         ntripCasterUploadProfileRef = json.optJSONObject(KEY_NTRIP_CASTER_UPLOAD)?.let(ProfileReference::fromJson),
         baseCasterUploadEnabled = json.optBoolean("baseCasterUploadEnabled", false),
         rtklibProfileRef = json.optJSONObject(KEY_RTKLIB)?.let(ProfileReference::fromJson),
+        solutionPolicyProfileRef = json.optJSONObject(KEY_SOLUTION_POLICY)?.let(ProfileReference::fromJson),
         recordingOutputProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_RECORDING_OUTPUT)),
         storageProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_STORAGE)),
         basePositionProfileRef = json.optJSONObject(KEY_BASE_POSITION)?.let(ProfileReference::fromJson),
+        optionPolicies = json.optJSONObject("optionPolicies")?.let(SettingsSetOptionPolicies::fromJson)
+            ?: SettingsSetOptionPolicies.defaults(),
         overrides = SettingsSetOverridesJson.fromJson(json.optJSONObject("overrides") ?: JSONObject()),
         isProtected = json.optBoolean("isProtected", false),
     )
+}
+
+private fun SettingsSetOptionPolicies.toJson(): JSONObject {
+    val json = JSONObject()
+    ActiveSetupOptionKey.entries.forEach { key ->
+        val policy = policyFor(key)
+        if (policy != SettingsSetOptionPolicy.DEFAULT_OVERRIDABLE) {
+            json.put(key.name, policy.name)
+        }
+    }
+    return json
+}
+
+private fun SettingsSetOptionPolicies.Companion.fromJson(json: JSONObject): SettingsSetOptionPolicies {
+    var policies = SettingsSetOptionPolicies.defaults()
+    ActiveSetupOptionKey.entries.forEach { key ->
+        val raw = json.optString(key.name, "")
+        if (raw.isNotBlank()) {
+            val policy = runCatching { SettingsSetOptionPolicy.valueOf(raw) }
+                .getOrElse { SettingsSetOptionPolicy.DEFAULT_OVERRIDABLE }
+            policies = policies.withPolicy(key, policy)
+        }
+    }
+    return policies
 }
 
 private fun SettingsSetOverrides.toJson(): JSONObject {

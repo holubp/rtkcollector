@@ -125,16 +125,58 @@ class BestSolutionSelectorTest {
         assertEquals("dgps", selected?.sourceId)
     }
 
+    @Test
+    fun `manual device policy excludes rtklib candidate`() {
+        val now = 10_000L
+        val rtklib = candidate("rtklib", FixClass.RTK_FIXED, updatedAtMillis = now - 100, engine = SolutionEngine.RTKLIB_REALTIME)
+        val device = candidate("device", FixClass.DGPS, updatedAtMillis = now - 100, engine = SolutionEngine.DEVICE_INTERNAL)
+
+        val selected = BestSolutionSelector.select(
+            candidates = listOf(rtklib, device),
+            nowMillis = now,
+            policy = SolutionSourcePolicy.DEVICE_INTERNAL_ONLY,
+        )
+
+        assertEquals("device", selected?.sourceId)
+    }
+
+    @Test
+    fun `manual rtklib policy excludes device candidate`() {
+        val now = 10_000L
+        val rtklib = candidate("rtklib", FixClass.RTK_FLOAT, updatedAtMillis = now - 100, engine = SolutionEngine.RTKLIB_REALTIME)
+        val device = candidate("device", FixClass.RTK_FIXED, updatedAtMillis = now - 100, engine = SolutionEngine.DEVICE_INTERNAL)
+
+        val selected = BestSolutionSelector.select(
+            candidates = listOf(rtklib, device),
+            nowMillis = now,
+            policy = SolutionSourcePolicy.RTKLIB_ONLY,
+        )
+
+        assertEquals("rtklib", selected?.sourceId)
+    }
+
+    @Test
+    fun `off policy returns no selected solution`() {
+        val selected = BestSolutionSelector.select(
+            candidates = listOf(candidate("device", FixClass.RTK_FIXED, updatedAtMillis = 10_000L)),
+            nowMillis = 10_000L,
+            policy = SolutionSourcePolicy.OFF,
+        )
+
+        assertNull(selected)
+    }
+
     private fun candidate(
         id: String,
         fixClass: FixClass,
         updatedAtMillis: Long,
         horizontalAccuracyM: Double? = null,
+        engine: SolutionEngine = SolutionEngine.DEVICE_INTERNAL,
     ): SolutionCandidate =
         SolutionCandidate(
             sourceId = id,
             receiverFamily = "test",
-            engine = SolutionEngine.DEVICE_INTERNAL,
+            engine = engine,
             fixClass = fixClass,
             updatedAtMillis = updatedAtMillis,
             latDeg = 50.0,

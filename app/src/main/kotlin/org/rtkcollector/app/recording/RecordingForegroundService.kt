@@ -103,6 +103,7 @@ import org.rtkcollector.core.solution.BestSolutionSelector
 import org.rtkcollector.core.solution.CoordinateAverageAddResult
 import org.rtkcollector.core.solution.CoordinateAverageSummary
 import org.rtkcollector.core.solution.SolutionCandidate
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.workflow.CorrectionFormat
 import org.rtkcollector.core.workflow.RtklibCorrectionInputRoute
 import org.rtkcollector.core.workflow.RtklibInputRoute
@@ -167,6 +168,8 @@ class RecordingForegroundService : Service() {
     private var previousMockResult: org.rtkcollector.app.mocklocation.MockLocationPublishResult? = null
     private var mockLocationRequested: Boolean = false
     private var mockLocationRateHz: Int = RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
+    private var screenSolutionPolicy: SolutionSourcePolicy = SolutionSourcePolicy.AUTO_BEST
+    private var mockSolutionPolicy: SolutionSourcePolicy = SolutionSourcePolicy.AUTO_BEST
     private var ubloxStreamParser = UbloxStreamParser()
     private var ubloxFrequencyTracker = UbloxMessageFrequencyTracker()
     private var lastUbloxNavSatAtMillis: Long? = null
@@ -345,6 +348,9 @@ class RecordingForegroundService : Service() {
                 rtklibValidationSummary = intent.getStringExtra(EXTRA_RTKLIB_VALIDATION_SUMMARY),
                 rtklibOutputNmea = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_NMEA, false),
                 rtklibOutputPos = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_POS, false),
+                solutionPolicyProfileId = intent.getStringExtra(EXTRA_SOLUTION_POLICY_PROFILE_ID),
+                solutionScreenPolicy = intent.getStringExtra(EXTRA_SOLUTION_SCREEN_POLICY),
+                solutionMockPolicy = intent.getStringExtra(EXTRA_SOLUTION_MOCK_POLICY),
                 storageProfileId = intent.getStringExtra(EXTRA_STORAGE_PROFILE_ID),
                 storageKind = intent.getStringExtra(EXTRA_STORAGE_KIND),
                 coordinateSource = intent.getStringExtra(EXTRA_COORDINATE_SOURCE),
@@ -424,6 +430,8 @@ class RecordingForegroundService : Service() {
             val enableMockLocation = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
             mockLocationRequested = enableMockLocation
             mockLocationRateHz = intent.mockLocationRateHz()
+            screenSolutionPolicy = intent.solutionSourcePolicyExtra(EXTRA_SOLUTION_SCREEN_POLICY)
+            mockSolutionPolicy = intent.solutionSourcePolicyExtra(EXTRA_SOLUTION_MOCK_POLICY)
             configureMockLocation(enableMockLocation)
             val configuredMode = Um980ModeParser.configuredMode(
                 (initCommands + baudSwitchCommands + modeCommands).joinToString("\n"),
@@ -1794,6 +1802,8 @@ class RecordingForegroundService : Service() {
                 lastMockPublishedIdentity = lastMockPublishedIdentity,
                 lastMockPublishWallClockAtMillis = lastMockPublishWallClockAtMillis,
                 previousMockResult = previousMockResult,
+                screenPolicy = screenSolutionPolicy,
+                mockPolicy = mockSolutionPolicy,
             )
             val tick = BestSolutionTickLogic.compute(tickInput)
             applyTickStateDelta(tick.stateDelta, now)
@@ -2588,6 +2598,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_RECORD_REMOTE_BASE_RAW = "recordRemoteBaseRaw"
         const val EXTRA_ENABLE_MOCK_LOCATION = "enableMockLocation"
         const val EXTRA_MOCK_LOCATION_RATE_HZ = "mockLocationRateHz"
+        const val EXTRA_SOLUTION_POLICY_PROFILE_ID = "solutionPolicyProfileId"
+        const val EXTRA_SOLUTION_SCREEN_POLICY = "solutionScreenPolicy"
+        const val EXTRA_SOLUTION_MOCK_POLICY = "solutionMockPolicy"
         const val EXTRA_COORDINATE_SOURCE = "coordinateSource"
         const val EXTRA_BASE_POSITION_JSON = "basePositionJson"
         const val EXTRA_BASE_COORDINATE_ID = "baseCoordinateId"
@@ -2746,6 +2759,11 @@ internal fun sanitizeMockLocationRateHz(rateHz: Int): Int =
 
 internal fun mockLocationPublishPeriodMillis(rateHz: Int): Long =
     RecordingForegroundService.DEFAULT_MOCK_LOCATION_PUBLISH_PERIOD_MILLIS / sanitizeMockLocationRateHz(rateHz)
+
+private fun Intent.solutionSourcePolicyExtra(name: String): SolutionSourcePolicy =
+    runCatching {
+        SolutionSourcePolicy.valueOf(getStringExtra(name).orEmpty())
+    }.getOrDefault(SolutionSourcePolicy.AUTO_BEST)
 
 internal fun recordingReceiverFamily(receiverProfileId: String?, commandReceiverFamily: String?): String {
     val id = commandReceiverFamily?.takeIf { it.isNotBlank() } ?: receiverProfileId

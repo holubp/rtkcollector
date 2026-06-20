@@ -15,6 +15,7 @@ data class SettingsImportSummary(
     val ntripMountpointProfileCount: Int,
     val recordingPolicyProfileCount: Int,
     val rtklibProfileCount: Int,
+    val solutionPolicyProfileCount: Int,
     val storageProfileCount: Int,
     val settingsSetCount: Int,
     val selectedSettingsSetId: String?,
@@ -97,6 +98,7 @@ fun validateSettingsImportJson(text: String): SettingsImportValidationResult {
             ntripMountpointProfileCount = backup.ntripMountpointProfiles.size,
             recordingPolicyProfileCount = backup.recordingPolicyProfiles.size,
             rtklibProfileCount = backup.rtklibProfiles.size,
+            solutionPolicyProfileCount = backup.solutionPolicyProfiles.size,
             storageProfileCount = backup.storageProfiles.size,
             settingsSetCount = backup.settingsSets.size,
             selectedSettingsSetId = backup.selectedSettingsSetId,
@@ -115,6 +117,7 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
     duplicateId("NTRIP mountpoint profile", backup.ntripMountpointProfiles.map { it.id })?.let { return it }
     duplicateId("recording output profile", backup.recordingPolicyProfiles.map { it.id })?.let { return it }
     duplicateId("RTKLIB profile", backup.rtklibProfiles.map { it.id })?.let { return it }
+    duplicateId("solution policy profile", backup.solutionPolicyProfiles.map { it.id })?.let { return it }
     duplicateId("storage profile", backup.storageProfiles.map { it.id })?.let { return it }
     duplicateId("settings set", backup.settingsSets.map { it.id })?.let { return it }
 
@@ -125,6 +128,7 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
     val mountpointIds = backup.ntripMountpointProfiles.mapTo(mutableSetOf()) { it.id }
     val recordingIds = backup.recordingPolicyProfiles.mapTo(mutableSetOf()) { it.id }
     val rtklibIds = backup.rtklibProfiles.mapTo(mutableSetOf()) { it.id }
+    val solutionPolicyIds = backup.solutionPolicyProfiles.mapTo(mutableSetOf()) { it.id }
     val storageIds = backup.storageProfiles.mapTo(mutableSetOf()) { it.id }
     val settingsSetIds = backup.settingsSets.mapTo(mutableSetOf()) { it.id }
 
@@ -145,6 +149,9 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
             ?.let { return it }
         settingsSet.rtklibProfileRef?.id
             ?.let { missingReference(it, rtklibIds, settingsSet.name, "RTKLIB profile") }
+            ?.let { return it }
+        settingsSet.solutionPolicyProfileRef?.id
+            ?.let { missingReference(it, solutionPolicyIds, settingsSet.name, "solution policy profile") }
             ?.let { return it }
         missingReference(
             settingsSet.recordingOutputProfileRef.id,

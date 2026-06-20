@@ -14,6 +14,7 @@
 | `WF-FIXEDBASE-001` | Automated + manual | Workflow validator; fixed-base coordinate display/start test | In progress | Accepted-coordinate persistence and display remain under review. |
 | `WF-FIXEDBASE-002` | Automated + review | Active recording config tests | Passing | Fixed-base start rejects `MODE ROVER` command profiles. |
 | `WF-RTKLIB-001` | Automated + review | RTKLIB input route tests; native bridge tests; V1 code review | In progress | Routing/API foundation, bounded worker and JNI/native bridge are implemented. Native `.so` build still needs validation on a host with a working Android NDK. |
+| `WF-SOLUTION-001` | Automated + review | Best-solution selector tests; recording tick policy tests; session metadata tests | Passing | Screen and mock-location source policies can be selected separately. |
 | `RX-UM980-001` | Automated + manual | UM980 parser tests; binary session replay | Needs review | Mixed-stream parser coverage should keep expanding. |
 | `RX-UM980-RTK-001` | Automated + manual | BESTNAV/ADRNAV/RTKSTATUS/RTCMSTATUS tests; field session | Needs review | Real receiver/caster validation remains important. |
 | `RX-UM980-PPP-001` | Automated + manual | PPPNAV parser/dashboard tests; debug sessions | Passing | Local tests cover label mapping; field regression should continue. |
@@ -22,7 +23,7 @@
 | `RX-UBLOX-M8T-001` | Automated + hardware | u-blox parser/capability tests; M8T device test | Not field-tested | First implementation exists. |
 | `RX-UBLOX-RTKLIB-001` | Automated + hardware | RTKLIB input route tests; M8T/M8P replay test later | Needs field validation | UBX RAWX/SFRBX route is modelled as direct RTKLIB-EX input. |
 | `SESSION-FILES-001` | Automated + manual | Session writer tests; completed sessions | Needs review | Keep artifacts separate by source and purpose. |
-| `SESSION-META-001` | Automated + review | Session metadata tests; session format review | Needs review | Must exclude secrets. |
+| `SESSION-META-001` | Automated + review | Session metadata tests; session format review | Passing | Metadata includes workflow and solution-policy context and must exclude secrets. |
 | `SESSION-NMEA-001` | Automated + sample replay | NMEA exporter/re-exporter tests; high-rate samples | Needs review | Verify sub-second UTC preservation. |
 | `SESSION-RTCM-001` | Automated + manual | Correction-input raw/RTCM3 tests; downstream replay | Needs review | Ensure output works with external pipelines. |
 | `SESSION-RTKLIB-001` | Automated + manual | RTKLIB output writer tests; RTKLIB-enabled session later | In progress | NMEA/POS artifact model and native output bridge exist; host native build and field/replay solution validation remain open. |
@@ -42,6 +43,9 @@
 | `UI-DASH-003` | Manual + review | Phone portrait dashboard screenshot | Needs review | Live-monitoring cards should switch to single column when needed. |
 | `UI-DASH-004` | Automated + manual | Dashboard state/action tests; dashboard chip smoke test | Needs review | Mock GPS chip is top-level; no placeholder Mark action. |
 | `UI-BASE-001` | Automated + manual | Dashboard state tests; temporary-base dashboard review | Needs review | Keep controls compact and explicit. |
+| `UI-SETUP-001` | Automated + manual | Active setup resolver tests; settings hub review | In progress | Active settings set is visible in the settings hub. Main-menu refinement remains under review. |
+| `UI-SETUP-002` | Automated + manual | Active setup resolver tests; settings-set editor review | In progress | Policy model and JSON persistence exist; compact editor polish remains. |
+| `UI-PROFILE-002` | Automated + manual | Profile compatibility tests; profile editor smoke test | In progress | Compatibility model and controlled RTKLIB/solution references exist; grouping/reorder UI remains open. |
 | `UI-PROFILE-001` | Automated + manual | Protected-profile tests; profile editor smoke test | Needs review | Built-ins are view-only and copyable. |
 | `UI-KEYBOARD-001` | Manual + review | Hardware keyboard command-editor smoke test | Needs field retest | Arrow keys stay inside native multiline editor; Tab/Shift+Tab traverse fields. |
 | `UI-STORAGE-001` | Manual + review | Storage profile folder-picker smoke test | Needs provider testing | Tree URI is picker-selected and display-only. |

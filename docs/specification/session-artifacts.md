@@ -19,8 +19,10 @@ Verification:
 
 Status: Normative
 
-`session.json` SHOULD record workflow, receiver, correction-source, artifact and
-validation context without embedding secret values.
+`session.json` SHOULD record workflow, receiver, correction-source, artifact,
+solution-policy and validation context without embedding secret values. When a
+solution policy profile is active, metadata SHOULD include the selected profile
+identifier plus the screen and mock-location source policies.
 
 Verification:
 - Automated: session metadata writer tests.

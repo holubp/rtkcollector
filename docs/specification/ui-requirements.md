@@ -68,6 +68,45 @@ Verification:
 
 ## Profile Editors
 
+### UI-SETUP-001: Active Settings Set Is Visible In Settings
+
+Status: Normative
+
+The settings hub MUST show the currently active settings set and current
+workflow near the top of the menu. Activating a settings set MUST be separate
+from editing a settings-set profile.
+
+Verification:
+- Automated: active setup resolver and settings-set persistence tests.
+- Manual: settings hub review before and during recording.
+
+### UI-SETUP-002: Settings Set Options Have Explicit Application Policy
+
+Status: Normative
+
+Major settings-set options SHOULD declare how they apply to the live active
+setup: default and user-changeable, locked, empty and remembered after user
+selection, or empty and required every time. User selections made from the main
+dashboard are transient active-setup choices and MUST NOT silently rewrite the
+settings-set profile.
+
+Verification:
+- Automated: active setup resolver tests.
+- Manual: activate settings set, override dashboard selectors and restart app.
+
+### UI-PROFILE-002: Profile Activation Is Separate From Editing
+
+Status: Normative
+
+Profile list screens MUST distinguish activation from editing. Profile
+references that are constrained by receiver family or workflow compatibility
+MUST be selectable from controlled lists instead of free-text identifiers.
+
+Verification:
+- Automated: profile compatibility tests where practical.
+- Manual: settings/profile screens show Activate/Edit/Rename as distinct
+  actions.
+
 ### UI-PROFILE-001: Built-In Profiles Are Viewable And Copyable
 
 Status: Normative

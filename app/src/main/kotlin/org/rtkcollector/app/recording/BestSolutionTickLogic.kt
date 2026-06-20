@@ -4,6 +4,7 @@ import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.core.solution.BestSolutionSelector
 import org.rtkcollector.core.solution.BestSolutionSnapshot
 import org.rtkcollector.core.solution.SolutionCandidate
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 
 data class BestSolutionTickInput(
     val candidates: Collection<SolutionCandidate>,
@@ -15,6 +16,8 @@ data class BestSolutionTickInput(
     val lastMockPublishWallClockAtMillis: Long? = null,
     val previousMockResult: MockLocationPublishResult? = null,
     val maxAgeMillis: Long = BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS,
+    val screenPolicy: SolutionSourcePolicy = SolutionSourcePolicy.AUTO_BEST,
+    val mockPolicy: SolutionSourcePolicy = SolutionSourcePolicy.AUTO_BEST,
 )
 
 data class BestSolutionStateDelta(
@@ -58,21 +61,28 @@ data class PublishResultApplication(
 
 object BestSolutionTickLogic {
     fun compute(input: BestSolutionTickInput): BestSolutionTickOutput {
-        val best = BestSolutionSelector.select(
+        val screenBest = BestSolutionSelector.select(
             input.candidates,
             input.nowMillis,
             input.maxAgeMillis,
+            policy = input.screenPolicy,
         )
-        val bestIdentity = best?.publishIdentity()
+        val mockBest = BestSolutionSelector.select(
+            input.candidates,
+            input.nowMillis,
+            input.maxAgeMillis,
+            policy = input.mockPolicy,
+        )
+        val bestIdentity = mockBest?.publishIdentity()
         val samePublishedCandidate =
-            best != null &&
-                best.updatedAtMillis == input.lastMockPublishedAt &&
+            mockBest != null &&
+                mockBest.updatedAtMillis == input.lastMockPublishedAt &&
                 bestIdentity == input.lastMockPublishedIdentity
 
         val mockResult = when {
             !input.mockEnabled -> MockLocationPublishResult.DISABLED
             !input.mockProviderAvailable -> MockLocationPublishResult.NOT_PERMITTED
-            best == null -> MockLocationPublishResult.STALE
+            mockBest == null -> MockLocationPublishResult.STALE
             samePublishedCandidate ->
                 input.previousMockResult ?: MockLocationPublishResult.PUBLISHED
             else -> MockLocationPublishResult.PUBLISHED // tentative; caller updates via applyPublishResult
@@ -81,16 +91,16 @@ object BestSolutionTickLogic {
         val publishAction: PublishAction = if (
             input.mockEnabled &&
             input.mockProviderAvailable &&
-            best != null &&
+            mockBest != null &&
             !samePublishedCandidate
         ) {
-            PublishAction.Publish(best)
+            PublishAction.Publish(mockBest)
         } else {
             PublishAction.None
         }
 
         return BestSolutionTickOutput(
-            stateDelta = stateDeltaForSnapshot(best, mockResult),
+            stateDelta = stateDeltaForSnapshot(screenBest, mockResult),
             publishAction = publishAction,
             newLastMockPublishedAt = input.lastMockPublishedAt,
             newLastMockPublishedIdentity = input.lastMockPublishedIdentity,

@@ -101,6 +101,20 @@ class ProfileStores(context: Context) {
             profiles.onEach(RtklibProfile::validate).map(RtklibProfile::toJson),
         )
 
+    fun solutionPolicyProfiles(): List<SolutionPolicyProfile> =
+        readProfiles(
+            key = "solutionPolicyProfiles",
+            defaults = ::defaultSolutionPolicyProfiles,
+            decode = SolutionPolicyProfile::fromJson,
+            encode = SolutionPolicyProfile::toJson,
+        )
+
+    fun saveSolutionPolicyProfiles(profiles: List<SolutionPolicyProfile>) =
+        writeProfiles(
+            "solutionPolicyProfiles",
+            profiles.onEach(SolutionPolicyProfile::validate).map(SolutionPolicyProfile::toJson),
+        )
+
     fun storageProfiles(): List<StorageProfile> =
         readProfiles(
             key = "storageProfiles",
@@ -297,6 +311,29 @@ class ProfileStores(context: Context) {
                 name = "RTKLIB temporary-base static RTK",
                 enabled = true,
                 preset = RtklibProfile.PRESET_TEMPORARY_BASE_STATIC_RTK,
+                isProtected = true,
+            ),
+        )
+
+    private fun defaultSolutionPolicyProfiles(): List<SolutionPolicyProfile> =
+        listOf(
+            SolutionPolicyProfile(
+                id = "solution-auto-best",
+                name = "Automatic best solution",
+                isProtected = true,
+            ),
+            SolutionPolicyProfile(
+                id = "solution-device-internal",
+                name = "Device internal solution only",
+                screenPolicy = org.rtkcollector.core.solution.SolutionSourcePolicy.DEVICE_INTERNAL_ONLY,
+                mockPolicy = org.rtkcollector.core.solution.SolutionSourcePolicy.DEVICE_INTERNAL_ONLY,
+                isProtected = true,
+            ),
+            SolutionPolicyProfile(
+                id = "solution-rtklib",
+                name = "RTKLIB solution only",
+                screenPolicy = org.rtkcollector.core.solution.SolutionSourcePolicy.RTKLIB_ONLY,
+                mockPolicy = org.rtkcollector.core.solution.SolutionSourcePolicy.RTKLIB_ONLY,
                 isProtected = true,
             ),
         )

@@ -2,6 +2,7 @@ package org.rtkcollector.app.profile
 
 import org.rtkcollector.core.correction.Um980RtcmBaseOutputSanity
 import org.rtkcollector.core.rtklib.RtklibSnapshot
+import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.workflow.SessionArtifact
 import org.rtkcollector.receiver.ublox.UbloxBaudCommands
 
@@ -21,6 +22,7 @@ data class ActiveRecordingConfig(
     val ntrip: ActiveNtripConfig,
     val casterUpload: ActiveCasterUploadConfig,
     val rtklib: ActiveRtklibConfig,
+    val solutionPolicy: ActiveSolutionPolicyConfig,
     val recording: ActiveRecordingOutputConfig,
     val storage: ActiveStorageConfig,
 ) {
@@ -82,6 +84,7 @@ data class ActiveRecordingConfig(
             recordingPolicyProfile: RecordingPolicyProfile,
             storageProfile: StorageProfile,
             rtklibProfile: RtklibProfile? = null,
+            solutionPolicyProfile: SolutionPolicyProfile? = null,
             workflowName: String,
             workflowUsesNtrip: Boolean,
             hasAcceptedBaseCoordinate: Boolean = false,
@@ -244,6 +247,12 @@ data class ActiveRecordingConfig(
                     ?: recordingPolicyProfile.mockLocationRateHz,
             )
 
+            val solutionPolicy = ActiveSolutionPolicyConfig(
+                profileId = solutionPolicyProfile?.id,
+                screenPolicy = solutionPolicyProfile?.screenPolicy ?: SolutionSourcePolicy.AUTO_BEST,
+                mockPolicy = solutionPolicyProfile?.mockPolicy ?: SolutionSourcePolicy.AUTO_BEST,
+            )
+
             val storage = ActiveStorageConfig(
                 id = storageProfile.id,
                 kind = storageOverride?.kind ?: storageProfile.kind,
@@ -266,12 +275,19 @@ data class ActiveRecordingConfig(
                 ntrip = ntrip,
                 casterUpload = casterUpload,
                 rtklib = rtklib,
+                solutionPolicy = solutionPolicy,
                 recording = recordingOutput,
                 storage = storage,
             )
         }
     }
 }
+
+data class ActiveSolutionPolicyConfig(
+    val profileId: String?,
+    val screenPolicy: SolutionSourcePolicy,
+    val mockPolicy: SolutionSourcePolicy,
+)
 
 data class ActiveRtklibConfig(
     val enabled: Boolean,

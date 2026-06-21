@@ -221,6 +221,16 @@ class ProfileStoresTest {
     }
 
     @Test
+    fun `reference lookup resolves solution policy profiles`() {
+        val profile = SolutionPolicyProfile(
+            id = "solution-rtklib",
+            name = "RTKLIB solution only",
+        )
+
+        assertEquals(profile, listOf(profile).requireProfileReference("solution-rtklib", "solution policy profile"))
+    }
+
+    @Test
     fun `mountpoint display uses actual mountpoint not profile name`() {
         assertEquals(
             "n/a",

@@ -85,6 +85,7 @@ import org.rtkcollector.app.profile.ntripCasterUploadSecretId
 import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
+import org.rtkcollector.app.profile.requireProfileReference
 import org.rtkcollector.app.profile.validateSettingsImportJson
 import org.rtkcollector.app.profile.withWorkflowActivationMode
 import org.rtkcollector.app.profile.workflowActivationMode
@@ -3772,6 +3773,19 @@ private fun RtkCollectorAppPreview() {
     RtkCollectorApp()
 }
 
+private data class ResolvedDashboardProfiles(
+    val settingsSet: RecordingSettingsSet,
+    val commandProfile: CommandProfile,
+    val usbProfile: UsbBaudProfile,
+    val ntripCaster: NtripCasterProfile?,
+    val ntripMountpoint: NtripMountpointProfile?,
+    val ntripCasterUploadProfile: NtripCasterUploadProfile?,
+    val recordingPolicy: RecordingPolicyProfile,
+    val storageProfile: StorageProfile,
+    val rtklibProfile: RtklibProfile?,
+    val solutionPolicyProfile: SolutionPolicyProfile?,
+)
+
 private fun buildDashboardStartIntent(
     context: Context,
     settingsSets: List<RecordingSettingsSet>,
@@ -3781,43 +3795,57 @@ private fun buildDashboardStartIntent(
 ): Intent? {
     val profileStore = ProfileStores(context)
     val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
-    val commandProfile = profileStore.commandProfiles().findByReference(
-        id = settingsSet.commandProfileRef.id,
-        label = "command profile",
-    )
-    val usbProfile = profileStore.usbBaudProfiles().findByReference(
-        id = settingsSet.usbBaudProfileRef.id,
-        label = "USB/baud profile",
-    )
-    val ntripResolution = settingsSet.resolveNtripProfiles(
-        casterProfiles = profileStore.ntripCasterProfiles(),
-        mountpointProfiles = profileStore.ntripMountpointProfiles(),
-    )
-    val ntripCaster = ntripResolution.caster
-    val ntripMountpoint = ntripResolution.mountpoint
-    val resolvedSettingsSet = ntripResolution.settingsSet
-    val ntripCasterUploadProfile = resolvedSettingsSet.ntripCasterUploadProfileRef?.id?.let { uploadProfileId ->
-        profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == uploadProfileId }
-    }
-    val recordingPolicy = profileStore.recordingPolicyProfiles().findByReference(
-        id = settingsSet.recordingOutputProfileRef.id,
-        label = "recording policy profile",
-    )
-    val storageProfile = profileStore.storageProfiles().findByReference(
-        id = settingsSet.storageProfileRef.id,
-        label = "storage location profile",
-    )
-    val rtklibProfile = resolvedSettingsSet.rtklibProfileRef?.id?.let {
-        profileStore.rtklibProfiles().findByReference(
-            id = it,
-            label = "RTKLIB profile",
+    val resolvedProfiles = try {
+        val commandProfile = profileStore.commandProfiles().requireProfileReference(
+            id = settingsSet.commandProfileRef.id,
+            label = "command profile",
         )
-    }
-    val solutionPolicyProfile = resolvedSettingsSet.solutionPolicyProfileRef?.id?.let {
-        profileStore.solutionPolicyProfiles().findByReference(
-            id = it,
-            label = "solution policy profile",
+        val usbProfile = profileStore.usbBaudProfiles().requireProfileReference(
+            id = settingsSet.usbBaudProfileRef.id,
+            label = "USB/baud profile",
         )
+        val ntripResolution = settingsSet.resolveNtripProfiles(
+            casterProfiles = profileStore.ntripCasterProfiles(),
+            mountpointProfiles = profileStore.ntripMountpointProfiles(),
+        )
+        val resolvedSettingsSet = ntripResolution.settingsSet
+        val recordingPolicy = profileStore.recordingPolicyProfiles().requireProfileReference(
+            id = settingsSet.recordingOutputProfileRef.id,
+            label = "recording policy profile",
+        )
+        val storageProfile = profileStore.storageProfiles().requireProfileReference(
+            id = settingsSet.storageProfileRef.id,
+            label = "storage location profile",
+        )
+        val rtklibProfile = resolvedSettingsSet.rtklibProfileRef?.id?.let {
+            profileStore.rtklibProfiles().requireProfileReference(
+                id = it,
+                label = "RTKLIB profile",
+            )
+        }
+        val solutionPolicyProfile = resolvedSettingsSet.solutionPolicyProfileRef?.id?.let {
+            profileStore.solutionPolicyProfiles().requireProfileReference(
+                id = it,
+                label = "solution policy profile",
+            )
+        }
+        ResolvedDashboardProfiles(
+            settingsSet = resolvedSettingsSet,
+            commandProfile = commandProfile,
+            usbProfile = usbProfile,
+            ntripCaster = ntripResolution.caster,
+            ntripMountpoint = ntripResolution.mountpoint,
+            ntripCasterUploadProfile = resolvedSettingsSet.ntripCasterUploadProfileRef?.id?.let { uploadProfileId ->
+                profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == uploadProfileId }
+            },
+            recordingPolicy = recordingPolicy,
+            storageProfile = storageProfile,
+            rtklibProfile = rtklibProfile,
+            solutionPolicyProfile = solutionPolicyProfile,
+        )
+    } catch (error: IllegalArgumentException) {
+        Toast.makeText(context, "Cannot start: ${error.message}", Toast.LENGTH_LONG).show()
+        return null
     }
     val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
     if (workflowId.isNullOrBlank()) {
@@ -3848,16 +3876,16 @@ private fun buildDashboardStartIntent(
     val workflowUsesNtrip = workflowId.workflowUsesNtrip()
     val activeConfig = try {
         ActiveRecordingConfig.resolve(
-            settingsSet = resolvedSettingsSet.copy(workflowId = workflowId),
-            commandProfile = commandProfile,
-            usbBaudProfile = usbProfile,
-            ntripCasterProfile = ntripCaster,
-            ntripMountpointProfile = ntripMountpoint,
-            ntripCasterUploadProfile = ntripCasterUploadProfile,
-            recordingPolicyProfile = recordingPolicy,
-            storageProfile = storageProfile,
-            rtklibProfile = rtklibProfile,
-            solutionPolicyProfile = solutionPolicyProfile,
+            settingsSet = resolvedProfiles.settingsSet.copy(workflowId = workflowId),
+            commandProfile = resolvedProfiles.commandProfile,
+            usbBaudProfile = resolvedProfiles.usbProfile,
+            ntripCasterProfile = resolvedProfiles.ntripCaster,
+            ntripMountpointProfile = resolvedProfiles.ntripMountpoint,
+            ntripCasterUploadProfile = resolvedProfiles.ntripCasterUploadProfile,
+            recordingPolicyProfile = resolvedProfiles.recordingPolicy,
+            storageProfile = resolvedProfiles.storageProfile,
+            rtklibProfile = resolvedProfiles.rtklibProfile,
+            solutionPolicyProfile = resolvedProfiles.solutionPolicyProfile,
             workflowName = workflowId.workflowName(),
             workflowUsesNtrip = workflowUsesNtrip,
             hasAcceptedBaseCoordinate = selectedBaseCoordinate != null,
@@ -3868,9 +3896,9 @@ private fun buildDashboardStartIntent(
         return null
     }
     val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-    val usbDevice = usbManager.selectUsbDevice(usbProfile)
+    val usbDevice = usbManager.selectUsbDevice(resolvedProfiles.usbProfile)
     if (usbDevice == null) {
-        val message = if (usbProfile.usbVid != null || usbProfile.usbPid != null) {
+        val message = if (resolvedProfiles.usbProfile.usbVid != null || resolvedProfiles.usbProfile.usbPid != null) {
             "Cannot start: selected USB receiver is not connected."
         } else {
             "Cannot start: no USB receiver is connected or selected."
@@ -3946,9 +3974,9 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_COMMAND_PROFILE_ID, activeConfig.commandProfileId)
         putExtra(RecordingForegroundService.EXTRA_COMMAND_RECEIVER_FAMILY, activeConfig.commandReceiverFamily)
         putExtra(RecordingForegroundService.EXTRA_USB_BAUD_PROFILE_ID, activeConfig.usbBaudProfileId)
-        putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, ntripCaster?.id)
-        putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, ntripMountpoint?.id)
-        putExtra(RecordingForegroundService.EXTRA_RECORDING_POLICY_ID, recordingPolicy.id)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, resolvedProfiles.ntripCaster?.id)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, resolvedProfiles.ntripMountpoint?.id)
+        putExtra(RecordingForegroundService.EXTRA_RECORDING_POLICY_ID, resolvedProfiles.recordingPolicy.id)
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_PROFILE_ID, activeConfig.rtklib.profileId)
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_ENABLED, activeConfig.rtklib.enabled)
         putExtra(RecordingForegroundService.EXTRA_RTKLIB_PRESET, activeConfig.rtklib.preset)
@@ -3989,15 +4017,15 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_BASE_COORDINATE_NAME, selectedBaseCoordinate?.name)
         putExtra(RecordingForegroundService.EXTRA_BASE_COORDINATE_METHOD, selectedBaseCoordinate?.method)
         putStringArrayListExtra(RecordingForegroundService.EXTRA_EXPECTED_ARTIFACTS, ArrayList(activeConfig.expectedSessionArtifactNames))
-        putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, resolvedSettingsSet.displayNameWithOverrides())
-        putExtra(RecordingForegroundService.EXTRA_SETTINGS_COMMAND_PROFILE_NAME, commandProfile.name)
+        putExtra(RecordingForegroundService.EXTRA_SETTINGS_SET_NAME, resolvedProfiles.settingsSet.displayNameWithOverrides())
+        putExtra(RecordingForegroundService.EXTRA_SETTINGS_COMMAND_PROFILE_NAME, resolvedProfiles.commandProfile.name)
         putExtra(
             RecordingForegroundService.EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME,
-            dashboardBaudLabel(usbProfile.name, activeConfig.serialBaud),
+            dashboardBaudLabel(resolvedProfiles.usbProfile.name, activeConfig.serialBaud),
         )
-        putExtra(RecordingForegroundService.EXTRA_SETTINGS_NTRIP_CASTER_PROFILE_NAME, ntripCaster?.name ?: "NTRIP disabled")
-        putExtra(RecordingForegroundService.EXTRA_SETTINGS_RECORDING_OUTPUT_PROFILE_NAME, recordingPolicy.name)
-        putExtra(RecordingForegroundService.EXTRA_SETTINGS_STORAGE_PROFILE_NAME, storageProfile.name)
+        putExtra(RecordingForegroundService.EXTRA_SETTINGS_NTRIP_CASTER_PROFILE_NAME, resolvedProfiles.ntripCaster?.name ?: "NTRIP disabled")
+        putExtra(RecordingForegroundService.EXTRA_SETTINGS_RECORDING_OUTPUT_PROFILE_NAME, resolvedProfiles.recordingPolicy.name)
+        putExtra(RecordingForegroundService.EXTRA_SETTINGS_STORAGE_PROFILE_NAME, resolvedProfiles.storageProfile.name)
     }
 }
 
@@ -4020,26 +4048,26 @@ private fun buildNtripUpdateIntent(
         val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
         ActiveRecordingConfig.resolve(
             settingsSet = resolvedSettingsSet.copy(workflowId = workflowId ?: resolvedSettingsSet.workflowId),
-            commandProfile = profileStore.commandProfiles().findByReference(
+            commandProfile = profileStore.commandProfiles().requireProfileReference(
                 id = settingsSet.commandProfileRef.id,
                 label = "command profile",
             ),
-            usbBaudProfile = profileStore.usbBaudProfiles().findByReference(
+            usbBaudProfile = profileStore.usbBaudProfiles().requireProfileReference(
                 id = settingsSet.usbBaudProfileRef.id,
                 label = "USB/baud profile",
             ),
             ntripCasterProfile = ntripCaster,
             ntripMountpointProfile = ntripMountpoint,
-            recordingPolicyProfile = profileStore.recordingPolicyProfiles().findByReference(
+            recordingPolicyProfile = profileStore.recordingPolicyProfiles().requireProfileReference(
                 id = settingsSet.recordingOutputProfileRef.id,
                 label = "recording policy profile",
             ),
-            storageProfile = profileStore.storageProfiles().findByReference(
+            storageProfile = profileStore.storageProfiles().requireProfileReference(
                 id = settingsSet.storageProfileRef.id,
                 label = "storage location profile",
             ),
             solutionPolicyProfile = resolvedSettingsSet.solutionPolicyProfileRef?.id?.let {
-                profileStore.solutionPolicyProfiles().findByReference(
+                profileStore.solutionPolicyProfiles().requireProfileReference(
                     id = it,
                     label = "solution policy profile",
                 )
@@ -4675,20 +4703,6 @@ private fun usbDeviceOptionItems(
         connectedChoices.map { EditableProfileOption(it.toProfileValue(), it.label) } +
         listOfNotNull(remembered)
 }
-
-private inline fun <reified T> List<T>.findByReference(id: String, label: String): T =
-    firstOrNull { profile ->
-        when (profile) {
-            is CommandProfile -> profile.id == id
-            is UsbBaudProfile -> profile.id == id
-            is NtripCasterProfile -> profile.id == id
-            is NtripMountpointProfile -> profile.id == id
-            is RecordingPolicyProfile -> profile.id == id
-            is RtklibProfile -> profile.id == id
-            is StorageProfile -> profile.id == id
-            else -> false
-        }
-    } ?: error("Missing $label '$id'.")
 
 private fun List<CommandProfile>.preferredBaseCommandProfile(): CommandProfile? =
     firstOrNull { it.id == ProfileStores.UM980_BASE_CONFIG_PROFILE_ID }

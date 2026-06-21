@@ -412,4 +412,26 @@ class ProfileStoresTest {
         assertEquals(null, set.ntripMountpointProfileRef)
         assertEquals("Default V1 recording outputs", set.recordingOutputProfileRef.name)
     }
+
+    @Test
+    fun `migration repairs sanitized ublox rtklib settings set workflow`() {
+        val migrated = ProfileStoreMigrations.settingsSets(
+            settingsSets = listOf(
+                RecordingSettingsSet.builtInRoverNtrip().copy(
+                    id = "ublox-m8t-rover-rtklib",
+                    name = "u-blox M8T rover + RTKLIB",
+                    workflowId = "plain-rover",
+                    workflowApplicationPolicy = WorkflowApplicationPolicy.LET_USER_SELECT,
+                    receiverProfileId = "ublox-m8t",
+                    ntripMountpointProfileRef = ProfileReference("mount", "TUBO"),
+                    rtklibProfileRef = ProfileReference("rtklib-rover-kinematic", "RTKLIB rover kinematic RTK"),
+                ),
+            ),
+            defaults = emptyList(),
+        )
+
+        val set = migrated.single()
+        assertEquals("rover-rtklib", set.workflowId)
+        assertEquals(WorkflowApplicationPolicy.SET_SPECIFIC, set.workflowApplicationPolicy)
+    }
 }

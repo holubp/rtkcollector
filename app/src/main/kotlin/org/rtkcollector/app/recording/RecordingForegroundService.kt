@@ -144,6 +144,7 @@ class RecordingForegroundService : Service() {
     private var casterUploadController: NtripCasterUploadController? = null
     private var rtklibWorker: RtklibWorker? = null
     private var activeWorkflowUsesNtrip: Boolean = false
+    private var activeNtripSendToReceiver: Boolean = true
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
@@ -495,6 +496,7 @@ class RecordingForegroundService : Service() {
             ntripRateWindowCorrectionBytes = 0L
             ntripRateWindowTxBytes = 0L
             activeWorkflowUsesNtrip = workflowUsesNtrip
+            activeNtripSendToReceiver = intent.getBooleanExtra(EXTRA_NTRIP_SEND_TO_RECEIVER, true)
             broadcastState()
 
             lastMockPublishedAt = null
@@ -618,12 +620,17 @@ class RecordingForegroundService : Service() {
         if (config == null) {
             return
         }
-        startNtripController(config, recorder)
+        startNtripController(
+            config = config,
+            recorder = recorder,
+            sendCorrectionsToReceiver = intent.getBooleanExtra(EXTRA_NTRIP_SEND_TO_RECEIVER, true),
+        )
     }
 
     private fun startNtripController(
         config: NtripRuntimeConfig,
         recorder: SessionRawRecorder,
+        sendCorrectionsToReceiver: Boolean,
     ) {
         val ntripRtcmExtractor = Rtcm3Extractor(validateCrc = true)
         val controller = NtripRuntimeController(
@@ -639,13 +646,17 @@ class RecordingForegroundService : Service() {
             onRtcmBytes = { bytes ->
                 if (running.get()) {
                     processNtripCorrectionBytes(bytes, recorder, ntripRtcmExtractor)
-                    val txResult = runCatching {
-                        synchronized(txLock) {
-                            runtime?.sendToReceiver(bytes) ?: error("USB runtime is not available.")
+                    val txResult = if (sendCorrectionsToReceiver) {
+                        runCatching {
+                            synchronized(txLock) {
+                                runtime?.sendToReceiver(bytes) ?: error("USB runtime is not available.")
+                            }
                         }
+                    } else {
+                        Result.success(Unit)
                     }
                     ntripRateWindowCorrectionBytes += bytes.size
-                    if (txResult.isSuccess) {
+                    if (sendCorrectionsToReceiver && txResult.isSuccess) {
                         ntripRateWindowTxBytes += bytes.size
                     }
                     val updatedState = state.copy(
@@ -930,7 +941,11 @@ class RecordingForegroundService : Service() {
             )
         }
         if (ntripController == null) {
-            startNtripController(config, recorder)
+            startNtripController(
+                config = config,
+                recorder = recorder,
+                sendCorrectionsToReceiver = activeNtripSendToReceiver,
+            )
         } else {
             ntripController?.update(config)
         }
@@ -2568,6 +2583,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_NTRIP_PASSWORD = "ntripPassword"
         const val EXTRA_NTRIP_SECRET_REF = "ntripSecretRef"
         const val EXTRA_NTRIP_GGA = "ntripGga"
+        const val EXTRA_NTRIP_SEND_TO_RECEIVER = "ntripSendToReceiver"
         const val EXTRA_NTRIP_STATION_ID = "ntripStationId"
         const val EXTRA_NTRIP_BASE_LAT = "ntripBaseLat"
         const val EXTRA_NTRIP_BASE_LON = "ntripBaseLon"

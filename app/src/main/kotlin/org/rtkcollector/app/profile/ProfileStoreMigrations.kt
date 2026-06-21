@@ -93,7 +93,7 @@ internal object ProfileStoreMigrations {
                 } else {
                     settingsSet.recordingOutputProfileRef
                 },
-            )
+            ).repairRtklibWorkflow()
         }.withMissingDefaults(defaults, RecordingSettingsSet::id)
 }
 
@@ -122,6 +122,26 @@ private fun legacyBuiltInCommandProfileIdByName(name: String): String? =
         "um980 base" -> ProfileStores.UM980_BASE_CONFIG_PROFILE_ID
         else -> null
     }
+
+private fun RecordingSettingsSet.repairRtklibWorkflow(): RecordingSettingsSet {
+    val rtklibProfileId = rtklibProfileRef?.id.orEmpty()
+    if (workflowId != "plain-rover" ||
+        rtklibProfileId.isBlank() ||
+        rtklibProfileId == ProfileStores.RTKLIB_DISABLED_PROFILE_ID ||
+        ntripMountpointProfileRef == null
+    ) {
+        return this
+    }
+    val repairedWorkflowId = if (receiverProfileId.startsWith("ublox-m8t", ignoreCase = true)) {
+        "rover-rtklib"
+    } else {
+        "rover-ntrip-rtklib"
+    }
+    return copy(
+        workflowId = repairedWorkflowId,
+        workflowApplicationPolicy = WorkflowApplicationPolicy.SET_SPECIFIC,
+    )
+}
 
 private fun List<CommandProfile>.required(id: String): CommandProfile =
     firstOrNull { it.id == id } ?: error("Missing default command profile '$id'.")

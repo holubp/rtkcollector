@@ -68,7 +68,12 @@ data class ActiveRecordingConfig(
                 "NTRIP caster upload requires base RTCM output: ${sanity.errors.joinToString(" ")}"
             }
         }
-        if (workflowId == WORKFLOW_PLAIN_ROVER || workflowId == WORKFLOW_ROVER_NTRIP || workflowId == WORKFLOW_FIXED_BASE) {
+        if (workflowId == WORKFLOW_PLAIN_ROVER ||
+            workflowId == WORKFLOW_ROVER_NTRIP ||
+            workflowId == WORKFLOW_ROVER_RTKLIB ||
+            workflowId == WORKFLOW_ROVER_NTRIP_RTKLIB ||
+            workflowId == WORKFLOW_FIXED_BASE
+        ) {
             validateWorkflowModeCommandsForStart(workflowId, initCommands + baudSwitchCommands + modeCommands)
         }
     }
@@ -387,7 +392,11 @@ private fun List<String>.containsModeCommand(mode: String): Boolean =
     }
 
 internal fun validateWorkflowModeCommandsForStart(workflowId: String?, modeCommands: List<String>) {
-    if (workflowId == WORKFLOW_PLAIN_ROVER || workflowId == WORKFLOW_ROVER_NTRIP) {
+    if (workflowId == WORKFLOW_PLAIN_ROVER ||
+        workflowId == WORKFLOW_ROVER_NTRIP ||
+        workflowId == WORKFLOW_ROVER_RTKLIB ||
+        workflowId == WORKFLOW_ROVER_NTRIP_RTKLIB
+    ) {
         require(!modeCommands.containsModeCommand("BASE")) {
             "Rover workflow cannot start with a command profile that sets MODE BASE."
         }
@@ -401,5 +410,7 @@ internal fun validateWorkflowModeCommandsForStart(workflowId: String?, modeComma
 
 private const val WORKFLOW_PLAIN_ROVER = "plain-rover"
 private const val WORKFLOW_ROVER_NTRIP = "rover-ntrip"
+private const val WORKFLOW_ROVER_RTKLIB = "rover-rtklib"
+private const val WORKFLOW_ROVER_NTRIP_RTKLIB = "rover-ntrip-rtklib"
 private const val WORKFLOW_BASE_CALIBRATION = "base-calibration"
 private const val WORKFLOW_FIXED_BASE = "fixed-base"

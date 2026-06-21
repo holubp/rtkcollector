@@ -5,9 +5,10 @@
 The NTRIP client manages caster connection, mountpoint selection,
 authentication, optional GGA upload and RTCM byte stream receipt.
 
-Experimental V1 implements an NTRIP client for receiving RTCM bytes and
-transmitting them to the receiver serial input. The client sends NTRIP v2-style
-HTTP requests by default and has a controlled v1 compatibility retry for caster
+Experimental V1 implements an NTRIP client for receiving RTCM bytes. Depending
+on workflow, those bytes may be transmitted to the receiver serial input,
+offered to the RTKLIB worker, or both. The client sends NTRIP v2-style HTTP
+requests by default and has a controlled v1 compatibility retry for caster
 responses that indicate protocol-version incompatibility. Authentication and
 authorization failures such as HTTP `401` and `403` are non-retryable field
 errors, not reconnect loops. In code and artifacts the Android-to-receiver path
@@ -74,6 +75,10 @@ USB or raw storage fails.
   best-effort where storage permits.
 - All correction bytes sent to the receiver are also written to
   `tx-to-receiver.raw` before serial TX.
+- Rover + RTKLIB workflows for raw-only receivers may set RTKLIB as the
+  correction target without receiver TX injection. In that mode
+  `correction-input.raw` still records the caster stream, while
+  `tx-to-receiver.raw` must not grow from NTRIP correction bytes.
 - NTRIP must not block raw capture.
 
 ## Base RTCM Caster Upload

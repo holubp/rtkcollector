@@ -190,9 +190,24 @@ class DashboardMountpointLabelTest {
     fun `ntrip workflow detection is explicit`() {
         assertEquals(false, "plain-rover".workflowUsesNtrip())
         assertEquals(true, "rover-ntrip".workflowUsesNtrip())
+        assertEquals(true, "rover-rtklib".workflowUsesNtrip())
+        assertEquals(true, "rover-ntrip-rtklib".workflowUsesNtrip())
         assertEquals(true, "base-calibration".workflowUsesNtrip())
         assertEquals(false, "fixed-base".workflowUsesNtrip())
         assertEquals(false, "nontrip-debug".workflowUsesNtrip())
+    }
+
+    @Test
+    fun `rtklib only rover workflow does not feed ntrip corrections to receiver`() {
+        assertEquals(false, "rover-rtklib".workflowSendsNtripToReceiver())
+        assertEquals(true, "rover-ntrip-rtklib".workflowSendsNtripToReceiver())
+        assertEquals(true, "rover-ntrip".workflowSendsNtripToReceiver())
+    }
+
+    @Test
+    fun `known rtklib rover workflow is restored`() {
+        assertEquals("rover-rtklib", restoredWorkflowIdOrNull("rover-rtklib"))
+        assertEquals("rover-ntrip-rtklib", restoredWorkflowIdOrNull("rover-ntrip-rtklib"))
     }
 
     @Test

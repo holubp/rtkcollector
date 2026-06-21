@@ -300,6 +300,75 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `ublox rtklib rover workflow accepts configured ntrip corrections`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "rover-rtklib",
+                receiverProfileId = "ublox-m8t",
+                rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+            ),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = "!UBX CFG-MSG 2 21 0 0 0 1 0 0",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            rtklibProfile = RtklibProfile(
+                id = "rtklib-rover",
+                name = "RTKLIB rover",
+                enabled = true,
+            ),
+            workflowName = "Rover + RTKLIB",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        config.validateForStart()
+
+        assertTrue(config.rtklib.validationErrors.isEmpty())
+        assertTrue(config.rtklib.routePlan.orEmpty().contains("input_ubx(UBX_RXM_RAWX_SFRBX)"))
+    }
+
+    @Test
+    fun `rtklib rover workflow rejects base mode command profiles`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "rover-rtklib",
+                receiverProfileId = "ublox-m8t",
+                rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+            ),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = "MODE BASE",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            rtklibProfile = RtklibProfile(
+                id = "rtklib-rover",
+                name = "RTKLIB rover",
+                enabled = true,
+            ),
+            workflowName = "Rover + RTKLIB",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertTrue(error.message.orEmpty().contains("Rover workflow cannot start with a command profile that sets MODE BASE."))
+    }
+
+    @Test
     fun `ntrip runtime uses profile-bound secret and falls back to legacy stored password`() {
         val lookedUpSecrets = mutableListOf<String>()
         val config = ActiveRecordingConfig.resolve(

@@ -27,6 +27,21 @@ Verification:
 - Automated: NTRIP client/request/routing tests.
 - Manual: EUREF/CORS mountpoint session reaches receiver RTK float/fix.
 
+### WF-ROVER-RTKLIB-001: Rover With NTRIP To RTKLIB
+
+Status: Experimental
+
+Rover + RTKLIB MUST run Android as the NTRIP client when the selected RTKLIB
+profile requires live RTCM3 corrections. The correction target MAY be RTKLIB
+only. In that case the app MUST record the correction input and feed the RTKLIB
+worker, but MUST NOT treat the workflow as NTRIP-to-receiver or transmit RTCM
+bytes to a receiver that is only providing raw rover observations.
+
+Verification:
+- Automated: workflow classification and active recording configuration tests.
+- Manual: u-blox M8T RAWX/SFRBX recording with an EUREF/CORS mountpoint starts
+  RTKLIB without sending RTCM corrections to receiver TX.
+
 ## Base Workflows
 
 ### WF-TEMPBASE-001: Temporary Base Is Coordinate Determination

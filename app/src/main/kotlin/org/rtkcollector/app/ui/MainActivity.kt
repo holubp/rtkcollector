@@ -3627,12 +3627,16 @@ private val SELECTABLE_BAUD_RATES = listOf(
 
 private const val WORKFLOW_PLAIN_ROVER = "plain-rover"
 private const val WORKFLOW_ROVER_NTRIP = "rover-ntrip"
+private const val WORKFLOW_ROVER_RTKLIB = "rover-rtklib"
+private const val WORKFLOW_ROVER_NTRIP_RTKLIB = "rover-ntrip-rtklib"
 private const val WORKFLOW_BASE_CALIBRATION = "base-calibration"
 private const val WORKFLOW_FIXED_BASE = "fixed-base"
 
 private val WORKFLOW_MODE_OPTIONS = listOf(
     EditableProfileOption(WORKFLOW_PLAIN_ROVER, "Plain rover"),
     EditableProfileOption(WORKFLOW_ROVER_NTRIP, "Rover with NTRIP"),
+    EditableProfileOption(WORKFLOW_ROVER_RTKLIB, "Rover with RTKLIB"),
+    EditableProfileOption(WORKFLOW_ROVER_NTRIP_RTKLIB, "Rover with NTRIP + RTKLIB"),
     EditableProfileOption(WORKFLOW_BASE_CALIBRATION, "Temporary base"),
     EditableProfileOption(WORKFLOW_FIXED_BASE, "Fixed base"),
 )
@@ -3948,6 +3952,7 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, activeConfig.ntrip.password.orEmpty())
         putExtra(RecordingForegroundService.EXTRA_NTRIP_SECRET_REF, activeConfig.ntrip.secretRef.orEmpty())
         putExtra(RecordingForegroundService.EXTRA_NTRIP_GGA, "")
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_SEND_TO_RECEIVER, workflowId.workflowSendsNtripToReceiver())
         putExtra(RecordingForegroundService.EXTRA_NTRIP_STATION_ID, activeConfig.ntrip.stationId.orEmpty())
         activeConfig.ntrip.baseLatDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LAT, it) }
         activeConfig.ntrip.baseLonDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LON, it) }
@@ -4728,7 +4733,15 @@ private fun List<String>.withFixedBaseModeCommand(command: String?): List<String
 }
 
 internal fun String.workflowUsesNtrip(): Boolean =
-    this == WORKFLOW_ROVER_NTRIP || this == WORKFLOW_BASE_CALIBRATION
+    this == WORKFLOW_ROVER_NTRIP ||
+        this == WORKFLOW_ROVER_RTKLIB ||
+        this == WORKFLOW_ROVER_NTRIP_RTKLIB ||
+        this == WORKFLOW_BASE_CALIBRATION
+
+internal fun String.workflowSendsNtripToReceiver(): Boolean =
+    this == WORKFLOW_ROVER_NTRIP ||
+        this == WORKFLOW_ROVER_NTRIP_RTKLIB ||
+        this == WORKFLOW_BASE_CALIBRATION
 
 private fun String?.workflowLabel(): String =
     this?.workflowName() ?: "Select workflow"
@@ -4737,6 +4750,8 @@ private fun String.workflowName(): String =
     when (this) {
         WORKFLOW_PLAIN_ROVER -> "Plain rover recording"
         WORKFLOW_ROVER_NTRIP -> "Rover + NTRIP to receiver"
+        WORKFLOW_ROVER_RTKLIB -> "Rover + RTKLIB"
+        WORKFLOW_ROVER_NTRIP_RTKLIB -> "Rover + NTRIP to receiver + RTKLIB"
         WORKFLOW_BASE_CALIBRATION -> "Temporary base"
         WORKFLOW_FIXED_BASE -> "Fixed base operation"
         else -> replace('-', ' ').replaceFirstChar { it.titlecase() }

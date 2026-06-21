@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import org.rtkcollector.app.diagnostics.DiagnosticCategory
 import org.rtkcollector.app.diagnostics.DiagnosticsSettings
 import org.rtkcollector.app.diagnostics.DiagnosticsStore
@@ -40,6 +41,8 @@ import org.rtkcollector.core.capture.CaptureEvent
 import org.rtkcollector.core.capture.CaptureEventSink
 import org.rtkcollector.core.capture.CaptureRuntime
 import org.rtkcollector.core.capture.RawRecorder
+import org.rtkcollector.core.capture.RecordingHealthEvent
+import org.rtkcollector.core.capture.RecordingHealthMonitor
 import org.rtkcollector.core.correction.DefaultNtripRuntimeClient
 import org.rtkcollector.core.correction.NtripClient
 import org.rtkcollector.core.correction.NtripCasterUploadController
@@ -133,6 +136,7 @@ class RecordingForegroundService : Service() {
     private val running = AtomicBoolean(false)
     private val stopping = AtomicBoolean(false)
     private val shutdownSent = AtomicBoolean(false)
+    private val ntripReconnectRequested = AtomicBoolean(false)
     private var captureThread: Thread? = null
     @Volatile private var runtime: CaptureRuntime? = null
     @Volatile private var transport: AndroidUsbSerialTransport? = null
@@ -148,6 +152,7 @@ class RecordingForegroundService : Service() {
     private var activeUsbVid: Int? = null
     private var activeUsbPid: Int? = null
     private var ntripController: NtripRuntimeController? = null
+    private var activeNtripRuntimeConfig: NtripRuntimeConfig? = null
     private var casterUploadController: NtripCasterUploadController? = null
     private var rtklibWorker: RtklibWorker? = null
     private var activeWorkflowUsesNtrip: Boolean = false
@@ -196,6 +201,7 @@ class RecordingForegroundService : Service() {
         java.util.concurrent.ConcurrentHashMap<String, org.rtkcollector.core.solution.SolutionCandidate>()
     private var mockLocationPublisher: MockLocationPublisher? = null
     private val coordinateAveragingController = CoordinateAveragingController()
+    private val recordingHealthMonitor = RecordingHealthMonitor()
 
     override fun onCreate() {
         super.onCreate()
@@ -238,8 +244,11 @@ class RecordingForegroundService : Service() {
         }
         stopping.set(false)
         shutdownSent.set(false)
+        ntripReconnectRequested.set(false)
         activeWorkflowUsesNtrip = false
+        activeNtripRuntimeConfig = null
         routineStateBroadcastRateLimiter.reset()
+        recordingHealthMonitor.reset(SystemClock.elapsedRealtime())
         state = state.copy(
             lifecycle = RecordingLifecycleState.STARTING,
             errorCategory = RecordingErrorCategory.NONE,
@@ -547,9 +556,15 @@ class RecordingForegroundService : Service() {
     private fun captureLoop(recorder: SessionRawRecorder) {
         while (running.get()) {
             runCatching {
-                synchronized(runtimeLock) {
+                val bytesRead = synchronized(runtimeLock) {
                     runtime?.readOnce(READ_BUFFER_BYTES) ?: 0
                 }
+                val nowMillis = SystemClock.elapsedRealtime()
+                val receiverHealthEvents = recordingHealthMonitor.recordReceiverRead(bytesRead, nowMillis)
+                val correctionHealthEvents = recordingHealthMonitor.checkCorrections(
+                    nowMillis = nowMillis,
+                    correctionsExpected = shouldExpectCorrectionBytes(),
+                )
                 state = state.copy(
                     running = true,
                     receiverRxBytes = recorder.receiverRxBytes,
@@ -558,8 +573,12 @@ class RecordingForegroundService : Service() {
                     nmeaBytes = recorder.nmeaBytes,
                     sessionTotalBytes = writers?.totalBytesWritten ?: state.sessionTotalBytes,
                     ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
-                    rawRecordingActive = true,
-                ).clearRecoverableUsbError()
+                    rawRecordingActive = if (bytesRead > 0) true else state.rawRecordingActive,
+                ).let { updated ->
+                    if (bytesRead > 0) updated.clearRecoverableUsbError() else updated
+                }
+                handleRecordingHealthEvents(receiverHealthEvents, recorder)
+                handleRecordingHealthEvents(correctionHealthEvents, recorder)
                 broadcastRoutineState()
                 updateForegroundNotification()
             }.onFailure { error ->
@@ -622,6 +641,7 @@ class RecordingForegroundService : Service() {
                 transport = usbTransport
                 runtime = captureRuntime
             }
+            recordSessionEvent("usb-reconnect-succeeded", "USB receiver reconnected and receiver profile was re-applied.")
             state = state.copy(
                 lastError = null,
                 errorCategory = RecordingErrorCategory.NONE,
@@ -629,6 +649,16 @@ class RecordingForegroundService : Service() {
                 rawRecordingActive = true,
             )
             broadcastState()
+        }.onFailure { error ->
+            recordSessionEvent(
+                "usb-reconnect-failed",
+                error.message ?: error.javaClass.simpleName,
+            )
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.USB,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { "USB reconnect failed: ${error.message ?: error.javaClass.simpleName}" },
+            )
         }.isSuccess
     }
 
@@ -637,6 +667,7 @@ class RecordingForegroundService : Service() {
         recorder: SessionRawRecorder,
     ) {
         if (!intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) {
+            activeNtripRuntimeConfig = null
             state = state.copy(ntripState = "Disabled", correctionsActive = false)
             broadcastState()
             return
@@ -657,6 +688,7 @@ class RecordingForegroundService : Service() {
         recorder: SessionRawRecorder,
         sendCorrectionsToReceiver: Boolean,
     ) {
+        activeNtripRuntimeConfig = config
         val ntripRtcmExtractor = Rtcm3Extractor(validateCrc = true)
         val controller = NtripRuntimeController(
             clientFactory = { runtimeConfig ->
@@ -670,6 +702,10 @@ class RecordingForegroundService : Service() {
             emit = ::handleNtripSnapshot,
             onRtcmBytes = { bytes ->
                 if (running.get()) {
+                    val healthEvents = recordingHealthMonitor.recordCorrectionBytes(
+                        byteCount = bytes.size,
+                        nowMillis = SystemClock.elapsedRealtime(),
+                    )
                     processNtripCorrectionBytes(bytes, recorder, ntripRtcmExtractor)
                     val txResult = if (sendCorrectionsToReceiver) {
                         runCatching {
@@ -696,11 +732,8 @@ class RecordingForegroundService : Service() {
                         errorCategory = if (txResult.isFailure) RecordingErrorCategory.USB else state.errorCategory,
                         errorSeverity = if (txResult.isFailure) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
                     )
-                    state = if (txResult.isSuccess) {
-                        updatedState.clearRecoverableUsbError()
-                    } else {
-                        updatedState
-                    }
+                    state = updatedState
+                    handleRecordingHealthEvents(healthEvents, recorder)
                     broadcastState()
                     updateForegroundNotification()
                 }
@@ -736,6 +769,123 @@ class RecordingForegroundService : Service() {
                 state.withRtcmReferenceStation(referenceStation).copy(rtcmFrames = state.rtcmFrames + 1)
             } else {
                 state.copy(rtcmFrames = state.rtcmFrames + 1)
+            }
+        }
+    }
+
+    private fun shouldExpectCorrectionBytes(): Boolean =
+        running.get() &&
+            activeWorkflowUsesNtrip &&
+            ntripController != null &&
+            state.ntripState !in setOf("Disabled", "DISABLED", "CONFIG_ERROR", "AUTH_ERROR", "STOPPED")
+
+    private fun requestNtripReconnect(config: NtripRuntimeConfig) {
+        if (!ntripReconnectRequested.compareAndSet(false, true)) return
+        Thread(
+            {
+                try {
+                    if (running.get() && activeNtripRuntimeConfig == config) {
+                        ntripController?.update(config)
+                        recordSessionEvent("ntrip-reconnect-requested", state.ntripUrl)
+                    }
+                } catch (error: Throwable) {
+                    val message = error.message ?: error.javaClass.simpleName
+                    recordSessionEvent("ntrip-reconnect-failed", message)
+                    recordRuntimeDiagnostic(
+                        category = DiagnosticCategory.NTRIP,
+                        severity = RecordingErrorSeverity.DEGRADED.name,
+                        message = { "NTRIP reconnect request failed: $message" },
+                    )
+                    state = state.copy(
+                        lastError = message,
+                        errorCategory = RecordingErrorCategory.NTRIP,
+                        errorSeverity = RecordingErrorSeverity.DEGRADED,
+                        correctionsActive = false,
+                    )
+                    broadcastState()
+                    updateForegroundNotification(force = true)
+                } finally {
+                    ntripReconnectRequested.set(false)
+                }
+            },
+            "rtkcollector-ntrip-health-reconnect",
+        ).also { thread ->
+            thread.isDaemon = true
+            thread.start()
+        }
+    }
+
+    private fun handleRecordingHealthEvents(
+        events: List<RecordingHealthEvent>,
+        recorder: SessionRawRecorder?,
+    ) {
+        events.forEach { event ->
+            when (event) {
+                is RecordingHealthEvent.ReceiverRxStalled -> {
+                    val message = "USB receiver produced no bytes for ${event.staleForMillis / 1000}s; reconnecting."
+                    state = state.copy(
+                        lastError = message,
+                        errorCategory = RecordingErrorCategory.USB,
+                        errorSeverity = RecordingErrorSeverity.DEGRADED,
+                        rawRecordingActive = false,
+                    )
+                    recordSessionEvent("receiver-rx-stalled", message)
+                    recordRuntimeDiagnostic(
+                        category = DiagnosticCategory.USB,
+                        severity = RecordingErrorSeverity.DEGRADED.name,
+                        message = { message },
+                    )
+                    if (recorder != null && !tryReconnectUsb(recorder)) {
+                        recordSessionEvent("usb-reconnect-pending", "USB receiver reconnect attempt did not succeed yet.")
+                    }
+                    broadcastState()
+                    updateForegroundNotification(force = true)
+                }
+                RecordingHealthEvent.ReceiverRxRecovered -> {
+                    val message = "USB receiver bytes resumed."
+                    recordSessionEvent("receiver-rx-recovered", message)
+                    state = state.copy(rawRecordingActive = true).clearRecoverableUsbError()
+                    broadcastState()
+                    updateForegroundNotification(force = true)
+                }
+                is RecordingHealthEvent.CorrectionsStalled -> {
+                    val message = "NTRIP corrections produced no bytes for ${event.staleForMillis / 1000}s; reconnecting."
+                    state = state.copy(
+                        lastError = message,
+                        errorCategory = RecordingErrorCategory.NTRIP,
+                        errorSeverity = RecordingErrorSeverity.DEGRADED,
+                        correctionsActive = false,
+                    )
+                    recordSessionEvent("ntrip-corrections-stalled", message)
+                    recordRuntimeDiagnostic(
+                        category = DiagnosticCategory.NTRIP,
+                        severity = RecordingErrorSeverity.DEGRADED.name,
+                        message = { message },
+                        attributes = { mapOf("url" to state.ntripUrl) },
+                    )
+                    activeNtripRuntimeConfig?.let(::requestNtripReconnect)
+                    broadcastState()
+                    updateForegroundNotification(force = true)
+                }
+                RecordingHealthEvent.CorrectionsRecovered -> {
+                    val message = "NTRIP correction bytes resumed."
+                    recordSessionEvent("ntrip-corrections-recovered", message)
+                    ntripReconnectRequested.set(false)
+                    if (state.errorCategory == RecordingErrorCategory.NTRIP &&
+                        state.errorSeverity == RecordingErrorSeverity.DEGRADED
+                    ) {
+                        state = state.copy(
+                            lastError = null,
+                            errorCategory = RecordingErrorCategory.NONE,
+                            errorSeverity = RecordingErrorSeverity.NONE,
+                            correctionsActive = true,
+                        )
+                    } else {
+                        state = state.copy(correctionsActive = true)
+                    }
+                    broadcastState()
+                    updateForegroundNotification(force = true)
+                }
             }
         }
     }
@@ -954,6 +1104,7 @@ class RecordingForegroundService : Service() {
             broadcastState()
             return
         }
+        activeNtripRuntimeConfig = config
         val recorder = activeRecorder ?: return
         val updatedUrl = ntripDisplayUrl(config)
         val mountpointChanged = updatedUrl != state.ntripUrl
@@ -986,6 +1137,8 @@ class RecordingForegroundService : Service() {
 
     private fun disableNtrip() {
         ntripController?.disable("User disabled NTRIP during recording.")
+        activeNtripRuntimeConfig = null
+        ntripReconnectRequested.set(false)
         runCatching { writers?.appendEventJson("""{"type":"ntrip-disabled","reason":"user"}""") }
         state = state.copy(ntripState = "DISABLED", correctionsActive = false)
         broadcastState()
@@ -1328,6 +1481,8 @@ class RecordingForegroundService : Service() {
         activeSerialBaud = 230400
         activeTargetBaud = 230400
         ntripController = null
+        activeNtripRuntimeConfig = null
+        ntripReconnectRequested.set(false)
         casterUploadController = null
         rtklibWorker = null
         activeWorkflowUsesNtrip = false
@@ -1686,6 +1841,18 @@ class RecordingForegroundService : Service() {
                 attributes = attributes(),
             ),
         )
+    }
+
+    private fun recordSessionEvent(type: String, message: String) {
+        runCatching {
+            activeEventSink?.recordEvent(
+                CaptureEvent(
+                    timestamp = Instant.now().toString(),
+                    type = type,
+                    message = message,
+                ),
+            )
+        }
     }
 
     private fun recordPerformanceDiagnosticIfDue() {

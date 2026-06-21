@@ -64,6 +64,37 @@ Verification:
 - Automated: reconnect policy tests where practical.
 - Manual: disconnect and reconnect receiver during recording.
 
+### ANDROID-USB-003: Silent Receiver RX Stalls Are Degraded USB Failures
+
+Status: Normative
+
+During an active recording, repeated empty receiver reads MUST NOT be treated as
+healthy raw recording indefinitely. If no receiver-originated bytes arrive for
+the configured stall threshold, the foreground service MUST mark USB capture as
+degraded, write a session event, keep already written artifacts, and attempt to
+reopen the selected receiver and rerun the required receiver init/baud sequence.
+Recovery MUST be based on actual receiver bytes resuming, not on unrelated UI,
+NTRIP or TX activity.
+
+Verification:
+- Automated: recording health monitor stall/recovery tests.
+- Manual: long-running session with receiver disconnect/silence and reconnect.
+
+### ANDROID-CORRECTION-001: Correction Stream Stalls Are Reconnected Without Stopping Raw Capture
+
+Status: Normative
+
+When the selected workflow expects NTRIP or another correction stream, absence
+of correction bytes beyond the configured stall threshold MUST put corrections
+into a degraded state, write a session event and request reconnection where the
+correction source supports it. This MUST NOT stop receiver raw recording while
+USB capture and storage remain functional.
+
+Verification:
+- Automated: NTRIP reconnect tests for unexpected stream end and correction
+  stall/recovery monitor tests.
+- Manual: rover + NTRIP session with transient network/caster interruption.
+
 ## Storage
 
 ### ANDROID-STORAGE-001: SAF Tree Access Is Explicit And Persisted

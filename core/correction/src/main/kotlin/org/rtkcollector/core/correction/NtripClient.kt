@@ -356,6 +356,29 @@ class NtripClient(
             val result = connectOnce(ggaLines = ggaLines, onState = onState, onRtcmBytes = onRtcmBytes)
             when (result) {
                 is NtripConnectionResult.Completed -> {
+                    if (attemptIndex < reconnectPolicy.maxAttempts - 1 && !cancelled.get()) {
+                        lastFailure = NtripConnectionResult.Failure(
+                            NtripFailure(
+                                kind = NtripFailureKind.STREAM_FAILED,
+                                state = NtripConnectionState.STREAMING,
+                                message = "NTRIP stream ended unexpectedly after ${result.bytesRead} bytes",
+                            ),
+                        )
+                        onState(
+                            CorrectionStatus(
+                                NtripConnectionState.RECONNECT_WAIT,
+                                lastError = "NTRIP stream ended unexpectedly after ${result.bytesRead} bytes",
+                            ),
+                        )
+                        try {
+                            delay(reconnectPolicy.delayMillis)
+                        } catch (exception: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            onState(CorrectionStatus(NtripConnectionState.STOPPED))
+                            return cancelledResult(exception)
+                        }
+                        return@repeat
+                    }
                     onState(CorrectionStatus(NtripConnectionState.STOPPED))
                     return result
                 }

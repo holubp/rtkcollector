@@ -34,6 +34,13 @@ before session writers are opened. If Start requests permission, the user must
 approve the Android dialog and press Start again; V1 does not auto-start
 recording from the permission callback.
 
+Silent USB reads are not healthy recording. If the receiver produces no bytes
+for the configured watchdog interval, the foreground service reports degraded
+USB capture, writes a session event and attempts to reopen the selected receiver
+and rerun the configured init/baud sequence. Successful NTRIP activity or serial
+TX does not clear a USB RX-stall error; only actual receiver bytes or a
+successful receiver reconnect does.
+
 Mock-location publishing, when enabled, is owned by the same foreground service
 as recording. It is not an Activity-owned feature and must stop when the
 recording/session stops.

@@ -32,6 +32,8 @@
 | `ANDROID-DIAGNOSTICS-001` | Automated + review | Diagnostics controller tests and service call-site review | In progress | Runtime logging and performance monitoring are guarded and advisory. Field performance validation remains useful. |
 | `ANDROID-USB-001` | Automated + device | USB decision tests; Huawei P30 Pro smoke test | Needs field retest | Vendor Android edge case. |
 | `ANDROID-USB-002` | Automated + manual | Reconnect policy tests; disconnect/reconnect smoke test | Needs review | Must preserve existing session artifacts. |
+| `ANDROID-USB-003` | Automated + manual | Recording health monitor tests; USB silence/reconnect field test | Needs field validation | Empty USB reads are degraded stalls, not healthy recording. |
+| `ANDROID-CORRECTION-001` | Automated + manual | Recording health monitor tests; NTRIP EOF reconnect test; network interruption smoke test | Needs field validation | Correction stalls reconnect without stopping receiver raw capture. |
 | `ANDROID-STORAGE-001` | Manual + review | SAF folder-picker storage profile and service start review | Needs provider testing | Verify persisted write permission on common Android document providers. |
 | `ANDROID-MOCK-001` | Automated + manual | Mock-location mapper tests; mock altitude smoke test | Needs review | `Location.altitude` must use ellipsoidal height. |
 | `ANDROID-MOCK-002` | Review | Android API limitation review; user-doc wording | Passing | Satellite counts may be extras; full `GnssStatus` injection is not promised. |

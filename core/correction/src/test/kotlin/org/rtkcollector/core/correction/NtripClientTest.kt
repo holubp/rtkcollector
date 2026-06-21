@@ -342,6 +342,30 @@ class NtripClientTest {
     }
 
     @Test
+    fun `unexpected eof after streaming retries instead of stopping corrections`() {
+        val connector = QueueingNtripSocketConnector(
+            FakeNtripSocket(inputBytes = "ICY 200 OK\r\n\r\n".toByteArray() + byteArrayOf(0x01)),
+            FakeNtripSocket(inputBytes = "ICY 200 OK\r\n\r\n".toByteArray() + byteArrayOf(0x02, 0x03)),
+        )
+        val states = mutableListOf<NtripConnectionState>()
+        val streamed = ByteArrayOutputStream()
+        val client = NtripClient(
+            request = defaultRequest(),
+            connector = connector,
+            reconnectPolicy = NtripReconnectPolicy(maxAttempts = 2, delayMillis = 0),
+        )
+
+        val result = client.runWithReconnect(
+            onState = { states.add(it.state) },
+            onRtcmBytes = { streamed.write(it) },
+        )
+
+        assertInstanceOf(NtripConnectionResult.Completed::class.java, result)
+        assertTrue(states.contains(NtripConnectionState.RECONNECT_WAIT))
+        assertArrayEquals(byteArrayOf(0x01, 0x02, 0x03), streamed.toByteArray())
+    }
+
+    @Test
     fun `cancel closes active socket and stops stream thread`() {
         val socket = BlockingNtripSocket()
         val client = NtripClient(

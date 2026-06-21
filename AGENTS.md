@@ -170,6 +170,12 @@ unchanged.
   URIs.
 - Keep raw capture independent from Compose, Activity lifecycle and advisory
   parsers.
+- Empty USB reads during an active recording are not proof of healthy capture.
+  If receiver-originated bytes stop beyond the configured stall threshold, the
+  foreground service must persist a session event, report degraded USB capture
+  and attempt receiver reconnect/re-init while preserving existing artifacts.
+  Do not clear USB RX-stall state from unrelated NTRIP or serial TX activity;
+  clear it only when receiver bytes resume or reconnect succeeds.
 - Do not broadcast full dashboard state from high-rate capture loops on every
   receiver read. Throttle routine UI state broadcasts; keep lifecycle, error,
   start, stop and reconnect state changes immediate.
@@ -189,6 +195,10 @@ unchanged.
   satellite status or satellite sky positions; expose those limits clearly.
 - Record receiver RX, app TX to receiver, correction input, events, quality and
   metadata as separate artifacts.
+- If an established NTRIP stream ends or expected correction bytes stop
+  arriving, treat it as a degraded reconnect condition unless authentication or
+  authorisation failed. NTRIP reconnect and receiver TX failures must remain
+  separate from byte-exact receiver RX recording.
 - Validate workflow and command safety before sending receiver commands,
   connecting NTRIP or starting real recording.
 - Do not add map, GIS, shapefile or feature-collection dependencies.

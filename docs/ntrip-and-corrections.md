@@ -62,6 +62,11 @@ the active NTRIP attempt and must not be retried indefinitely. Network failures
 are degraded retry states. In both cases, receiver recording continues unless
 USB or raw storage fails.
 
+If an established NTRIP stream ends unexpectedly or correction bytes stop
+arriving while the active workflow expects corrections, the runtime treats this
+as a degraded correction-stream failure and reconnects. This must not stop raw
+receiver recording. Recovery is recorded only after correction bytes resume.
+
 ## Correction Routing
 
 - RTCM bytes from NTRIP must be validated enough to avoid obvious framing

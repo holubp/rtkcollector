@@ -777,7 +777,7 @@ class RecordingForegroundService : Service() {
         running.get() &&
             activeWorkflowUsesNtrip &&
             ntripController != null &&
-            state.ntripState !in setOf("Disabled", "DISABLED", "CONFIG_ERROR", "AUTH_ERROR", "STOPPED")
+            state.ntripState == NtripRuntimeState.STREAMING.name
 
     private fun requestNtripReconnect(config: NtripRuntimeConfig) {
         if (!ntripReconnectRequested.compareAndSet(false, true)) return

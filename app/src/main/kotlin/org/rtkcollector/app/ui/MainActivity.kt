@@ -2623,13 +2623,18 @@ private fun shareDiagnosticZip(context: Context, zipFile: File) {
     context.startActivity(Intent.createChooser(intent, "Share RtkCollector diagnostics"))
 }
 
-private fun showCannotStart(context: Context, detail: String) {
+private fun showCannotStart(
+    context: Context,
+    detail: String,
+    attributes: Map<String, String> = emptyMap(),
+) {
     val message = "Cannot start: $detail"
     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
     recordAppRuntimeDiagnosticIfEnabled(
         context = context,
         severity = "ERROR",
         message = "Start preflight failed: $detail",
+        attributes = attributes,
     )
 }
 
@@ -2637,6 +2642,7 @@ private fun recordAppRuntimeDiagnosticIfEnabled(
     context: Context,
     severity: String,
     message: String,
+    attributes: Map<String, String> = emptyMap(),
 ) {
     runCatching {
         val settings = DiagnosticsSettings(context)
@@ -2648,6 +2654,7 @@ private fun recordAppRuntimeDiagnosticIfEnabled(
                 category = DiagnosticCategory.APP,
                 severity = severity,
                 message = message,
+                attributes = attributes,
             ),
         )
     }
@@ -4030,7 +4037,11 @@ private fun buildDashboardStartIntent(
             passwordLookup = NtripSecretStore(context)::getPassword,
         )
     } catch (error: IllegalArgumentException) {
-        showCannotStart(context, error.message ?: error.javaClass.simpleName)
+        showCannotStart(
+            context = context,
+            detail = error.message ?: error.javaClass.simpleName,
+            attributes = resolvedProfiles.startPreflightAttributes(workflowId = workflowId, activeConfig = null),
+        )
         return null
     }
     val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -4063,7 +4074,11 @@ private fun buildDashboardStartIntent(
     try {
         activeConfig.validateForStart()
     } catch (error: IllegalArgumentException) {
-        showCannotStart(context, error.message ?: error.javaClass.simpleName)
+        showCannotStart(
+            context = context,
+            detail = error.message ?: error.javaClass.simpleName,
+            attributes = resolvedProfiles.startPreflightAttributes(workflowId = workflowId, activeConfig = activeConfig),
+        )
         return null
     }
     return Intent(context, RecordingForegroundService::class.java).apply {
@@ -4237,6 +4252,35 @@ private fun buildNtripUpdateIntent(
         activeConfig.ntrip.baseLonDeg?.let { putExtra(RecordingForegroundService.EXTRA_NTRIP_BASE_LON, it) }
     }
 }
+
+private fun ResolvedDashboardProfiles.startPreflightAttributes(
+    workflowId: String,
+    activeConfig: ActiveRecordingConfig?,
+): Map<String, String> =
+    buildMap {
+        put("workflowId", workflowId)
+        put("workflowUsesNtrip", workflowId.workflowUsesNtrip().toString())
+        put("settingsSetId", settingsSet.id)
+        put("settingsSetName", settingsSet.name)
+        put("receiverProfileId", settingsSet.receiverProfileId)
+        put("commandProfileId", commandProfile.id)
+        put("commandReceiverFamily", commandProfile.receiverFamily)
+        put("ntripCasterProfileId", ntripCaster?.id.orEmpty())
+        put("ntripCasterProfileName", ntripCaster?.name.orEmpty())
+        put("ntripCasterHostPresent", (!ntripCaster?.host.isNullOrBlank()).toString())
+        put("ntripMountpointProfileId", ntripMountpoint?.id.orEmpty())
+        put("ntripMountpointProfileName", ntripMountpoint?.name.orEmpty())
+        put("ntripMountpointPresent", (!ntripMountpoint?.mountpoint.isNullOrBlank()).toString())
+        put("rtklibProfileId", rtklibProfile?.id.orEmpty())
+        put("rtklibEnabled", (rtklibProfile?.enabled == true).toString())
+        activeConfig?.let { config ->
+            put("activeNtripEnabled", config.ntrip.enabled.toString())
+            put("activeNtripHostPresent", config.ntrip.host.isNotBlank().toString())
+            put("activeNtripMountpointPresent", config.ntrip.mountpoint.isNotBlank().toString())
+            put("activeNtripConfigured", config.ntrip.isConfigured.toString())
+            put("rtklibValidationSummary", config.rtklib.validationSummary.orEmpty())
+        }
+    }
 
 private fun persistentReceiverServiceIntent(
     context: Context,

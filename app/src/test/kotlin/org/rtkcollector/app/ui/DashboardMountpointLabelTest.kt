@@ -124,6 +124,59 @@ class DashboardMountpointLabelTest {
     }
 
     @Test
+    fun `active caster falls back to configured caster whose sourcetable contains selected mountpoint`() {
+        val blankCaster = NtripCasterProfile(id = "blank", name = "Blank", host = "")
+        val matchingCaster = NtripCasterProfile(
+            id = "matching",
+            name = "Matching",
+            host = "caster.example.org",
+            sourcetableMountpoints = listOf("TUBO00CZE0"),
+        )
+        val mountpoint = NtripMountpointProfile(
+            id = "mount",
+            name = "Mount",
+            casterProfileId = "blank",
+            mountpoint = "TUBO00CZE0",
+        )
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterProfileRef = ProfileReference("blank", "Blank"),
+            ntripMountpointProfileRef = ProfileReference("mount", "Mount"),
+        )
+
+        val resolved = settingsSet.resolveNtripProfiles(
+            casterProfiles = listOf(blankCaster, matchingCaster),
+            mountpointProfiles = listOf(mountpoint),
+        )
+
+        assertEquals("matching", resolved.caster?.id)
+        assertEquals(ProfileReference("matching", "Matching"), resolved.settingsSet.ntripCasterProfileRef)
+    }
+
+    @Test
+    fun `active caster falls back to single configured caster for selected mountpoint`() {
+        val blankCaster = NtripCasterProfile(id = "blank", name = "Blank", host = "")
+        val configuredCaster = NtripCasterProfile(id = "configured", name = "Configured", host = "caster.example.org")
+        val mountpoint = NtripMountpointProfile(
+            id = "mount",
+            name = "Mount",
+            casterProfileId = "blank",
+            mountpoint = "TUBO00CZE0",
+        )
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterProfileRef = ProfileReference("blank", "Blank"),
+            ntripMountpointProfileRef = ProfileReference("mount", "Mount"),
+        )
+
+        val resolved = settingsSet.resolveNtripProfiles(
+            casterProfiles = listOf(blankCaster, configuredCaster),
+            mountpointProfiles = listOf(mountpoint),
+        )
+
+        assertEquals("configured", resolved.caster?.id)
+        assertEquals(ProfileReference("configured", "Configured"), resolved.settingsSet.ntripCasterProfileRef)
+    }
+
+    @Test
     fun `remembered mountpoint is materialised into selected settings set when missing`() {
         val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
             id = "settings",

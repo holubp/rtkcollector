@@ -22,8 +22,16 @@ internal fun RecordingSettingsSet.resolveNtripProfiles(
     val casterFromMountpoint = mountpoint?.casterProfileId
         ?.let { casterId -> casterProfiles.firstOrNull { it.id == casterId } }
     if (mountpoint != null) {
+        val configuredCasters = casterProfiles.filter(NtripCasterProfile::isConfiguredForCorrectionStart)
+        val casterMatchingMountpoint = configuredCasters.firstOrNull { caster ->
+            mountpoint.mountpoint.isNotBlank() && mountpoint.mountpoint in caster.sourcetableMountpoints
+        }
+        val singleConfiguredCaster = configuredCasters.singleOrNull()
         val resolvedCaster = casterFromMountpoint
             ?.takeIf(NtripCasterProfile::isConfiguredForCorrectionStart)
+            ?: settingsCaster?.takeIf(NtripCasterProfile::isConfiguredForCorrectionStart)
+            ?: casterMatchingMountpoint
+            ?: singleConfiguredCaster
             ?: settingsCaster
             ?: casterFromMountpoint
         val syncedSettingsSet = if (

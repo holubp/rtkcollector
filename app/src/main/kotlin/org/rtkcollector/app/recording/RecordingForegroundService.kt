@@ -579,6 +579,12 @@ class RecordingForegroundService : Service() {
                 }
                 val nowMillis = SystemClock.elapsedRealtime()
                 val receiverHealthEvents = recordingHealthMonitor.recordReceiverRead(bytesRead, nowMillis)
+                recordingHealthMonitor.recordReceiverProtocolBytes(bytesRead, nowMillis)
+                val receiverProtocolHealthEvents = recordingHealthMonitor.checkReceiverProtocol(
+                    nowMillis = nowMillis,
+                    protocolFramesExpected = shouldExpectReceiverProtocolFrames(),
+                    receiverFamily = activeReceiverFamily,
+                )
                 val correctionHealthEvents = recordingHealthMonitor.checkCorrections(
                     nowMillis = nowMillis,
                     correctionsExpected = shouldExpectCorrectionBytes(),
@@ -596,6 +602,7 @@ class RecordingForegroundService : Service() {
                     if (bytesRead > 0) updated.clearRecoverableUsbError() else updated
                 }
                 handleRecordingHealthEvents(receiverHealthEvents, recorder)
+                handleRecordingHealthEvents(receiverProtocolHealthEvents, recorder)
                 handleRecordingHealthEvents(correctionHealthEvents, recorder)
                 broadcastRoutineState()
                 updateForegroundNotification()
@@ -660,6 +667,7 @@ class RecordingForegroundService : Service() {
                 runtime = captureRuntime
             }
             recordSessionEvent("usb-reconnect-succeeded", "USB receiver reconnected and receiver profile was re-applied.")
+            recordingHealthMonitor.reset(SystemClock.elapsedRealtime())
             state = state.copy(
                 lastError = null,
                 errorCategory = RecordingErrorCategory.NONE,
@@ -797,6 +805,15 @@ class RecordingForegroundService : Service() {
             ntripController != null &&
             state.ntripState == NtripRuntimeState.STREAMING.name
 
+    private fun shouldExpectReceiverProtocolFrames(): Boolean =
+        running.get() &&
+            (
+                activeReceiverFamily.startsWith("um980", ignoreCase = true) ||
+                    activeReceiverFamily.startsWith("unicore", ignoreCase = true) ||
+                    activeReceiverFamily.startsWith("ublox", ignoreCase = true) ||
+                    activeReceiverFamily.contains("nmea", ignoreCase = true)
+            )
+
     private fun requestNtripReconnect(config: NtripRuntimeConfig) {
         if (!ntripReconnectRequested.compareAndSet(false, true)) return
         Thread(
@@ -866,6 +883,53 @@ class RecordingForegroundService : Service() {
                     broadcastState()
                     updateForegroundNotification(force = true)
                 }
+                is RecordingHealthEvent.ReceiverProtocolStalled -> {
+                    val message = "Receiver bytes are arriving but no valid ${event.receiverFamily} protocol frames " +
+                        "were decoded for ${event.staleForMillis / 1000}s " +
+                        "(${event.bytesSinceLastValidFrame} bytes since last valid frame); reconnecting."
+                    state = state.copy(
+                        lastError = message,
+                        errorCategory = RecordingErrorCategory.USB,
+                        errorSeverity = RecordingErrorSeverity.DEGRADED,
+                        rawRecordingActive = false,
+                    )
+                    recordSessionEvent("receiver-protocol-stalled", message)
+                    recordRuntimeDiagnostic(
+                        category = DiagnosticCategory.USB,
+                        severity = RecordingErrorSeverity.DEGRADED.name,
+                        message = { message },
+                        attributes = {
+                            mapOf(
+                                "receiverFamily" to event.receiverFamily,
+                                "staleForMillis" to event.staleForMillis.toString(),
+                                "bytesSinceLastValidFrame" to event.bytesSinceLastValidFrame.toString(),
+                            )
+                        },
+                    )
+                    if (recorder != null && !tryReconnectUsb(recorder)) {
+                        recordSessionEvent("usb-reconnect-pending", "USB receiver reconnect attempt did not succeed yet.")
+                    }
+                    broadcastState()
+                    updateForegroundNotification(force = true)
+                }
+                is RecordingHealthEvent.ReceiverProtocolRecovered -> {
+                    val message = "Valid ${event.receiverFamily} receiver protocol frames resumed."
+                    recordSessionEvent("receiver-protocol-recovered", message)
+                    if (state.errorCategory == RecordingErrorCategory.USB &&
+                        state.errorSeverity == RecordingErrorSeverity.DEGRADED
+                    ) {
+                        state = state.copy(
+                            lastError = null,
+                            errorCategory = RecordingErrorCategory.NONE,
+                            errorSeverity = RecordingErrorSeverity.NONE,
+                            rawRecordingActive = true,
+                        )
+                    } else {
+                        state = state.copy(rawRecordingActive = true)
+                    }
+                    broadcastState()
+                    updateForegroundNotification(force = true)
+                }
                 is RecordingHealthEvent.CorrectionsStalled -> {
                     val message = "NTRIP corrections produced no bytes for ${event.staleForMillis / 1000}s; reconnecting."
                     state = state.copy(
@@ -905,6 +969,16 @@ class RecordingForegroundService : Service() {
                     updateForegroundNotification(force = true)
                 }
             }
+        }
+    }
+
+    private fun markValidReceiverProtocolFrame(nowMillis: Long) {
+        val events = recordingHealthMonitor.recordValidReceiverProtocolFrame(
+            nowMillis = nowMillis,
+            receiverFamily = activeReceiverFamily,
+        )
+        if (events.isNotEmpty()) {
+            handleRecordingHealthEvents(events, activeRecorder)
         }
     }
 
@@ -2072,6 +2146,9 @@ class RecordingForegroundService : Service() {
         exportJsonSolution: Boolean,
     ) {
         ubloxStreamParser.accept(bytes).forEach { record ->
+            if (record.kind == "ubx" || record.kind == "nmea") {
+                markValidReceiverProtocolFrame(nowMillis)
+            }
             if (record.kind == "ubx") {
                 when {
                     record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x07.toByte() -> {
@@ -2442,6 +2519,9 @@ class RecordingForegroundService : Service() {
                         return@AdvisoryConsumer
                     }
                     streamParser.accept(bytes).forEach { record ->
+                        if (record.kind == "nmea" || record.kind == "unicore_ascii" || record.kind == "unicore_binary") {
+                            markValidReceiverProtocolFrame(SystemClock.elapsedRealtime())
+                        }
                         when (record.kind) {
                             "nmea" -> {
                                 if (exportNmea) {

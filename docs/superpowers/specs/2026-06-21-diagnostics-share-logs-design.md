@@ -17,7 +17,7 @@ default.
 In scope:
 
 - rename the settings menu group `Device tools` to `Developer tools`;
-- add a `Share logs` item under `Developer tools`;
+- add an `App logs and performance monitoring` item under `Developer tools`;
 - allow runtime diagnostics logging to be enabled and disabled;
 - allow performance monitoring to be enabled and disabled;
 - share runtime diagnostics as a temporary ZIP through Android sharing;
@@ -43,10 +43,11 @@ The settings menu group currently named `Device tools` becomes
 `Developer tools` contains:
 
 - `Device console`;
-- `Share logs`.
+- `App logs and performance monitoring`.
 
-The `Share logs` screen is only for developer diagnostics. It has three compact
-sections:
+The `App logs and performance monitoring` screen is only for developer
+diagnostics. Sharing is one of the functions on this screen; the screen itself
+is not only a share dialog. It has three compact sections:
 
 1. Runtime logging
    - toggle: `Runtime logging`;
@@ -197,7 +198,8 @@ receiver raw files or NTRIP correction artifacts.
 
 ## Error Handling
 
-If sharing fails, show a concise user-visible error in the `Share logs` screen.
+If sharing fails, show a concise user-visible error in the
+`App logs and performance monitoring` screen.
 
 If diagnostics storage cannot be written while logging is enabled, disable the
 affected diagnostic writer and show that logging failed. Recording must

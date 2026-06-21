@@ -96,6 +96,9 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val rtklib = rtklibCardFrom(intent)
     val files = FilesCardState(
         sessionLocation = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SESSION_PATH) ?: "n/a",
+        sessionTotalBytes = formatBytes(
+            intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_SESSION_TOTAL_BYTES, 0),
+        ),
         receiverRxBytes = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_RX_BYTES, 0)),
         txToReceiverBytes = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_TX_BYTES, 0)),
         ntripBytes = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_CORRECTION_BYTES, 0)),

@@ -1036,9 +1036,9 @@ private fun CorrectionsCard(
         Metric("Base position", state.ntrip.baseLatLon)
         DashedSeparator()
         Metric("Inbound rate", state.ntrip.rates)
-        Metric("Sent to receiver", state.files.txToReceiverBytes)
-        Metric("Correction bytes", state.files.ntripBytes)
-        Metric("NTRIP transferred", state.ntrip.transferred)
+        Metric("NTRIP received", state.ntrip.transferred)
+        Metric("Saved corrections", state.files.ntripBytes)
+        Metric("Forwarded to receiver", state.files.txToReceiverBytes)
         if (!state.ntrip.uploadUrl.equals("n/a", ignoreCase = true)) {
             DashedSeparator()
             Metric("Upload", state.ntrip.uploadStatus)
@@ -1064,6 +1064,7 @@ private fun RecordingCard(
         onHelp = onHelp,
     ) {
         MajorValue(state.files.sessionLocation)
+        Metric("Session total", state.files.sessionTotalBytes)
         Metric("receiver-rx.raw", state.files.receiverRxBytes)
         Metric("TX to receiver", state.files.txToReceiverBytes)
         Metric("correction-input.raw", state.files.ntripBytes)

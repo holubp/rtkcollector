@@ -176,6 +176,26 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `service state maps total session bytes separately from raw artifact bytes`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RX_BYTES, 11_508_415L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_TX_BYTES, 4_792_865L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_CORRECTION_BYTES, 4_792_235L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_NMEA_BYTES, 12_838_811L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_SESSION_TOTAL_BYTES, 125_545_871L)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("11.5 MB", state.files.receiverRxBytes)
+        assertEquals("4.8 MB", state.files.txToReceiverBytes)
+        assertEquals("4.8 MB", state.files.ntripBytes)
+        assertEquals("12.8 MB", state.files.nmeaBytes)
+        assertEquals("125.5 MB", state.files.sessionTotalBytes)
+    }
+
+    @Test
     fun `ntrip placeholder url does not become mountpoint a`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

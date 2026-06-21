@@ -43,6 +43,7 @@ data class RecordingServiceState(
     val txToReceiverBytes: Long = 0,
     val correctionInputBytes: Long = 0,
     val nmeaBytes: Long = 0,
+    val sessionTotalBytes: Long = 0,
     val ntripState: String = "Not configured",
     val ntripUrl: String = "n/a",
     val ntripTransferred: String = "0 B",

@@ -233,6 +233,7 @@ class RecordingForegroundService : Service() {
             txToReceiverBytes = 0,
             correctionInputBytes = 0,
             nmeaBytes = 0,
+            sessionTotalBytes = 0,
             ntripTransferred = "0 B",
             ntripRates = "n/a",
             rawRecordingActive = false,
@@ -533,6 +534,7 @@ class RecordingForegroundService : Service() {
                     txToReceiverBytes = recorder.txToReceiverBytes,
                     correctionInputBytes = recorder.correctionInputBytes,
                     nmeaBytes = recorder.nmeaBytes,
+                    sessionTotalBytes = writers?.totalBytesWritten ?: state.sessionTotalBytes,
                     ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                     rawRecordingActive = true,
                 ).clearRecoverableUsbError()
@@ -649,6 +651,7 @@ class RecordingForegroundService : Service() {
                     val updatedState = state.copy(
                         correctionInputBytes = recorder.correctionInputBytes,
                         nmeaBytes = recorder.nmeaBytes,
+                        sessionTotalBytes = writers?.totalBytesWritten ?: state.sessionTotalBytes,
                         ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                         ntripRates = ntripRatesDisplay(),
                         txToReceiverBytes = recorder.txToReceiverBytes,
@@ -1622,6 +1625,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_TX_BYTES, state.txToReceiverBytes)
                 putExtra(EXTRA_STATE_CORRECTION_BYTES, state.correctionInputBytes)
                 putExtra(EXTRA_STATE_NMEA_BYTES, state.nmeaBytes)
+                putExtra(EXTRA_STATE_SESSION_TOTAL_BYTES, state.sessionTotalBytes)
                 putExtra(EXTRA_STATE_SETTINGS_SET_LABEL, state.settingsSetLabel)
                 putExtra(EXTRA_STATE_SETTINGS_COMMAND_PROFILE_LABEL, state.settingsCommandProfileLabel)
                 putExtra(EXTRA_STATE_SETTINGS_BAUD_PROFILE_LABEL, state.settingsBaudProfileLabel)
@@ -2641,6 +2645,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_TX_BYTES = "txToReceiverBytes"
         const val EXTRA_STATE_CORRECTION_BYTES = "correctionInputBytes"
         const val EXTRA_STATE_NMEA_BYTES = "nmeaBytes"
+        const val EXTRA_STATE_SESSION_TOTAL_BYTES = "sessionTotalBytes"
         const val EXTRA_STATE_NTRIP = "ntripState"
         const val EXTRA_STATE_NTRIP_URL = "ntripUrl"
         const val EXTRA_STATE_NTRIP_TRANSFERRED = "ntripTransferred"

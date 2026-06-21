@@ -14,8 +14,10 @@ import java.io.Closeable
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicLong
 
 internal interface RecordingSessionWriters : Closeable {
+    val totalBytesWritten: Long
     fun writeSessionJson(json: String)
     fun appendReceiverRx(bytes: ByteArray)
     fun appendTxToReceiver(bytes: ByteArray)
@@ -40,21 +42,87 @@ internal interface RecordingSessionWriters : Closeable {
 internal class PathRecordingSessionWriters private constructor(
     private val delegate: SessionWriters,
 ) : RecordingSessionWriters {
-    override fun writeSessionJson(json: String) = delegate.writeSessionJson(json)
-    override fun appendReceiverRx(bytes: ByteArray) = delegate.appendReceiverRx(bytes)
-    override fun appendTxToReceiver(bytes: ByteArray) = delegate.appendTxToReceiver(bytes)
-    override fun appendCorrectionInput(bytes: ByteArray) = delegate.appendCorrectionInput(bytes)
-    override fun appendBaseCasterUploadRtcm(bytes: ByteArray) = delegate.appendBaseCasterUploadRtcm(bytes)
-    override fun appendEventJson(json: String) = delegate.appendEventJson(json)
-    override fun appendQualityLiveJson(json: String) = delegate.appendQualityLiveJson(json)
-    override fun appendReceiverSolutionNmea(sentence: String) = delegate.appendReceiverSolutionNmea(sentence)
-    override fun appendReceiverSolutionJson(json: String) = delegate.appendReceiverSolutionJson(json)
-    override fun appendReceiverPppSolutionJson(json: String) = delegate.appendReceiverPppSolutionJson(json)
-    override fun appendRtklibSolutionNmea(sentence: String) = delegate.appendRtklibSolutionNmea(sentence)
-    override fun appendRtklibSolutionPos(line: String) = delegate.appendRtklibSolutionPos(line)
-    override fun appendRtklibStatusJson(json: String) = delegate.appendRtklibStatusJson(json)
-    override fun appendExtractedRtcm(bytes: ByteArray) = delegate.appendExtractedRtcm(bytes)
-    override fun writeBasePositionJson(json: String) = delegate.writeBasePositionJson(json)
+    private val totalBytes = AtomicLong(0)
+
+    override val totalBytesWritten: Long
+        get() = totalBytes.get()
+
+    override fun writeSessionJson(json: String) {
+        val text = json.trimEnd() + "\n"
+        delegate.writeSessionJson(json)
+        countUtf8(text)
+    }
+
+    override fun appendReceiverRx(bytes: ByteArray) {
+        delegate.appendReceiverRx(bytes)
+        count(bytes.size.toLong())
+    }
+
+    override fun appendTxToReceiver(bytes: ByteArray) {
+        delegate.appendTxToReceiver(bytes)
+        count(bytes.size.toLong())
+    }
+
+    override fun appendCorrectionInput(bytes: ByteArray) {
+        delegate.appendCorrectionInput(bytes)
+        count(bytes.size * 2L)
+    }
+
+    override fun appendBaseCasterUploadRtcm(bytes: ByteArray) {
+        delegate.appendBaseCasterUploadRtcm(bytes)
+        count(bytes.size.toLong())
+    }
+
+    override fun appendEventJson(json: String) {
+        delegate.appendEventJson(json)
+        countJsonLine(json)
+    }
+
+    override fun appendQualityLiveJson(json: String) {
+        delegate.appendQualityLiveJson(json)
+        countJsonLine(json)
+    }
+
+    override fun appendReceiverSolutionNmea(sentence: String) {
+        delegate.appendReceiverSolutionNmea(sentence)
+        countAscii(sentence)
+    }
+
+    override fun appendReceiverSolutionJson(json: String) {
+        delegate.appendReceiverSolutionJson(json)
+        countJsonLine(json)
+    }
+
+    override fun appendReceiverPppSolutionJson(json: String) {
+        delegate.appendReceiverPppSolutionJson(json)
+        countJsonLine(json)
+    }
+
+    override fun appendRtklibSolutionNmea(sentence: String) {
+        delegate.appendRtklibSolutionNmea(sentence)
+        countAscii(sentence)
+    }
+
+    override fun appendRtklibSolutionPos(line: String) {
+        delegate.appendRtklibSolutionPos(line)
+        countAscii(line)
+    }
+
+    override fun appendRtklibStatusJson(json: String) {
+        delegate.appendRtklibStatusJson(json)
+        countJsonLine(json)
+    }
+
+    override fun appendExtractedRtcm(bytes: ByteArray) {
+        delegate.appendExtractedRtcm(bytes)
+        count(bytes.size.toLong())
+    }
+
+    override fun writeBasePositionJson(json: String) {
+        val text = json.trimEnd() + "\n"
+        delegate.writeBasePositionJson(json)
+        countUtf8(text)
+    }
     override fun flush() = delegate.flush()
     override fun flushRaw() = delegate.flush()
     override fun closeAll(): SessionWriterCloseReport {
@@ -76,6 +144,23 @@ internal class PathRecordingSessionWriters private constructor(
     }
 
     override fun close() = delegate.close()
+
+    private fun count(bytes: Long) {
+        totalBytes.addAndGet(bytes)
+    }
+
+    private fun countAscii(text: String) {
+        count(text.toByteArray(StandardCharsets.US_ASCII).size.toLong())
+    }
+
+    private fun countUtf8(text: String) {
+        count(text.toByteArray(StandardCharsets.UTF_8).size.toLong())
+    }
+
+    private fun countJsonLine(json: String) {
+        countUtf8(json)
+        count(1)
+    }
 
     companion object {
         fun open(sessionDirectory: Path): PathRecordingSessionWriters =
@@ -102,65 +187,88 @@ internal class SafRecordingSessionWriters private constructor(
     private val rtklibStatus: OutputStream,
     private val extractedRtcm: OutputStream,
 ) : RecordingSessionWriters {
+    private val totalBytes = AtomicLong(0)
+
+    override val totalBytesWritten: Long
+        get() = totalBytes.get()
+
     override fun writeSessionJson(json: String) {
-        writeText(SessionArtifactFile.SESSION_JSON.fileName, json.trimEnd() + "\n")
+        val text = json.trimEnd() + "\n"
+        writeText(SessionArtifactFile.SESSION_JSON.fileName, text)
+        countUtf8(text)
     }
 
     override fun appendReceiverRx(bytes: ByteArray) {
         receiverRx.write(bytes)
+        count(bytes.size)
     }
 
     override fun appendTxToReceiver(bytes: ByteArray) {
         txToReceiver.write(bytes)
+        count(bytes.size)
     }
 
     override fun appendCorrectionInput(bytes: ByteArray) {
         correctionInput.write(bytes)
         correctionInputRtcm3.writeBestEffort(bytes)
+        count(bytes.size)
+        if (correctionInputRtcm3 != null) count(bytes.size)
     }
 
     override fun appendBaseCasterUploadRtcm(bytes: ByteArray) {
         baseCasterUploadRtcm3.write(bytes)
+        count(bytes.size)
     }
 
     override fun appendEventJson(json: String) {
         events.writeJsonLine(json)
+        countJsonLine(json)
     }
 
     override fun appendQualityLiveJson(json: String) {
         qualityLive.writeJsonLine(json)
+        countJsonLine(json)
     }
 
     override fun appendReceiverSolutionNmea(sentence: String) {
         receiverSolutionNmea.write(sentence.toByteArray(StandardCharsets.US_ASCII))
+        countAscii(sentence)
     }
 
     override fun appendReceiverSolutionJson(json: String) {
         receiverSolution.writeJsonLine(json)
+        countJsonLine(json)
     }
 
     override fun appendReceiverPppSolutionJson(json: String) {
         receiverPppSolution.writeJsonLine(json)
+        countJsonLine(json)
     }
 
     override fun appendRtklibSolutionNmea(sentence: String) {
         rtklibSolutionNmea.write(sentence.toByteArray(StandardCharsets.US_ASCII))
+        countAscii(sentence)
     }
 
     override fun appendRtklibSolutionPos(line: String) {
         rtklibSolutionPos.write(line.toByteArray(StandardCharsets.US_ASCII))
+        countAscii(line)
     }
 
     override fun appendRtklibStatusJson(json: String) {
         rtklibStatus.writeJsonLine(json)
+        countJsonLine(json)
     }
 
     override fun appendExtractedRtcm(bytes: ByteArray) {
         extractedRtcm.write(bytes)
+        count(bytes.size)
     }
 
     override fun writeBasePositionJson(json: String) {
-        writeText(SessionArtifactFile.BASE_POSITION_JSON.fileName, json.trimEnd() + "\n")
+        val text = json.trimEnd() + "\n"
+        writeText(SessionArtifactFile.BASE_POSITION_JSON.fileName, text)
+        countUtf8(text)
     }
 
     override fun flush() {
@@ -302,6 +410,27 @@ internal class SafRecordingSessionWriters private constructor(
         rtklibSolutionPos.close()
         rtklibStatus.close()
         extractedRtcm.close()
+    }
+
+    private fun count(bytes: Int) {
+        count(bytes.toLong())
+    }
+
+    private fun count(bytes: Long) {
+        totalBytes.addAndGet(bytes)
+    }
+
+    private fun countAscii(text: String) {
+        count(text.toByteArray(StandardCharsets.US_ASCII).size)
+    }
+
+    private fun countUtf8(text: String) {
+        count(text.toByteArray(StandardCharsets.UTF_8).size)
+    }
+
+    private fun countJsonLine(json: String) {
+        countUtf8(json)
+        count(1)
     }
 
     private fun writeText(fileName: String, text: String) {

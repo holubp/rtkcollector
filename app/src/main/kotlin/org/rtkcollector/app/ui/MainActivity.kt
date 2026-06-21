@@ -79,12 +79,16 @@ import org.rtkcollector.app.profile.SolutionPolicyProfile
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
+import org.rtkcollector.app.profile.WorkflowActivationMode
 import org.rtkcollector.app.profile.displayMountpoint
 import org.rtkcollector.app.profile.ntripCasterUploadSecretId
 import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.validateSettingsImportJson
+import org.rtkcollector.app.profile.withWorkflowActivationMode
+import org.rtkcollector.app.profile.workflowActivationMode
+import org.rtkcollector.app.profile.workflowIdAfterSettingsSetActivation
 import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.app.receiver.PersistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
@@ -2800,10 +2804,10 @@ private fun ProfileStores.profileEditorData(
                 fields = listOf(
                     EditableProfileField("name", "Name", set.name),
                     EditableProfileField(
-                        key = "workflowApplicationPolicy",
+                        key = "workflowActivationMode",
                         label = "Workflow when activating this settings set",
-                        value = set.workflowApplicationPolicy,
-                        optionItems = WORKFLOW_APPLICATION_POLICY_OPTIONS,
+                        value = set.workflowActivationMode(),
+                        optionItems = WORKFLOW_ACTIVATION_MODE_OPTIONS,
                     ),
                     EditableProfileField(
                         key = "workflowId",
@@ -3190,7 +3194,6 @@ private fun ProfileStores.saveProfileEditorData(
                     require(!set.isProtected) { "Protected settings sets cannot be edited." }
                     set.copy(
                         name = values.required("name"),
-                        workflowApplicationPolicy = values.required("workflowApplicationPolicy"),
                         workflowId = values.required("workflowId"),
                         commandProfileRef = reference(values.required("commandProfileId"), commandProfiles().map { it.id to it.name }),
                         usbBaudProfileRef = reference(values.required("usbBaudProfileId"), usbBaudProfiles().map { it.id to it.name }),
@@ -3215,7 +3218,7 @@ private fun ProfileStores.saveProfileEditorData(
                             recordingPolicyProfiles().map { it.id to it.name },
                         ),
                         storageProfileRef = reference(values.required("storageProfileId"), storageProfiles().map { it.id to it.name }),
-                    )
+                    ).withWorkflowActivationMode(values.required("workflowActivationMode"))
                 }
             }
             saveSettingsSets(updated)
@@ -3633,10 +3636,23 @@ private val WORKFLOW_MODE_OPTIONS = listOf(
     EditableProfileOption(WORKFLOW_FIXED_BASE, "Fixed base"),
 )
 
-private val WORKFLOW_APPLICATION_POLICY_OPTIONS = listOf(
-    EditableProfileOption(WorkflowApplicationPolicy.SET_SPECIFIC, "Select specific workflow"),
-    EditableProfileOption(WorkflowApplicationPolicy.LET_USER_SELECT, "Let user select before start"),
-    EditableProfileOption(WorkflowApplicationPolicy.LEAVE_INTACT, "Leave current workflow intact"),
+private val WORKFLOW_ACTIVATION_MODE_OPTIONS = listOf(
+    EditableProfileOption(
+        WorkflowActivationMode.SELECT_CHANGEABLE,
+        "Select specific workflow, user can change",
+    ),
+    EditableProfileOption(
+        WorkflowActivationMode.SELECT_LOCKED,
+        "Select specific workflow, locked",
+    ),
+    EditableProfileOption(
+        WorkflowActivationMode.LET_USER_SELECT_BEFORE_START,
+        "Let user select before start",
+    ),
+    EditableProfileOption(
+        WorkflowActivationMode.LEAVE_CURRENT_INTACT,
+        "Leave current workflow intact",
+    ),
 )
 
 private val PPP_NMEA_GGA_QUALITY_OPTIONS = listOf(
@@ -4735,11 +4751,7 @@ internal fun sanitizedImportedSettingsSets(settingsSets: List<RecordingSettingsS
     }
 
 private fun RecordingSettingsSet?.applyWorkflowPolicy(currentWorkflowId: String?): String? =
-    when (this?.workflowApplicationPolicy) {
-        WorkflowApplicationPolicy.LET_USER_SELECT -> null
-        WorkflowApplicationPolicy.LEAVE_INTACT -> currentWorkflowId
-        else -> this?.workflowId ?: currentWorkflowId
-    }
+    this?.workflowIdAfterSettingsSetActivation(currentWorkflowId) ?: currentWorkflowId
 
 private fun CommandProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
     ProfileListRow(

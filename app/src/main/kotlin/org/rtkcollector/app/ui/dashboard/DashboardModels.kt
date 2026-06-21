@@ -476,6 +476,7 @@ data class RtklibCardState(
 
 data class FilesCardState(
     val sessionLocation: String = "n/a",
+    val sessionTotalBytes: String = "0 B",
     val receiverRxBytes: String = "0 B",
     val txToReceiverBytes: String = "0 B",
     val ntripBytes: String = "0 B",

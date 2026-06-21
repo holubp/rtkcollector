@@ -304,6 +304,10 @@ class ProfileStores(context: Context) {
                 name = "RTKLIB rover kinematic RTK",
                 enabled = true,
                 preset = RtklibProfile.PRESET_ROVER_KINEMATIC_RTK,
+                frequencyCount = 1,
+                serverCycleMillis = 50,
+                serverBufferBytes = 65_536,
+                solutionBufferBytes = 65_536,
                 isProtected = true,
             ),
             RtklibProfile(

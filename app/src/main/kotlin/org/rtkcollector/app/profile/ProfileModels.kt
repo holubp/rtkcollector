@@ -336,6 +336,10 @@ data class RtklibProfile(
     val outputPos: Boolean = true,
     val maxRoverQueueBytes: Int = DEFAULT_MAX_ROVER_QUEUE_BYTES,
     val maxCorrectionQueueBytes: Int = DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+    val frequencyCount: Int = DEFAULT_FREQUENCY_COUNT,
+    val serverCycleMillis: Int = DEFAULT_SERVER_CYCLE_MILLIS,
+    val serverBufferBytes: Int = DEFAULT_SERVER_BUFFER_BYTES,
+    val solutionBufferBytes: Int = DEFAULT_SOLUTION_BUFFER_BYTES,
     val isProtected: Boolean = false,
 ) {
     fun validate() {
@@ -344,6 +348,10 @@ data class RtklibProfile(
         require(preset in PRESETS) { "RTKLIB preset is invalid." }
         require(maxRoverQueueBytes > 0) { "RTKLIB rover queue limit must be positive." }
         require(maxCorrectionQueueBytes > 0) { "RTKLIB correction queue limit must be positive." }
+        require(frequencyCount in 1..3) { "RTKLIB frequency count must be 1, 2 or 3." }
+        require(serverCycleMillis > 0) { "RTKLIB server cycle must be positive." }
+        require(serverBufferBytes > 0) { "RTKLIB server buffer size must be positive." }
+        require(solutionBufferBytes > 0) { "RTKLIB solution buffer size must be positive." }
         require(!enabled || outputNmea || outputPos) { "Enabled RTKLIB profile must write NMEA or POS output." }
     }
 
@@ -360,12 +368,20 @@ data class RtklibProfile(
         .put("outputPos", outputPos)
         .put("maxRoverQueueBytes", maxRoverQueueBytes)
         .put("maxCorrectionQueueBytes", maxCorrectionQueueBytes)
+        .put("frequencyCount", frequencyCount)
+        .put("serverCycleMillis", serverCycleMillis)
+        .put("serverBufferBytes", serverBufferBytes)
+        .put("solutionBufferBytes", solutionBufferBytes)
 
     companion object {
         const val PRESET_ROVER_KINEMATIC_RTK = "ROVER_KINEMATIC_RTK"
         const val PRESET_TEMPORARY_BASE_STATIC_RTK = "TEMPORARY_BASE_STATIC_RTK"
         const val DEFAULT_MAX_ROVER_QUEUE_BYTES = 1_048_576
         const val DEFAULT_MAX_CORRECTION_QUEUE_BYTES = 262_144
+        const val DEFAULT_FREQUENCY_COUNT = 1
+        const val DEFAULT_SERVER_CYCLE_MILLIS = 50
+        const val DEFAULT_SERVER_BUFFER_BYTES = 65_536
+        const val DEFAULT_SOLUTION_BUFFER_BYTES = 65_536
         val PRESETS = setOf(PRESET_ROVER_KINEMATIC_RTK, PRESET_TEMPORARY_BASE_STATIC_RTK)
 
         fun fromJson(json: JSONObject): RtklibProfile = RtklibProfile(
@@ -378,6 +394,10 @@ data class RtklibProfile(
             outputPos = json.optBoolean("outputPos", true),
             maxRoverQueueBytes = json.optInt("maxRoverQueueBytes", DEFAULT_MAX_ROVER_QUEUE_BYTES),
             maxCorrectionQueueBytes = json.optInt("maxCorrectionQueueBytes", DEFAULT_MAX_CORRECTION_QUEUE_BYTES),
+            frequencyCount = json.optInt("frequencyCount", DEFAULT_FREQUENCY_COUNT),
+            serverCycleMillis = json.optInt("serverCycleMillis", DEFAULT_SERVER_CYCLE_MILLIS),
+            serverBufferBytes = json.optInt("serverBufferBytes", DEFAULT_SERVER_BUFFER_BYTES),
+            solutionBufferBytes = json.optInt("solutionBufferBytes", DEFAULT_SOLUTION_BUFFER_BYTES),
         ).also(RtklibProfile::validate)
     }
 }

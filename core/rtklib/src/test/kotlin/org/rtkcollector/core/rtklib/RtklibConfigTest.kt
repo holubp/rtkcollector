@@ -72,6 +72,42 @@ class RtklibConfigTest {
     }
 
     @Test
+    fun `frequency count must be supported by RTKLIB live processing`() {
+        val workflow = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.ubloxM8t().copy(supportsRoverMode = true))
+        val config = RtklibConfig(
+            routePlan = RtklibInputRouter().plan(workflow),
+            preset = RtklibPreset.ROVER_KINEMATIC_RTK,
+            receiverProfileId = "ublox-m8t-rawx-sfrbx",
+            baseContextSummary = "NTRIP CORS01",
+            frequencyCount = 0,
+        )
+
+        val result = config.validate()
+
+        assertTrue(result.errors.any { it.contains("frequencyCount must be 1, 2 or 3") })
+    }
+
+    @Test
+    fun `server cycle and buffer sizes must be positive`() {
+        val workflow = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.ubloxM8t().copy(supportsRoverMode = true))
+        val config = RtklibConfig(
+            routePlan = RtklibInputRouter().plan(workflow),
+            preset = RtklibPreset.ROVER_KINEMATIC_RTK,
+            receiverProfileId = "ublox-m8t-rawx-sfrbx",
+            baseContextSummary = "NTRIP CORS01",
+            serverCycleMillis = 0,
+            serverBufferBytes = 0,
+            solutionBufferBytes = 0,
+        )
+
+        val result = config.validate()
+
+        assertTrue(result.errors.any { it.contains("serverCycleMillis must be positive") })
+        assertTrue(result.errors.any { it.contains("serverBufferBytes must be positive") })
+        assertTrue(result.errors.any { it.contains("solutionBufferBytes must be positive") })
+    }
+
+    @Test
     fun `not configured route is rejected before native backend can start`() {
         val workflow = WorkflowExamples.plainRoverRecording(ReceiverCapabilityFixtures.um980N4())
         val config = RtklibConfig(

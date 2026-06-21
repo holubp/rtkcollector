@@ -77,6 +77,26 @@ class RecordingPolicyProfileTest {
     }
 
     @Test
+    fun `rtklib profile persists server runtime parameters`() {
+        val profile = RtklibProfile(
+            id = "rtklib-m8t",
+            name = "RTKLIB M8T",
+            enabled = true,
+            frequencyCount = 1,
+            serverCycleMillis = 50,
+            serverBufferBytes = 65536,
+            solutionBufferBytes = 65536,
+        )
+
+        val decoded = RtklibProfile.fromJson(profile.toJson())
+
+        assertEquals(1, decoded.frequencyCount)
+        assertEquals(50, decoded.serverCycleMillis)
+        assertEquals(65536, decoded.serverBufferBytes)
+        assertEquals(65536, decoded.solutionBufferBytes)
+    }
+
+    @Test
     fun `enabled rtklib profile requires at least one output`() {
         assertThrows(IllegalArgumentException::class.java) {
             RtklibProfile(

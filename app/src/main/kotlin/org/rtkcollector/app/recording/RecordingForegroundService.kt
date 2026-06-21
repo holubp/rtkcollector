@@ -374,6 +374,22 @@ class RecordingForegroundService : Service() {
                 rtklibValidationSummary = intent.getStringExtra(EXTRA_RTKLIB_VALIDATION_SUMMARY),
                 rtklibOutputNmea = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_NMEA, false),
                 rtklibOutputPos = intent.getBooleanExtra(EXTRA_RTKLIB_OUTPUT_POS, false),
+                rtklibFrequencyCount = intent.getIntExtra(
+                    EXTRA_RTKLIB_FREQUENCY_COUNT,
+                    RtklibConfig.DEFAULT_FREQUENCY_COUNT,
+                ),
+                rtklibServerCycleMillis = intent.getIntExtra(
+                    EXTRA_RTKLIB_SERVER_CYCLE_MILLIS,
+                    RtklibConfig.DEFAULT_SERVER_CYCLE_MILLIS,
+                ),
+                rtklibServerBufferBytes = intent.getIntExtra(
+                    EXTRA_RTKLIB_SERVER_BUFFER_BYTES,
+                    RtklibConfig.DEFAULT_SERVER_BUFFER_BYTES,
+                ),
+                rtklibSolutionBufferBytes = intent.getIntExtra(
+                    EXTRA_RTKLIB_SOLUTION_BUFFER_BYTES,
+                    RtklibConfig.DEFAULT_SOLUTION_BUFFER_BYTES,
+                ),
                 solutionPolicyProfileId = intent.getStringExtra(EXTRA_SOLUTION_POLICY_PROFILE_ID),
                 solutionScreenPolicy = intent.getStringExtra(EXTRA_SOLUTION_SCREEN_POLICY),
                 solutionMockPolicy = intent.getStringExtra(EXTRA_SOLUTION_MOCK_POLICY),
@@ -937,6 +953,22 @@ class RecordingForegroundService : Service() {
             maxCorrectionQueueBytes = intent.getIntExtra(
                 EXTRA_RTKLIB_MAX_CORRECTION_QUEUE_BYTES,
                 RtklibConfig.DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+            ),
+            frequencyCount = intent.getIntExtra(
+                EXTRA_RTKLIB_FREQUENCY_COUNT,
+                RtklibConfig.DEFAULT_FREQUENCY_COUNT,
+            ),
+            serverCycleMillis = intent.getIntExtra(
+                EXTRA_RTKLIB_SERVER_CYCLE_MILLIS,
+                RtklibConfig.DEFAULT_SERVER_CYCLE_MILLIS,
+            ),
+            serverBufferBytes = intent.getIntExtra(
+                EXTRA_RTKLIB_SERVER_BUFFER_BYTES,
+                RtklibConfig.DEFAULT_SERVER_BUFFER_BYTES,
+            ),
+            solutionBufferBytes = intent.getIntExtra(
+                EXTRA_RTKLIB_SOLUTION_BUFFER_BYTES,
+                RtklibConfig.DEFAULT_SOLUTION_BUFFER_BYTES,
             ),
         )
         val worker = RtklibWorker(
@@ -2900,6 +2932,10 @@ class RecordingForegroundService : Service() {
         const val EXTRA_RTKLIB_OUTPUT_POS = "rtklibOutputPos"
         const val EXTRA_RTKLIB_MAX_ROVER_QUEUE_BYTES = "rtklibMaxRoverQueueBytes"
         const val EXTRA_RTKLIB_MAX_CORRECTION_QUEUE_BYTES = "rtklibMaxCorrectionQueueBytes"
+        const val EXTRA_RTKLIB_FREQUENCY_COUNT = "rtklibFrequencyCount"
+        const val EXTRA_RTKLIB_SERVER_CYCLE_MILLIS = "rtklibServerCycleMillis"
+        const val EXTRA_RTKLIB_SERVER_BUFFER_BYTES = "rtklibServerBufferBytes"
+        const val EXTRA_RTKLIB_SOLUTION_BUFFER_BYTES = "rtklibSolutionBufferBytes"
         const val EXTRA_STORAGE_PROFILE_ID = "storageProfileId"
         const val EXTRA_STORAGE_KIND = "storageKind"
         const val EXTRA_STORAGE_TREE_URI = "storageTreeUri"

@@ -233,6 +233,11 @@ data class ActiveRecordingConfig(
                 maxRoverQueueBytes = rtklibProfile?.maxRoverQueueBytes ?: RtklibProfile.DEFAULT_MAX_ROVER_QUEUE_BYTES,
                 maxCorrectionQueueBytes = rtklibProfile?.maxCorrectionQueueBytes
                     ?: RtklibProfile.DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+                frequencyCount = rtklibProfile?.frequencyCount ?: RtklibProfile.DEFAULT_FREQUENCY_COUNT,
+                serverCycleMillis = rtklibProfile?.serverCycleMillis ?: RtklibProfile.DEFAULT_SERVER_CYCLE_MILLIS,
+                serverBufferBytes = rtklibProfile?.serverBufferBytes ?: RtklibProfile.DEFAULT_SERVER_BUFFER_BYTES,
+                solutionBufferBytes = rtklibProfile?.solutionBufferBytes
+                    ?: RtklibProfile.DEFAULT_SOLUTION_BUFFER_BYTES,
             )
 
             val recordingOutput = ActiveRecordingOutputConfig(
@@ -306,6 +311,10 @@ data class ActiveRtklibConfig(
     val outputPos: Boolean,
     val maxRoverQueueBytes: Int,
     val maxCorrectionQueueBytes: Int,
+    val frequencyCount: Int,
+    val serverCycleMillis: Int,
+    val serverBufferBytes: Int,
+    val solutionBufferBytes: Int,
 )
 
 data class ActiveCasterUploadConfig(

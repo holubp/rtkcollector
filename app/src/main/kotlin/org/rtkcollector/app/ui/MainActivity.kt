@@ -3211,6 +3211,19 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("outputPos", "Write RTKLIB POS", profile.outputPos.toString(), boolean = true),
                     EditableProfileField("maxRoverQueueBytes", "Rover input queue bytes", profile.maxRoverQueueBytes.toString()),
                     EditableProfileField("maxCorrectionQueueBytes", "Correction input queue bytes", profile.maxCorrectionQueueBytes.toString()),
+                    EditableProfileField(
+                        key = "frequencyCount",
+                        label = "Frequency count",
+                        value = profile.frequencyCount.toString(),
+                        optionItems = listOf(
+                            EditableProfileOption("1", "1"),
+                            EditableProfileOption("2", "2"),
+                            EditableProfileOption("3", "3"),
+                        ),
+                    ),
+                    EditableProfileField("serverCycleMillis", "Server cycle [ms]", profile.serverCycleMillis.toString()),
+                    EditableProfileField("serverBufferBytes", "Server buffer [bytes]", profile.serverBufferBytes.toString()),
+                    EditableProfileField("solutionBufferBytes", "Solution buffer [bytes]", profile.solutionBufferBytes.toString()),
                 ),
             ).asProtectedProfileView(profile.isProtected)
         }
@@ -3518,6 +3531,14 @@ private fun ProfileStores.saveProfileEditorData(
                             ?: RtklibProfile.DEFAULT_MAX_ROVER_QUEUE_BYTES,
                         maxCorrectionQueueBytes = values.optional("maxCorrectionQueueBytes")?.toIntOrNull()
                             ?: RtklibProfile.DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
+                        frequencyCount = values.optional("frequencyCount")?.toIntOrNull()
+                            ?: RtklibProfile.DEFAULT_FREQUENCY_COUNT,
+                        serverCycleMillis = values.optional("serverCycleMillis")?.toIntOrNull()
+                            ?: RtklibProfile.DEFAULT_SERVER_CYCLE_MILLIS,
+                        serverBufferBytes = values.optional("serverBufferBytes")?.toIntOrNull()
+                            ?: RtklibProfile.DEFAULT_SERVER_BUFFER_BYTES,
+                        solutionBufferBytes = values.optional("solutionBufferBytes")?.toIntOrNull()
+                            ?: RtklibProfile.DEFAULT_SOLUTION_BUFFER_BYTES,
                     )
                 } else {
                     profile
@@ -4144,6 +4165,10 @@ private fun buildDashboardStartIntent(
             RecordingForegroundService.EXTRA_RTKLIB_MAX_CORRECTION_QUEUE_BYTES,
             activeConfig.rtklib.maxCorrectionQueueBytes,
         )
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_FREQUENCY_COUNT, activeConfig.rtklib.frequencyCount)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_SERVER_CYCLE_MILLIS, activeConfig.rtklib.serverCycleMillis)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_SERVER_BUFFER_BYTES, activeConfig.rtklib.serverBufferBytes)
+        putExtra(RecordingForegroundService.EXTRA_RTKLIB_SOLUTION_BUFFER_BYTES, activeConfig.rtklib.solutionBufferBytes)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_PROFILE_ID, activeConfig.storage.id)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_KIND, activeConfig.storage.kind)
         putExtra(RecordingForegroundService.EXTRA_STORAGE_TREE_URI, activeConfig.storage.treeUri)

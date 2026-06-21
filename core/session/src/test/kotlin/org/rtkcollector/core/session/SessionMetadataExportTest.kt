@@ -29,6 +29,10 @@ class SessionMetadataExportTest {
                 rtklibSnapshotId = "rtklib-ex-2.5.0@commit",
                 rtklibRoutePlan = "rover=input_unicore(UNICORE_OBSVMB); correction=input_rtcm3(RTCM3)",
                 rtklibValidationSummary = "valid; snapshot=rtklib-ex-2.5.0@commit",
+                rtklibFrequencyCount = 1,
+                rtklibServerCycleMillis = 50,
+                rtklibServerBufferBytes = 65536,
+                rtklibSolutionBufferBytes = 65536,
                 solutionPolicyProfileId = "solution-auto-best",
                 solutionScreenPolicy = "AUTO_BEST",
                 solutionMockPolicy = "RTKLIB_ONLY",
@@ -38,6 +42,10 @@ class SessionMetadataExportTest {
         assertTrue(json.contains("\"rtklibSnapshotId\":\"rtklib-ex-2.5.0@commit\""))
         assertTrue(json.contains("\"rtklibRoutePlan\":\"rover=input_unicore(UNICORE_OBSVMB); correction=input_rtcm3(RTCM3)\""))
         assertTrue(json.contains("\"rtklibValidationSummary\":\"valid; snapshot=rtklib-ex-2.5.0@commit\""))
+        assertTrue(json.contains("\"rtklibFrequencyCount\":1"))
+        assertTrue(json.contains("\"rtklibServerCycleMillis\":50"))
+        assertTrue(json.contains("\"rtklibServerBufferBytes\":65536"))
+        assertTrue(json.contains("\"rtklibSolutionBufferBytes\":65536"))
         assertTrue(json.contains("\"solutionPolicyProfileId\":\"solution-auto-best\""))
         assertTrue(json.contains("\"solutionMockPolicy\":\"RTKLIB_ONLY\""))
     }

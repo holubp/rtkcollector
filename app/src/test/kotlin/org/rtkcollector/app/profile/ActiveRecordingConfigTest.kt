@@ -335,6 +335,45 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
+    fun `active config carries rtklib server runtime parameters`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "rover-rtklib",
+                receiverProfileId = "ublox-m8t",
+                rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+            ),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                receiverFamily = "ublox-m8t",
+                runtimeScript = "!UBX CFG-MSG 2 21 0 0 0 1 0 0",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            rtklibProfile = RtklibProfile(
+                id = "rtklib-rover",
+                name = "RTKLIB rover",
+                enabled = true,
+                frequencyCount = 1,
+                serverCycleMillis = 50,
+                serverBufferBytes = 65536,
+                solutionBufferBytes = 65536,
+            ),
+            workflowName = "Rover + RTKLIB",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        assertEquals(1, config.rtklib.frequencyCount)
+        assertEquals(50, config.rtklib.serverCycleMillis)
+        assertEquals(65536, config.rtklib.serverBufferBytes)
+        assertEquals(65536, config.rtklib.solutionBufferBytes)
+    }
+
+    @Test
     fun `rtklib rover workflow rejects base mode command profiles`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(

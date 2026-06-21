@@ -2623,6 +2623,36 @@ private fun shareDiagnosticZip(context: Context, zipFile: File) {
     context.startActivity(Intent.createChooser(intent, "Share RtkCollector diagnostics"))
 }
 
+private fun showCannotStart(context: Context, detail: String) {
+    val message = "Cannot start: $detail"
+    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    recordAppRuntimeDiagnosticIfEnabled(
+        context = context,
+        severity = "ERROR",
+        message = "Start preflight failed: $detail",
+    )
+}
+
+private fun recordAppRuntimeDiagnosticIfEnabled(
+    context: Context,
+    severity: String,
+    message: String,
+) {
+    runCatching {
+        val settings = DiagnosticsSettings(context)
+        if (!settings.runtimeLoggingEnabled) return
+        DiagnosticsStore(context.filesDir).appendRuntime(
+            enabled = true,
+            record = RuntimeDiagnosticRecord(
+                timestampMillis = System.currentTimeMillis(),
+                category = DiagnosticCategory.APP,
+                severity = severity,
+                message = message,
+            ),
+        )
+    }
+}
+
 private fun scheduleTemporaryZipCleanup(zipFiles: List<File>) {
     Handler(Looper.getMainLooper()).postDelayed(
         {
@@ -3960,20 +3990,16 @@ private fun buildDashboardStartIntent(
             solutionPolicyProfile = solutionPolicyProfile,
         )
     } catch (error: IllegalArgumentException) {
-        Toast.makeText(context, "Cannot start: ${error.message}", Toast.LENGTH_LONG).show()
+        showCannotStart(context, error.message ?: error.javaClass.simpleName)
         return null
     }
     val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
     if (workflowId.isNullOrBlank()) {
-        Toast.makeText(context, "Cannot start: workflow is not selected.", Toast.LENGTH_LONG).show()
+        showCannotStart(context, "workflow is not selected.")
         return null
     }
     if (workflowId == WORKFLOW_FIXED_BASE && selectedBaseCoordinate == null) {
-        Toast.makeText(
-            context,
-            "Cannot start: fixed base requires an accepted base coordinate.",
-            Toast.LENGTH_LONG,
-        ).show()
+        showCannotStart(context, "fixed base requires an accepted base coordinate.")
         return null
     }
     val fixedBaseModeCommand = if (workflowId == WORKFLOW_FIXED_BASE) {
@@ -3982,11 +4008,7 @@ private fun buildDashboardStartIntent(
         null
     }
     if (workflowId == WORKFLOW_FIXED_BASE && fixedBaseModeCommand == null) {
-        Toast.makeText(
-            context,
-            "Cannot start: fixed base coordinate needs ellipsoidal height.",
-            Toast.LENGTH_LONG,
-        ).show()
+        showCannotStart(context, "fixed base coordinate needs ellipsoidal height.")
         return null
     }
     val workflowUsesNtrip = workflowId.workflowUsesNtrip()
@@ -4008,7 +4030,7 @@ private fun buildDashboardStartIntent(
             passwordLookup = NtripSecretStore(context)::getPassword,
         )
     } catch (error: IllegalArgumentException) {
-        Toast.makeText(context, "Cannot start: ${error.message}", Toast.LENGTH_LONG).show()
+        showCannotStart(context, error.message ?: error.javaClass.simpleName)
         return null
     }
     val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -4019,7 +4041,7 @@ private fun buildDashboardStartIntent(
         } else {
             "Cannot start: no USB receiver is connected or selected."
         }
-        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        showCannotStart(context, message.removePrefix("Cannot start: "))
         return null
     }
     val usbAccess = UsbStartAccessDecision.evaluate(
@@ -4028,12 +4050,12 @@ private fun buildDashboardStartIntent(
     )
     when (usbAccess.action) {
         UsbStartAccessAction.NO_DEVICE -> {
-            Toast.makeText(context, usbAccess.message, Toast.LENGTH_LONG).show()
+            showCannotStart(context, usbAccess.message.removePrefix("Cannot start: "))
             return null
         }
         UsbStartAccessAction.REQUEST_PERMISSION -> {
             requestUsbPermissionForDevice(context, usbDevice)
-            Toast.makeText(context, usbAccess.message, Toast.LENGTH_LONG).show()
+            showCannotStart(context, usbAccess.message.removePrefix("Cannot start: "))
             return null
         }
         UsbStartAccessAction.VERIFY_AND_START -> Unit
@@ -4041,7 +4063,7 @@ private fun buildDashboardStartIntent(
     try {
         activeConfig.validateForStart()
     } catch (error: IllegalArgumentException) {
-        Toast.makeText(context, "Cannot start: ${error.message}", Toast.LENGTH_LONG).show()
+        showCannotStart(context, error.message ?: error.javaClass.simpleName)
         return null
     }
     return Intent(context, RecordingForegroundService::class.java).apply {

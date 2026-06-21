@@ -17,25 +17,32 @@ internal fun RecordingSettingsSet.resolveNtripProfiles(
 ): ResolvedNtripProfiles {
     val mountpoint = ntripMountpointProfileRef?.id
         ?.let { id -> mountpointProfiles.firstOrNull { it.id == id } }
+    val settingsCaster = ntripCasterProfileRef?.id
+        ?.let { id -> casterProfiles.firstOrNull { it.id == id } }
     val casterFromMountpoint = mountpoint?.casterProfileId
         ?.let { casterId -> casterProfiles.firstOrNull { it.id == casterId } }
     if (mountpoint != null) {
+        val resolvedCaster = casterFromMountpoint
+            ?.takeIf(NtripCasterProfile::isConfiguredForCorrectionStart)
+            ?: settingsCaster
+            ?: casterFromMountpoint
         val syncedSettingsSet = if (
-            casterFromMountpoint != null &&
-            ntripCasterProfileRef?.id != casterFromMountpoint.id
+            resolvedCaster != null &&
+            ntripCasterProfileRef?.id != resolvedCaster.id
         ) {
-            copy(ntripCasterProfileRef = ProfileReference(casterFromMountpoint.id, casterFromMountpoint.name))
+            copy(ntripCasterProfileRef = ProfileReference(resolvedCaster.id, resolvedCaster.name))
         } else {
             this
         }
         return ResolvedNtripProfiles(
-            caster = casterFromMountpoint,
+            caster = resolvedCaster,
             mountpoint = mountpoint,
             settingsSet = syncedSettingsSet,
         )
     }
 
-    val caster = ntripCasterProfileRef?.id
-        ?.let { id -> casterProfiles.firstOrNull { it.id == id } }
-    return ResolvedNtripProfiles(caster = caster, mountpoint = null, settingsSet = this)
+    return ResolvedNtripProfiles(caster = settingsCaster, mountpoint = null, settingsSet = this)
 }
+
+private fun NtripCasterProfile.isConfiguredForCorrectionStart(): Boolean =
+    host.isNotBlank() && port in 1..65535

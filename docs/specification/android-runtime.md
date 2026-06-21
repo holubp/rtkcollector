@@ -80,6 +80,27 @@ Verification:
 - Automated: recording health monitor stall/recovery tests.
 - Manual: long-running session with receiver disconnect/silence and reconnect.
 
+### ANDROID-USB-004: Receiver Protocol Stalls Are Degraded USB Failures
+
+Status: Normative
+
+During an active recording, receiver-originated bytes that do not produce valid
+frames for the selected receiver protocol MUST NOT be treated as healthy
+recording indefinitely. If bytes continue to arrive but no valid UM980 binary
+or ASCII/NMEA frame, u-blox UBX/NMEA frame, or generic NMEA frame is observed
+for the configured protocol-stall threshold, the foreground service MUST mark
+USB capture as degraded, write a session event, keep recording raw bytes
+byte-exactly, and attempt to reopen the selected receiver and rerun the
+required receiver init/baud sequence. Parser failures and invalid bytes MUST
+NOT be written into `receiver-rx.raw` as metadata and MUST NOT stop the
+recording session while storage and transport still accept bytes.
+
+Verification:
+- Automated: recording health monitor protocol-stall/recovery tests.
+- Automated: service compile check showing protocol-health hooks are advisory.
+- Manual: long-running UM980 binary session where USB keeps producing bytes but
+  valid UM980 sync disappears.
+
 ### ANDROID-CORRECTION-001: Correction Stream Stalls Are Reconnected Without Stopping Raw Capture
 
 Status: Normative

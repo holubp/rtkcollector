@@ -94,6 +94,10 @@ u-blox profiles that emit UBX RXM-RAWX and RXM-SFRBX MUST be eligible for a
 direct RTKLIB-EX route through the UBX decoder. The route model MUST preserve
 u-blox-specific raw data instead of forcing it through a generic intermediate
 observation model unless a future validation shows a direct route is unsafe.
+u-blox M8T and M8P profiles MUST be treated as single-frequency RTKLIB inputs
+unless a future receiver-specific profile declares otherwise. RTKLIB runtime
+configuration MUST pass this frequency count explicitly instead of relying on
+RTKLIB's default dual-frequency processing option.
 
 Verification:
 - Automated: RTKLIB input route tests for u-blox RAWX/SFRBX direct routing.

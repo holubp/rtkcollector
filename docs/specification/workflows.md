@@ -145,6 +145,18 @@ Initial V2 route expectations:
 - NMEA, BESTNAV, ADRNAV, PPPNAV and NAV-PVT are solution/monitoring data, not
   RTKLIB raw-observation input.
 
+Live RTKLIB real-time processing MUST preserve RTKLIB's rover/base observation
+synchronisation semantics. The preferred implementation is RTKLIB's `rtksvr_t`
+server using app-fed in-memory streams. A custom native loop MAY be used only
+if automated replay tests prove it combines rover observations, base RTCM
+observations, ephemeris, base position and correction age equivalently to
+RTKLIB's server loop. A native loop MUST NOT solve each rover epoch against
+only the most recently decoded single RTCM observation message.
+
+RTKLIB processing MUST remain lazy and advisory. If RTKLIB is disabled by the
+validated workflow/profile, no RTKLIB native library may be loaded, no RTKLIB
+worker may be started and no RTKLIB memory buffers may be allocated.
+
 Verification:
 - Review: no V1 feature requires RTKLIB to record, feed NTRIP or prepare a base.
 - Automated: RTKLIB input route tests cover direct u-blox, direct Unicore,

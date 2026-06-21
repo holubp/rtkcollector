@@ -19,6 +19,10 @@ class RtklibNativeBridge(
             correctionFormat: String,
             outputNmea: Boolean,
             outputPos: Boolean,
+            frequencyCount: Int,
+            serverCycleMillis: Int,
+            serverBufferBytes: Int,
+            solutionBufferBytes: Int,
         ): String?
         fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String>
         fun snapshot(handle: Long): Array<String>
@@ -43,6 +47,10 @@ class RtklibNativeBridge(
                 correctionFormat = config.routePlan.correctionInput.format?.name.orEmpty(),
                 outputNmea = config.outputNmea,
                 outputPos = config.outputPos,
+                frequencyCount = config.frequencyCount,
+                serverCycleMillis = config.serverCycleMillis,
+                serverBufferBytes = config.serverBufferBytes,
+                solutionBufferBytes = config.solutionBufferBytes,
             )
             return if (error.isNullOrBlank()) {
                 RtklibStartResult.started()
@@ -100,7 +108,22 @@ class RtklibNativeBridge(
             correctionFormat: String,
             outputNmea: Boolean,
             outputPos: Boolean,
-        ): String? = nativeRtklibStart(handle, preset, roverFormat, correctionFormat, outputNmea, outputPos)
+            frequencyCount: Int,
+            serverCycleMillis: Int,
+            serverBufferBytes: Int,
+            solutionBufferBytes: Int,
+        ): String? = nativeRtklibStart(
+            handle,
+            preset,
+            roverFormat,
+            correctionFormat,
+            outputNmea,
+            outputPos,
+            frequencyCount,
+            serverCycleMillis,
+            serverBufferBytes,
+            solutionBufferBytes,
+        )
         override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> =
             nativeRtklibFeed(handle, streamKind, bytes)
         override fun snapshot(handle: Long): Array<String> = nativeRtklibSnapshot(handle)
@@ -122,6 +145,10 @@ private external fun nativeRtklibStart(
     correctionFormat: String,
     outputNmea: Boolean,
     outputPos: Boolean,
+    frequencyCount: Int,
+    serverCycleMillis: Int,
+    serverBufferBytes: Int,
+    solutionBufferBytes: Int,
 ): String?
 private external fun nativeRtklibFeed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String>
 private external fun nativeRtklibSnapshot(handle: Long): Array<String>

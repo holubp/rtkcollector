@@ -102,6 +102,30 @@ class RtklibWorkerTest {
         assertEquals(1, loads)
     }
 
+    @Test
+    fun `native bridge passes rtklib server runtime parameters`() {
+        val api = FakeNativeApi()
+        val bridge = RtklibNativeBridge(
+            loadLibrary = {},
+            nativeApi = api,
+        )
+        val backend = bridge.create()
+
+        backend.start(
+            validConfig().copy(
+                frequencyCount = 1,
+                serverCycleMillis = 50,
+                serverBufferBytes = 65536,
+                solutionBufferBytes = 65536,
+            ),
+        )
+
+        assertEquals(1, api.frequencyCount)
+        assertEquals(50, api.serverCycleMillis)
+        assertEquals(65536, api.serverBufferBytes)
+        assertEquals(65536, api.solutionBufferBytes)
+    }
+
     private fun validConfig(): RtklibConfig {
         val workflow = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.ubloxM8p0())
         return RtklibConfig(
@@ -146,6 +170,11 @@ class RtklibWorkerTest {
     }
 
     private class FakeNativeApi : RtklibNativeBridge.NativeApi {
+        var frequencyCount: Int = -1
+        var serverCycleMillis: Int = -1
+        var serverBufferBytes: Int = -1
+        var solutionBufferBytes: Int = -1
+
         override fun version(): String = "test"
         override fun create(): Long = 1L
         override fun start(
@@ -155,7 +184,17 @@ class RtklibWorkerTest {
             correctionFormat: String,
             outputNmea: Boolean,
             outputPos: Boolean,
-        ): String? = null
+            frequencyCount: Int,
+            serverCycleMillis: Int,
+            serverBufferBytes: Int,
+            solutionBufferBytes: Int,
+        ): String? {
+            this.frequencyCount = frequencyCount
+            this.serverCycleMillis = serverCycleMillis
+            this.serverBufferBytes = serverBufferBytes
+            this.solutionBufferBytes = solutionBufferBytes
+            return null
+        }
 
         override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> =
             arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")

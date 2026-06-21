@@ -57,6 +57,12 @@ import androidx.compose.ui.unit.dp
 import org.rtkcollector.app.console.DeviceConsoleController
 import org.rtkcollector.app.console.DeviceConsoleLineEnding
 import org.rtkcollector.app.console.DeviceConsoleState
+import org.rtkcollector.app.diagnostics.DiagnosticCategory
+import org.rtkcollector.app.diagnostics.DiagnosticsSettings
+import org.rtkcollector.app.diagnostics.DiagnosticsStore
+import org.rtkcollector.app.diagnostics.DiagnosticsZipExporter
+import org.rtkcollector.app.diagnostics.RuntimeDiagnosticRecord
+import org.rtkcollector.app.diagnostics.RuntimeDiagnostics
 import org.rtkcollector.app.base.AcceptedBaseCoordinate
 import org.rtkcollector.app.base.AcceptedBaseCoordinateStore
 import org.rtkcollector.app.base.BaseCoordinateForm
@@ -128,6 +134,7 @@ import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
 import org.rtkcollector.app.ui.dashboard.serviceCoordinateAveragingState
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
+import org.rtkcollector.app.ui.diagnostics.AppDiagnosticsScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListState
 import org.rtkcollector.app.ui.profiles.NtripMountpointEditorState
@@ -218,6 +225,14 @@ fun RtkCollectorApp(
 ) {
     var screen by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf(AppScreen.HOME) }
     val context = LocalContext.current
+    val diagnosticsSettings = remember(context) { DiagnosticsSettings(context) }
+    val diagnosticsStore = remember(context) { DiagnosticsStore(context.filesDir) }
+    val diagnosticsZipExporter = remember(context) { DiagnosticsZipExporter(context.cacheDir) }
+    val runtimeDiagnostics = remember(context) {
+        RuntimeDiagnostics(diagnosticsStore) { diagnosticsSettings.runtimeLoggingEnabled }
+    }
+    var diagnosticsRevision by remember { mutableStateOf(0) }
+    var diagnosticsError by remember { mutableStateOf<String?>(null) }
     val profileStore = remember(context) { ProfileStores(context) }
     val baseCoordinateStore = remember(context) { AcceptedBaseCoordinateStore(context) }
     val initialSelectedSettingsSetId = remember(profileStore) { profileStore.selectedSettingsSetId() }
@@ -815,6 +830,7 @@ fun RtkCollectorApp(
                             importSettingsLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
                         },
                         onDeviceConsole = { screen = AppScreen.DEVICE_CONSOLE },
+                        onAppDiagnostics = { screen = AppScreen.APP_DIAGNOSTICS },
                         onBack = { screen = AppScreen.HOME },
                     )
                 AppScreen.NTRIP_MOUNTPOINT -> NtripMountpointScreen(
@@ -1739,6 +1755,91 @@ fun RtkCollectorApp(
                     },
                     onBack = { screen = AppScreen.SETTINGS },
                 )
+                AppScreen.APP_DIAGNOSTICS -> {
+                    @Suppress("UNUSED_VARIABLE")
+                    val currentDiagnosticsRevision = diagnosticsRevision
+                    val diagnosticsStatus = diagnosticsStore.status(
+                        runtimeEnabled = diagnosticsSettings.runtimeLoggingEnabled,
+                        performanceEnabled = diagnosticsSettings.performanceMonitoringEnabled,
+                    )
+                    AppDiagnosticsScreen(
+                        status = diagnosticsStatus,
+                        lastError = diagnosticsError,
+                        onRuntimeLoggingChange = { enabled: Boolean ->
+                            diagnosticsSettings.runtimeLoggingEnabled = enabled
+                            diagnosticsRevision++
+                        },
+                        onPerformanceMonitoringChange = { enabled: Boolean ->
+                            diagnosticsSettings.performanceMonitoringEnabled = enabled
+                            diagnosticsRevision++
+                        },
+                        onShareRuntimeLogs = {
+                            runCatching {
+                                shareDiagnosticZip(
+                                    context,
+                                    diagnosticsZipExporter.exportRuntimeLogs(diagnosticsStore, diagnosticsStatus),
+                                )
+                            }.onSuccess {
+                                diagnosticsError = null
+                            }.onFailure { error ->
+                                diagnosticsError = error.message ?: error.javaClass.simpleName
+                                if (runtimeDiagnostics.isEnabled) {
+                                    runtimeDiagnostics.record(
+                                        RuntimeDiagnosticRecord(
+                                            timestampMillis = System.currentTimeMillis(),
+                                            category = DiagnosticCategory.APP,
+                                            severity = "DEGRADED",
+                                            message = "Runtime diagnostics sharing failed: ${diagnosticsError.orEmpty()}",
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        onSharePerformanceLogs = {
+                            runCatching {
+                                shareDiagnosticZip(
+                                    context,
+                                    diagnosticsZipExporter.exportPerformanceLogs(diagnosticsStore, diagnosticsStatus),
+                                )
+                            }.onSuccess {
+                                diagnosticsError = null
+                            }.onFailure { error ->
+                                diagnosticsError = error.message ?: error.javaClass.simpleName
+                                if (runtimeDiagnostics.isEnabled) {
+                                    runtimeDiagnostics.record(
+                                        RuntimeDiagnosticRecord(
+                                            timestampMillis = System.currentTimeMillis(),
+                                            category = DiagnosticCategory.APP,
+                                            severity = "DEGRADED",
+                                            message = "Performance diagnostics sharing failed: ${diagnosticsError.orEmpty()}",
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        onDeleteLogs = {
+                            runCatching {
+                                diagnosticsStore.deleteDiagnostics()
+                                diagnosticsZipExporter.deleteTemporaryShares()
+                                diagnosticsRevision++
+                                diagnosticsError = null
+                            }.onFailure { error ->
+                                diagnosticsError = error.message ?: error.javaClass.simpleName
+                                if (runtimeDiagnostics.isEnabled) {
+                                    runtimeDiagnostics.record(
+                                        RuntimeDiagnosticRecord(
+                                            timestampMillis = System.currentTimeMillis(),
+                                            category = DiagnosticCategory.APP,
+                                            severity = "DEGRADED",
+                                            message = "Diagnostics deletion failed: ${diagnosticsError.orEmpty()}",
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        onBack = { screen = AppScreen.SETTINGS },
+                    )
+                }
                 AppScreen.DEVICE_CONSOLE -> {
                     val usbProfiles = profileStore.usbBaudProfiles()
                     val commandProfiles = profileStore.commandProfiles()
@@ -2510,6 +2611,16 @@ private fun shareBasePositionJson(context: Context, coordinate: AcceptedBaseCoor
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Share base position JSON"))
+}
+
+private fun shareDiagnosticZip(context: Context, zipFile: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", zipFile)
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/zip"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share RtkCollector diagnostics"))
 }
 
 private fun scheduleTemporaryZipCleanup(zipFiles: List<File>) {
@@ -3595,6 +3706,7 @@ private enum class AppScreen {
     BASE_COORDINATE_EDITOR,
     SESSIONS,
     DEVICE_CONSOLE,
+    APP_DIAGNOSTICS,
     SETTINGS_SETS,
     SETTINGS_SET_SELECTOR,
     MOUNTPOINT_SELECTOR,

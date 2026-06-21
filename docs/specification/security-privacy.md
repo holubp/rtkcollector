@@ -38,3 +38,16 @@ Verification:
 - Automated: settings import validation tests.
 - Manual: Android "open JSON with RtkCollector" import flow.
 
+## Diagnostics
+
+### SEC-DIAGNOSTICS-001: Diagnostics Are Opt-In And Redacted
+
+Status: Normative
+
+Runtime diagnostics and performance monitoring MUST be disabled by default.
+When enabled, diagnostic records MUST redact NTRIP passwords, authorization
+headers, tokens and credential-like fields before writing or sharing.
+
+Verification:
+- Automated: diagnostics redaction and disabled-state tests.
+- Review: diagnostic call sites use guarded construction for hot-path records.

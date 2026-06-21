@@ -25,6 +25,19 @@ Verification:
 - Review: capture loop has no UI dependencies.
 - Manual: background/minimised recording continues to grow `receiver-rx.raw`.
 
+### ANDROID-DIAGNOSTICS-001: Diagnostics Do Not Block Recording
+
+Status: Normative
+
+Runtime logging and performance monitoring MUST NOT run on the raw receiver
+capture path. When disabled, they MUST avoid timers, file I/O, JSON
+construction and metric aggregation. When enabled, diagnostic failures MUST NOT
+stop recording or mutate session artifacts.
+
+Verification:
+- Automated: diagnostics controller disabled-state tests.
+- Review: service hooks are guarded and outside receiver byte loops.
+
 ## USB
 
 ### ANDROID-USB-001: USB Permission And Open Access Are Separate Gates

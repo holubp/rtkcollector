@@ -29,6 +29,7 @@
 | `SESSION-RTKLIB-001` | Automated + manual | RTKLIB output writer tests; RTKLIB-enabled session later | In progress | NMEA/POS artifact model and native output bridge exist; host native build and field/replay solution validation remain open. |
 | `ANDROID-SERVICE-001` | Review + manual | Service ownership review; background recording smoke test | Needs review | Screen-off and background testing remain required. |
 | `ANDROID-CAPTURE-001` | Review + manual | Capture code review; background/minimised session | Needs review | UI/parser failures must remain advisory. |
+| `ANDROID-DIAGNOSTICS-001` | Automated + review | Diagnostics controller tests and service call-site review | In progress | Runtime logging and performance monitoring are guarded and advisory. Field performance validation remains useful. |
 | `ANDROID-USB-001` | Automated + device | USB decision tests; Huawei P30 Pro smoke test | Needs field retest | Vendor Android edge case. |
 | `ANDROID-USB-002` | Automated + manual | Reconnect policy tests; disconnect/reconnect smoke test | Needs review | Must preserve existing session artifacts. |
 | `ANDROID-STORAGE-001` | Manual + review | SAF folder-picker storage profile and service start review | Needs provider testing | Verify persisted write permission on common Android document providers. |
@@ -38,6 +39,7 @@
 | `SEC-SECRETS-001` | Automated + review | Session/settings export tests | Needs review | Include plaintext password export option. |
 | `SEC-SETTINGS-001` | Automated + manual | Settings export tests; export UI review | Needs review | Plaintext passwords must be opt-in. |
 | `SEC-IMPORT-001` | Automated + manual | Settings import validation tests; Android JSON open flow | Needs review | Reject malformed or unsafe imports. |
+| `SEC-DIAGNOSTICS-001` | Automated + review | Diagnostics redaction and disabled-state tests | In progress | Diagnostics sharing uses app-private logs and scoped temporary ZIPs. |
 | `UI-DASH-001` | Manual + review | Phone/tablet portrait/landscape screenshots | Needs review | Visual fidelity and nav-bar checks. |
 | `UI-DASH-002` | Manual + review | Live UM980 session screenshots/video | Needs review | No jumping cards. |
 | `UI-DASH-003` | Manual + review | Phone portrait dashboard screenshot | Needs review | Live-monitoring cards should switch to single column when needed. |

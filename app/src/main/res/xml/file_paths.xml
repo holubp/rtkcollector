@@ -7,6 +7,9 @@
         name="session_share_zips"
         path="session-share-zips/" />
     <cache-path
+        name="diagnostic_share"
+        path="diagnostic-share/" />
+    <cache-path
         name="session_share_nmea"
         path="session-share-nmea/" />
     <cache-path

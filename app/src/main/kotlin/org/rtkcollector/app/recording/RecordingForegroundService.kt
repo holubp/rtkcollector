@@ -13,6 +13,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import org.rtkcollector.app.diagnostics.DiagnosticCategory
+import org.rtkcollector.app.diagnostics.DiagnosticsSettings
+import org.rtkcollector.app.diagnostics.DiagnosticsStore
+import org.rtkcollector.app.diagnostics.PerformanceDiagnosticSample
+import org.rtkcollector.app.diagnostics.PerformanceDiagnostics
+import org.rtkcollector.app.diagnostics.RuntimeDiagnosticRecord
+import org.rtkcollector.app.diagnostics.RuntimeDiagnostics
 import org.rtkcollector.app.mocklocation.AndroidMockLocationSink
 import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.app.mocklocation.MockLocationPublisher
@@ -148,6 +155,14 @@ class RecordingForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
+    private val diagnosticsSettings by lazy { DiagnosticsSettings(this) }
+    private val diagnosticsStore by lazy { DiagnosticsStore(filesDir) }
+    private val runtimeDiagnostics by lazy {
+        RuntimeDiagnostics(diagnosticsStore) { diagnosticsSettings.runtimeLoggingEnabled }
+    }
+    private val performanceDiagnostics by lazy {
+        PerformanceDiagnostics(diagnosticsStore) { diagnosticsSettings.performanceMonitoringEnabled }
+    }
     private val persistentWriteInProgress = AtomicBoolean(false)
     private val runtimeLock = Any()
     private val txLock = Any()
@@ -519,6 +534,11 @@ class RecordingForegroundService : Service() {
                 rawRecordingActive = false,
                 correctionsActive = false,
             )
+            recordRuntimeDiagnostic(
+                category = state.errorCategory.toDiagnosticCategory(),
+                severity = state.errorSeverity.name,
+                message = { "Recording start failed: ${error.message ?: error.javaClass.simpleName}" },
+            )
             broadcastState()
             stopRecording(sendShutdown = false)
         }
@@ -548,6 +568,11 @@ class RecordingForegroundService : Service() {
                     errorCategory = RecordingErrorCategory.USB,
                     errorSeverity = RecordingErrorSeverity.DEGRADED,
                     rawRecordingActive = false,
+                )
+                recordRuntimeDiagnostic(
+                    category = DiagnosticCategory.USB,
+                    severity = RecordingErrorSeverity.DEGRADED.name,
+                    message = { "USB capture read failed: ${error.message ?: error.javaClass.simpleName}" },
                 )
                 broadcastState()
                 if (!tryReconnectUsb(recorder)) {
@@ -725,6 +750,14 @@ class RecordingForegroundService : Service() {
             errorSeverity = if (ntripProblem) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
             correctionsActive = snapshot.correctionsActive,
         )
+        if (ntripProblem) {
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.NTRIP,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { "NTRIP ${snapshot.state.name}: ${snapshot.message ?: "no detail"}" },
+                attributes = { mapOf("url" to state.ntripUrl) },
+            )
+        }
         broadcastState()
     }
 
@@ -986,6 +1019,11 @@ class RecordingForegroundService : Service() {
                 errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
             )
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.RECEIVER_COMMAND,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { state.lastError ?: "Cannot write receiver configuration." },
+            )
             broadcastState()
             return
         }
@@ -996,6 +1034,11 @@ class RecordingForegroundService : Service() {
                 lastError = "Cannot write receiver configuration: active receiver connection is unavailable.",
                 errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.RECEIVER_COMMAND,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { state.lastError ?: "Cannot write receiver configuration." },
             )
             broadcastState()
             return
@@ -1009,6 +1052,11 @@ class RecordingForegroundService : Service() {
                 lastError = "Cannot write receiver configuration: no commands were provided.",
                 errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.RECEIVER_COMMAND,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { state.lastError ?: "Cannot write receiver configuration." },
             )
             broadcastState()
             return
@@ -1025,6 +1073,11 @@ class RecordingForegroundService : Service() {
                 lastError = "Persistent receiver configuration write is already in progress.",
                 errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.RECEIVER_COMMAND,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { state.lastError ?: "Persistent receiver configuration write is already in progress." },
             )
             broadcastState()
             return
@@ -1083,6 +1136,12 @@ class RecordingForegroundService : Service() {
                 lastError = "Persistent receiver configuration failed: $message",
                 errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.RECEIVER_COMMAND,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { state.lastError ?: "Persistent receiver configuration failed." },
+                attributes = { mapOf("label" to label) },
             )
             broadcastState()
         }
@@ -1248,6 +1307,11 @@ class RecordingForegroundService : Service() {
                         RecordingErrorSeverity.DEGRADED
                     },
                     rawRecordingActive = false,
+                )
+                recordRuntimeDiagnostic(
+                    category = DiagnosticCategory.STORAGE,
+                    severity = state.errorSeverity.name,
+                    message = { closeReport.userMessage ?: "Session writer close failed." },
                 )
             }
         }
@@ -1605,6 +1669,56 @@ class RecordingForegroundService : Service() {
         manager.notify(NOTIFICATION_ID, notification(text))
     }
 
+    private fun recordRuntimeDiagnostic(
+        category: DiagnosticCategory,
+        severity: String,
+        message: () -> String,
+        attributes: () -> Map<String, String> = { emptyMap() },
+    ) {
+        if (!diagnosticsSettings.runtimeLoggingEnabled) return
+        if (!runtimeDiagnostics.isEnabled) return
+        runtimeDiagnostics.record(
+            RuntimeDiagnosticRecord(
+                timestampMillis = System.currentTimeMillis(),
+                category = category,
+                severity = severity,
+                message = message(),
+                attributes = attributes(),
+            ),
+        )
+    }
+
+    private fun recordPerformanceDiagnosticIfDue() {
+        if (!diagnosticsSettings.performanceMonitoringEnabled) return
+        if (!performanceDiagnostics.isEnabled) return
+        val now = System.currentTimeMillis()
+        performanceDiagnostics.recordIfDue(now) {
+            val runtime = Runtime.getRuntime()
+            PerformanceDiagnosticSample(
+                timestampMillis = now,
+                receiverRxBytes = state.receiverRxBytes,
+                correctionInputBytes = state.correctionInputBytes,
+                txToReceiverBytes = state.txToReceiverBytes,
+                sessionTotalBytes = state.sessionTotalBytes,
+                heapUsedBytes = runtime.totalMemory() - runtime.freeMemory(),
+                heapMaxBytes = runtime.maxMemory(),
+                threadCount = Thread.activeCount(),
+                mockLastIntervalMs = state.mockLocationLastIntervalMs,
+            )
+        }
+    }
+
+    private fun RecordingErrorCategory.toDiagnosticCategory(): DiagnosticCategory =
+        when (this) {
+            RecordingErrorCategory.NONE -> DiagnosticCategory.APP
+            RecordingErrorCategory.USB -> DiagnosticCategory.USB
+            RecordingErrorCategory.STORAGE -> DiagnosticCategory.STORAGE
+            RecordingErrorCategory.NTRIP -> DiagnosticCategory.NTRIP
+            RecordingErrorCategory.RECEIVER_COMMAND -> DiagnosticCategory.RECEIVER_COMMAND
+            RecordingErrorCategory.PARSER_EXPORT -> DiagnosticCategory.SERVICE
+            RecordingErrorCategory.SERVICE_LIFECYCLE -> DiagnosticCategory.SERVICE
+        }
+
     private fun broadcastState() {
         casterUploadController?.snapshot()?.let { snapshot ->
             state = state.withCasterUploadSnapshot(snapshot)
@@ -1719,6 +1833,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_UBLOX_FREQUENCY, state.ubloxFrequency)
             },
         )
+        recordPerformanceDiagnosticIfDue()
     }
 
     private fun broadcastRoutineState() {
@@ -1864,6 +1979,11 @@ class RecordingForegroundService : Service() {
                                     "Check Developer options mock-location app setting.",
                                 errorCategory = RecordingErrorCategory.PARSER_EXPORT,
                                 errorSeverity = RecordingErrorSeverity.DEGRADED,
+                            )
+                            recordRuntimeDiagnostic(
+                                category = DiagnosticCategory.MOCK_LOCATION,
+                                severity = RecordingErrorSeverity.DEGRADED.name,
+                                message = { state.lastError ?: "Android mock-location update failed." },
                             )
                         }
                     }
@@ -2012,6 +2132,11 @@ class RecordingForegroundService : Service() {
                 lastError = mockLocationSetupFailureMessage(outcome.exceptionOrNull()!!),
                 errorCategory = RecordingErrorCategory.PARSER_EXPORT,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.MOCK_LOCATION,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { state.lastError ?: "Android mock-location provider setup failed." },
             )
             return
         }

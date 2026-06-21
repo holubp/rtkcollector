@@ -65,6 +65,7 @@ fun SettingsHub(
     onExportSettings: () -> Unit,
     onImportSettings: () -> Unit,
     onDeviceConsole: () -> Unit,
+    onAppDiagnostics: () -> Unit,
     onBack: () -> Unit,
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
@@ -146,8 +147,10 @@ fun SettingsHub(
                     SettingsRow("⇩", "Import settings backup", onImportSettings)
                 }
 
-                SettingsSection("Device tools") {
+                SettingsSection("Developer tools") {
                     SettingsRow("IO", "Device console", onDeviceConsole)
+                    SettingsDivider()
+                    SettingsRow("LOG", "App logs and performance monitoring", onAppDiagnostics)
                 }
             }
             HelpOverlay(topic = helpTopic, onDismiss = { helpTopic = null })
@@ -277,6 +280,7 @@ private fun SettingsHubPreview() {
             onExportSettings = {},
             onImportSettings = {},
             onDeviceConsole = {},
+            onAppDiagnostics = {},
             onBack = {},
         )
     }

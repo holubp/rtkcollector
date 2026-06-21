@@ -4000,7 +4000,7 @@ private fun buildDashboardStartIntent(
         showCannotStart(context, error.message ?: error.javaClass.simpleName)
         return null
     }
-    val workflowId = selectedWorkflowId ?: profileStore.selectedWorkflowId()
+    val workflowId = resolvedProfiles.settingsSet.applyWorkflowPolicy(selectedWorkflowId ?: profileStore.selectedWorkflowId())
     if (workflowId.isNullOrBlank()) {
         showCannotStart(context, "workflow is not selected.")
         return null

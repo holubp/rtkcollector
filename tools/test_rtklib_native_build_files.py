@@ -11,6 +11,7 @@ def test_app_cmake_builds_pinned_rtklib_without_command_line_apps():
     assert "rtklib_bridge.cpp" in cmake
     assert "${RTKLIB_SRC}/rcvraw.c" in cmake
     assert "${RTKLIB_SRC}/rtkpos.c" in cmake
+    assert "${RTKLIB_SRC}/rtksvr.c" in cmake
     assert "${RTKLIB_SRC}/solution.c" in cmake
     assert "${RTKLIB_SRC}/rcv/novatel.c" in cmake
     assert "${RTKLIB_SRC}/rcv/swiftnav.c" in cmake

@@ -180,6 +180,8 @@ private fun Array<String>.toSnapshot(): RtklibEngineSnapshot {
         lastError = parsed.error,
         decodedRoverEpochs = parsed.decodedRoverEpochs,
         decodedCorrectionMessages = parsed.decodedCorrectionMessages,
+        serverRoverObservationMessages = parsed.decodedRoverEpochs,
+        serverBaseObservationMessages = parsed.decodedCorrectionMessages,
     )
 }
 

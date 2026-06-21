@@ -61,6 +61,7 @@ import org.rtkcollector.core.correction.Rtcm3Extractor
 import org.rtkcollector.core.correction.Rtcm3ReferenceStation
 import org.rtkcollector.core.correction.Rtcm3ReferenceStationParser
 import org.rtkcollector.core.rtklib.RtklibConfig
+import org.rtkcollector.core.rtklib.RtklibEngineSnapshot
 import org.rtkcollector.core.rtklib.RtklibNativeBridge
 import org.rtkcollector.core.rtklib.RtklibOutputWriters
 import org.rtkcollector.core.rtklib.RtklibPreset
@@ -155,6 +156,7 @@ class RecordingForegroundService : Service() {
     private var activeNtripRuntimeConfig: NtripRuntimeConfig? = null
     private var casterUploadController: NtripCasterUploadController? = null
     private var rtklibWorker: RtklibWorker? = null
+    private var lastRtklibStatusWriteMillis: Long = 0L
     private var activeWorkflowUsesNtrip: Boolean = false
     private var activeNtripSendToReceiver: Boolean = true
     private var wakeLock: PowerManager.WakeLock? = null
@@ -1923,6 +1925,7 @@ class RecordingForegroundService : Service() {
             state = state.withCasterUploadSnapshot(snapshot)
         }
         rtklibWorker?.snapshot()?.let { snapshot ->
+            maybeAppendRtklibStatus(snapshot, System.currentTimeMillis())
             state = state.copy(
                 rtklibState = snapshot.state.name,
                 rtklibLastError = snapshot.lastError ?: state.rtklibLastError,
@@ -2039,6 +2042,14 @@ class RecordingForegroundService : Service() {
         if (routineStateBroadcastRateLimiter.shouldBroadcast(System.currentTimeMillis())) {
             broadcastState()
         }
+    }
+
+    private fun maybeAppendRtklibStatus(snapshot: RtklibEngineSnapshot, nowMillis: Long) {
+        if (nowMillis - lastRtklibStatusWriteMillis < 1_000L) return
+        lastRtklibStatusWriteMillis = nowMillis
+        writers?.appendRtklibStatusJson(
+            """{"type":"rtklib-status","state":"${snapshot.state.name.jsonEscape()}","fix":${snapshot.latestSolution?.fixClass?.name.jsonStringOrNull()},"decodedRoverEpochs":${snapshot.decodedRoverEpochs},"decodedCorrectionMessages":${snapshot.decodedCorrectionMessages},"serverCpuTimeMillis":${snapshot.serverCpuTimeMillis ?: "null"},"serverRoverObservationMessages":${snapshot.serverRoverObservationMessages},"serverBaseObservationMessages":${snapshot.serverBaseObservationMessages},"serverMissingObservationCount":${snapshot.serverMissingObservationCount},"droppedRoverBytes":${snapshot.droppedRoverBytes},"droppedCorrectionBytes":${snapshot.droppedCorrectionBytes},"warning":${snapshot.lastWarning.jsonStringOrNull()},"error":${snapshot.lastError.jsonStringOrNull()}}""",
+        )
     }
 
     private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980MessageFrequencyTracker) {

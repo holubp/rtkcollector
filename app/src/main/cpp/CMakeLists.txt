@@ -44,6 +44,7 @@ add_library(
     "${RTKLIB_SRC}/rtcm3e.c"
     "${RTKLIB_SRC}/rtkcmn.c"
     "${RTKLIB_SRC}/rtkpos.c"
+    "${RTKLIB_SRC}/rtksvr.c"
     "${RTKLIB_SRC}/sbas.c"
     "${RTKLIB_SRC}/sofa.c"
     "${RTKLIB_SRC}/solution.c"

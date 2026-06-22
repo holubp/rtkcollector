@@ -210,33 +210,35 @@ data class ActiveRecordingConfig(
                 .commandLines()
             val resolvedShutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript)
                 .commandLines()
+            val effectiveRtklibProfile = rtklibProfile.takeIf { settingsSet.workflowId.workflowUsesRtklibForStart() }
+            val rtklibEnabled = effectiveRtklibProfile?.enabled == true
 
             val rtklibValidation = RtklibStartValidator.validate(
-                enabled = rtklibProfile?.enabled == true,
+                enabled = rtklibEnabled,
                 receiverProfileId = settingsSet.receiverProfileId,
                 commands = resolvedInitCommands + baudSwitchCommands + resolvedModeCommands,
                 ntripEnabled = workflowUsesNtrip,
                 ntripConfigured = ntrip.isConfigured,
-                outputNmea = rtklibProfile?.outputNmea ?: false,
-                outputPos = rtklibProfile?.outputPos ?: false,
+                outputNmea = effectiveRtklibProfile?.outputNmea ?: false,
+                outputPos = effectiveRtklibProfile?.outputPos ?: false,
             )
             val rtklib = ActiveRtklibConfig(
-                enabled = rtklibProfile?.enabled == true,
-                profileId = rtklibProfile?.id,
-                preset = rtklibProfile?.preset ?: RtklibProfile.PRESET_ROVER_KINEMATIC_RTK,
+                enabled = rtklibEnabled,
+                profileId = effectiveRtklibProfile?.id,
+                preset = effectiveRtklibProfile?.preset ?: RtklibProfile.PRESET_ROVER_KINEMATIC_RTK,
                 snapshotId = RtklibSnapshot.ID,
                 routePlan = rtklibValidation.routePlan,
                 validationSummary = rtklibValidation.validationSummary,
                 validationErrors = rtklibValidation.errors,
-                outputNmea = rtklibProfile?.outputNmea ?: false,
-                outputPos = rtklibProfile?.outputPos ?: false,
-                maxRoverQueueBytes = rtklibProfile?.maxRoverQueueBytes ?: RtklibProfile.DEFAULT_MAX_ROVER_QUEUE_BYTES,
-                maxCorrectionQueueBytes = rtklibProfile?.maxCorrectionQueueBytes
+                outputNmea = effectiveRtklibProfile?.outputNmea ?: false,
+                outputPos = effectiveRtklibProfile?.outputPos ?: false,
+                maxRoverQueueBytes = effectiveRtklibProfile?.maxRoverQueueBytes ?: RtklibProfile.DEFAULT_MAX_ROVER_QUEUE_BYTES,
+                maxCorrectionQueueBytes = effectiveRtklibProfile?.maxCorrectionQueueBytes
                     ?: RtklibProfile.DEFAULT_MAX_CORRECTION_QUEUE_BYTES,
-                frequencyCount = rtklibProfile?.frequencyCount ?: RtklibProfile.DEFAULT_FREQUENCY_COUNT,
-                serverCycleMillis = rtklibProfile?.serverCycleMillis ?: RtklibProfile.DEFAULT_SERVER_CYCLE_MILLIS,
-                serverBufferBytes = rtklibProfile?.serverBufferBytes ?: RtklibProfile.DEFAULT_SERVER_BUFFER_BYTES,
-                solutionBufferBytes = rtklibProfile?.solutionBufferBytes
+                frequencyCount = effectiveRtklibProfile?.frequencyCount ?: RtklibProfile.DEFAULT_FREQUENCY_COUNT,
+                serverCycleMillis = effectiveRtklibProfile?.serverCycleMillis ?: RtklibProfile.DEFAULT_SERVER_CYCLE_MILLIS,
+                serverBufferBytes = effectiveRtklibProfile?.serverBufferBytes ?: RtklibProfile.DEFAULT_SERVER_BUFFER_BYTES,
+                solutionBufferBytes = effectiveRtklibProfile?.solutionBufferBytes
                     ?: RtklibProfile.DEFAULT_SOLUTION_BUFFER_BYTES,
             )
 
@@ -259,8 +261,10 @@ data class ActiveRecordingConfig(
 
             val solutionPolicy = ActiveSolutionPolicyConfig(
                 profileId = solutionPolicyProfile?.id,
-                screenPolicy = solutionPolicyProfile?.screenPolicy ?: SolutionSourcePolicy.AUTO_BEST,
-                mockPolicy = solutionPolicyProfile?.mockPolicy ?: SolutionSourcePolicy.AUTO_BEST,
+                screenPolicy = (solutionPolicyProfile?.screenPolicy ?: SolutionSourcePolicy.AUTO_BEST)
+                    .coerceWhenRtklibInactive(rtklib.enabled),
+                mockPolicy = (solutionPolicyProfile?.mockPolicy ?: SolutionSourcePolicy.AUTO_BEST)
+                    .coerceWhenRtklibInactive(rtklib.enabled),
             )
 
             val storage = ActiveStorageConfig(
@@ -398,6 +402,16 @@ private fun List<String>.containsModeCommand(mode: String): Boolean =
         parts.size >= 2 &&
             parts[0].equals("MODE", ignoreCase = true) &&
             parts[1].equals(mode, ignoreCase = true)
+    }
+
+private fun String.workflowUsesRtklibForStart(): Boolean =
+    this == WORKFLOW_ROVER_RTKLIB || this == WORKFLOW_ROVER_NTRIP_RTKLIB
+
+private fun SolutionSourcePolicy.coerceWhenRtklibInactive(rtklibEnabled: Boolean): SolutionSourcePolicy =
+    if (!rtklibEnabled && this == SolutionSourcePolicy.RTKLIB_ONLY) {
+        SolutionSourcePolicy.DEVICE_INTERNAL_ONLY
+    } else {
+        this
     }
 
 internal fun validateWorkflowModeCommandsForStart(workflowId: String?, modeCommands: List<String>) {

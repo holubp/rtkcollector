@@ -272,7 +272,7 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
-    fun `enabled rtklib profile requires ntrip corrections for this mvp`() {
+    fun `plain rover workflow ignores remembered enabled rtklib profile`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
                 workflowId = "plain-rover",
@@ -294,9 +294,10 @@ class ActiveRecordingConfigTest {
             passwordLookup = { null },
         )
 
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+        config.validateForStart()
 
-        assertTrue(error.message.orEmpty().contains("RTKLIB real-time MVP requires NTRIP RTCM3 corrections."))
+        assertFalse(config.rtklib.enabled)
+        assertFalse(config.expectedSessionArtifactNames.contains(SessionArtifact.RTKLIB_STATUS_JSONL.name))
     }
 
     @Test
@@ -547,6 +548,31 @@ class ActiveRecordingConfigTest {
         assertEquals("solution-rtklib", config.solutionPolicy.profileId)
         assertEquals(SolutionSourcePolicy.DEVICE_INTERNAL_ONLY, config.solutionPolicy.screenPolicy)
         assertEquals(SolutionSourcePolicy.RTKLIB_ONLY, config.solutionPolicy.mockPolicy)
+    }
+
+    @Test
+    fun `plain rover workflow coerces rtklib-only solution policy to device internal`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "plain-rover"),
+            commandProfile = CommandProfile("commands", "Commands"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            solutionPolicyProfile = SolutionPolicyProfile(
+                id = "solution-rtklib",
+                name = "RTKLIB solution",
+                screenPolicy = SolutionSourcePolicy.RTKLIB_ONLY,
+                mockPolicy = SolutionSourcePolicy.RTKLIB_ONLY,
+            ),
+            workflowName = "Plain rover",
+            workflowUsesNtrip = false,
+            passwordLookup = { null },
+        )
+
+        assertEquals(SolutionSourcePolicy.DEVICE_INTERNAL_ONLY, config.solutionPolicy.screenPolicy)
+        assertEquals(SolutionSourcePolicy.DEVICE_INTERNAL_ONLY, config.solutionPolicy.mockPolicy)
     }
 
     @Test

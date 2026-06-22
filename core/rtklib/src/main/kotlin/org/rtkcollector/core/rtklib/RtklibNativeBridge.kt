@@ -33,6 +33,8 @@ class RtklibNativeBridge(
     private class NativeBackend(private val api: NativeApi) : RtklibBackend {
         private var handle: Long = 0L
         private var closed = false
+        private var previousNativeNmeaText: String = ""
+        private var previousNativePosText: String = ""
 
         override fun start(config: RtklibConfig): RtklibStartResult {
             if (closed) return RtklibStartResult.failed("RTKLIB native backend is closed")
@@ -53,6 +55,8 @@ class RtklibNativeBridge(
                 solutionBufferBytes = config.solutionBufferBytes,
             )
             return if (error.isNullOrBlank()) {
+                previousNativeNmeaText = ""
+                previousNativePosText = ""
                 RtklibStartResult.started()
             } else {
                 RtklibStartResult.failed(error)
@@ -63,11 +67,18 @@ class RtklibNativeBridge(
             if (closed || handle == 0L) {
                 return RtklibNativeOutputBatch(warning = "RTKLIB native backend is not open")
             }
-            return api.feed(
+            val values = api.feed(
                 handle = handle,
                 streamKind = chunk.streamKind.nativeOrdinal(),
                 bytes = chunk.bytes,
-            ).toOutputBatch()
+            )
+            values[3] = newNativeText(values.getOrNull(3).orEmpty(), previousNativeNmeaText).also {
+                previousNativeNmeaText = it.fullText
+            }.delta
+            values[4] = newNativeText(values.getOrNull(4).orEmpty(), previousNativePosText).also {
+                previousNativePosText = it.fullText
+            }.delta
+            return values.toOutputBatch()
         }
 
         override fun snapshot(): RtklibEngineSnapshot {
@@ -135,6 +146,17 @@ class RtklibNativeBridge(
         const val LIBRARY_NAME: String = "rtkcollector_rtklib"
     }
 }
+
+private data class NativeTextDelta(val delta: String, val fullText: String)
+
+private fun newNativeText(current: String, previous: String): NativeTextDelta =
+    when {
+        current.isEmpty() -> NativeTextDelta(delta = "", fullText = previous)
+        previous.isNotEmpty() && current == previous -> NativeTextDelta(delta = "", fullText = previous)
+        previous.isNotEmpty() && current.startsWith(previous) ->
+            NativeTextDelta(delta = current.substring(previous.length), fullText = current)
+        else -> NativeTextDelta(delta = current, fullText = current)
+    }
 
 private external fun nativeRtklibVersion(): String
 private external fun nativeRtklibCreate(): Long

@@ -22,6 +22,8 @@ class RtklibWorker(
     private var latestSolution: RtklibSolutionSnapshot? = null
     private var lastWarning: String? = null
     private var lastError: String? = null
+    private var lastWrittenNmeaLine: String? = null
+    private var lastWrittenPosLine: String? = null
     private var state = RtklibEngineState.STOPPED
     private var config: RtklibConfig? = null
 
@@ -72,6 +74,8 @@ class RtklibWorker(
             backend = createdBackend
             accepting = true
             state = RtklibEngineState.RUNNING
+            lastWrittenNmeaLine = null
+            lastWrittenPosLine = null
             workerThread = Thread(::runLoop, "rtkcollector-rtklib-worker").apply {
                 isDaemon = true
                 start()
@@ -180,6 +184,7 @@ class RtklibWorker(
                     outputPos = activeConfig.outputPos,
                 )
                 .filteredFor(activeConfig)
+                .withoutRepeatedOutputLines()
 
             try {
                 outputWriters.write(writableBatch)
@@ -208,6 +213,31 @@ class RtklibWorker(
             nmeaLines = if (config.outputNmea) nmeaLines else emptyList(),
             posLines = if (config.outputPos) posLines else emptyList(),
         )
+
+    private fun RtklibNativeOutputBatch.withoutRepeatedOutputLines(): RtklibNativeOutputBatch {
+        val filteredNmea = nmeaLines.withoutConsecutiveRepeats(lastWrittenNmeaLine).also {
+            lastWrittenNmeaLine = it.lastLine
+        }.lines
+        val filteredPos = posLines.withoutConsecutiveRepeats(lastWrittenPosLine).also {
+            lastWrittenPosLine = it.lastLine
+        }.lines
+        return copy(nmeaLines = filteredNmea, posLines = filteredPos)
+    }
+
+    private data class OutputLineFilterResult(val lines: List<String>, val lastLine: String?)
+
+    private fun List<String>.withoutConsecutiveRepeats(previousLine: String?): OutputLineFilterResult {
+        var previous = previousLine
+        val filtered = buildList {
+            for (line in this@withoutConsecutiveRepeats) {
+                if (line != previous) {
+                    add(line)
+                    previous = line
+                }
+            }
+        }
+        return OutputLineFilterResult(lines = filtered, lastLine = previous)
+    }
 
     private fun subtractQueuedBytes(chunk: RtklibInputChunk) {
         if (chunk.streamKind == RtklibInputStreamKind.ROVER) {

@@ -147,6 +147,43 @@ class RtklibWorkerTest {
     }
 
     @Test
+    fun `worker does not repeat identical synthetic solution output`() {
+        val nmea = ByteArrayOutputStream()
+        val pos = ByteArrayOutputStream()
+        val solution = RtklibSolutionSnapshot(
+            fixClass = RtklibFixClass.RTK_FLOAT,
+            timestampMillis = 1_782_122_587_188L,
+            latDeg = 50.123456789,
+            lonDeg = 14.987654321,
+            ellipsoidalHeightM = 310.25,
+            horizontalAccuracyM = 0.123,
+            verticalAccuracyM = 0.456,
+            satellitesUsed = 14,
+        )
+        val backend = FakeBackend(
+            output = RtklibNativeOutputBatch(solution = solution),
+            latch = CountDownLatch(2),
+        )
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory {
+                override fun create(): RtklibBackend = backend
+            },
+            outputWriters = RtklibOutputWriters(nmea, pos),
+        )
+
+        assertTrue(worker.start(validConfig()).started)
+        assertTrue(worker.offerRoverBytes(byteArrayOf(1), 10L).accepted)
+        assertTrue(worker.offerRoverBytes(byteArrayOf(2), 20L).accepted)
+        assertTrue(backend.await())
+        worker.stop()
+
+        assertEquals(1, nmea.toString(Charsets.US_ASCII.name()).lineSequence().filter(String::isNotBlank).count())
+        assertEquals(1, pos.toString(Charsets.US_ASCII.name()).lineSequence().filter(String::isNotBlank).count())
+        assertEquals(1, worker.snapshot().outputNmeaLines)
+        assertEquals(1, worker.snapshot().outputPosLines)
+    }
+
+    @Test
     fun `native bridge loads lazily only when a backend is created`() {
         var loads = 0
         val bridge = RtklibNativeBridge(
@@ -181,6 +218,25 @@ class RtklibWorkerTest {
         assertEquals(50, api.serverCycleMillis)
         assertEquals(65536, api.serverBufferBytes)
         assertEquals(65536, api.solutionBufferBytes)
+    }
+
+    @Test
+    fun `native bridge exposes only new lines from cumulative text outputs`() {
+        val api = CumulativeOutputNativeApi()
+        val bridge = RtklibNativeBridge(
+            loadLibrary = {},
+            nativeApi = api,
+        )
+        val backend = bridge.create()
+        assertTrue(backend.start(validConfig()).started)
+
+        val first = backend.feed(RtklibInputChunk(RtklibInputStreamKind.ROVER, byteArrayOf(1), 1L))
+        val second = backend.feed(RtklibInputChunk(RtklibInputStreamKind.ROVER, byteArrayOf(2), 2L))
+
+        assertEquals(listOf("\$GPGGA,first"), first.nmeaLines)
+        assertEquals(listOf("pos-first"), first.posLines)
+        assertEquals(listOf("\$GPGGA,second"), second.nmeaLines)
+        assertEquals(listOf("pos-second"), second.posLines)
     }
 
     private fun validConfig(): RtklibConfig {
@@ -264,6 +320,46 @@ class RtklibWorkerTest {
 
         override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> =
             arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
+
+        override fun snapshot(handle: Long): Array<String> =
+            arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
+
+        override fun stop(handle: Long) = Unit
+        override fun destroy(handle: Long) = Unit
+    }
+
+    private class CumulativeOutputNativeApi : RtklibNativeBridge.NativeApi {
+        private var feeds = 0
+
+        override fun version(): String = "test"
+        override fun create(): Long = 1L
+        override fun start(
+            handle: Long,
+            preset: String,
+            roverFormat: String,
+            correctionFormat: String,
+            outputNmea: Boolean,
+            outputPos: Boolean,
+            frequencyCount: Int,
+            serverCycleMillis: Int,
+            serverBufferBytes: Int,
+            solutionBufferBytes: Int,
+        ): String? = null
+
+        override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> {
+            feeds += 1
+            val nmea = if (feeds == 1) {
+                "\$GPGGA,first\n"
+            } else {
+                "\$GPGGA,first\n\$GPGGA,second\n"
+            }
+            val pos = if (feeds == 1) {
+                "pos-first\n"
+            } else {
+                "pos-first\npos-second\n"
+            }
+            return arrayOf("RUNNING", "", "", nmea, pos, "", "", "", "", "", "", "", "", "0", "0")
+        }
 
         override fun snapshot(handle: Long): Array<String> =
             arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")

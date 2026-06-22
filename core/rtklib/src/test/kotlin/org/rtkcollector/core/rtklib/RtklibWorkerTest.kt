@@ -19,6 +19,16 @@ class RtklibWorkerTest {
             output = RtklibNativeOutputBatch(
                 nmeaLines = listOf("\$GPGGA,fixture"),
                 posLines = listOf("%  GPST latitude(deg) longitude(deg)", "2026/01/01 1.0 2.0"),
+                solution = RtklibSolutionSnapshot(
+                    fixClass = RtklibFixClass.RTK_FIXED,
+                    timestampMillis = 1_234L,
+                    latDeg = 50.1,
+                    lonDeg = 14.2,
+                    ellipsoidalHeightM = 300.0,
+                    horizontalAccuracyM = 0.01,
+                    verticalAccuracyM = 0.02,
+                    satellitesUsed = 12,
+                ),
             ),
             latch = CountDownLatch(1),
         )
@@ -32,12 +42,17 @@ class RtklibWorkerTest {
         assertTrue(worker.start(validConfig()).started)
         assertTrue(worker.offerRoverBytes(byteArrayOf(1, 2, 3), 10L).accepted)
         assertTrue(backend.await())
-        worker.stop()
+        val snapshot = waitForSolution(worker)
+        assertEquals(RtklibFixClass.RTK_FIXED, snapshot.latestSolution?.fixClass)
+        assertEquals(50.1, snapshot.latestSolution?.latDeg)
+        assertEquals(14.2, snapshot.latestSolution?.lonDeg)
+        assertEquals(0.01, snapshot.latestSolution?.horizontalAccuracyM)
 
         assertEquals("\$GPGGA,fixture\n", nmea.toString(Charsets.US_ASCII.name()))
         assertTrue(pos.toString(Charsets.US_ASCII.name()).contains("2026/01/01"))
         assertEquals(1, worker.snapshot().outputNmeaLines)
         assertEquals(2, worker.snapshot().outputPosLines)
+        worker.stop()
     }
 
     @Test
@@ -134,6 +149,15 @@ class RtklibWorkerTest {
             receiverProfileId = "ublox-m8p",
             baseContextSummary = "NTRIP CORS01",
         )
+    }
+
+    private fun waitForSolution(worker: RtklibWorker): RtklibEngineSnapshot {
+        repeat(20) {
+            val snapshot = worker.snapshot()
+            if (snapshot.latestSolution != null) return snapshot
+            Thread.sleep(25L)
+        }
+        return worker.snapshot()
     }
 
     private class FakeBackend(

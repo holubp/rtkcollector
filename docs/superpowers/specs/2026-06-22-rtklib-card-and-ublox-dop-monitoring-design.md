@@ -28,6 +28,8 @@ In scope:
   `PDOP` and `HDOP / VDOP` fields;
 - verify or repair u-blox `UBX-NAV-PVT` UTC propagation to the Position card;
 - keep u-blox horizontal/vertical accuracy sourced from `UBX-NAV-PVT hAcc/vAcc`;
+- update built-in u-blox profiles and any exported settings fixture consistently
+  where profile configuration changes are required;
 - add focused mapper/parser/profile tests.
 
 Out of scope:
@@ -90,6 +92,18 @@ Do not change `u-blox M8T raw 1 Hz safe` in this pass. It remains the
 conservative long-recording profile unless later field testing shows NAV-DOP is
 needed there too.
 
+Profile changes must update the app-distributed built-in definitions in source,
+not only local/user settings. If an importable settings JSON needs to be edited
+for testing or transfer between devices, start from the local untracked sample:
+
+```text
+samples/rtkcollector-settings-1781935653886-ublox-rtklib-updated-no-passwords.json
+```
+
+Do not reconstruct that JSON from scratch and do not introduce NTRIP passwords.
+The `samples/` copy remains local debugging/configuration evidence and must not
+be committed unless the repository policy is explicitly changed.
+
 The parser should add a small `UBX-NAV-DOP` decoder in the u-blox receiver
 module. It should validate the UBX frame, require class `0x01`, id `0x04`, and
 decode the DOP fields as u-blox centi-DOP values:
@@ -141,11 +155,13 @@ errors, so the main Position-card `Lat error` and `Lon error` fields remain
 
 1. Built-in u-blox command profiles enable NAV-DOP where live monitoring needs
    DOP.
-2. The advisory u-blox stream parser emits UBX frames from recorded receiver
+2. Optional importable settings JSON is updated from the named no-passwords
+   local sample when a user-transfer configuration is needed.
+3. The advisory u-blox stream parser emits UBX frames from recorded receiver
    bytes.
-3. The u-blox parser decodes NAV-DOP and NAV-PVT.
-4. `RecordingForegroundService` updates dashboard state from parsed telemetry.
-5. The main Position/Fix cards display UTC, PDOP and HDOP/VDOP when available.
+4. The u-blox parser decodes NAV-DOP and NAV-PVT.
+5. `RecordingForegroundService` updates dashboard state from parsed telemetry.
+6. The main Position/Fix cards display UTC, PDOP and HDOP/VDOP when available.
 
 ## Error Handling
 
@@ -167,6 +183,9 @@ Add focused tests for:
 - `UBX-NAV-DOP` parser validation and centi-DOP scaling;
 - u-blox built-in profile strings containing the NAV-DOP enable command where
   expected;
+- if a settings JSON export is updated locally, diff it against
+  `samples/rtkcollector-settings-1781935653886-ublox-rtklib-updated-no-passwords.json`
+  and verify no plaintext passwords or unrelated NTRIP changes were introduced;
 - service/dashboard mapping from parsed NAV-DOP to `PDOP` and `HDOP / VDOP`;
 - NAV-PVT UTC propagation to dashboard state using a valid UTC sample;
 - frequency-line formatting after adding `NAV-DOP`.

@@ -236,6 +236,28 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `rtklib card maps position height and accuracy`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_STATE, "RUNNING")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_FIX_CLASS, "RTK_FIXED")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS, 120L)
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_LAT_LON, "50.087451200, 14.421253400")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ELLIPSOIDAL_HEIGHT, "287.423 m")
+            putExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ACCURACY_HV, "8.0 mm / 12.0 mm")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("RUNNING", state.rtklib?.state)
+        assertEquals("RTK_FIXED", state.rtklib?.fixClass)
+        assertEquals("120 ms", state.rtklib?.age)
+        assertEquals("50.087451200, 14.421253400", state.rtklib?.latLon)
+        assertEquals("287.423 m", state.rtklib?.ellipsoidalHeight)
+        assertEquals("8.0 mm / 12.0 mm", state.rtklib?.accuracyHv)
+    }
+
+    @Test
     fun `ppp status does not describe main fix when bestnav is none`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

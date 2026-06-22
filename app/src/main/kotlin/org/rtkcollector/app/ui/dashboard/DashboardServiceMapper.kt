@@ -171,6 +171,10 @@ private fun rtklibCardFrom(intent: Intent): RtklibCardState? {
         age = positiveLongExtra(intent, RecordingForegroundService.EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS)
             ?.let { "${it} ms" }
             ?: "n/a",
+        latLon = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_LAT_LON) ?: "n/a",
+        ellipsoidalHeight = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ELLIPSOIDAL_HEIGHT)
+            ?: "n/a",
+        accuracyHv = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ACCURACY_HV) ?: "n/a",
         roverQueue = formatBytes(intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_ROVER_QUEUE_BYTES, 0).toLong()),
         correctionQueue = formatBytes(
             intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_CORRECTION_QUEUE_BYTES, 0).toLong(),

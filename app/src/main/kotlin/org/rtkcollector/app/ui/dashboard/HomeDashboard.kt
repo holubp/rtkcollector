@@ -1005,6 +1005,9 @@ private fun RtklibCard(state: RtklibCardState) {
         MajorValue(state.state)
         Metric("Fix", state.fixClass)
         Metric("Age", state.age)
+        Metric("Lat/Lon", state.latLon)
+        Metric("Ell h", state.ellipsoidalHeight)
+        Metric("Acc H/V", state.accuracyHv)
         Metric("Route", state.routePlan)
         Metric("Snapshot", state.snapshotId)
         if (!state.lastError.equals("n/a", ignoreCase = true)) {

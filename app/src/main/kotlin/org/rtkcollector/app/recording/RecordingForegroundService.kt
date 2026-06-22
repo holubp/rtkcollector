@@ -1624,6 +1624,9 @@ class RecordingForegroundService : Service() {
             rtklibLastError = null,
             rtklibFixClass = "n/a",
             rtklibSolutionAgeMs = null,
+            rtklibLatLon = "n/a",
+            rtklibEllipsoidalHeight = "n/a",
+            rtklibAccuracyHv = "n/a",
             rtklibRoverQueueBytes = 0,
             rtklibCorrectionQueueBytes = 0,
             rtklibDroppedRoverBytes = 0,
@@ -1721,6 +1724,21 @@ class RecordingForegroundService : Service() {
 
     private fun metersDisplay(value: Double?): String =
         if (value == null) "n/a" else "%.3f m".format(java.util.Locale.US, value)
+
+    private fun accuracyMetersDisplay(value: Double?): String =
+        when {
+            value == null -> "n/a"
+            kotlin.math.abs(value) < 0.01 -> "%.1f mm".format(java.util.Locale.US, value * 1000.0)
+            kotlin.math.abs(value) < 1.0 -> "%.1f cm".format(java.util.Locale.US, value * 100.0)
+            else -> "%.3f m".format(java.util.Locale.US, value)
+        }
+
+    private fun accuracyPairDisplay(horizontalM: Double?, verticalM: Double?): String =
+        if (horizontalM != null && verticalM != null) {
+            "${accuracyMetersDisplay(horizontalM)} / ${accuracyMetersDisplay(verticalM)}"
+        } else {
+            "n/a"
+        }
 
     private fun distanceDisplay(valueMeters: Double?): String =
         if (valueMeters == null) {
@@ -2000,13 +2018,20 @@ class RecordingForegroundService : Service() {
         }
         rtklibWorker?.snapshot()?.let { snapshot ->
             maybeAppendRtklibStatus(snapshot, System.currentTimeMillis())
+            val solution = snapshot.latestSolution
             state = state.copy(
                 rtklibState = snapshot.state.name,
                 rtklibLastError = snapshot.lastError ?: state.rtklibLastError,
-                rtklibFixClass = snapshot.latestSolution?.fixClass?.name ?: state.rtklibFixClass,
-                rtklibSolutionAgeMs = snapshot.latestSolution?.timestampMillis?.let { timestamp ->
+                rtklibFixClass = solution?.fixClass?.name ?: state.rtklibFixClass,
+                rtklibSolutionAgeMs = solution?.timestampMillis?.let { timestamp ->
                     (System.currentTimeMillis() - timestamp).coerceAtLeast(0L)
                 } ?: state.rtklibSolutionAgeMs,
+                rtklibLatLon = latLonDisplay(solution?.latDeg, solution?.lonDeg)
+                    .takeUnless { it == "n/a" } ?: state.rtklibLatLon,
+                rtklibEllipsoidalHeight = metersDisplay(solution?.ellipsoidalHeightM)
+                    .takeUnless { it == "n/a" } ?: state.rtklibEllipsoidalHeight,
+                rtklibAccuracyHv = accuracyPairDisplay(solution?.horizontalAccuracyM, solution?.verticalAccuracyM)
+                    .takeUnless { it == "n/a" } ?: state.rtklibAccuracyHv,
                 rtklibRoverQueueBytes = snapshot.roverQueueBytes,
                 rtklibCorrectionQueueBytes = snapshot.correctionQueueBytes,
                 rtklibDroppedRoverBytes = snapshot.droppedRoverBytes,
@@ -2054,6 +2079,9 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_RTKLIB_LAST_ERROR, state.rtklibLastError)
                 putExtra(EXTRA_STATE_RTKLIB_FIX_CLASS, state.rtklibFixClass)
                 putExtra(EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS, state.rtklibSolutionAgeMs ?: -1L)
+                putExtra(EXTRA_STATE_RTKLIB_LAT_LON, state.rtklibLatLon)
+                putExtra(EXTRA_STATE_RTKLIB_ELLIPSOIDAL_HEIGHT, state.rtklibEllipsoidalHeight)
+                putExtra(EXTRA_STATE_RTKLIB_ACCURACY_HV, state.rtklibAccuracyHv)
                 putExtra(EXTRA_STATE_RTKLIB_ROVER_QUEUE_BYTES, state.rtklibRoverQueueBytes)
                 putExtra(EXTRA_STATE_RTKLIB_CORRECTION_QUEUE_BYTES, state.rtklibCorrectionQueueBytes)
                 putExtra(EXTRA_STATE_RTKLIB_DROPPED_ROVER_BYTES, state.rtklibDroppedRoverBytes)
@@ -2122,7 +2150,7 @@ class RecordingForegroundService : Service() {
         if (nowMillis - lastRtklibStatusWriteMillis < 1_000L) return
         lastRtklibStatusWriteMillis = nowMillis
         writers?.appendRtklibStatusJson(
-            """{"type":"rtklib-status","state":"${snapshot.state.name.jsonEscape()}","fix":${snapshot.latestSolution?.fixClass?.name.jsonStringOrNull()},"decodedRoverEpochs":${snapshot.decodedRoverEpochs},"decodedCorrectionMessages":${snapshot.decodedCorrectionMessages},"serverCpuTimeMillis":${snapshot.serverCpuTimeMillis ?: "null"},"serverRoverObservationMessages":${snapshot.serverRoverObservationMessages},"serverBaseObservationMessages":${snapshot.serverBaseObservationMessages},"serverMissingObservationCount":${snapshot.serverMissingObservationCount},"droppedRoverBytes":${snapshot.droppedRoverBytes},"droppedCorrectionBytes":${snapshot.droppedCorrectionBytes},"warning":${snapshot.lastWarning.jsonStringOrNull()},"error":${snapshot.lastError.jsonStringOrNull()}}""",
+            """{"type":"rtklib-status","state":"${snapshot.state.name.jsonEscape()}","fix":${snapshot.latestSolution?.fixClass?.name.jsonStringOrNull()},"latDeg":${snapshot.latestSolution?.latDeg ?: "null"},"lonDeg":${snapshot.latestSolution?.lonDeg ?: "null"},"ellipsoidalHeightM":${snapshot.latestSolution?.ellipsoidalHeightM ?: "null"},"horizontalAccuracyM":${snapshot.latestSolution?.horizontalAccuracyM ?: "null"},"verticalAccuracyM":${snapshot.latestSolution?.verticalAccuracyM ?: "null"},"decodedRoverEpochs":${snapshot.decodedRoverEpochs},"decodedCorrectionMessages":${snapshot.decodedCorrectionMessages},"serverCpuTimeMillis":${snapshot.serverCpuTimeMillis ?: "null"},"serverRoverObservationMessages":${snapshot.serverRoverObservationMessages},"serverBaseObservationMessages":${snapshot.serverBaseObservationMessages},"serverMissingObservationCount":${snapshot.serverMissingObservationCount},"droppedRoverBytes":${snapshot.droppedRoverBytes},"droppedCorrectionBytes":${snapshot.droppedCorrectionBytes},"warning":${snapshot.lastWarning.jsonStringOrNull()},"error":${snapshot.lastError.jsonStringOrNull()}}""",
         )
     }
 
@@ -3098,6 +3126,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_RTKLIB_LAST_ERROR = "rtklibLastError"
         const val EXTRA_STATE_RTKLIB_FIX_CLASS = "rtklibFixClass"
         const val EXTRA_STATE_RTKLIB_SOLUTION_AGE_MS = "rtklibSolutionAgeMs"
+        const val EXTRA_STATE_RTKLIB_LAT_LON = "rtklibLatLon"
+        const val EXTRA_STATE_RTKLIB_ELLIPSOIDAL_HEIGHT = "rtklibEllipsoidalHeight"
+        const val EXTRA_STATE_RTKLIB_ACCURACY_HV = "rtklibAccuracyHv"
         const val EXTRA_STATE_RTKLIB_ROVER_QUEUE_BYTES = "rtklibRoverQueueBytes"
         const val EXTRA_STATE_RTKLIB_CORRECTION_QUEUE_BYTES = "rtklibCorrectionQueueBytes"
         const val EXTRA_STATE_RTKLIB_DROPPED_ROVER_BYTES = "rtklibDroppedRoverBytes"

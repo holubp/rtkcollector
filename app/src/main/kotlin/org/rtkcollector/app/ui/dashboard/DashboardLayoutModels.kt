@@ -14,3 +14,19 @@ enum class DashboardLayoutPreference(
             entries.firstOrNull { it.storageId == value } ?: default
     }
 }
+
+enum class DashboardDistanceUnitPreference(
+    val storageId: String,
+    val displayName: String,
+) {
+    DYNAMIC("dynamic", "Dynamic m/cm/mm"),
+    STATIC_METERS("meters", "Static metres"),
+    ;
+
+    companion object {
+        val default: DashboardDistanceUnitPreference = DYNAMIC
+
+        fun fromStorageId(value: String?): DashboardDistanceUnitPreference =
+            entries.firstOrNull { it.storageId == value } ?: default
+    }
+}

@@ -82,6 +82,7 @@ data class RecordingServiceState(
     val receiverRtkEvidenceAtMillis: Long? = null,
     val correctionInputRtcmAtMillis: Long? = null,
     val rtcmDecodedAtMillis: Long? = null,
+    val correctionLastUpdatedAtMillis: Long? = null,
     val rtcmLastMessageId: Int? = null,
     val rtcmLastBaseId: Int? = null,
     val latLon: String = "n/a",

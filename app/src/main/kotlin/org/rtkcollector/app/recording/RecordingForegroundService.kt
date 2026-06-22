@@ -275,6 +275,7 @@ class RecordingForegroundService : Service() {
             rtcmDecodedAtMillis = null,
             rtcmLastMessageId = null,
             rtcmLastBaseId = null,
+            correctionLastUpdatedAtMillis = null,
             um980Frequency = DEFAULT_UM980_FREQUENCY_DISPLAY,
             um980Mode = "n/a",
             ubloxFrequency = DEFAULT_UBLOX_FREQUENCY_DISPLAY,
@@ -783,7 +784,10 @@ class RecordingForegroundService : Service() {
         )
         val frames = rtcmExtractor.accept(bytes)
         if (frames.isNotEmpty()) {
-            state = state.copy(correctionInputRtcmAtMillis = android.os.SystemClock.elapsedRealtime())
+            state = state.copy(
+                correctionInputRtcmAtMillis = android.os.SystemClock.elapsedRealtime(),
+                correctionLastUpdatedAtMillis = System.currentTimeMillis(),
+            )
         }
         frames.forEach { frame ->
             runCatching {
@@ -2100,6 +2104,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_RTK_CALCULATE_STATUS_DESCRIPTION, state.rtkCalculateStatusDescription)
                 putExtra(EXTRA_STATE_RTCM_LAST_MESSAGE_ID, state.rtcmLastMessageId ?: -1)
                 putExtra(EXTRA_STATE_RTCM_LAST_BASE_ID, state.rtcmLastBaseId ?: -1)
+                putExtra(EXTRA_STATE_CORRECTION_LAST_UPDATED_AT, state.correctionLastUpdatedAtMillis ?: -1L)
                 putExtra(EXTRA_STATE_LAT_LON, state.latLon)
                 putExtra(EXTRA_STATE_ELLIPSOIDAL_HEIGHT, state.ellipsoidalHeight)
                 putExtra(EXTRA_STATE_ALTITUDE, state.altitude)
@@ -2857,6 +2862,7 @@ class RecordingForegroundService : Service() {
             rtcmDecodedAtMillis = nowMillis,
             rtcmLastMessageId = telemetry.rtcmMessageId ?: rtcmLastMessageId,
             rtcmLastBaseId = telemetry.rtcmBaseId ?: rtcmLastBaseId,
+            correctionLastUpdatedAtMillis = nowMillis,
             receiverRtkStatus = receiverRtkStatusAfterRtcmDecoded(
                 previousStatus = receiverRtkStatus,
                 lastReceiverRtkEvidenceAtMillis = receiverRtkEvidenceAtMillis,
@@ -3157,6 +3163,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_RTK_CALCULATE_STATUS_DESCRIPTION = "rtkCalculateStatusDescription"
         const val EXTRA_STATE_RTCM_LAST_MESSAGE_ID = "rtcmLastMessageId"
         const val EXTRA_STATE_RTCM_LAST_BASE_ID = "rtcmLastBaseId"
+        const val EXTRA_STATE_CORRECTION_LAST_UPDATED_AT = "correctionLastUpdatedAtMillis"
         const val EXTRA_STATE_LAT_LON = "latLon"
         const val EXTRA_STATE_ELLIPSOIDAL_HEIGHT = "ellipsoidalHeight"
         const val EXTRA_STATE_ALTITUDE = "altitude"

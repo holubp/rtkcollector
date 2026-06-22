@@ -54,6 +54,22 @@ Verification:
 - Manual: top chip can switch between Off, `1 Hz`, `2 Hz`, `5 Hz` and `10 Hz`
   before recording and during recording.
 
+### UI-DASH-005: Dashboard Labels And Units Are Consistent
+
+Status: Normative
+
+Dashboard fields with the same semantics MUST use the same labels and unit
+formatting across cards. Horizontal/vertical accuracy estimates SHOULD be
+presented as `Acc H/V`; latitude/longitude component estimates SHOULD be
+presented as `Err lat` and `Err lon`; satellites MUST state that values are
+`used / in view`. The dashboard MUST offer dynamic distance units
+(`m`/`cm`/`mm`) and static metre display for distance-like accuracy/error
+fields.
+
+Verification:
+- Automated: dashboard formatter and layout preference tests.
+- Manual: live dashboard review in portrait and landscape.
+
 ### UI-BASE-001: Base Coordinate Actions Are Compact And Explicit
 
 Status: Normative

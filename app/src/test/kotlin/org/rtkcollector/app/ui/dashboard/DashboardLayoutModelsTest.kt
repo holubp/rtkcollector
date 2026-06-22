@@ -20,6 +20,21 @@ class DashboardLayoutModelsTest {
     }
 
     @Test
+    fun `default distance units are dynamic`() {
+        assertEquals(DashboardDistanceUnitPreference.DYNAMIC, DashboardDistanceUnitPreference.default)
+        assertEquals("dynamic", DashboardDistanceUnitPreference.DYNAMIC.storageId)
+        assertEquals("Dynamic m/cm/mm", DashboardDistanceUnitPreference.DYNAMIC.displayName)
+    }
+
+    @Test
+    fun `stored distance unit ids parse defensively`() {
+        assertEquals(DashboardDistanceUnitPreference.STATIC_METERS, DashboardDistanceUnitPreference.fromStorageId("meters"))
+        assertEquals(DashboardDistanceUnitPreference.DYNAMIC, DashboardDistanceUnitPreference.fromStorageId("unknown"))
+        assertEquals(DashboardDistanceUnitPreference.DYNAMIC, DashboardDistanceUnitPreference.fromStorageId(""))
+        assertEquals(DashboardDistanceUnitPreference.DYNAMIC, DashboardDistanceUnitPreference.fromStorageId(null))
+    }
+
+    @Test
     fun `compact dashboard uses two columns on standard wide widths`() {
         assertEquals(2, compactDashboardCardColumnCount(370, 240))
         assertEquals(2, compactDashboardCardColumnCount(340, 240))

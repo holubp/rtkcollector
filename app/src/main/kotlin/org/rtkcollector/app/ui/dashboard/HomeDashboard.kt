@@ -85,6 +85,7 @@ private val SetupProfilesDashboardCardHeight = 160.dp
 fun HomeDashboard(
     state: DashboardState,
     layoutPreference: DashboardLayoutPreference = DashboardLayoutPreference.default,
+    distanceUnitPreference: DashboardDistanceUnitPreference = DashboardDistanceUnitPreference.default,
     startInProgress: Boolean = false,
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
@@ -192,6 +193,7 @@ fun HomeDashboard(
                     RailDashboard(
                         state = state,
                         status = state.status,
+                        distanceUnitPreference = distanceUnitPreference,
                         onWorkflow = onWorkflow,
                         onSettingsSet = onSettingsSet,
                         onMountpoint = onNtrip,
@@ -209,6 +211,7 @@ fun HomeDashboard(
                     CompactDashboard(
                         state = state,
                         status = state.status,
+                        distanceUnitPreference = distanceUnitPreference,
                         availableWidthDp = maxWidth.value.toInt(),
                         availableHeightDp = maxHeight.value.toInt(),
                         onWorkflow = onWorkflow,
@@ -391,6 +394,7 @@ private fun dashboardSecondaryButtonColors() = ButtonDefaults.buttonColors(
 private fun CompactDashboard(
     state: DashboardState,
     status: DashboardStatus,
+    distanceUnitPreference: DashboardDistanceUnitPreference,
     availableWidthDp: Int,
     availableHeightDp: Int,
     onWorkflow: () -> Unit,
@@ -423,6 +427,7 @@ private fun CompactDashboard(
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
         DashboardCards(
             state = state,
+            distanceUnitPreference = distanceUnitPreference,
             availableWidthDp = availableWidthDp,
             availableHeightDp = availableHeightDp,
             onSettingsSet = onSettingsSet,
@@ -439,6 +444,7 @@ private fun CompactDashboard(
 private fun RailDashboard(
     state: DashboardState,
     status: DashboardStatus,
+    distanceUnitPreference: DashboardDistanceUnitPreference,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onMountpoint: () -> Unit,
@@ -501,6 +507,7 @@ private fun RailDashboard(
         }
         DashboardCards(
             state = state,
+            distanceUnitPreference = distanceUnitPreference,
             onSettingsSet = onSettingsSet,
             onHelp = onHelp,
             modifier = Modifier.weight(1f),
@@ -692,6 +699,7 @@ private fun String.isMissingDashboardValue(): Boolean {
 @Composable
 private fun DashboardCards(
     state: DashboardState,
+    distanceUnitPreference: DashboardDistanceUnitPreference,
     modifier: Modifier = Modifier,
     availableWidthDp: Int? = null,
     availableHeightDp: Int? = null,
@@ -722,6 +730,7 @@ private fun DashboardCards(
                     ) {
                         PositionCard(
                             state = state,
+                            distanceUnitPreference = distanceUnitPreference,
                             coordinateAveraging = coordinateAveraging,
                             onStartCoordinateAveraging = onStartCoordinateAveraging,
                             onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -734,22 +743,23 @@ private fun DashboardCards(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        FixCard(state = state, onHelp = onHelp)
-                        state.rtklib?.let { RtklibCard(it) }
+                        FixCard(state = state, distanceUnitPreference = distanceUnitPreference, onHelp = onHelp)
+                        state.rtklib?.let { RtklibCard(it, distanceUnitPreference) }
                         RecordingCard(state = state, onHelp = onHelp)
                     }
                 }
             } else {
                 PositionCard(
                     state = state,
+                    distanceUnitPreference = distanceUnitPreference,
                     coordinateAveraging = coordinateAveraging,
                     onStartCoordinateAveraging = onStartCoordinateAveraging,
                     onStopCoordinateAveraging = onStopCoordinateAveraging,
                     onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
                     onHelp = onHelp,
                 )
-                FixCard(state = state, onHelp = onHelp)
-                state.rtklib?.let { RtklibCard(it) }
+                FixCard(state = state, distanceUnitPreference = distanceUnitPreference, onHelp = onHelp)
+                state.rtklib?.let { RtklibCard(it, distanceUnitPreference) }
                 CorrectionsCard(state = state, onHelp = onHelp)
                 RecordingCard(state = state, onHelp = onHelp)
             }
@@ -761,6 +771,7 @@ private fun DashboardCards(
 @Composable
 private fun PositionCard(
     state: DashboardState,
+    distanceUnitPreference: DashboardDistanceUnitPreference,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -815,8 +826,8 @@ private fun PositionCard(
         Metric("Ellipsoidal height", state.position.ellipsoidalHeight)
         Metric("Altitude", state.position.altitude)
         DashedSeparator()
-        Metric("Latitude error", state.position.latError)
-        Metric("Longitude error", state.position.lonError)
+        Metric("Err lat", formatDashboardDistance(state.position.latError, distanceUnitPreference))
+        Metric("Err lon", formatDashboardDistance(state.position.lonError, distanceUnitPreference))
     }
     if (showCopyDialog && coordinates != null) {
         CoordinateCopyDialog(
@@ -960,6 +971,7 @@ private fun String.isBaseCoordinateWorkflow(): Boolean {
 @Composable
 private fun FixCard(
     state: DashboardState,
+    distanceUnitPreference: DashboardDistanceUnitPreference,
     onHelp: (HelpTopic) -> Unit,
 ) {
     DashboardCard(
@@ -969,12 +981,15 @@ private fun FixCard(
         onHelp = onHelp,
     ) {
         MajorValue(state.fix.fixType)
-        Metric("Sats used/view", state.fix.satellites)
+        Metric("Sats used / in view", state.fix.satellites)
         Metric("PDOP", state.fix.pdop)
         Metric("HDOP / VDOP", state.fix.hdopVdop)
         DashedSeparator()
-        Metric("H accuracy", state.fix.horizontalAccuracy)
-        Metric("V accuracy", state.fix.verticalAccuracy)
+        Metric(
+            "Acc H/V",
+            "${formatDashboardDistance(state.fix.horizontalAccuracy, distanceUnitPreference)} / " +
+                formatDashboardDistance(state.fix.verticalAccuracy, distanceUnitPreference),
+        )
         Metric("Diff age", state.fix.differentialAge)
         Metric("Baseline", state.fix.baseline)
         DashedSeparator()
@@ -995,7 +1010,10 @@ private fun FixCard(
 }
 
 @Composable
-private fun RtklibCard(state: RtklibCardState) {
+private fun RtklibCard(
+    state: RtklibCardState,
+    distanceUnitPreference: DashboardDistanceUnitPreference,
+) {
     DashboardCard(
         title = "RTKLIB",
         cardHeight = RtklibDashboardCardHeight,
@@ -1004,10 +1022,10 @@ private fun RtklibCard(state: RtklibCardState) {
     ) {
         MajorValue(state.state)
         Metric("Fix", state.fixClass)
-        Metric("Age", state.age)
+        Metric("Solution age", state.age)
         Metric("Lat/Lon", state.latLon)
         Metric("Ell h", state.ellipsoidalHeight)
-        Metric("Acc H/V", state.accuracyHv)
+        Metric("Acc H/V", formatDashboardDistancePair(state.accuracyHv, distanceUnitPreference))
         Metric("Route", state.routePlan)
         Metric("Snapshot", state.snapshotId)
         if (!state.lastError.equals("n/a", ignoreCase = true)) {
@@ -1038,6 +1056,7 @@ private fun CorrectionsCard(
         Metric("Station ID", state.ntrip.stationId)
         Metric("Base position", state.ntrip.baseLatLon)
         DashedSeparator()
+        Metric("Last update", state.ntrip.lastUpdated)
         Metric("Inbound rate", state.ntrip.rates)
         Metric("NTRIP received", state.ntrip.transferred)
         Metric("Saved corrections", state.files.ntripBytes)

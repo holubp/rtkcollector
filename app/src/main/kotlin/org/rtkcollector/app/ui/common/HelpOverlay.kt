@@ -16,8 +16,8 @@ enum class HelpTopic(
     val body: String,
 ) {
     SATS_USED_VIEW(
-        title = "Sats used/view",
-        body = "Used is the number of satellites in the receiver solution. View is the aggregate visible-satellite count reported by telemetry such as GSV or STADOP.",
+        title = "Sats used / in view",
+        body = "Used is the number of satellites in the receiver solution. In view is the aggregate visible-satellite count reported by telemetry such as GSV or STADOP.",
     ),
     ELLIPSOIDAL_HEIGHT(
         title = "Ellipsoidal height",

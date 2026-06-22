@@ -47,6 +47,7 @@
 | `UI-DASH-002` | Manual + review | Live UM980 session screenshots/video | Needs review | No jumping cards. |
 | `UI-DASH-003` | Manual + review | Phone portrait dashboard screenshot | Needs review | Live-monitoring cards should switch to single column when needed. |
 | `UI-DASH-004` | Automated + manual | Dashboard state/action tests; dashboard chip smoke test | Needs review | Mock GPS chip is top-level; no placeholder Mark action. |
+| `UI-DASH-005` | Automated + manual | Dashboard formatter/layout tests; dashboard screenshot review | Needs review | Dashboard labels and dynamic/static distance units are consistent across cards. |
 | `UI-BASE-001` | Automated + manual | Dashboard state tests; temporary-base dashboard review | Needs review | Keep controls compact and explicit. |
 | `UI-SETUP-001` | Automated + manual | Active setup resolver tests; settings hub review | In progress | Active settings set is visible in the settings hub. Main-menu refinement remains under review. |
 | `UI-SETUP-002` | Automated + manual | Active setup resolver tests; settings-set editor review | In progress | Policy model and JSON persistence exist; compact editor polish remains. |

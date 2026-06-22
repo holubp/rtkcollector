@@ -20,6 +20,27 @@ fun formatDistance(meters: Double?): String {
     }
 }
 
+fun formatDashboardDistance(
+    value: String,
+    unitPreference: DashboardDistanceUnitPreference,
+): String {
+    val meters = value.distanceMetersOrNull() ?: return value
+    return when (unitPreference) {
+        DashboardDistanceUnitPreference.DYNAMIC -> formatDistance(meters)
+        DashboardDistanceUnitPreference.STATIC_METERS -> String.format(Locale.US, "%.3f m", meters)
+    }
+}
+
+fun formatDashboardDistancePair(
+    value: String,
+    unitPreference: DashboardDistanceUnitPreference,
+): String {
+    val parts = value.split("/")
+    if (parts.size != 2) return formatDashboardDistance(value, unitPreference)
+    return parts
+        .joinToString(" / ") { part -> formatDashboardDistance(part.trim(), unitPreference) }
+}
+
 fun formatBytes(bytes: Long?): String {
     val value = bytes ?: return "n/a"
     return when {
@@ -62,6 +83,12 @@ internal fun displayUtcTime(value: String?): String {
     }.getOrDefault(trimmed)
 }
 
+internal fun displayEpochMillisUtc(value: Long?): String =
+    value
+        ?.takeIf { it > 0L }
+        ?.let { FixedMillisUtcFormatter.format(Instant.ofEpochMilli(it)) }
+        ?: "n/a"
+
 internal fun receiverFrequencyForFamily(receiverFamily: String?): String =
     when {
         receiverFamily?.startsWith("ublox", ignoreCase = true) == true -> DefaultUbloxReceiverFrequency
@@ -70,6 +97,20 @@ internal fun receiverFrequencyForFamily(receiverFamily: String?): String =
 
 private fun Double.oneDecimal(): String =
     String.format(Locale.US, "%.1f", this)
+
+private val DistancePattern = Regex("""^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(mm|cm|m|km)$""", RegexOption.IGNORE_CASE)
+
+private fun String.distanceMetersOrNull(): Double? {
+    val match = DistancePattern.matchEntire(trim()) ?: return null
+    val value = match.groupValues[1].toDoubleOrNull() ?: return null
+    return when (match.groupValues[2].lowercase(Locale.US)) {
+        "mm" -> value / 1000.0
+        "cm" -> value / 100.0
+        "m" -> value
+        "km" -> value * 1000.0
+        else -> null
+    }
+}
 
 private val NmeaUtcPattern = Regex("""^(\d{6})(?:\.(\d+))?$""")
 

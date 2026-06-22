@@ -449,6 +449,7 @@ data class FixCardState(
 data class NtripCardState(
     val url: String = "n/a",
     val status: String = "n/a",
+    val lastUpdated: String = "n/a",
     val transferred: String = "n/a",
     val stationId: String = "n/a",
     val baseLatLon: String = "n/a",

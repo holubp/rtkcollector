@@ -78,6 +78,9 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",
         status = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP) ?: "n/a",
+        lastUpdated = displayEpochMillisUtc(
+            positiveLongExtra(intent, RecordingForegroundService.EXTRA_STATE_CORRECTION_LAST_UPDATED_AT),
+        ),
         transferred = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_TRANSFERRED) ?: "0 B",
         stationId = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_STATION_ID) ?: "n/a",
         baseLatLon = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_BASE_LAT_LON) ?: "n/a",

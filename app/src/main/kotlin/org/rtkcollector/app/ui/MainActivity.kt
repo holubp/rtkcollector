@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -120,6 +121,7 @@ import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
+import org.rtkcollector.app.ui.dashboard.DashboardDistanceUnitPreference
 import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
 import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.FixCardState
@@ -248,6 +250,9 @@ fun RtkCollectorApp(
     }
     var dashboardLayout by rememberSaveable(stateSaver = DashboardLayoutPreferenceSaver) {
         mutableStateOf(DashboardLayoutPreference.default)
+    }
+    var dashboardDistanceUnits by rememberSaveable(stateSaver = DashboardDistanceUnitPreferenceSaver) {
+        mutableStateOf(DashboardDistanceUnitPreference.default)
     }
     var showDashboardLayoutDialog by remember { mutableStateOf(false) }
     var showMockGpsDialog by remember { mutableStateOf(false) }
@@ -658,6 +663,7 @@ fun RtkCollectorApp(
                 AppScreen.HOME -> HomeDashboard(
                     state = state,
                     layoutPreference = dashboardLayout,
+                    distanceUnitPreference = dashboardDistanceUnits,
                     startInProgress = startInProgress,
                     onPrimaryAction = {
                         if (state.isRecording) {
@@ -799,7 +805,7 @@ fun RtkCollectorApp(
                             }
                         },
                         onBaseCoordinates = { screen = AppScreen.BASE_COORDINATES },
-                        dashboardLayoutLabel = dashboardLayout.displayName,
+                        dashboardLayoutLabel = "${dashboardLayout.displayName}; ${dashboardDistanceUnits.displayName}",
                         onDashboardLayout = { showDashboardLayoutDialog = true },
                         onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
                         onNtripCasterUpload = { screen = AppScreen.NTRIP_CASTER_UPLOAD },
@@ -2175,9 +2181,13 @@ fun RtkCollectorApp(
             if (showDashboardLayoutDialog) {
                 DashboardLayoutDialog(
                     selected = dashboardLayout,
+                    selectedDistanceUnits = dashboardDistanceUnits,
                     onSelect = { layout ->
                         dashboardLayout = layout
                         showDashboardLayoutDialog = false
+                    },
+                    onDistanceUnitsSelect = { unitPreference ->
+                        dashboardDistanceUnits = unitPreference
                     },
                     onDismiss = { showDashboardLayoutDialog = false },
                 )
@@ -2245,7 +2255,9 @@ private fun SettingsExportDialog(
 @Composable
 private fun DashboardLayoutDialog(
     selected: DashboardLayoutPreference,
+    selectedDistanceUnits: DashboardDistanceUnitPreference,
     onSelect: (DashboardLayoutPreference) -> Unit,
+    onDistanceUnitsSelect: (DashboardDistanceUnitPreference) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -2253,6 +2265,11 @@ private fun DashboardLayoutDialog(
         title = { Text("Dashboard layout") },
         text = {
             androidx.compose.foundation.layout.Column {
+                Text(
+                    text = "Layout",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 DashboardLayoutPreference.entries.forEach { layout ->
                     TextButton(
                         onClick = { onSelect(layout) },
@@ -2260,6 +2277,21 @@ private fun DashboardLayoutDialog(
                     ) {
                         val suffix = if (layout == selected) " (selected)" else ""
                         Text("${layout.displayName}$suffix")
+                    }
+                }
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Distance units",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                DashboardDistanceUnitPreference.entries.forEach { unitPreference ->
+                    TextButton(
+                        onClick = { onDistanceUnitsSelect(unitPreference) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        val suffix = if (unitPreference == selectedDistanceUnits) " (selected)" else ""
+                        Text("${unitPreference.displayName}$suffix")
                     }
                 }
             }
@@ -3911,6 +3943,11 @@ private val DashboardSelectorSaver: Saver<DashboardSelector?, String> = Saver(
 private val DashboardLayoutPreferenceSaver: Saver<DashboardLayoutPreference, String> = Saver(
     save = { it.storageId },
     restore = { DashboardLayoutPreference.fromStorageId(it) },
+)
+
+private val DashboardDistanceUnitPreferenceSaver: Saver<DashboardDistanceUnitPreference, String> = Saver(
+    save = { it.storageId },
+    restore = { DashboardDistanceUnitPreference.fromStorageId(it) },
 )
 
 private fun ProfileKind.backScreen(): AppScreen =

@@ -86,6 +86,46 @@ class BestSolutionTickLogicTest {
     }
 
     @Test
+    fun `rtklib only mock policy publishes fresh rtklib candidate`() {
+        val device = candidate("UBX-NAV-PVT", FixClass.DGPS, updatedAtMillis = 1_000L)
+        val rtklib = candidate(
+            sourceId = "RTKLIB",
+            fixClass = FixClass.RTK_FLOAT,
+            updatedAtMillis = 1_200L,
+            engine = SolutionEngine.RTKLIB_REALTIME,
+        )
+
+        val out = BestSolutionTickLogic.compute(
+            input(
+                candidates = listOf(device, rtklib),
+                nowMillis = 1_500L,
+                mockEnabled = true,
+            ).copy(mockPolicy = SolutionSourcePolicy.RTKLIB_ONLY),
+        )
+
+        val publish = out.publishAction as PublishAction.Publish
+        assertEquals("RTKLIB", publish.snapshot.sourceId)
+        assertEquals(SolutionEngine.RTKLIB_REALTIME, publish.snapshot.engine)
+        assertEquals(FixClass.RTK_FLOAT, publish.snapshot.fixClass)
+    }
+
+    @Test
+    fun `rtklib only mock policy does not fall back to device candidate`() {
+        val device = candidate("UBX-NAV-PVT", FixClass.DGPS, updatedAtMillis = 1_000L)
+
+        val out = BestSolutionTickLogic.compute(
+            input(
+                candidates = listOf(device),
+                nowMillis = 1_500L,
+                mockEnabled = true,
+            ).copy(mockPolicy = SolutionSourcePolicy.RTKLIB_ONLY),
+        )
+
+        assertEquals(MockLocationPublishResult.STALE, out.stateDelta.mockResult)
+        assertTrue(out.publishAction is PublishAction.None)
+    }
+
+    @Test
     fun `candidate display delta carries position and quality for direct monitoring`() {
         val candidate = candidate(
             sourceId = "UBX-NAV-PVT",

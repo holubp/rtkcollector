@@ -2024,6 +2024,14 @@ class RecordingForegroundService : Service() {
         rtklibWorker?.snapshot()?.let { snapshot ->
             maybeAppendRtklibStatus(snapshot, System.currentTimeMillis())
             val solution = snapshot.latestSolution
+            solution?.let { rtklibSolution ->
+                RtklibSolutionCandidateMapper.toCandidate(
+                    snapshot = rtklibSolution,
+                    receiverFamily = activeReceiverFamily,
+                )?.let { candidate ->
+                    solutionCandidates[candidate.sourceId] = candidate
+                }
+            }
             state = state.copy(
                 rtklibState = snapshot.state.name,
                 rtklibLastError = snapshot.lastError ?: state.rtklibLastError,

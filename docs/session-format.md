@@ -100,7 +100,10 @@ The real-time user-facing RTKLIB outputs are `rtklib-solution.nmea` and
 Completed-session postprocessing may add `rtklib-postprocessed-forward.nmea`,
 `rtklib-postprocessed-forward.pos`, `rtklib-postprocessed-combined.nmea` and
 `rtklib-postprocessed-combined.pos`. These files are shareable only after an
-explicit postprocessing action has generated them.
+explicit postprocessing action has generated them. For filesystem-backed
+sessions, that action calls the native RTKLIB-EX library path: `convrnx()` for
+receiver/correction conversion and `postpos()` for the selected forward or
+forward/backward solution mode.
 The current configuration metadata fields are `rtklibProfileId`,
 `rtklibEnabled`, `rtklibPreset`, `rtklibOutputNmea` and `rtklibOutputPos`.
 These fields must not contain NTRIP passwords, tokens or other secrets.

@@ -1,8 +1,10 @@
 #include <jni.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <sstream>
@@ -21,6 +23,7 @@ constexpr int SERVER_STREAM_ROVER = 0;
 constexpr int SERVER_STREAM_BASE = 1;
 constexpr int SERVER_STREAM_NMEA = 3;
 constexpr int SERVER_STREAM_POS = 4;
+constexpr int RINEX_OUTPUT_FILE_COUNT = 9;
 
 struct NativeResult {
     std::string state = "RUNNING";
@@ -91,6 +94,12 @@ static int rover_format_for(const char *format) {
     return -1;
 }
 
+static int solution_type_for(const char *solution_type) {
+    if (std::strcmp(solution_type, "FORWARD") == 0) return SOLTYPE_FORWARD;
+    if (std::strcmp(solution_type, "FORWARD_BACKWARD") == 0) return SOLTYPE_COMBINED;
+    return -1;
+}
+
 static int clamp_positive(int value, int minimum) {
     return std::max(value, minimum);
 }
@@ -115,6 +124,156 @@ static void configure_options(RtklibEngineHandle *engine, const char *preset, in
     engine->solopt[1].times = TIMES_GPST;
     engine->solopt[1].timeu = 3;
     engine->solopt[1].outhead = 0;
+}
+
+static void configure_postprocess_options(
+    const char *preset,
+    int frequency_count,
+    int solution_type,
+    int solution_format,
+    prcopt_t *prcopt,
+    solopt_t *solopt
+) {
+    *prcopt = prcopt_default;
+    prcopt->soltype = solution_type;
+    prcopt->mode = std::strcmp(preset, "TEMPORARY_BASE_STATIC_RTK") == 0 ? PMODE_STATIC : PMODE_KINEMA;
+    prcopt->navsys = SYS_GPS | SYS_GLO | SYS_GAL | SYS_CMP | SYS_QZS;
+    prcopt->nf = std::max(1, std::min(3, frequency_count));
+    prcopt->refpos = POSOPT_RTCM;
+    prcopt->rovpos = POSOPT_POS_LLH;
+
+    *solopt = solopt_default;
+    solopt->posf = solution_format;
+    solopt->times = TIMES_GPST;
+    solopt->timeu = 3;
+    solopt->outhead = solution_format == SOLF_LLH ? 1 : 0;
+}
+
+static void configure_rinex_options(rnxopt_t *rnxopt, int frequency_count) {
+    std::memset(rnxopt, 0, sizeof(rnxopt_t));
+    rnxopt->rnxver = 304;
+    rnxopt->obstype = OBSTYPE_PR | OBSTYPE_CP | OBSTYPE_DOP | OBSTYPE_SNR;
+    rnxopt->navsys = SYS_GPS | SYS_GLO | SYS_GAL | SYS_QZS | SYS_SBS | SYS_CMP | SYS_IRN;
+    rnxopt->ttol = 0.005;
+    rnxopt->freqtype = FREQTYPE_L1;
+    if (frequency_count >= 2) rnxopt->freqtype |= FREQTYPE_L2;
+    if (frequency_count >= 3) rnxopt->freqtype |= FREQTYPE_L3;
+    for (int i = 0; i < RNX_NUMSYS; i++) {
+        for (int j = 0; j < MAXCODE; j++) rnxopt->mask[i][j] = '1';
+        rnxopt->mask[i][MAXCODE] = '\0';
+    }
+    std::strncpy(rnxopt->prog, "RtkCollector", sizeof(rnxopt->prog) - 1);
+    std::strncpy(rnxopt->runby, "RtkCollector", sizeof(rnxopt->runby) - 1);
+}
+
+static bool file_non_empty(const std::string &path) {
+    FILE *fp = std::fopen(path.c_str(), "rb");
+    if (!fp) return false;
+    std::fseek(fp, 0, SEEK_END);
+    long size = std::ftell(fp);
+    std::fclose(fp);
+    return size > 0;
+}
+
+static void add_existing_file(const std::string &path, std::vector<std::string> *files) {
+    if (!path.empty() && file_non_empty(path)) files->push_back(path);
+}
+
+static std::string postprocess_work_path(const std::string &output_pos, const char *suffix) {
+    return output_pos + suffix;
+}
+
+struct RinexConversionOutput {
+    std::string observation;
+    std::vector<std::string> navigation;
+    std::vector<std::string> generated_files;
+};
+
+static bool convert_raw_to_rinex(
+    int format,
+    int frequency_count,
+    const std::string &input,
+    const std::string &prefix,
+    RinexConversionOutput *output,
+    std::string *error
+) {
+    rnxopt_t rnxopt{};
+    configure_rinex_options(&rnxopt, frequency_count);
+    std::array<std::string, RINEX_OUTPUT_FILE_COUNT> names = {
+        prefix + ".obs",
+        prefix + ".nav",
+        prefix + ".gnav",
+        prefix + ".hnav",
+        prefix + ".qnav",
+        prefix + ".lnav",
+        prefix + ".cnav",
+        prefix + ".inav",
+        "",
+    };
+    std::array<std::array<char, 1024>, RINEX_OUTPUT_FILE_COUNT> buffers{};
+    std::array<char *, RINEX_OUTPUT_FILE_COUNT> outputs{};
+    for (int i = 0; i < RINEX_OUTPUT_FILE_COUNT; i++) {
+        if (names[i].empty()) {
+            outputs[i] = nullptr;
+            continue;
+        }
+        std::snprintf(buffers[i].data(), buffers[i].size(), "%s", names[i].c_str());
+        outputs[i] = buffers[i].data();
+        std::remove(names[i].c_str());
+    }
+
+    if (!convrnx(format, &rnxopt, input.c_str(), outputs.data())) {
+        *error = "RTKLIB convrnx failed for " + input;
+        return false;
+    }
+
+    for (int i = 0; i <= 7; i++) {
+        if (file_non_empty(names[i])) output->generated_files.push_back(names[i]);
+    }
+    if (file_non_empty(names[0])) output->observation = names[0];
+    for (int i = 1; i <= 7; i++) add_existing_file(names[i], &output->navigation);
+    return !output->observation.empty();
+}
+
+static bool run_postpos_output(
+    const std::vector<std::string> &inputs,
+    const char *preset,
+    int frequency_count,
+    int solution_type,
+    int solution_format,
+    const std::string &output,
+    std::string *error
+) {
+    prcopt_t prcopt{};
+    solopt_t solopt{};
+    filopt_t filopt{};
+    configure_postprocess_options(preset, frequency_count, solution_type, solution_format, &prcopt, &solopt);
+
+    std::vector<const char *> input_ptrs;
+    input_ptrs.reserve(inputs.size());
+    for (const auto &path : inputs) input_ptrs.push_back(path.c_str());
+    std::remove(output.c_str());
+
+    gtime_t zero{};
+    int status = postpos(
+        zero,
+        zero,
+        0.0,
+        0.0,
+        &prcopt,
+        &solopt,
+        &filopt,
+        input_ptrs.data(),
+        static_cast<int>(input_ptrs.size()),
+        output.c_str(),
+        "",
+        ""
+    );
+    if (status != 0 || !file_non_empty(output)) {
+        *error = "RTKLIB postpos failed for " + output;
+        return false;
+    }
+    return true;
 }
 
 static void release_rtklib_state(RtklibEngineHandle *engine) {
@@ -418,6 +577,113 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibSnapshot(JNIE
         engine->latest = result;
     }
     return to_java_result(env, engine, result);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
+    JNIEnv *env,
+    jclass,
+    jstring preset,
+    jstring rover_format,
+    jint frequency_count,
+    jstring solution_type,
+    jstring receiver_rx_raw,
+    jstring correction_rtcm3,
+    jstring output_nmea,
+    jstring output_pos
+) {
+    const char *preset_chars = env->GetStringUTFChars(preset, nullptr);
+    const char *rover_chars = env->GetStringUTFChars(rover_format, nullptr);
+    const char *solution_type_chars = env->GetStringUTFChars(solution_type, nullptr);
+    const char *receiver_rx_chars = env->GetStringUTFChars(receiver_rx_raw, nullptr);
+    const char *correction_chars = env->GetStringUTFChars(correction_rtcm3, nullptr);
+    const char *output_nmea_chars = env->GetStringUTFChars(output_nmea, nullptr);
+    const char *output_pos_chars = env->GetStringUTFChars(output_pos, nullptr);
+
+    std::string error;
+    int rover_format_id = rover_format_for(rover_chars);
+    int solution_type_id = solution_type_for(solution_type_chars);
+    if (rover_format_id < 0) {
+        error = std::string("Unsupported RTKLIB postprocess rover format: ") + rover_chars;
+    } else if (solution_type_id < 0) {
+        error = std::string("Unsupported RTKLIB postprocess solution type: ") + solution_type_chars;
+    } else {
+        std::vector<std::string> inputs;
+        std::vector<std::string> generated_files;
+        std::string output_pos_string(output_pos_chars);
+        std::string rover_prefix = postprocess_work_path(output_pos_string, ".rover");
+        std::string base_prefix = postprocess_work_path(output_pos_string, ".base");
+        RinexConversionOutput rover_rinex{};
+        RinexConversionOutput base_rinex{};
+
+        bool rover_ok = convert_raw_to_rinex(
+            rover_format_id,
+            frequency_count,
+            receiver_rx_chars,
+            rover_prefix,
+            &rover_rinex,
+            &error);
+        generated_files.insert(
+            generated_files.end(),
+            rover_rinex.generated_files.begin(),
+            rover_rinex.generated_files.end());
+        if (!rover_ok) {
+            if (error.empty()) error = "RTKLIB rover raw conversion produced no observations";
+        } else {
+            bool base_ok = convert_raw_to_rinex(
+                STRFMT_RTCM3,
+                frequency_count,
+                correction_chars,
+                base_prefix,
+                &base_rinex,
+                &error);
+            generated_files.insert(
+                generated_files.end(),
+                base_rinex.generated_files.begin(),
+                base_rinex.generated_files.end());
+
+            if (!base_ok) {
+                if (error.empty()) error = "RTKLIB correction conversion produced no base observations";
+            } else {
+                inputs.push_back(rover_rinex.observation);
+                inputs.push_back(base_rinex.observation);
+                inputs.insert(inputs.end(), rover_rinex.navigation.begin(), rover_rinex.navigation.end());
+                inputs.insert(inputs.end(), base_rinex.navigation.begin(), base_rinex.navigation.end());
+
+                if (!run_postpos_output(
+                        inputs,
+                        preset_chars,
+                        frequency_count,
+                        solution_type_id,
+                        SOLF_LLH,
+                        output_pos_chars,
+                        &error)) {
+                    if (error.empty()) error = "RTKLIB POS postprocess failed";
+                } else if (!run_postpos_output(
+                        inputs,
+                        preset_chars,
+                        frequency_count,
+                        solution_type_id,
+                        SOLF_NMEA,
+                        output_nmea_chars,
+                        &error)) {
+                    if (error.empty()) error = "RTKLIB NMEA postprocess failed";
+                }
+            }
+        }
+        for (const auto &path : generated_files) std::remove(path.c_str());
+    }
+
+    env->ReleaseStringUTFChars(preset, preset_chars);
+    env->ReleaseStringUTFChars(rover_format, rover_chars);
+    env->ReleaseStringUTFChars(solution_type, solution_type_chars);
+    env->ReleaseStringUTFChars(receiver_rx_raw, receiver_rx_chars);
+    env->ReleaseStringUTFChars(correction_rtcm3, correction_chars);
+    env->ReleaseStringUTFChars(output_nmea, output_nmea_chars);
+    env->ReleaseStringUTFChars(output_pos, output_pos_chars);
+
+    if (error.empty()) return nullptr;
+    return env->NewStringUTF(error.c_str());
 }
 
 extern "C" JNIEXPORT void JNICALL

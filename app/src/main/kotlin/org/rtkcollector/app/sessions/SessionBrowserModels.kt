@@ -17,6 +17,7 @@ data class SessionActionCapabilities(
     val shareZip: Boolean,
     val shareNmea: Boolean,
     val reexportNmea: Boolean,
+    val regenerateRtklib: Boolean,
     val archive: Boolean,
     val restore: Boolean,
     val delete: Boolean,
@@ -27,6 +28,7 @@ data class SessionActionCapabilities(
                 shareZip = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
                 shareNmea = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
                 reexportNmea = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
+                regenerateRtklib = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
                 archive = !isActive && (kind == SessionEntryKind.CURRENT_STOPPED || kind == SessionEntryKind.RECORDING),
                 restore = kind == SessionEntryKind.ARCHIVE,
                 delete = !isActive,
@@ -60,6 +62,7 @@ data class SessionBrowserEntry(
                 shareZip = false,
                 shareNmea = false,
                 reexportNmea = false,
+                regenerateRtklib = false,
                 archive = false,
                 restore = false,
                 delete = false,
@@ -74,6 +77,9 @@ data class SessionBrowserEntry(
 
     val canReexportNmea: Boolean
         get() = effectiveCapabilities.reexportNmea
+
+    val canRegenerateRtklib: Boolean
+        get() = effectiveCapabilities.regenerateRtklib
 
     val canArchive: Boolean
         get() = effectiveCapabilities.archive

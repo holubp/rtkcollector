@@ -50,6 +50,7 @@ class SessionBrowserModelsTest {
                 shareZip = true,
                 shareNmea = true,
                 reexportNmea = true,
+                regenerateRtklib = true,
                 archive = false,
                 restore = false,
                 delete = true,
@@ -59,9 +60,17 @@ class SessionBrowserModelsTest {
         assertTrue(saf.canShareZip)
         assertTrue(saf.canShareNmea)
         assertTrue(saf.canReexportNmea)
+        assertTrue(saf.canRegenerateRtklib)
         assertFalse(saf.canArchive)
         assertFalse(saf.canRestore)
         assertTrue(saf.canDelete)
+    }
+
+    @Test
+    fun `filesystem recordings can regenerate rtklib postprocessed outputs`() {
+        val entry = entry("recording", SessionEntryKind.RECORDING, 10)
+
+        assertTrue(entry.canRegenerateRtklib)
     }
 
     @Test

@@ -13,6 +13,8 @@ def test_app_cmake_builds_pinned_rtklib_without_command_line_apps():
     assert "${RTKLIB_SRC}/rtkpos.c" in cmake
     assert "${RTKLIB_SRC}/rtksvr.c" in cmake
     assert "${RTKLIB_SRC}/solution.c" in cmake
+    assert "${RTKLIB_SRC}/postpos.c" in cmake
+    assert "${RTKLIB_SRC}/convrnx.c" in cmake
     assert "${RTKLIB_SRC}/rcv/novatel.c" in cmake
     assert "${RTKLIB_SRC}/rcv/swiftnav.c" in cmake
     assert "app/consapp" not in cmake
@@ -35,7 +37,21 @@ def test_native_bridge_exports_expected_jni_symbols():
         "nativeRtklibStart",
         "nativeRtklibFeed",
         "nativeRtklibSnapshot",
+        "nativeRtklibPostprocess",
         "nativeRtklibStop",
         "nativeRtklibDestroy",
     ):
         assert f"Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_{symbol}" in bridge
+
+
+def test_native_postprocess_uses_rtklib_library_calls_without_cli_shellout():
+    bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
+
+    assert "convrnx(" in bridge
+    assert "postpos(" in bridge
+    assert "SOLTYPE_FORWARD" in bridge
+    assert "SOLTYPE_COMBINED" in bridge
+    assert "inputs.push_back(rover_rinex.observation);" in bridge
+    assert "inputs.push_back(base_rinex.observation);" in bridge
+    assert "system(" not in bridge
+    assert "popen(" not in bridge

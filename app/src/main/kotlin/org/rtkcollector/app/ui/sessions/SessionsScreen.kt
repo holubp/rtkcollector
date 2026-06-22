@@ -50,6 +50,7 @@ fun SessionsScreen(
     onShareSelected: () -> Unit,
     onShareNmeaSelected: () -> Unit,
     onReexportNmeaSelected: () -> Unit,
+    onRegenerateRtklibSelected: () -> Unit,
     onArchiveSelected: () -> Unit,
     onRestoreSelected: () -> Unit,
     onDeleteSelected: () -> Unit,
@@ -62,6 +63,7 @@ fun SessionsScreen(
     val canShare = selected.any(SessionBrowserEntry::canShareZip)
     val canShareNmea = selected.any(SessionBrowserEntry::canShareNmea)
     val canReexportNmea = selected.any(SessionBrowserEntry::canReexportNmea)
+    val canRegenerateRtklib = selected.any(SessionBrowserEntry::canRegenerateRtklib)
     val canArchive = selected.any(SessionBrowserEntry::canArchive)
     val canRestore = selected.any(SessionBrowserEntry::canRestore)
     val canDelete = selected.any(SessionBrowserEntry::canDelete)
@@ -110,12 +112,18 @@ fun SessionsScreen(
             Button(onClick = onShareSelected, enabled = canShare) { Text("Share ZIP") }
             Button(onClick = onShareNmeaSelected, enabled = canShareNmea) { Text("Share NMEA") }
             Button(onClick = onReexportNmeaSelected, enabled = canReexportNmea) { Text("Regenerate NMEA") }
+            Button(onClick = onRegenerateRtklibSelected, enabled = canRegenerateRtklib) { Text("Regenerate RTKLIB") }
             Button(onClick = { confirmation = ConfirmationAction.ARCHIVE }, enabled = canArchive) { Text("Archive") }
             Button(onClick = { confirmation = ConfirmationAction.RESTORE }, enabled = canRestore) { Text("Restore") }
             Button(onClick = { confirmation = ConfirmationAction.DELETE }, enabled = canDelete) { Text("Delete") }
         }
         Text(
             text = "Regenerate NMEA updates receiver-solution.nmea from the in-device receiver solution only.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = "Regenerate RTKLIB creates postprocessed RTKLIB artifacts; Share NMEA exposes them after generation.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

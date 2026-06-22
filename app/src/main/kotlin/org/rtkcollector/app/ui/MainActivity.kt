@@ -108,6 +108,7 @@ import org.rtkcollector.app.receiver.um980VersionProbeBytes
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.recording.ReceiverNmeaReexporter
+import org.rtkcollector.app.recording.RtklibSessionPostprocessor
 import org.rtkcollector.app.recording.SessionNmeaExporter
 import org.rtkcollector.app.recording.SessionNmeaShareSelection
 import org.rtkcollector.app.recording.SessionNmeaSource
@@ -170,6 +171,8 @@ import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripSourcetableClient
 import org.rtkcollector.core.correction.NtripSourcetableRequest
+import org.rtkcollector.core.rtklib.RtklibNativeBridge
+import org.rtkcollector.core.rtklib.RtklibPostprocessMode
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -267,6 +270,7 @@ fun RtkCollectorApp(
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
     var pendingNmeaSources by remember { mutableStateOf<List<SessionNmeaSource>>(emptyList()) }
     var pendingNmeaEntries by remember { mutableStateOf<List<SessionBrowserEntry>>(emptyList()) }
+    var pendingRtklibPostprocessEntries by remember { mutableStateOf<List<SessionBrowserEntry>>(emptyList()) }
     var profileRevision by remember { mutableStateOf(0) }
     var consoleState by remember { mutableStateOf(DeviceConsoleState()) }
     var consoleInput by rememberSaveable { mutableStateOf("") }
@@ -351,6 +355,34 @@ fun RtkCollectorApp(
                     }
                 }
         }.start()
+    }
+    fun runRtklibPostprocess(entries: List<SessionBrowserEntry>, mode: RtklibPostprocessMode) {
+        val selected = entries.filter { it.canRegenerateRtklib && !it.isSafLocation }
+        if (selected.isEmpty()) {
+            Toast.makeText(context, "Select at least one filesystem-backed completed recording.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val modeLabel = when (mode) {
+            RtklibPostprocessMode.FORWARD -> "forward"
+            RtklibPostprocessMode.FORWARD_BACKWARD -> "forward/backward"
+        }
+        runSessionTask("Regenerate RTKLIB") {
+            val backend = RtklibNativeBridge()
+            selected.forEachIndexed { index, entry ->
+                runOnMain(context) {
+                    zipProgressText = "RTKLIB ${index + 1}/${selected.size}: $modeLabel"
+                    sessionProgressFraction = index.toFloat() / selected.size.toFloat()
+                }
+                val result = RtklibSessionPostprocessor.postprocessFilesystemSession(
+                    sessionDirectory = Paths.get(entry.location),
+                    mode = mode,
+                    backend = backend,
+                )
+                if (!result.success) {
+                    error(result.message ?: "RTKLIB postprocess failed for ${entry.title}.")
+                }
+            }
+        }
     }
     fun refreshProfileUi(updatedSettingsSets: List<RecordingSettingsSet> = settingsSets) {
         settingsSets = updatedSettingsSets
@@ -723,6 +755,47 @@ fun RtkCollectorApp(
                             onClick = {
                                 pendingNmeaSources = emptyList()
                                 pendingNmeaEntries = emptyList()
+                            },
+                        ) {
+                            Text("Cancel")
+                        }
+                    },
+                )
+            }
+            if (pendingRtklibPostprocessEntries.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = {
+                        pendingRtklibPostprocessEntries = emptyList()
+                    },
+                    title = { Text("Regenerate RTKLIB") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Choose the native RTKLIB-EX postprocessing mode for the selected recording(s).")
+                            TextButton(
+                                onClick = {
+                                    val entries = pendingRtklibPostprocessEntries
+                                    pendingRtklibPostprocessEntries = emptyList()
+                                    runRtklibPostprocess(entries, RtklibPostprocessMode.FORWARD)
+                                },
+                            ) {
+                                Text("Forward only")
+                            }
+                            TextButton(
+                                onClick = {
+                                    val entries = pendingRtklibPostprocessEntries
+                                    pendingRtklibPostprocessEntries = emptyList()
+                                    runRtklibPostprocess(entries, RtklibPostprocessMode.FORWARD_BACKWARD)
+                                },
+                            ) {
+                                Text("Forward + backward")
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                pendingRtklibPostprocessEntries = emptyList()
                             },
                         ) {
                             Text("Cancel")
@@ -1722,6 +1795,14 @@ fun RtkCollectorApp(
                                     ).show()
                                 }
                             }.start()
+                        }
+                    },
+                    onRegenerateRtklibSelected = {
+                        val selected = sessionBrowserState.selectedEntries.filter(SessionBrowserEntry::canRegenerateRtklib)
+                        if (selected.isEmpty()) {
+                            Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
+                        } else {
+                            pendingRtklibPostprocessEntries = selected
                         }
                     },
                     onArchiveSelected = {

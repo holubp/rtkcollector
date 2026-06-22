@@ -324,6 +324,17 @@ class RtklibWorkerTest {
         override fun snapshot(handle: Long): Array<String> =
             arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
 
+        override fun postprocess(
+            preset: String,
+            roverFormat: String,
+            frequencyCount: Int,
+            solutionType: String,
+            receiverRxRaw: String,
+            correctionRtcm3: String,
+            outputNmea: String,
+            outputPos: String,
+        ): String? = null
+
         override fun stop(handle: Long) = Unit
         override fun destroy(handle: Long) = Unit
     }
@@ -363,6 +374,17 @@ class RtklibWorkerTest {
 
         override fun snapshot(handle: Long): Array<String> =
             arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
+
+        override fun postprocess(
+            preset: String,
+            roverFormat: String,
+            frequencyCount: Int,
+            solutionType: String,
+            receiverRxRaw: String,
+            correctionRtcm3: String,
+            outputNmea: String,
+            outputPos: String,
+        ): String? = null
 
         override fun stop(handle: Long) = Unit
         override fun destroy(handle: Long) = Unit

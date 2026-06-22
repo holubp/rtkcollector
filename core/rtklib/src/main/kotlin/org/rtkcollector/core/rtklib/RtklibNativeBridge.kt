@@ -3,10 +3,29 @@ package org.rtkcollector.core.rtklib
 class RtklibNativeBridge(
     private val loadLibrary: () -> Unit = { System.loadLibrary(LIBRARY_NAME) },
     private val nativeApi: NativeApi = JniNativeApi,
-) : RtklibBackendFactory {
+) : RtklibBackendFactory, RtklibPostprocessBackend {
     override fun create(): RtklibBackend {
         loadLibrary()
         return NativeBackend(nativeApi)
+    }
+
+    override fun postprocess(request: RtklibPostprocessRequest): RtklibPostprocessResult {
+        loadLibrary()
+        val error = nativeApi.postprocess(
+            preset = request.preset.name,
+            roverFormat = request.roverFormat,
+            frequencyCount = request.frequencyCount,
+            solutionType = request.mode.name,
+            receiverRxRaw = request.receiverRxRaw.toString(),
+            correctionRtcm3 = request.correctionRtcm3.toString(),
+            outputNmea = request.outputNmea.toString(),
+            outputPos = request.outputPos.toString(),
+        )
+        return if (error.isNullOrBlank()) {
+            RtklibPostprocessResult.success()
+        } else {
+            RtklibPostprocessResult.failed(error)
+        }
     }
 
     interface NativeApi {
@@ -26,6 +45,16 @@ class RtklibNativeBridge(
         ): String?
         fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String>
         fun snapshot(handle: Long): Array<String>
+        fun postprocess(
+            preset: String,
+            roverFormat: String,
+            frequencyCount: Int,
+            solutionType: String,
+            receiverRxRaw: String,
+            correctionRtcm3: String,
+            outputNmea: String,
+            outputPos: String,
+        ): String?
         fun stop(handle: Long)
         fun destroy(handle: Long)
     }
@@ -138,6 +167,25 @@ class RtklibNativeBridge(
         override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> =
             nativeRtklibFeed(handle, streamKind, bytes)
         override fun snapshot(handle: Long): Array<String> = nativeRtklibSnapshot(handle)
+        override fun postprocess(
+            preset: String,
+            roverFormat: String,
+            frequencyCount: Int,
+            solutionType: String,
+            receiverRxRaw: String,
+            correctionRtcm3: String,
+            outputNmea: String,
+            outputPos: String,
+        ): String? = nativeRtklibPostprocess(
+            preset,
+            roverFormat,
+            frequencyCount,
+            solutionType,
+            receiverRxRaw,
+            correctionRtcm3,
+            outputNmea,
+            outputPos,
+        )
         override fun stop(handle: Long) = nativeRtklibStop(handle)
         override fun destroy(handle: Long) = nativeRtklibDestroy(handle)
     }
@@ -174,6 +222,16 @@ private external fun nativeRtklibStart(
 ): String?
 private external fun nativeRtklibFeed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String>
 private external fun nativeRtklibSnapshot(handle: Long): Array<String>
+private external fun nativeRtklibPostprocess(
+    preset: String,
+    roverFormat: String,
+    frequencyCount: Int,
+    solutionType: String,
+    receiverRxRaw: String,
+    correctionRtcm3: String,
+    outputNmea: String,
+    outputPos: String,
+): String?
 private external fun nativeRtklibStop(handle: Long)
 private external fun nativeRtklibDestroy(handle: Long)
 

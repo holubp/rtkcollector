@@ -107,8 +107,10 @@ import org.rtkcollector.app.receiver.persistentReceiverWriteRoute
 import org.rtkcollector.app.receiver.um980VersionProbeBytes
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.recording.RecordingForegroundService
+import org.rtkcollector.app.recording.ReceiverNmeaReexporter
 import org.rtkcollector.app.recording.SessionNmeaExporter
 import org.rtkcollector.app.recording.SessionNmeaShareSelection
+import org.rtkcollector.app.recording.SessionNmeaSource
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
 import org.rtkcollector.app.sessions.SafSessionActions
 import org.rtkcollector.app.sessions.SafSessionBrowser
@@ -164,7 +166,6 @@ import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudPlan
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
-import org.rtkcollector.receiver.unicore.Um980NmeaReexporter
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripSourcetableClient
@@ -264,6 +265,8 @@ fun RtkCollectorApp(
     var pendingStorageFolderSelection by remember { mutableStateOf<PendingStorageFolderSelection?>(null) }
     var settingsImportRequestId by remember { mutableStateOf(0) }
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
+    var pendingNmeaSources by remember { mutableStateOf<List<SessionNmeaSource>>(emptyList()) }
+    var pendingNmeaEntries by remember { mutableStateOf<List<SessionBrowserEntry>>(emptyList()) }
     var profileRevision by remember { mutableStateOf(0) }
     var consoleState by remember { mutableStateOf(DeviceConsoleState()) }
     var consoleInput by rememberSaveable { mutableStateOf("") }
@@ -658,6 +661,74 @@ fun RtkCollectorApp(
                     },
                 )
                 return@Surface
+            }
+            if (pendingNmeaSources.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = {
+                        pendingNmeaSources = emptyList()
+                        pendingNmeaEntries = emptyList()
+                    },
+                    title = { Text("Share NMEA") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Choose which available NMEA output to share.")
+                            pendingNmeaSources.forEach { source ->
+                                TextButton(
+                                    onClick = {
+                                        val entries = pendingNmeaEntries
+                                        pendingNmeaSources = emptyList()
+                                        pendingNmeaEntries = emptyList()
+                                        shareNmeaFromEntries(
+                                            context = context,
+                                            entries = entries,
+                                            requestedSources = setOf(source),
+                                            refreshSessions = ::refreshSessions,
+                                            setProgress = { text, fraction ->
+                                                zipProgressText = text
+                                                sessionProgressFraction = fraction
+                                            },
+                                        )
+                                    },
+                                ) {
+                                    Text(source.displayName)
+                                }
+                            }
+                            if (pendingNmeaSources.size > 1) {
+                                TextButton(
+                                    onClick = {
+                                        val entries = pendingNmeaEntries
+                                        val sources = pendingNmeaSources.toSet()
+                                        pendingNmeaSources = emptyList()
+                                        pendingNmeaEntries = emptyList()
+                                        shareNmeaFromEntries(
+                                            context = context,
+                                            entries = entries,
+                                            requestedSources = sources,
+                                            refreshSessions = ::refreshSessions,
+                                            setProgress = { text, fraction ->
+                                                zipProgressText = text
+                                                sessionProgressFraction = fraction
+                                            },
+                                        )
+                                    },
+                                ) {
+                                    Text("All available")
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                pendingNmeaSources = emptyList()
+                                pendingNmeaEntries = emptyList()
+                            },
+                        ) {
+                            Text("Cancel")
+                        }
+                    },
+                )
             }
             when (screen) {
                 AppScreen.HOME -> HomeDashboard(
@@ -1535,73 +1606,46 @@ fun RtkCollectorApp(
                         if (selected.isEmpty()) {
                             Toast.makeText(context, "Select at least one completed recording.", Toast.LENGTH_LONG).show()
                         } else {
-                            zipProgressText = "Preparing NMEA..."
-                            sessionProgressFraction = 0f
-                            Thread {
-                                runCatching {
-                                    val cacheRoot = context.cacheDir.resolve("session-share-nmea").toPath()
-                                    cleanupTemporaryNmeaShares(cacheRoot)
-                                    val filesystemEntries = selected.filterNot { it.isSafLocation }
-                                    val safEntries = selected.filter { it.isSafLocation }
-                                    val selection = SessionNmeaShareSelection.fromSessionDirectories(
-                                        sessionDirectories = filesystemEntries.map { Paths.get(it.location) },
-                                        outputDirectory = cacheRoot,
-                                    )
-                                    val outputs = selection.plans.mapIndexed { index, plan ->
-                                        runOnMain(context) {
-                                            zipProgressText = "NMEA ${index + 1}/${selected.size}"
-                                            sessionProgressFraction = (index + 1).toFloat() / selected.size.toFloat()
-                                        }
-                                        SessionNmeaExporter.export(plan)
-                                    }.toMutableList()
-                                    var skipped = selection.skippedCount
-                                    safEntries.forEachIndexed { index, entry ->
-                                        val output = SafSessionActions.createTemporaryNmeaShare(
+                            val filesystemSources = selected
+                                .filterNot { it.isSafLocation }
+                                .flatMap { entry ->
+                                    runCatching {
+                                        SessionNmeaShareSelection.availableSources(Paths.get(entry.location))
+                                    }.getOrDefault(emptyList())
+                                }
+                            val safSources = selected
+                                .filter { it.isSafLocation }
+                                .flatMap { entry ->
+                                    SessionNmeaSource.entries.filter { source ->
+                                        SafSessionActions.hasNonEmptyChild(
                                             resolver = context.contentResolver,
                                             sessionUri = Uri.parse(entry.location),
-                                            cacheRoot = cacheRoot,
+                                            fileName = source.artifactFileName,
                                         )
-                                        if (output == null) {
-                                            skipped++
-                                        } else {
-                                            outputs.add(output)
-                                        }
-                                        runOnMain(context) {
-                                            val completed = filesystemEntries.size + index + 1
-                                            zipProgressText = "NMEA $completed/${selected.size}"
-                                            sessionProgressFraction = completed.toFloat() / selected.size.toFloat()
-                                        }
-                                    }
-                                    skipped to outputs
-                                }.onSuccess { (skipped, outputs) ->
-                                    runOnMain(context) {
-                                        zipProgressText = null
-                                        sessionProgressFraction = null
-                                        if (outputs.isEmpty()) {
-                                            Toast.makeText(
-                                                context,
-                                                "No recorded NMEA file is available for the selected session(s).",
-                                                Toast.LENGTH_LONG,
-                                            ).show()
-                                        } else {
-                                            shareNmeaFiles(context, outputs.map { it.toFile() })
-                                            val message = if (skipped > 0) {
-                                                "Shared NMEA for ${outputs.size} session(s); $skipped selected session(s) had no NMEA export."
-                                            } else {
-                                                "Shared NMEA for ${outputs.size} session(s)."
-                                            }
-                                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                                        }
-                                        refreshSessions()
-                                    }
-                                }.onFailure { error ->
-                                    runOnMain(context) {
-                                        zipProgressText = null
-                                        sessionProgressFraction = null
-                                        Toast.makeText(context, "Share NMEA failed: ${error.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
-                            }.start()
+                            val sources = (filesystemSources + safSources).distinct()
+                            when {
+                                sources.isEmpty() -> Toast.makeText(
+                                    context,
+                                    "No recorded NMEA file is available for the selected session(s).",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                sources.size == 1 -> shareNmeaFromEntries(
+                                    context = context,
+                                    entries = selected,
+                                    requestedSources = sources.toSet(),
+                                    refreshSessions = ::refreshSessions,
+                                    setProgress = { text, fraction ->
+                                        zipProgressText = text
+                                        sessionProgressFraction = fraction
+                                    },
+                                )
+                                else -> {
+                                    pendingNmeaEntries = selected
+                                    pendingNmeaSources = sources
+                                }
+                            }
                         }
                     },
                     onReexportNmeaSelected = {
@@ -1631,6 +1675,7 @@ fun RtkCollectorApp(
                                             val sentences = SafSessionActions.reexportNmea(
                                                 resolver = context.contentResolver,
                                                 sessionUri = Uri.parse(entry.location),
+                                                receiverFamily = entry.receiverFamily,
                                                 options = options,
                                             ) { progress ->
                                                 val withinSession = progress.fraction?.toFloat() ?: 0f
@@ -1652,9 +1697,10 @@ fun RtkCollectorApp(
                                             skipped++
                                         } else {
                                             runCatching {
-                                                Um980NmeaReexporter.reexportReceiverRxRaw(
+                                                ReceiverNmeaReexporter.reexportReceiverRxRaw(
                                                     receiverRxRaw = receiverRxRaw,
                                                     outputNmea = sessionDirectory.resolve("receiver-solution.nmea"),
+                                                    receiverFamily = entry.receiverFamily,
                                                     options = options,
                                                 )
                                             }.onSuccess {
@@ -2618,6 +2664,82 @@ private fun shareNmeaFiles(context: Context, nmeaFiles: List<File>) {
     }
     context.startActivity(Intent.createChooser(intent, "Share recording NMEA files"))
     scheduleTemporaryNmeaCleanup(nmeaFiles)
+}
+
+private fun shareNmeaFromEntries(
+    context: Context,
+    entries: List<SessionBrowserEntry>,
+    requestedSources: Set<SessionNmeaSource>?,
+    refreshSessions: () -> Unit,
+    setProgress: (String?, Float?) -> Unit,
+) {
+    if (entries.isEmpty()) return
+    setProgress("Preparing NMEA...", 0f)
+    Thread {
+        runCatching {
+            val cacheRoot = context.cacheDir.resolve("session-share-nmea").toPath()
+            cleanupTemporaryNmeaShares(cacheRoot)
+            val filesystemEntries = entries.filterNot { it.isSafLocation }
+            val safEntries = entries.filter { it.isSafLocation }
+            val filesystemSelection = SessionNmeaShareSelection.fromSessionDirectories(
+                sessionDirectories = filesystemEntries.map { Paths.get(it.location) },
+                outputDirectory = cacheRoot,
+                requestedSources = requestedSources,
+            )
+            val outputs = filesystemSelection.plans.mapIndexed { index, plan ->
+                runOnMain(context) {
+                    setProgress("NMEA ${index + 1}/${entries.size}", (index + 1).toFloat() / entries.size.toFloat())
+                }
+                SessionNmeaExporter.export(plan)
+            }.toMutableList()
+            var skipped = filesystemSelection.skippedCount
+            safEntries.forEachIndexed { index, entry ->
+                val safOutputs = SafSessionActions.createTemporaryNmeaShares(
+                    resolver = context.contentResolver,
+                    sessionUri = Uri.parse(entry.location),
+                    cacheRoot = cacheRoot,
+                    requestedSources = requestedSources,
+                    useLegacyReceiverName =
+                        requestedSources == null || requestedSources == setOf(SessionNmeaSource.RECEIVER_SOLUTION),
+                )
+                if (safOutputs.isEmpty()) {
+                    skipped++
+                } else {
+                    outputs.addAll(safOutputs)
+                }
+                runOnMain(context) {
+                    val completed = filesystemEntries.size + index + 1
+                    setProgress("NMEA $completed/${entries.size}", completed.toFloat() / entries.size.toFloat())
+                }
+            }
+            skipped to outputs
+        }.onSuccess { (skipped, outputs) ->
+            runOnMain(context) {
+                setProgress(null, null)
+                if (outputs.isEmpty()) {
+                    Toast.makeText(
+                        context,
+                        "No recorded NMEA file is available for the selected session(s).",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                } else {
+                    shareNmeaFiles(context, outputs.map { it.toFile() })
+                    val message = if (skipped > 0) {
+                        "Shared NMEA for ${outputs.size} file(s); $skipped selected session(s) had no matching NMEA export."
+                    } else {
+                        "Shared NMEA for ${outputs.size} file(s)."
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                }
+                refreshSessions()
+            }
+        }.onFailure { error ->
+            runOnMain(context) {
+                setProgress(null, null)
+                Toast.makeText(context, "Share NMEA failed: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }.start()
 }
 
 private fun shareNmea(context: Context, nmeaFile: File) {

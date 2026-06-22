@@ -1,5 +1,6 @@
 package org.rtkcollector.app.sessions
 
+import org.json.JSONObject
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.deleteIfExists
@@ -25,6 +26,7 @@ object FilesystemSessionBrowser {
                     kind = if (currentSessionActive) SessionEntryKind.CURRENT_ACTIVE else SessionEntryKind.CURRENT_STOPPED,
                     modifiedEpochMillis = modifiedMillis(path),
                     sizeBytes = pathSize(path),
+                    receiverFamily = receiverFamily(path),
                 )
             }
 
@@ -45,6 +47,7 @@ object FilesystemSessionBrowser {
                                 kind = SessionEntryKind.RECORDING,
                                 modifiedEpochMillis = modifiedMillis(path),
                                 sizeBytes = pathSize(path),
+                                receiverFamily = receiverFamily(path),
                             )
                         } else if (Files.isRegularFile(path) && path.name.endsWith(".zip")) {
                             entries += SessionBrowserEntry(
@@ -77,6 +80,15 @@ object FilesystemSessionBrowser {
         Files.exists(path.resolve("session.json")) ||
             Files.exists(path.resolve("receiver-rx.raw")) ||
             path.name.startsWith("session-")
+
+    private fun receiverFamily(path: Path): String? =
+        runCatching {
+            val sessionJson = path.resolve("session.json")
+            if (!Files.isRegularFile(sessionJson)) return@runCatching null
+            JSONObject(String(Files.readAllBytes(sessionJson), Charsets.UTF_8))
+                .optString("receiverDriverId")
+                .takeIf(String::isNotBlank)
+        }.getOrNull()
 
     private fun modifiedMillis(path: Path): Long =
         runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrDefault(0L)

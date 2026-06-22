@@ -3,6 +3,7 @@ package org.rtkcollector.app.sessions
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
+import org.json.JSONObject
 import org.rtkcollector.core.session.SessionArtifactFile
 
 object SafSessionBrowser {
@@ -26,6 +27,7 @@ object SafSessionBrowser {
                 kind = if (currentSessionActive) SessionEntryKind.CURRENT_ACTIVE else SessionEntryKind.CURRENT_STOPPED,
                 modifiedEpochMillis = uri.lastModified(resolver),
                 sizeBytes = uri.directorySize(resolver),
+                receiverFamily = uri.receiverFamily(resolver),
                 filesystemBacked = false,
                 capabilities = capabilitiesForDirectory(currentSessionActive),
             )
@@ -42,6 +44,7 @@ object SafSessionBrowser {
                     kind = SessionEntryKind.RECORDING,
                     modifiedEpochMillis = child.lastModified,
                     sizeBytes = child.uri.directorySize(resolver),
+                    receiverFamily = child.uri.receiverFamily(resolver),
                     filesystemBacked = false,
                     capabilities = capabilitiesForDirectory(isActive = false),
                 )
@@ -156,6 +159,16 @@ internal fun Uri.looksLikeSessionDirectory(resolver: ContentResolver): Boolean {
         findChild(resolver, SessionArtifactFile.SESSION_JSON.fileName) != null ||
         findChild(resolver, SessionArtifactFile.RECEIVER_RX_RAW.fileName) != null
 }
+
+internal fun Uri.receiverFamily(resolver: ContentResolver): String? =
+    runCatching {
+        val sessionJson = findChild(resolver, SessionArtifactFile.SESSION_JSON.fileName) ?: return@runCatching null
+        resolver.openInputStream(sessionJson.uri)?.use { input ->
+            JSONObject(input.readBytes().toString(Charsets.UTF_8))
+                .optString("receiverDriverId")
+                .takeIf(String::isNotBlank)
+        }
+    }.getOrNull()
 
 private fun Uri.querySingleString(resolver: ContentResolver, column: String): String? =
     resolver.query(this, arrayOf(column), null, null, null)?.use { cursor ->

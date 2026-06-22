@@ -42,6 +42,7 @@ data class SessionBrowserEntry(
     val kind: SessionEntryKind,
     val modifiedEpochMillis: Long,
     val sizeBytes: Long? = null,
+    val receiverFamily: String? = null,
     val filesystemBacked: Boolean = true,
     val capabilities: SessionActionCapabilities? = null,
 ) {

@@ -3,11 +3,13 @@ package org.rtkcollector.app.sessions
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
+import org.rtkcollector.app.recording.ReceiverNmeaReexporter
 import org.rtkcollector.app.recording.SessionZipProgress
+import org.rtkcollector.app.recording.SessionNmeaShareSelection
+import org.rtkcollector.app.recording.SessionNmeaSource
 import org.rtkcollector.core.session.SessionArtifactFile
 import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
 import org.rtkcollector.receiver.unicore.Um980NmeaReexportProgress
-import org.rtkcollector.receiver.unicore.Um980NmeaReexporter
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.Deflater
@@ -35,24 +37,54 @@ object SafSessionActions {
         return output
     }
 
+    fun createTemporaryNmeaShares(
+        resolver: ContentResolver,
+        sessionUri: Uri,
+        cacheRoot: Path,
+        requestedSources: Set<SessionNmeaSource>? = null,
+        useLegacyReceiverName: Boolean = true,
+    ): List<Path> {
+        Files.createDirectories(cacheRoot)
+        val sessionName = sessionUri.displayName(resolver) ?: "saf-session"
+        val allowed = requestedSources ?: SessionNmeaSource.entries.toSet()
+        val availableSources = SessionNmeaSource.entries.filter { source ->
+            source in allowed && hasNonEmptyChild(resolver, sessionUri, source.artifactFileName)
+        }
+        val receiverOnly = availableSources == listOf(SessionNmeaSource.RECEIVER_SOLUTION)
+        return availableSources.mapNotNull { source ->
+            val child = sessionUri.findChild(resolver, source.artifactFileName) ?: return@mapNotNull null
+            val outputName = SessionNmeaShareSelection.exportName(
+                sessionName = sessionName,
+                source = source,
+                useLegacyReceiverName =
+                    useLegacyReceiverName && receiverOnly && source == SessionNmeaSource.RECEIVER_SOLUTION,
+            )
+            val output = cacheRoot.resolve(outputName)
+            resolver.openInputStream(child.uri)?.use { input ->
+                Files.newOutputStream(output).use { fileOutput -> input.copyTo(fileOutput) }
+            } ?: return@mapNotNull null
+            output
+        }
+    }
+
     fun createTemporaryNmeaShare(
         resolver: ContentResolver,
         sessionUri: Uri,
         cacheRoot: Path,
     ): Path? {
-        val nmea = sessionUri.findChild(resolver, SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName) ?: return null
-        Files.createDirectories(cacheRoot)
-        val sessionName = sessionUri.displayName(resolver) ?: "saf-session"
-        val output = cacheRoot.resolve("$sessionName.nmea")
-        resolver.openInputStream(nmea.uri)?.use { input ->
-            Files.newOutputStream(output).use { fileOutput -> input.copyTo(fileOutput) }
-        } ?: return null
-        return output
+        return createTemporaryNmeaShares(
+            resolver = resolver,
+            sessionUri = sessionUri,
+            cacheRoot = cacheRoot,
+            requestedSources = setOf(SessionNmeaSource.RECEIVER_SOLUTION),
+            useLegacyReceiverName = true,
+        ).singleOrNull()
     }
 
     fun reexportNmea(
         resolver: ContentResolver,
         sessionUri: Uri,
+        receiverFamily: String?,
         options: Um980NmeaExportOptions = Um980NmeaExportOptions(),
         onProgress: (Um980NmeaReexportProgress) -> Unit = {},
     ): Long {
@@ -76,14 +108,19 @@ object SafSessionActions {
                         runCatching { DocumentsContract.deleteDocument(resolver, temporary) }
                         return 0L
                     }
-                    Um980NmeaReexporter.reexportReceiverRxRaw(
+                    ReceiverNmeaReexporter.reexportReceiverRxRaw(
                         input = input,
                         output = output,
+                        receiverFamily = receiverFamily,
                         totalBytes = receiverRxRaw.sizeBytes,
                         options = options,
                         onProgress = onProgress,
                     )
                 }
+            }
+            if (result == 0L) {
+                runCatching { DocumentsContract.deleteDocument(resolver, temporary) }
+                return@runCatching 0L
             }
 
             sessionUri.findChild(resolver, SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName)
@@ -104,11 +141,14 @@ object SafSessionActions {
                 }
                 runCatching { DocumentsContract.deleteDocument(resolver, temporary) }
             }
-            result.sentencesWritten
+            result
         }.onFailure {
             runCatching { DocumentsContract.deleteDocument(resolver, temporary) }
         }.getOrThrow()
     }
+
+    fun hasNonEmptyChild(resolver: ContentResolver, sessionUri: Uri, fileName: String): Boolean =
+        sessionUri.findChild(resolver, fileName)?.let { (it.sizeBytes ?: 0L) > 0L } == true
 
     fun archiveSession(
         resolver: ContentResolver,

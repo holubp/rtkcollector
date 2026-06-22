@@ -109,11 +109,16 @@ fun SessionsScreen(
         ) {
             Button(onClick = onShareSelected, enabled = canShare) { Text("Share ZIP") }
             Button(onClick = onShareNmeaSelected, enabled = canShareNmea) { Text("Share NMEA") }
-            Button(onClick = onReexportNmeaSelected, enabled = canReexportNmea) { Text("Re-export NMEA") }
+            Button(onClick = onReexportNmeaSelected, enabled = canReexportNmea) { Text("Regenerate NMEA") }
             Button(onClick = { confirmation = ConfirmationAction.ARCHIVE }, enabled = canArchive) { Text("Archive") }
             Button(onClick = { confirmation = ConfirmationAction.RESTORE }, enabled = canRestore) { Text("Restore") }
             Button(onClick = { confirmation = ConfirmationAction.DELETE }, enabled = canDelete) { Text("Delete") }
         }
+        Text(
+            text = "Regenerate NMEA updates receiver-solution.nmea from the in-device receiver solution only.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             text = "${selected.size} selected",
             style = MaterialTheme.typography.labelMedium,

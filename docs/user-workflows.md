@@ -82,13 +82,16 @@ Completed recordings can be selected individually, by group or all together.
 Sharing the full recording creates one temporary ZIP per selected session,
 sends those ZIPs through the Android share sheet and leaves the original session
 folders untouched. Users can also share the derived NMEA solution export
-directly when `receiver-solution.nmea` exists for the selected session. Direct
-NMEA sharing creates temporary `.nmea` files in app cache with names matching
-the session ZIP naming pattern, sends those files through the Android share
-sheet and does not modify the session folder. The same session list also offers
-an explicit `Re-export NMEA` action for filesystem-backed stopped sessions; it
-regenerates `receiver-solution.nmea` from `receiver-rx.raw` using the currently
-selected PPP-to-GGA mapping and leaves raw/correction/TX artifacts unchanged.
+directly when any NMEA solution file exists for the selected session. The share
+dialog offers only non-empty files that are already present: receiver solution
+NMEA, RTKLIB real-time NMEA, and any RTKLIB postprocessed NMEA that the user has
+generated earlier. Direct NMEA sharing creates temporary `.nmea` files in app
+cache, sends those files through the Android share sheet and does not modify
+the session folder. The same session list also offers an explicit `Regenerate
+NMEA` action for stopped sessions; it regenerates only
+`receiver-solution.nmea` from `receiver-rx.raw` using the receiver's in-device
+solution and the currently selected PPP-to-GGA mapping, leaving
+raw/correction/TX and RTKLIB artifacts unchanged.
 Old temporary share ZIPs and NMEA files are cleaned up on later share attempts,
 and newly shared temporary files are scheduled for delayed best-effort cleanup
 because Android does not expose a reliable signal that the receiving app has
@@ -103,7 +106,7 @@ completed folders or archive ZIPs.
 Filesystem-backed app-private storage and SAF document-tree storage should offer
 the same session-management workflow where Android's document provider supports
 the required operations: browse sessions, share temporary ZIPs, share generated
-NMEA, re-export generated NMEA, archive, restore and delete completed
+NMEA, regenerate receiver NMEA, archive, restore and delete completed
 recordings. SAF operations are stream-based and provider-dependent; failures
 must be reported without mutating `receiver-rx.raw`. Start/Stop and Menu are
 intended to stay outside scrollable content so they remain reachable in portrait

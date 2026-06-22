@@ -17,6 +17,10 @@ session/
   receiver-ppp-solution.jsonl optional
   rtklib-solution.nmea optional, V2 RTKLIB-EX output
   rtklib-solution.pos optional, V2 RTKLIB-EX output
+  rtklib-postprocessed-forward.nmea optional, completed-session RTKLIB forward output
+  rtklib-postprocessed-forward.pos optional, completed-session RTKLIB forward output
+  rtklib-postprocessed-combined.nmea optional, completed-session RTKLIB forward/backward output
+  rtklib-postprocessed-combined.pos optional, completed-session RTKLIB forward/backward output
   rtklib-status.jsonl optional, V2 RTKLIB-EX diagnostics
   init-script.txt
   receiver-profile.json
@@ -91,8 +95,12 @@ RTKLIB-EX snapshot id once native code is bundled, forward-only route plan,
 receiver input route, correction input route and enabled output artifacts.
 RTKLIB solution artifacts are derived/advisory outputs and must stay separate
 from receiver-derived `receiver-solution.nmea` and `receiver-solution.jsonl`.
-The required user-facing RTKLIB outputs are `rtklib-solution.nmea` and
+The real-time user-facing RTKLIB outputs are `rtklib-solution.nmea` and
 `rtklib-solution.pos`; optional diagnostics belong in `rtklib-status.jsonl`.
+Completed-session postprocessing may add `rtklib-postprocessed-forward.nmea`,
+`rtklib-postprocessed-forward.pos`, `rtklib-postprocessed-combined.nmea` and
+`rtklib-postprocessed-combined.pos`. These files are shareable only after an
+explicit postprocessing action has generated them.
 The current configuration metadata fields are `rtklibProfileId`,
 `rtklibEnabled`, `rtklibPreset`, `rtklibOutputNmea` and `rtklibOutputPos`.
 These fields must not contain NTRIP passwords, tokens or other secrets.
@@ -109,9 +117,12 @@ is `correction-input.raw`; the `.rtcm3` mirror is best-effort where storage
 permits. `receiver-solution.nmea` and
 solution JSONL files are advisory exports derived from the RX stream and may be
 disabled by recording policy; parser/export failure must not stop raw
-recording. Direct NMEA sharing uses `receiver-solution.nmea` as its source and
-creates a temporary `.nmea` copy for Android send-to workflows; it must not
-regenerate, reinterpret or modify the authoritative `receiver-rx.raw` stream.
+recording. Direct NMEA sharing offers only non-empty NMEA artifacts that already
+exist for the selected session: receiver in-device `receiver-solution.nmea`,
+real-time `rtklib-solution.nmea`, and any generated RTKLIB postprocessed NMEA
+files. Sharing creates temporary `.nmea` copies for Android send-to workflows;
+it must not regenerate, reinterpret or modify the authoritative
+`receiver-rx.raw` stream.
 When derived NMEA is generated from binary or structured receiver telemetry, UTC
 fields should preserve sub-second precision available in the source solution,
 and binary/noise fragments must not be copied into the NMEA sidecar. The
@@ -120,11 +131,13 @@ GGA quality field for generated NMEA. V1 allows `2`, `5` or `9`, defaults to
 `2`, and must not emit `4` for PPP unless a future parser can explicitly prove
 PPP-AR/PPP-RTK integer-fixed status.
 
-For stopped sessions, the app may re-export `receiver-solution.nmea` from
-`receiver-rx.raw` on explicit user request. This operation replaces only the
-derived NMEA sidecar and must leave `receiver-rx.raw`, `tx-to-receiver.raw`,
-correction input and session metadata unchanged. Filesystem-backed storage and
-SAF document-tree storage should both expose this workflow; SAF implementations
+For stopped sessions, the app may regenerate `receiver-solution.nmea` from
+`receiver-rx.raw` on explicit user request. This operation uses only the best
+available receiver/in-device solution for the receiver family, replaces only the
+receiver-derived NMEA sidecar when at least one sentence is produced, and must
+leave `receiver-rx.raw`, `tx-to-receiver.raw`, correction input, RTKLIB
+artifacts and session metadata unchanged. Filesystem-backed storage and SAF
+document-tree storage should both expose this workflow; SAF implementations
 must use stream-based reads and writes because document URIs are not filesystem
 paths.
 
@@ -157,8 +170,9 @@ only for Android send-to workflows and should be removed on a best-effort basis
 through delayed cleanup after sharing and before later share attempts. Sharing
 multiple selected sessions creates one temporary ZIP per session rather than one
 combined multi-session archive. Direct NMEA shares are also temporary cache
-artifacts, not session archives, and are recreated from `receiver-solution.nmea`
-only when the user explicitly requests NMEA sharing.
+artifacts, not session archives. The legacy temporary name `<session>.nmea`
+is preserved when sharing only `receiver-solution.nmea`; RTKLIB and multi-source
+shares use explicit source suffixes such as `<session>-rtklib-realtime.nmea`.
 
 A permanent archive is a maximum-compression ZIP stored next to the session
 folder in configured filesystem storage. Archiving must verify the ZIP before

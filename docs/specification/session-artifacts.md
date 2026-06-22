@@ -36,10 +36,13 @@ Status: Normative
 
 Generated `receiver-solution.nmea` MUST preserve sub-second UTC where source
 telemetry provides it. It MUST NOT copy binary/noise fragments that merely look
-like dollar-prefixed NMEA lines.
+like dollar-prefixed NMEA lines. Regeneration of NMEA for completed sessions
+MUST update only `receiver-solution.nmea` from the receiver/in-device solution.
+It MUST NOT overwrite RTKLIB real-time or postprocessed NMEA artifacts.
 
 Verification:
-- Automated: UM980 NMEA exporter/re-exporter tests.
+- Automated: UM980 NMEA exporter/re-exporter tests; receiver-family NMEA
+  regeneration tests; source-aware NMEA sharing tests.
 - Manual: compare generated NMEA against known high-rate recording.
 
 ### SESSION-RTCM-001: NTRIP RTCM Is Exportable
@@ -63,7 +66,11 @@ The required RTKLIB artifacts are `rtklib-solution.nmea` and
 `rtklib-solution.pos`. Optional RTKLIB engine diagnostics MAY be stored in
 `rtklib-status.jsonl`. These artifacts MUST NOT replace or modify
 `receiver-rx.raw`, `correction-input.raw`, `receiver-solution.nmea` or
-`receiver-solution.jsonl`.
+`receiver-solution.jsonl`. Completed-session RTKLIB postprocessing MAY create
+additional artifacts such as `rtklib-postprocessed-forward.nmea` and
+`rtklib-postprocessed-combined.nmea`. These artifacts MUST be shared only when
+they already exist and MUST NOT be implied by the receiver NMEA regeneration
+action.
 
 Verification:
 - Automated: workflow artifact validation and RTKLIB output writer tests.

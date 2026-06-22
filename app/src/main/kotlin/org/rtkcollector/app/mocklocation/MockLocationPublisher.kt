@@ -1,5 +1,6 @@
 package org.rtkcollector.app.mocklocation
 
+import android.os.Build
 import android.os.Bundle
 import org.rtkcollector.core.solution.BestSolutionSelector
 import org.rtkcollector.core.solution.BestSolutionSnapshot
@@ -8,7 +9,9 @@ data class MockLocationUpdate(
     val latDeg: Double,
     val lonDeg: Double,
     val altitudeM: Double?,
+    val mslAltitudeM: Double?,
     val horizontalAccuracyM: Float?,
+    val verticalAccuracyM: Float?,
     val timeMillis: Long,
     val satellitesUsed: Int?,
     val satellitesInView: Int?,
@@ -51,7 +54,9 @@ class MockLocationPublisher(
                     latDeg = current.latDeg,
                     lonDeg = current.lonDeg,
                     altitudeM = current.ellipsoidalHeightM,
+                    mslAltitudeM = current.mslAltitudeM,
                     horizontalAccuracyM = current.horizontalAccuracyM?.toFloat(),
+                    verticalAccuracyM = current.verticalAccuracyM?.toFloat(),
                     timeMillis = current.updatedAtMillis,
                     satellitesUsed = current.satellitesUsed,
                     satellitesInView = current.satellitesInView,
@@ -80,6 +85,12 @@ class AndroidMockLocationSink(
             longitude = update.lonDeg
             update.altitudeM?.let { altitude = it }
             update.horizontalAccuracyM?.let { accuracy = it }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                update.verticalAccuracyM?.let { verticalAccuracyMeters = it }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                update.mslAltitudeM?.let { mslAltitudeMeters = it }
+            }
             extras = mockLocationExtras(update)
             time = update.timeMillis
             elapsedRealtimeNanos = android.os.SystemClock.elapsedRealtimeNanos()
@@ -88,12 +99,16 @@ class AndroidMockLocationSink(
     }
 }
 
-private fun mockLocationExtras(update: MockLocationUpdate): Bundle? {
+internal fun mockLocationExtras(update: MockLocationUpdate): Bundle? {
     val extras = Bundle()
     update.satellitesUsed?.let { used ->
         extras.putInt("satellites", used)
         extras.putInt("satellitesUsed", used)
+        extras.putInt("satellitesInUse", used)
     }
-    update.satellitesInView?.let { extras.putInt("satellitesInView", it) }
+    update.satellitesInView?.let { inView ->
+        extras.putInt("satellitesInView", inView)
+        extras.putInt("satellitesVisible", inView)
+    }
     return if (extras.isEmpty) null else extras
 }

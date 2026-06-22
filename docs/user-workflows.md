@@ -59,15 +59,19 @@ Android mock-location output is a recording-scoped option. When enabled, the
 foreground recording service publishes the current best fresh RtkCollector
 solution to Android's mock GPS provider. The app must be selected as the mock
 location app in Android Developer options. Mock-provider failure degrades only
-mock output; raw receiver recording continues. Android `Location.altitude` is
-published as ellipsoidal height. Satellite counts are attached as best-effort
-location extras when available, but Android's public mock-location API does not
-allow an ordinary app to inject full GNSS satellite status or satellite sky
-positions for other apps. The Fix card shows compact mock-provider monitoring
-when mock output is enabled, including publish state, effective publish rate,
-the millisecond interval between the last two successful mock updates and the
-age of the selected solution. The Home screen also has a compact `Mock GPS`
-chip next to the `READY`/`RECORDING` state chip. Tapping it selects `Off` or a
+mock output; raw receiver recording continues. RtkCollector publishes latitude,
+longitude, ellipsoidal height, horizontal accuracy, fix time and elapsed
+realtime to Android's mock GPS provider. On Android versions whose public
+`Location` API supports them, RtkCollector also publishes vertical accuracy and
+MSL altitude when these are available from the selected best solution.
+Satellite counts are attached as best-effort extras under common aliases, but
+Android's public mock-location API does not allow an ordinary app to inject
+full GNSS satellite status or satellite sky positions for other apps. The Fix
+card shows compact mock-provider monitoring when mock output is enabled,
+including publish state, effective publish rate, the millisecond interval
+between the last two successful mock updates and the age of the selected
+solution. The Home screen also has a compact `Mock GPS` chip next to the
+`READY`/`RECORDING` state chip. Tapping it selects `Off` or a
 fixed publish rate of `1 Hz`, `2 Hz`, `5 Hz` or `10 Hz`. The default is `Off`
 unless the selected recording-output profile enables mock publishing; enabled
 profiles default to `1 Hz` unless another supported rate is selected. This

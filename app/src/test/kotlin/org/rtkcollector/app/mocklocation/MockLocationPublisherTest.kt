@@ -18,6 +18,14 @@ class MockLocationPublisherTest {
 
         assertEquals(MockLocationPublishResult.PUBLISHED, result)
         assertEquals(1, sink.locations.size)
+        val update = sink.locations.single()
+        assertEquals(50.0, update.latDeg)
+        assertEquals(14.0, update.lonDeg)
+        assertEquals(300.0, update.altitudeM)
+        assertEquals(250.0, update.mslAltitudeM)
+        assertEquals(1.2f, update.horizontalAccuracyM)
+        assertEquals(2.4f, update.verticalAccuracyM)
+        assertEquals(1_000L, update.timeMillis)
         assertNull(publisher.lastFailure)
     }
 
@@ -106,6 +114,43 @@ class MockLocationPublisherTest {
         val update = sink.locations.single()
         assertEquals(12, update.satellitesUsed)
         assertEquals(18, update.satellitesInView)
+    }
+
+    @Test
+    fun `omits optional vertical and msl fields when unavailable`() {
+        val sink = FakeMockLocationSink()
+        val publisher = MockLocationPublisher(sink)
+        val partial = snapshot().copy(mslAltitudeM = null, verticalAccuracyM = null)
+
+        publisher.publish(partial, enabled = true)
+
+        val update = sink.locations.single()
+        assertNull(update.mslAltitudeM)
+        assertNull(update.verticalAccuracyM)
+    }
+
+    @Test
+    fun `mock location extras include common satellite count aliases`() {
+        val extras = mockLocationExtras(
+            MockLocationUpdate(
+                latDeg = 50.0,
+                lonDeg = 14.0,
+                altitudeM = 300.0,
+                mslAltitudeM = 250.0,
+                horizontalAccuracyM = 1.2f,
+                verticalAccuracyM = 2.4f,
+                timeMillis = 1_000L,
+                satellitesUsed = 12,
+                satellitesInView = 18,
+            ),
+        )
+
+        assertNotNull(extras)
+        assertEquals(12, extras!!.getInt("satellites"))
+        assertEquals(12, extras.getInt("satellitesUsed"))
+        assertEquals(12, extras.getInt("satellitesInUse"))
+        assertEquals(18, extras.getInt("satellitesInView"))
+        assertEquals(18, extras.getInt("satellitesVisible"))
     }
 
     private fun snapshot(): BestSolutionSnapshot =

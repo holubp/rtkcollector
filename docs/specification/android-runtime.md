@@ -159,6 +159,27 @@ API.
 Verification:
 - Review: user docs and UI do not promise synthetic `GnssStatus` injection.
 
+### ANDROID-MOCK-004: Mock Location Uses Maximum Safe Public Location Fields
+
+Status: Normative
+
+When Android mock-location publishing is enabled, RtkCollector MUST populate
+every public `Location` field that is supported on the running Android version
+and available from the selected best solution. At minimum this includes
+latitude, longitude, ellipsoidal altitude, timestamp, elapsed realtime,
+horizontal accuracy, API-gated vertical accuracy and API-gated MSL altitude.
+RtkCollector MUST NOT invent unavailable speed, bearing or accuracy values.
+Satellite counts MAY be attached as best-effort extras under common aliases,
+but RtkCollector MUST NOT claim that these extras are equivalent to Android
+`GnssStatus`. Failure to apply an optional mock-location field MUST NOT stop
+receiver recording.
+
+Verification:
+- Automated: mock-location mapper tests.
+- Review: Android sink uses API guards for version-specific setters.
+- Manual: compare mock altitude, vertical accuracy and MSL altitude behaviour
+  on a device where consumer apps expose these fields.
+
 ### ANDROID-MOCK-003: Mock Provider Publishing Is Observable
 
 Status: Normative

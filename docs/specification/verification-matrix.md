@@ -39,6 +39,7 @@
 | `ANDROID-MOCK-001` | Automated + manual | Mock-location mapper tests; mock altitude smoke test | Needs review | `Location.altitude` must use ellipsoidal height. |
 | `ANDROID-MOCK-002` | Review | Android API limitation review; user-doc wording | Passing | Satellite counts may be extras; full `GnssStatus` injection is not promised. |
 | `ANDROID-MOCK-003` | Automated + manual | Mock publish tick/dashboard tests; mock provider field run | Needs review | Monitor status, last publish interval, selectable fixed rate and effective rate. |
+| `ANDROID-MOCK-004` | Automated + manual | Mock-location mapper tests; Android sink review; device mock-provider smoke test | Needs review | Publishes all supported public `Location` fields available from the selected best solution. |
 | `SEC-SECRETS-001` | Automated + review | Session/settings export tests | Needs review | Include plaintext password export option. |
 | `SEC-SETTINGS-001` | Automated + manual | Settings export tests; export UI review | Needs review | Plaintext passwords must be opt-in. |
 | `SEC-IMPORT-001` | Automated + manual | Settings import validation tests; Android JSON open flow | Needs review | Reject malformed or unsafe imports. |

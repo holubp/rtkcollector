@@ -1,33 +1,48 @@
 package org.rtkcollector.app.recording
 
+import org.rtkcollector.core.session.SessionArtifactFile
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-private const val RECEIVER_SOLUTION_NMEA = "receiver-solution.nmea"
+enum class SessionNmeaSource(
+    val artifactFileName: String,
+    val exportSuffix: String,
+    val displayName: String,
+) {
+    RECEIVER_SOLUTION(
+        artifactFileName = SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName,
+        exportSuffix = "receiver-solution",
+        displayName = "Receiver solution",
+    ),
+    RTKLIB_REALTIME(
+        artifactFileName = SessionArtifactFile.RTKLIB_SOLUTION_NMEA.fileName,
+        exportSuffix = "rtklib-realtime",
+        displayName = "RTKLIB real-time",
+    ),
+    RTKLIB_POSTPROCESSED_FORWARD(
+        artifactFileName = SessionArtifactFile.RTKLIB_POSTPROCESSED_FORWARD_NMEA.fileName,
+        exportSuffix = "rtklib-postprocessed-forward",
+        displayName = "RTKLIB postprocessed forward",
+    ),
+    RTKLIB_POSTPROCESSED_COMBINED(
+        artifactFileName = SessionArtifactFile.RTKLIB_POSTPROCESSED_COMBINED_NMEA.fileName,
+        exportSuffix = "rtklib-postprocessed-combined",
+        displayName = "RTKLIB postprocessed forward/backward",
+    ),
+}
 
 data class SessionNmeaSharePlan(
+    val source: SessionNmeaSource,
     val sourceNmea: Path,
     val outputNmea: Path,
 ) {
     init {
-        require(sourceNmea.fileName.toString() == RECEIVER_SOLUTION_NMEA) {
-            "NMEA share source must be receiver-solution.nmea."
+        require(sourceNmea.fileName.toString() == source.artifactFileName) {
+            "NMEA share source ${source.displayName} must use ${source.artifactFileName}."
         }
         require(outputNmea.fileName.toString().endsWith(".nmea")) {
             "NMEA share output must use .nmea suffix."
-        }
-    }
-
-    companion object {
-        fun fromSessionDirectory(sessionDirectory: Path, outputDirectory: Path): SessionNmeaSharePlan {
-            require(Files.isDirectory(sessionDirectory)) { "NMEA share source must be a session directory." }
-            val source = sessionDirectory.resolve(RECEIVER_SOLUTION_NMEA)
-            require(Files.isRegularFile(source)) { "Session has no receiver-solution.nmea." }
-            return SessionNmeaSharePlan(
-                sourceNmea = source,
-                outputNmea = outputDirectory.resolve("${sessionDirectory.fileName}.nmea"),
-            )
         }
     }
 }
@@ -43,21 +58,59 @@ data class SessionNmeaShareSelection(
         fun fromSessionDirectories(
             sessionDirectories: List<Path>,
             outputDirectory: Path,
+            requestedSources: Set<SessionNmeaSource>? = null,
         ): SessionNmeaShareSelection {
+            val availableBySession = sessionDirectories.map { session ->
+                session to availableSources(session, requestedSources)
+            }
+            val receiverOnlyAcrossSelection = availableBySession
+                .filter { (_, sources) -> sources.isNotEmpty() }
+                .all { (_, sources) -> sources == listOf(SessionNmeaSource.RECEIVER_SOLUTION) }
             val plans = mutableListOf<SessionNmeaSharePlan>()
             var skipped = 0
-            sessionDirectories.forEach { session ->
-                val plan = runCatching {
-                    SessionNmeaSharePlan.fromSessionDirectory(session, outputDirectory)
-                }.getOrNull()
-                if (plan == null) {
+            availableBySession.forEach { (session, sources) ->
+                if (sources.isEmpty()) {
                     skipped++
                 } else {
-                    plans += plan
+                    sources.forEach { source ->
+                        val outputName = exportName(
+                            sessionName = session.fileName.toString(),
+                            source = source,
+                            useLegacyReceiverName = receiverOnlyAcrossSelection && source == SessionNmeaSource.RECEIVER_SOLUTION,
+                        )
+                        plans += SessionNmeaSharePlan(
+                            source = source,
+                            sourceNmea = session.resolve(source.artifactFileName),
+                            outputNmea = outputDirectory.resolve(outputName),
+                        )
+                    }
                 }
             }
             return SessionNmeaShareSelection(plans = plans, skippedCount = skipped)
         }
+
+        fun availableSources(
+            sessionDirectory: Path,
+            requestedSources: Set<SessionNmeaSource>? = null,
+        ): List<SessionNmeaSource> {
+            require(Files.isDirectory(sessionDirectory)) { "NMEA share source must be a session directory." }
+            val allowed = requestedSources ?: SessionNmeaSource.entries.toSet()
+            return SessionNmeaSource.entries.filter { source ->
+                source in allowed &&
+                    sessionDirectory.resolve(source.artifactFileName).let { Files.isRegularFile(it) && Files.size(it) > 0L }
+            }
+        }
+
+        fun exportName(
+            sessionName: String,
+            source: SessionNmeaSource,
+            useLegacyReceiverName: Boolean,
+        ): String =
+            if (useLegacyReceiverName) {
+                "$sessionName.nmea"
+            } else {
+                "$sessionName-${source.exportSuffix}.nmea"
+            }
     }
 }
 

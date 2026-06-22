@@ -79,10 +79,9 @@ static std::string long_to_string(long long value) {
 }
 
 static long long solution_time_millis(const sol_t *sol) {
-    int week = 0;
-    double tow = time2gpst(sol->time, &week);
-    if (week <= 0) return 0;
-    return static_cast<long long>((week * 604800.0 + tow) * 1000.0);
+    if (sol->time.time <= 0) return 0;
+    return static_cast<long long>(sol->time.time) * 1000LL +
+           static_cast<long long>(sol->time.sec * 1000.0);
 }
 
 static int rover_format_for(const char *format) {

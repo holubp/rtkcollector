@@ -105,6 +105,48 @@ class RtklibWorkerTest {
     }
 
     @Test
+    fun `worker synthesizes output lines when native text streams are empty`() {
+        val nmea = ByteArrayOutputStream()
+        val pos = ByteArrayOutputStream()
+        val backend = FakeBackend(
+            output = RtklibNativeOutputBatch(
+                solution = RtklibSolutionSnapshot(
+                    fixClass = RtklibFixClass.RTK_FLOAT,
+                    timestampMillis = 1_782_122_587_188L,
+                    latDeg = 50.123456789,
+                    lonDeg = 14.987654321,
+                    ellipsoidalHeightM = 310.25,
+                    horizontalAccuracyM = 0.123,
+                    verticalAccuracyM = 0.456,
+                    satellitesUsed = 14,
+                ),
+            ),
+            latch = CountDownLatch(1),
+        )
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory {
+                override fun create(): RtklibBackend = backend
+            },
+            outputWriters = RtklibOutputWriters(nmea, pos),
+        )
+
+        assertTrue(worker.start(validConfig()).started)
+        assertTrue(worker.offerRoverBytes(byteArrayOf(1, 2, 3), 10L).accepted)
+        assertTrue(backend.await())
+        assertTrue(waitForSolution(worker).latestSolution != null)
+        worker.stop()
+
+        val nmeaText = nmea.toString(Charsets.US_ASCII.name())
+        val posText = pos.toString(Charsets.US_ASCII.name())
+        assertTrue(nmeaText.startsWith("\$GPGGA,"))
+        assertTrue(nmeaText.contains(",5,14,"))
+        assertTrue(posText.contains("50.123456789"))
+        assertTrue(posText.contains("RTK_FLOAT"))
+        assertEquals(1, worker.snapshot().outputNmeaLines)
+        assertEquals(1, worker.snapshot().outputPosLines)
+    }
+
+    @Test
     fun `native bridge loads lazily only when a backend is created`() {
         var loads = 0
         val bridge = RtklibNativeBridge(

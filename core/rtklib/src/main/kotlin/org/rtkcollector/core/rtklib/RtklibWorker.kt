@@ -173,7 +173,13 @@ class RtklibWorker(
             }
 
             val activeConfig = synchronized(monitor) { config } ?: continue
-            val writableBatch = batch.filteredFor(activeConfig)
+            val writableBatch = RtklibSolutionOutputSynthesizer
+                .withSyntheticOutputsIfNeeded(
+                    batch = batch,
+                    outputNmea = activeConfig.outputNmea,
+                    outputPos = activeConfig.outputPos,
+                )
+                .filteredFor(activeConfig)
 
             try {
                 outputWriters.write(writableBatch)

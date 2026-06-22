@@ -29,3 +29,14 @@ def test_native_bridge_does_not_use_single_latest_base_observation_snapshot():
 def test_native_build_includes_rtklib_server_source():
     cmake = CMAKE.read_text(encoding="utf-8")
     assert "${RTKLIB_SRC}/rtksvr.c" in cmake
+
+
+def test_native_bridge_reports_unix_epoch_solution_millis():
+    bridge = BRIDGE.read_text(encoding="utf-8")
+    solution_time = bridge[
+        bridge.index("static long long solution_time_millis"):
+        bridge.index("static int rover_format_for")
+    ]
+    assert "sol->time.time" in solution_time
+    assert "time2gpst" not in solution_time
+    assert "week * 604800.0" not in solution_time

@@ -55,3 +55,11 @@ def test_native_postprocess_uses_rtklib_library_calls_without_cli_shellout():
     assert "inputs.push_back(base_rinex.observation);" in bridge
     assert "system(" not in bridge
     assert "popen(" not in bridge
+
+
+def test_native_bridge_defines_rtklib_postprocessing_callbacks():
+    bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
+
+    assert 'extern "C" int showmsg' in bridge
+    assert 'extern "C" void settspan' in bridge
+    assert 'extern "C" void settime' in bridge

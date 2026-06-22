@@ -15,6 +15,14 @@ extern "C" {
 #include "rtklib.h"
 }
 
+extern "C" int showmsg(const char *, ...) {
+    return 0;
+}
+
+extern "C" void settspan(gtime_t, gtime_t) {}
+
+extern "C" void settime(gtime_t) {}
+
 namespace {
 
 constexpr int STREAM_ROVER = 0;

@@ -104,6 +104,7 @@ import org.rtkcollector.receiver.unicore.um980PppStatusLabel
 import org.rtkcollector.receiver.api.ReceiverCommand
 import org.rtkcollector.receiver.ublox.UbloxMessageFrequencyTracker
 import org.rtkcollector.receiver.ublox.UbloxMessageKind
+import org.rtkcollector.receiver.ublox.UbloxNavDopParser
 import org.rtkcollector.receiver.ublox.UbloxNavPvtParser
 import org.rtkcollector.receiver.ublox.UbloxNavSatParser
 import org.rtkcollector.receiver.ublox.UbloxNmeaExporter
@@ -1635,11 +1636,11 @@ class RecordingForegroundService : Service() {
             rtklibDecodedCorrectionMessages = 0,
             rtklibOutputNmeaLines = 0,
             rtklibOutputPosLines = 0,
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
             mockLocationRateHz = mockLocationRateHz,
         ).clearBestSolutionFields(
             mockLocationState = "Disabled",
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
         )
         stopping.set(false)
         broadcastState()
@@ -2210,6 +2211,16 @@ class RecordingForegroundService : Service() {
                                 satellitesUsed = telemetry.satellitesUsed,
                                 satellitesInView = telemetry.satellitesInView,
                                 satellites = satelliteDisplay(telemetry.satellitesUsed, telemetry.satellitesInView),
+                            )
+                        }
+                    }
+                    record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x04.toByte() -> {
+                        ubloxFrequencyTracker.record(UbloxMessageKind.NAV_DOP, nowMillis)
+                        UbloxNavDopParser.parse(record.bytes, nowMillis)?.let { telemetry ->
+                            state = state.copy(
+                                pdop = "%.1f".format(java.util.Locale.US, telemetry.pdop),
+                                vdop = telemetry.vdop,
+                                hdopVdop = dopPairDisplay(telemetry.hdop, telemetry.vdop),
                             )
                         }
                     }
@@ -3194,7 +3205,7 @@ class RecordingForegroundService : Service() {
         private const val DEFAULT_UM980_FREQUENCY_DISPLAY =
             "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
         private const val DEFAULT_UBLOX_FREQUENCY_DISPLAY =
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz"
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz"
         private const val UBLOX_NAV_SAT_FRESH_MILLIS = 5_000L
 
         fun stopIntent(context: Context): Intent =

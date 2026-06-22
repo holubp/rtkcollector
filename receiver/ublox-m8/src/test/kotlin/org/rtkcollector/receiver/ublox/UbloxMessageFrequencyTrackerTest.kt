@@ -12,7 +12,7 @@ class UbloxMessageFrequencyTrackerTest {
         tracker.record(UbloxMessageKind.NAV_PVT, 2_500L)
 
         assertEquals(
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 2/-/-/-/-/- Hz",
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA 2/-/-/-/-/-/- Hz",
             tracker.display(nowMillis = 3_000L),
         )
     }
@@ -25,7 +25,7 @@ class UbloxMessageFrequencyTrackerTest {
 
         val line = tracker.display(nowMillis = 0L)
 
-        assertEquals("Frequency $expectedHeader -/-/-/-/-/- Hz", line)
+        assertEquals("Frequency $expectedHeader -/-/-/-/-/-/- Hz", line)
     }
 
     @Test
@@ -36,7 +36,7 @@ class UbloxMessageFrequencyTrackerTest {
         }
 
         assertEquals(
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/5/-/-/-/- Hz",
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/5/-/-/-/-/- Hz",
             tracker.display(nowMillis = 5_000L),
         )
     }
@@ -49,7 +49,7 @@ class UbloxMessageFrequencyTrackerTest {
 
         // window=5000; at nowMillis=7001 both samples are outside the window.
         assertEquals(
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
             tracker.display(nowMillis = 7_001L),
         )
     }

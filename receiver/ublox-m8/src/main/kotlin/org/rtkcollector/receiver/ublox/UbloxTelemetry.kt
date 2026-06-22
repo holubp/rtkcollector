@@ -46,3 +46,14 @@ data class UbloxNavSatTelemetry(
     val satellitesInView: Int,
     val satellitesUsed: Int,
 )
+
+data class UbloxNavDopTelemetry(
+    val updatedAtMillis: Long,
+    val gdop: Double,
+    val pdop: Double,
+    val tdop: Double,
+    val vdop: Double,
+    val hdop: Double,
+    val ndop: Double,
+    val edop: Double,
+)

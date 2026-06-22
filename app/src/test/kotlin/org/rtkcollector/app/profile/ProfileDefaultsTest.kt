@@ -40,6 +40,19 @@ class ProfileDefaultsTest {
     }
 
     @Test
+    fun `m8t live monitoring profiles enable nav dop for dop display`() {
+        val navDopCommand = "!UBX CFG-MSG 1 4 0 0 0 1 0 0"
+
+        assertTrue(ProfileStores.UBLOX_M8T_RAW_5HZ_RTKLIB_EX_SCRIPT.contains(navDopCommand))
+        assertTrue(ProfileStores.UBLOX_M8T_RAW_STATUS_MOCK_SCRIPT.contains(navDopCommand))
+    }
+
+    @Test
+    fun `m8t safe raw profile does not enable nav dop in this pass`() {
+        assertTrue(!ProfileStores.UBLOX_M8T_RAW_1HZ_SCRIPT.contains("!UBX CFG-MSG 1 4 0 0 0 1 0 0"))
+    }
+
+    @Test
     fun `m8t mock profile enables timing marker output`() {
         assertTrue(ProfileStores.UBLOX_M8T_RAW_STATUS_MOCK_SCRIPT.contains("!UBX CFG-MSG 13 3 0 0 0 1 0 0"))
     }

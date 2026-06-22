@@ -32,6 +32,7 @@ data class BestSolutionStateDelta(
     val verticalAccuracyM: Double?,
     val satellitesUsed: Int?,
     val satellitesInView: Int?,
+    val utcTime: String? = null,
     val mockResult: MockLocationPublishResult,
 )
 
@@ -127,6 +128,7 @@ object BestSolutionTickLogic {
             verticalAccuracyM = candidate.verticalAccuracyM,
             satellitesUsed = candidate.satellitesUsed,
             satellitesInView = candidate.satellitesInView,
+            utcTime = candidate.utcTime,
             mockResult = mockResult,
         )
 
@@ -146,6 +148,7 @@ object BestSolutionTickLogic {
             verticalAccuracyM = snapshot?.verticalAccuracyM,
             satellitesUsed = snapshot?.satellitesUsed,
             satellitesInView = snapshot?.satellitesInView,
+            utcTime = snapshot?.utcTime,
             mockResult = mockResult,
         )
 

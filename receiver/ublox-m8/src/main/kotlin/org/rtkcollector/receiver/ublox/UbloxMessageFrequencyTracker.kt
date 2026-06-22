@@ -6,6 +6,7 @@ enum class UbloxMessageKind(val label: String) {
     TM2("TM2"),
     NAV_PVT("NAV-PVT"),
     NAV_SAT("NAV-SAT"),
+    NAV_DOP("NAV-DOP"),
     GGA("GGA"),
 }
 

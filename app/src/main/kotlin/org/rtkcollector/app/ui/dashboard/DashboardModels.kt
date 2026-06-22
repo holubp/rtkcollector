@@ -127,7 +127,7 @@ internal const val CompactDashboardTwoColumnMinWidthDp = 340
 internal const val DefaultUm980ReceiverFrequency =
     "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
 internal const val DefaultUbloxReceiverFrequency =
-    "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz"
+    "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz"
 
 internal fun compactDashboardCardColumnCount(
     availableWidthDp: Int,

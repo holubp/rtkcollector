@@ -25,10 +25,10 @@ class RecordingServiceStateTest {
             bestSolutionFix = "SINGLE",
             bestSolutionAgeMs = 500L,
             mockLocationState = "PUBLISHED",
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/1/1/1/1 Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA 1/1/1/1/1/-/1 Hz",
         ).clearBestSolutionFields(
             mockLocationState = "Disabled",
-            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
         )
 
         assertNull(cleared.latDeg)
@@ -45,7 +45,7 @@ class RecordingServiceStateTest {
         assertEquals("n/a", cleared.bestSolutionFix)
         assertNull(cleared.bestSolutionAgeMs)
         assertEquals("Disabled", cleared.mockLocationState)
-        assertEquals("Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz", cleared.ubloxFrequency)
+        assertEquals("Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz", cleared.ubloxFrequency)
     }
 
     @Test
@@ -160,6 +160,35 @@ class RecordingServiceStateTest {
         assertEquals(4, updated.satellitesUsed)
         assertEquals(19, updated.satellitesInView)
         assertEquals("4 / 19", updated.satellites)
+    }
+
+    @Test
+    fun `best solution delta propagates utc time`() {
+        val state = RecordingServiceState()
+
+        val updated = state.applyBestSolutionDisplayDelta(
+            delta = BestSolutionStateDelta(
+                bestSolutionSource = "UBX-NAV-PVT",
+                bestSolutionFix = "DGPS",
+                bestSolutionAgeMs = 10,
+                latDeg = 50.0874512,
+                lonDeg = 14.4212534,
+                ellipsoidalHeightM = 287.423,
+                mslAltitudeM = 243.812,
+                horizontalAccuracyM = 0.8,
+                verticalAccuracyM = 1.2,
+                satellitesUsed = 14,
+                satellitesInView = 18,
+                utcTime = "2026-06-19T21:00:48Z",
+                mockResult = org.rtkcollector.app.mocklocation.MockLocationPublishResult.PUBLISHED,
+            ),
+            ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
+            formatLatLon = { lat, lon -> "$lat, $lon" },
+            formatMeters = { "$it m" },
+            formatSatellites = { used, view -> "$used/$view" },
+        )
+
+        assertEquals("2026-06-19T21:00:48Z", updated.utcTime)
     }
 
     @Test

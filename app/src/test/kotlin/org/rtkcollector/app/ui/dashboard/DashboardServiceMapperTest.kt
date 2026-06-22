@@ -84,7 +84,7 @@ class DashboardServiceMapperTest {
             )
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
-                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA -/-/-/-/-/- Hz",
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
             )
 
         val state = dashboardStateFromRecordingIntent(intent)
@@ -106,13 +106,13 @@ class DashboardServiceMapperTest {
             )
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
-                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/-/5/-/- Hz",
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA 1/1/-/5/-/-/- Hz",
             )
 
         val state = dashboardStateFromRecordingIntent(intent)
 
         assertEquals(
-            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/-/5/-/- Hz",
+            "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA 1/1/-/5/-/-/- Hz",
             state.fix.receiverFrequency,
         )
     }
@@ -128,7 +128,7 @@ class DashboardServiceMapperTest {
             )
             .putExtra(
                 RecordingForegroundService.EXTRA_STATE_UBLOX_FREQUENCY,
-                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/GGA 1/1/-/5/-/- Hz",
+                "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA 1/1/-/5/-/-/- Hz",
             )
 
         val state = dashboardStateFromRecordingIntent(intent)

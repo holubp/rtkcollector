@@ -208,6 +208,30 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `correction last update ignores elapsed realtime timestamps`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_CORRECTION_LAST_UPDATED_AT, 691_380_000L)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("n/a", state.ntrip.lastUpdated)
+    }
+
+    @Test
+    fun `correction last update displays wall clock epoch timestamps`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_CORRECTION_LAST_UPDATED_AT, 1_781_699_696_000L)
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("2026-06-17T12:34:56.000Z", state.ntrip.lastUpdated)
+    }
+
+    @Test
     fun `bestnav none falls back to gga fix quality`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

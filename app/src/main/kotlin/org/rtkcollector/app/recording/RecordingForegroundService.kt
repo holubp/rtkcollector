@@ -2865,16 +2865,16 @@ class RecordingForegroundService : Service() {
     }
 
     private fun RecordingServiceState.withRtcmDecodedTelemetry(telemetry: Um980Telemetry): RecordingServiceState {
-        val nowMillis = android.os.SystemClock.elapsedRealtime()
+        val nowElapsedMillis = android.os.SystemClock.elapsedRealtime()
         return copy(
-            rtcmDecodedAtMillis = nowMillis,
+            rtcmDecodedAtMillis = nowElapsedMillis,
             rtcmLastMessageId = telemetry.rtcmMessageId ?: rtcmLastMessageId,
             rtcmLastBaseId = telemetry.rtcmBaseId ?: rtcmLastBaseId,
-            correctionLastUpdatedAtMillis = nowMillis,
+            correctionLastUpdatedAtMillis = System.currentTimeMillis(),
             receiverRtkStatus = receiverRtkStatusAfterRtcmDecoded(
                 previousStatus = receiverRtkStatus,
                 lastReceiverRtkEvidenceAtMillis = receiverRtkEvidenceAtMillis,
-                nowMillis = nowMillis,
+                nowMillis = nowElapsedMillis,
             ),
         )
     }

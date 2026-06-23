@@ -78,7 +78,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",
         status = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP) ?: "n/a",
-        lastUpdated = displayEpochMillisUtc(
+        lastUpdated = displayCorrectionLastUpdatedAt(
             positiveLongExtra(intent, RecordingForegroundService.EXTRA_STATE_CORRECTION_LAST_UPDATED_AT),
         ),
         transferred = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_TRANSFERRED) ?: "0 B",
@@ -212,6 +212,11 @@ private fun finiteDoubleExtra(intent: Intent, key: String): Double? =
 
 private fun positiveLongExtra(intent: Intent, key: String): Long? =
     intent.getLongExtra(key, -1L).takeIf { it >= 0L }
+
+private fun displayCorrectionLastUpdatedAt(epochMillis: Long?): String =
+    displayEpochMillisUtc(epochMillis?.takeIf { it >= MinimumCorrectionDisplayEpochMillis })
+
+private const val MinimumCorrectionDisplayEpochMillis = 1_577_836_800_000L
 
 internal fun displayMockLocationMonitor(
     state: String,

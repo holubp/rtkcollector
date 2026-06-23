@@ -37,6 +37,7 @@
 | `ANDROID-USB-003` | Automated + manual | Recording health monitor tests; USB silence/reconnect field test | Needs field validation | Empty USB reads are degraded stalls, not healthy recording. |
 | `ANDROID-USB-004` | Automated + manual | Recording health monitor protocol-stall tests; UM980 garbage-bytes session regression | Needs field validation | Detect bytes-without-valid-protocol-frame and reconnect without stopping raw capture. |
 | `ANDROID-CORRECTION-001` | Automated + manual | Recording health monitor tests; NTRIP EOF reconnect test; network interruption smoke test | Needs field validation | Correction stalls reconnect without stopping receiver raw capture. |
+| `ANDROID-CORRECTION-002` | Automated + manual | Dashboard service mapper test; rover + NTRIP dashboard smoke test | Needs field validation | Correction last-update display uses wall-clock UTC, not elapsed realtime. |
 | `ANDROID-STORAGE-001` | Manual + review | SAF folder-picker storage profile and service start review | Needs provider testing | Verify persisted write permission on common Android document providers. |
 | `ANDROID-MOCK-001` | Automated + manual | Mock-location mapper tests; mock altitude smoke test | Needs review | `Location.altitude` must use ellipsoidal height. |
 | `ANDROID-MOCK-002` | Review | Android API limitation review; user-doc wording | Passing | Satellite counts may be extras; full `GnssStatus` injection is not promised. |

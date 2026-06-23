@@ -138,6 +138,21 @@ Verification:
   stall/recovery monitor tests.
 - Manual: rover + NTRIP session with transient network/caster interruption.
 
+### ANDROID-CORRECTION-002: Correction Last-Update Display Uses Wall-Clock Time
+
+Status: Normative
+
+Dashboard correction last-update timestamps MUST be UTC wall-clock epochs.
+Internal elapsed-realtime timestamps MAY be used for recentness and stall
+detection, but MUST NOT be broadcast or rendered as correction last-update
+wall-clock values.
+
+Verification:
+- Automated: dashboard service mapper rejects elapsed-realtime correction
+  update values.
+- Manual: rover + NTRIP dashboard last update stays near current UTC time
+  during receiver RTCM telemetry updates.
+
 ## Storage
 
 ### ANDROID-STORAGE-001: SAF Tree Access Is Explicit And Persisted

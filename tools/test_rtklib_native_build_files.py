@@ -57,6 +57,24 @@ def test_native_postprocess_uses_rtklib_library_calls_without_cli_shellout():
     assert "popen(" not in bridge
 
 
+def test_native_postprocess_uses_converted_base_rinex_reference_position():
+    bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
+    postprocess_options = bridge.split("static void configure_postprocess_options(", maxsplit=1)[1]
+    postprocess_options = postprocess_options.split("static void configure_rinex_options(", maxsplit=1)[0]
+
+    assert "prcopt->refpos = POSOPT_RINEX;" in postprocess_options
+    assert "prcopt->refpos = POSOPT_RTCM;" not in postprocess_options
+
+
+def test_native_live_rtklib_keeps_rtcm_reference_position():
+    bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
+    live_options = bridge.split("static void configure_options(", maxsplit=1)[1]
+    live_options = live_options.split("static void configure_postprocess_options(", maxsplit=1)[0]
+
+    assert "engine->prcopt.refpos = POSOPT_RTCM;" in live_options
+    assert "engine->prcopt.refpos = POSOPT_RINEX;" not in live_options
+
+
 def test_native_bridge_defines_rtklib_postprocessing_callbacks():
     bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
 

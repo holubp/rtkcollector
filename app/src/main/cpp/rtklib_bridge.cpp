@@ -204,7 +204,7 @@ static void configure_postprocess_options(
     prcopt->mode = std::strcmp(preset, "TEMPORARY_BASE_STATIC_RTK") == 0 ? PMODE_STATIC : PMODE_KINEMA;
     prcopt->navsys = SYS_GPS | SYS_GLO | SYS_GAL | SYS_CMP | SYS_QZS;
     prcopt->nf = std::max(1, std::min(3, frequency_count));
-    prcopt->refpos = POSOPT_RTCM;
+    prcopt->refpos = POSOPT_RINEX;
     prcopt->rovpos = POSOPT_POS_LLH;
 
     *solopt = solopt_default;

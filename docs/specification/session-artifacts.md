@@ -68,9 +68,11 @@ The required RTKLIB artifacts are `rtklib-solution.nmea` and
 `receiver-rx.raw`, `correction-input.raw`, `receiver-solution.nmea` or
 `receiver-solution.jsonl`. Completed-session RTKLIB postprocessing MAY create
 additional artifacts such as `rtklib-postprocessed-forward.nmea` and
-`rtklib-postprocessed-combined.nmea`. These artifacts MUST be shared only when
-they already exist and MUST NOT be implied by the receiver NMEA regeneration
-action.
+`rtklib-postprocessed-combined.nmea`. When completed-session postprocessing
+converts RTCM3 correction input to base-station RINEX before calling RTKLIB
+`postpos()`, it MUST use the converted base RINEX header as the reference
+position source. These artifacts MUST be shared only when they already exist
+and MUST NOT be implied by the receiver NMEA regeneration action.
 
 Verification:
 - Automated: workflow artifact validation and RTKLIB output writer tests.

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -15,7 +16,31 @@ extern "C" {
 #include "rtklib.h"
 }
 
-extern "C" int showmsg(const char *, ...) {
+namespace {
+thread_local std::string rtklib_show_messages;
+
+static void reset_rtklib_messages() {
+    rtklib_show_messages.clear();
+}
+
+static std::string current_rtklib_messages() {
+    return rtklib_show_messages;
+}
+}
+
+extern "C" int showmsg(const char *format, ...) {
+    if (!format || !*format) return 0;
+
+    std::array<char, 2048> buffer{};
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(buffer.data(), buffer.size(), format, args);
+    va_end(args);
+
+    if (buffer[0] != '\0') {
+        if (!rtklib_show_messages.empty()) rtklib_show_messages.push_back('\n');
+        rtklib_show_messages.append(buffer.data());
+    }
     return 0;
 }
 
@@ -258,9 +283,12 @@ static bool convert_raw_to_rinex(
         if (!names[i].empty()) std::remove(names[i].c_str());
     }
 
+    reset_rtklib_messages();
     int status = convrnx(format, &rnxopt, input.c_str(), outputs.data());
     if (status <= 0) {
-        *error = "RTKLIB convrnx failed for " + input;
+        *error = "RTKLIB convrnx failed for " + input + " (status=" + std::to_string(status) + ")";
+        std::string messages = current_rtklib_messages();
+        if (!messages.empty()) *error += ": " + messages;
         return false;
     }
 
@@ -292,6 +320,7 @@ static bool run_postpos_output(
     std::remove(output.c_str());
 
     gtime_t zero{};
+    reset_rtklib_messages();
     int status = postpos(
         zero,
         zero,
@@ -307,7 +336,10 @@ static bool run_postpos_output(
         ""
     );
     if (status != 0 || !file_non_empty(output)) {
-        *error = "RTKLIB postpos failed for " + output;
+        *error = "RTKLIB postpos failed for " + output + " (status=" + std::to_string(status) + ")";
+        if (!file_non_empty(output)) *error += ", output is empty";
+        std::string messages = current_rtklib_messages();
+        if (!messages.empty()) *error += ": " + messages;
         return false;
     }
     return true;

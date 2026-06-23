@@ -10,6 +10,7 @@ enum class DiagnosticCategory {
     RECEIVER_COMMAND,
     SERVICE,
     MOCK_LOCATION,
+    RTKLIB,
 }
 
 data class RuntimeDiagnosticRecord(

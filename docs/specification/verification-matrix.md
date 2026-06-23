@@ -9,6 +9,7 @@
 | `PRODUCT-NONGOAL-001` | Review | Dependency and UI review | Passing | No maps/GIS/shapefile scope is allowed. |
 | `WF-ROVER-001` | Automated + manual | Workflow validator tests; plain rover smoke test | Needs review | Confirm no NTRIP connection opens. |
 | `WF-ROVER-NTRIP-001` | Automated + manual | NTRIP tests; EUREF/CORS field session | Needs review | Confirm RTK float/fix with correction recording. |
+| `WF-ROVER-RTKLIB-001` | Automated + manual | Workflow classification tests; active recording configuration tests; M8T RTKLIB field session | In progress | Rover + RTKLIB uses Android-side NTRIP as correction input to RTKLIB without requiring NTRIP-to-receiver. Further M8T field validation remains useful. |
 | `WF-TEMPBASE-001` | Automated + manual | Base averaging/acceptance tests; temporary-base field test | In progress | Implementation exists, needs complete workflow review and field validation. |
 | `WF-TEMPBASE-HEIGHT-001` | Automated + review | Dashboard candidate tests; UM980 fixed-base command review | Passing | Current candidate requires ellipsoidal height and avoids altitude fallback. |
 | `WF-FIXEDBASE-001` | Automated + manual | Workflow validator; fixed-base coordinate display/start test | In progress | Accepted-coordinate persistence and display remain under review. |
@@ -30,6 +31,7 @@
 | `ANDROID-SERVICE-001` | Review + manual | Service ownership review; background recording smoke test | Needs review | Screen-off and background testing remain required. |
 | `ANDROID-CAPTURE-001` | Review + manual | Capture code review; background/minimised session | Needs review | UI/parser failures must remain advisory. |
 | `ANDROID-DIAGNOSTICS-001` | Automated + review | Diagnostics controller tests and service call-site review | In progress | Runtime logging and performance monitoring are guarded and advisory. Field performance validation remains useful. |
+| `ANDROID-JNI-001` | Automated + review + manual | JNI/native bridge source-structure tests; native call-site review; Android Studio/CI native build and device exercise | In progress | Native RTKLIB bridge now has source tests for JNI input guards and `convrnx()` non-null output strings. Full native `.so` behaviour still needs host/device validation. |
 | `ANDROID-USB-001` | Automated + device | USB decision tests; Huawei P30 Pro smoke test | Needs field retest | Vendor Android edge case. |
 | `ANDROID-USB-002` | Automated + manual | Reconnect policy tests; disconnect/reconnect smoke test | Needs review | Must preserve existing session artifacts. |
 | `ANDROID-USB-003` | Automated + manual | Recording health monitor tests; USB silence/reconnect field test | Needs field validation | Empty USB reads are degraded stalls, not healthy recording. |

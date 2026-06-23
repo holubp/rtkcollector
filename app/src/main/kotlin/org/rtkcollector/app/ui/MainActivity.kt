@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -64,6 +66,7 @@ import org.rtkcollector.app.diagnostics.DiagnosticsStore
 import org.rtkcollector.app.diagnostics.DiagnosticsZipExporter
 import org.rtkcollector.app.diagnostics.RuntimeDiagnosticRecord
 import org.rtkcollector.app.diagnostics.RuntimeDiagnostics
+import org.rtkcollector.app.diagnostics.recordSessionTaskFailure
 import org.rtkcollector.app.base.AcceptedBaseCoordinate
 import org.rtkcollector.app.base.AcceptedBaseCoordinateStore
 import org.rtkcollector.app.base.BaseCoordinateForm
@@ -271,6 +274,7 @@ fun RtkCollectorApp(
     var pendingNmeaSources by remember { mutableStateOf<List<SessionNmeaSource>>(emptyList()) }
     var pendingNmeaEntries by remember { mutableStateOf<List<SessionBrowserEntry>>(emptyList()) }
     var pendingRtklibPostprocessEntries by remember { mutableStateOf<List<SessionBrowserEntry>>(emptyList()) }
+    var sessionTaskErrorDetail by remember { mutableStateOf<String?>(null) }
     var profileRevision by remember { mutableStateOf(0) }
     var consoleState by remember { mutableStateOf(DeviceConsoleState()) }
     var consoleInput by rememberSaveable { mutableStateOf("") }
@@ -334,7 +338,7 @@ fun RtkCollectorApp(
             selectedSettingsSetId = selectedSettingsSetId,
         )
     }
-    fun runSessionTask(label: String, task: () -> Unit) {
+    fun runSessionTask(label: String, category: DiagnosticCategory = DiagnosticCategory.APP, task: () -> Unit) {
         zipProgressText = "$label..."
         sessionProgressFraction = null
         Thread {
@@ -351,6 +355,15 @@ fun RtkCollectorApp(
                         zipProgressText = null
                         sessionProgressFraction = null
                         refreshSessions()
+                        val detail = "$label failed: ${error.message ?: error::class.java.name}\n${error.stackTraceToString()}"
+                        sessionTaskErrorDetail = detail
+                        recordSessionTaskFailure(
+                            store = diagnosticsStore,
+                            enabled = diagnosticsSettings.runtimeLoggingEnabled,
+                            label = label,
+                            category = category,
+                            error = error,
+                        )
                         Toast.makeText(context, "$label failed: ${error.message}", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -366,7 +379,7 @@ fun RtkCollectorApp(
             RtklibPostprocessMode.FORWARD -> "forward"
             RtklibPostprocessMode.FORWARD_BACKWARD -> "forward/backward"
         }
-        runSessionTask("Regenerate RTKLIB") {
+        runSessionTask("Regenerate RTKLIB", DiagnosticCategory.RTKLIB) {
             val backend = RtklibNativeBridge()
             selected.forEachIndexed { index, entry ->
                 runOnMain(context) {
@@ -799,6 +812,36 @@ fun RtkCollectorApp(
                             },
                         ) {
                             Text("Cancel")
+                        }
+                    },
+                )
+            }
+            sessionTaskErrorDetail?.let { detail ->
+                AlertDialog(
+                    onDismissRequest = { sessionTaskErrorDetail = null },
+                    title = { Text("Session operation failed") },
+                    text = {
+                        Text(
+                            text = detail,
+                            modifier = Modifier
+                                .height(260.dp)
+                                .verticalScroll(rememberScrollState()),
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                context.getSystemService(ClipboardManager::class.java)
+                                    .setPrimaryClip(ClipData.newPlainText("RtkCollector session error", detail))
+                                Toast.makeText(context, "Error details copied.", Toast.LENGTH_SHORT).show()
+                            },
+                        ) {
+                            Text("Copy")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { sessionTaskErrorDetail = null }) {
+                            Text("Close")
                         }
                     },
                 )

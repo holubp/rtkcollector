@@ -186,6 +186,12 @@ unchanged.
   frequency measurement, future RTKLIB-EX processing and future caster upload
   must not run on the raw capture path. They consume advisory snapshots or
   bounded queues after `receiver-rx.raw` has already been appended.
+- JNI, NDK and other native-library boundaries must be treated as unsafe input
+  boundaries. Validate Java strings, byte arrays, handles and allocation results
+  before dereferencing; use scoped/RAII ownership for JNI resources; and follow
+  downstream C API nullability contracts exactly. Passing `NULL` is allowed only
+  where the target API documents `NULL` as valid. If the target API documents an
+  empty string or another sentinel for "disabled", pass that sentinel instead.
 - For receivers with a documented best-navigation output such as UM980
   `BESTNAV/BESTNAVB`, the primary monitoring solution must be a transparent
   pass-through of that receiver solution. Mock-provider resampling is separate
@@ -256,6 +262,10 @@ Prefer the strongest feasible verification for the touched code:
 - Derived `receiver-solution.nmea` exports must preserve sub-second UTC from
   structured/binary receiver telemetry and must not copy binary/noise fragments
   that merely look like dollar-prefixed lines.
+- JNI/native changes must include source or native tests for pointer
+  nullability, resource release and downstream C API sentinel contracts. For
+  RTKLIB and similar C libraries, review the upstream function comments before
+  deciding whether a pointer may be null.
 - User-provided debug recordings should be expected under `samples/debug/`.
   Treat `samples/` as local evidence only; do not commit those captures.
 - App-distributed init/shutdown command profiles are built-ins: keep them

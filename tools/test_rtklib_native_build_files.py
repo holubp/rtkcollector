@@ -65,6 +65,18 @@ def test_native_bridge_defines_rtklib_postprocessing_callbacks():
     assert 'extern "C" void settime' in bridge
 
 
+def test_native_postprocess_preserves_rtklib_messages_in_failure_details():
+    bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
+
+    assert "#include <cstdarg>" in bridge
+    assert "thread_local std::string rtklib_show_messages" in bridge
+    assert "std::vsnprintf" in bridge
+    assert "rtklib_show_messages.clear()" in bridge
+    assert '"RTKLIB postpos failed for "' in bridge
+    assert "status=" in bridge
+    assert "rtklib_show_messages" in bridge
+
+
 def test_native_postprocess_does_not_pass_null_convrnx_outputs():
     bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
 

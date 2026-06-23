@@ -197,6 +197,15 @@ is installed. The app module owns the native packaging because Android expects
 shared libraries under the application APK; `core:rtklib` remains the pure
 Kotlin API and worker boundary.
 
+JNI and native-library adapters are safety-critical boundaries. Treat every
+Java-provided string, byte array, handle and object allocation as nullable until
+checked, even if the Kotlin type is non-null. Prefer scoped/RAII wrappers for
+JNI resources so every acquired `GetStringUTFChars` value is released on all
+return paths. Before passing pointers to RTKLIB-EX or another C library, read
+the target function's contract and match it exactly: `NULL` is valid only when
+the API documents it as valid. If the API documents an empty string as the
+disabled-output sentinel, pass a valid empty string, not `NULL`.
+
 Required host setup:
 
 - JDK 17.

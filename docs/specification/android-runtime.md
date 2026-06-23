@@ -38,6 +38,28 @@ Verification:
 - Automated: diagnostics controller disabled-state tests.
 - Review: service hooks are guarded and outside receiver byte loops.
 
+### ANDROID-JNI-001: JNI And Native Boundaries Are Explicitly Sanitized
+
+Status: Normative
+
+Any JNI, NDK or other native-library boundary MUST validate all Java-provided
+strings, arrays, handles and object allocation results before dereferencing or
+passing them to C/C++ code. Native adapters MUST follow each downstream C API's
+documented nullability contract exactly: use `NULL` only where that API
+explicitly defines it as valid, and use empty strings or other sentinel values
+where the API documents those instead. Native wrappers MUST prefer scoped or
+RAII ownership for JNI resources, release acquired resources on every return
+path, and return clear Java-facing errors for invalid inputs or unavailable
+native resources rather than crashing the app process.
+
+Verification:
+- Automated: source-structure tests for JNI/native bridge nullability contracts
+  and resource guards.
+- Review: all JNI/native call sites document which pointer arguments may be
+  null and which must be valid non-null sentinels.
+- Manual: native features that call external libraries are exercised on a host
+  or device with a working native build.
+
 ## USB
 
 ### ANDROID-USB-001: USB Permission And Open Access Are Separate Gates

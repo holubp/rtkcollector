@@ -71,8 +71,11 @@ additional artifacts such as `rtklib-postprocessed-forward.nmea` and
 `rtklib-postprocessed-combined.nmea`. When completed-session postprocessing
 converts RTCM3 correction input to base-station RINEX before calling RTKLIB
 `postpos()`, it MUST use the converted base RINEX header as the reference
-position source. These artifacts MUST be shared only when they already exist
-and MUST NOT be implied by the receiver NMEA regeneration action.
+position source. If native real-time RTKLIB text output is unavailable and the
+app synthesizes a minimal GGA sentence from a solution snapshot, it MUST NOT
+write ellipsoidal height into the NMEA GGA mean-sea-level altitude field or
+claim a zero geoid separation. These artifacts MUST be shared only when they
+already exist and MUST NOT be implied by the receiver NMEA regeneration action.
 
 Verification:
 - Automated: workflow artifact validation and RTKLIB output writer tests.

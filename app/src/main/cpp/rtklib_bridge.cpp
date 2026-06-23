@@ -49,6 +49,38 @@ struct NativeResult {
     std::string satellites_used;
 };
 
+class ScopedUtfChars {
+public:
+    ScopedUtfChars(JNIEnv *env, jstring value) : env_(env), value_(value) {
+        if (value_) chars_ = env_->GetStringUTFChars(value_, nullptr);
+    }
+
+    ScopedUtfChars(const ScopedUtfChars &) = delete;
+    ScopedUtfChars &operator=(const ScopedUtfChars &) = delete;
+
+    ~ScopedUtfChars() {
+        if (chars_) env_->ReleaseStringUTFChars(value_, chars_);
+    }
+
+    bool ok() const {
+        return value_ != nullptr && chars_ != nullptr;
+    }
+
+    const char *c_str() const {
+        return chars_ ? chars_ : "";
+    }
+
+private:
+    JNIEnv *env_;
+    jstring value_;
+    const char *chars_ = nullptr;
+};
+
+static jstring jni_input_error(JNIEnv *env, const char *message) {
+    if (env->ExceptionCheck()) return nullptr;
+    return env->NewStringUTF(message);
+}
+
 struct RtklibEngineHandle {
     std::mutex mutex;
     rtksvr_t server{};
@@ -221,16 +253,13 @@ static bool convert_raw_to_rinex(
     std::array<std::array<char, 1024>, RINEX_OUTPUT_FILE_COUNT> buffers{};
     std::array<char *, RINEX_OUTPUT_FILE_COUNT> outputs{};
     for (int i = 0; i < RINEX_OUTPUT_FILE_COUNT; i++) {
-        if (names[i].empty()) {
-            outputs[i] = nullptr;
-            continue;
-        }
         std::snprintf(buffers[i].data(), buffers[i].size(), "%s", names[i].c_str());
         outputs[i] = buffers[i].data();
-        std::remove(names[i].c_str());
+        if (!names[i].empty()) std::remove(names[i].c_str());
     }
 
-    if (!convrnx(format, &rnxopt, input.c_str(), outputs.data())) {
+    int status = convrnx(format, &rnxopt, input.c_str(), outputs.data());
+    if (status <= 0) {
         *error = "RTKLIB convrnx failed for " + input;
         return false;
     }
@@ -406,9 +435,18 @@ static jobjectArray to_java_result(JNIEnv *env, const RtklibEngineHandle *engine
         decoded_correction,
     };
     jclass string_class = env->FindClass("java/lang/String");
-    jobjectArray array = env->NewObjectArray(15, string_class, env->NewStringUTF(""));
+    if (!string_class) return nullptr;
+    jstring empty = env->NewStringUTF("");
+    if (!empty) return nullptr;
+    jobjectArray array = env->NewObjectArray(15, string_class, empty);
+    env->DeleteLocalRef(empty);
+    if (!array) return nullptr;
     for (int i = 0; i < 15; i++) {
-        env->SetObjectArrayElement(array, i, env->NewStringUTF(values[i].c_str()));
+        jstring item = env->NewStringUTF(values[i].c_str());
+        if (!item) return nullptr;
+        env->SetObjectArrayElement(array, i, item);
+        env->DeleteLocalRef(item);
+        if (env->ExceptionCheck()) return nullptr;
     }
     return array;
 }
@@ -451,18 +489,21 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibStart(
     std::lock_guard<std::mutex> lock(engine->mutex);
     release_rtklib_state(engine);
 
-    const char *preset_chars = env->GetStringUTFChars(preset, nullptr);
-    const char *rover_chars = env->GetStringUTFChars(rover_format, nullptr);
-    const char *correction_chars = env->GetStringUTFChars(correction_format, nullptr);
+    ScopedUtfChars preset_chars(env, preset);
+    ScopedUtfChars rover_chars(env, rover_format);
+    ScopedUtfChars correction_chars(env, correction_format);
+    if (!preset_chars.ok() || !rover_chars.ok() || !correction_chars.ok()) {
+        return jni_input_error(env, "RTKLIB native start received null or unavailable string input");
+    }
 
-    int raw_format = rover_format_for(rover_chars);
+    int raw_format = rover_format_for(rover_chars.c_str());
     std::string error;
     if (raw_format < 0) {
-        error = std::string("Unsupported RTKLIB rover format: ") + rover_chars;
-    } else if (std::strcmp(correction_chars, "RTCM3") != 0) {
-        error = std::string("Unsupported RTKLIB correction format: ") + correction_chars;
+        error = std::string("Unsupported RTKLIB rover format: ") + rover_chars.c_str();
+    } else if (std::strcmp(correction_chars.c_str(), "RTCM3") != 0) {
+        error = std::string("Unsupported RTKLIB correction format: ") + correction_chars.c_str();
     } else {
-        configure_options(engine, preset_chars, frequency_count);
+        configure_options(engine, preset_chars.c_str(), frequency_count);
         engine->output_nmea = output_nmea == JNI_TRUE;
         engine->output_pos = output_pos == JNI_TRUE;
         if (!rtksvrinit(&engine->server)) {
@@ -532,10 +573,6 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibStart(
         }
     }
 
-    env->ReleaseStringUTFChars(preset, preset_chars);
-    env->ReleaseStringUTFChars(rover_format, rover_chars);
-    env->ReleaseStringUTFChars(correction_format, correction_chars);
-
     if (!error.empty()) {
         release_rtklib_state(engine);
     }
@@ -557,6 +594,12 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibFeed(
         result.state = "FAILED";
         result.error = "RTKLIB native handle is null";
         return to_java_result(env, nullptr, result);
+    }
+    if (!bytes) {
+        NativeResult result;
+        result.state = "FAILED";
+        result.error = "RTKLIB native feed received null bytes";
+        return to_java_result(env, engine, result);
     }
     jsize length = env->GetArrayLength(bytes);
     std::vector<uint8_t> buffer(static_cast<size_t>(length));
@@ -600,25 +643,30 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
     jstring output_nmea,
     jstring output_pos
 ) {
-    const char *preset_chars = env->GetStringUTFChars(preset, nullptr);
-    const char *rover_chars = env->GetStringUTFChars(rover_format, nullptr);
-    const char *solution_type_chars = env->GetStringUTFChars(solution_type, nullptr);
-    const char *receiver_rx_chars = env->GetStringUTFChars(receiver_rx_raw, nullptr);
-    const char *correction_chars = env->GetStringUTFChars(correction_rtcm3, nullptr);
-    const char *output_nmea_chars = env->GetStringUTFChars(output_nmea, nullptr);
-    const char *output_pos_chars = env->GetStringUTFChars(output_pos, nullptr);
+    ScopedUtfChars preset_chars(env, preset);
+    ScopedUtfChars rover_chars(env, rover_format);
+    ScopedUtfChars solution_type_chars(env, solution_type);
+    ScopedUtfChars receiver_rx_chars(env, receiver_rx_raw);
+    ScopedUtfChars correction_chars(env, correction_rtcm3);
+    ScopedUtfChars output_nmea_chars(env, output_nmea);
+    ScopedUtfChars output_pos_chars(env, output_pos);
+    if (!preset_chars.ok() || !rover_chars.ok() || !solution_type_chars.ok() ||
+        !receiver_rx_chars.ok() || !correction_chars.ok() ||
+        !output_nmea_chars.ok() || !output_pos_chars.ok()) {
+        return jni_input_error(env, "RTKLIB native postprocess received null or unavailable string input");
+    }
 
     std::string error;
-    int rover_format_id = rover_format_for(rover_chars);
-    int solution_type_id = solution_type_for(solution_type_chars);
+    int rover_format_id = rover_format_for(rover_chars.c_str());
+    int solution_type_id = solution_type_for(solution_type_chars.c_str());
     if (rover_format_id < 0) {
-        error = std::string("Unsupported RTKLIB postprocess rover format: ") + rover_chars;
+        error = std::string("Unsupported RTKLIB postprocess rover format: ") + rover_chars.c_str();
     } else if (solution_type_id < 0) {
-        error = std::string("Unsupported RTKLIB postprocess solution type: ") + solution_type_chars;
+        error = std::string("Unsupported RTKLIB postprocess solution type: ") + solution_type_chars.c_str();
     } else {
         std::vector<std::string> inputs;
         std::vector<std::string> generated_files;
-        std::string output_pos_string(output_pos_chars);
+        std::string output_pos_string(output_pos_chars.c_str());
         std::string rover_prefix = postprocess_work_path(output_pos_string, ".rover");
         std::string base_prefix = postprocess_work_path(output_pos_string, ".base");
         RinexConversionOutput rover_rinex{};
@@ -627,7 +675,7 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
         bool rover_ok = convert_raw_to_rinex(
             rover_format_id,
             frequency_count,
-            receiver_rx_chars,
+            receiver_rx_chars.c_str(),
             rover_prefix,
             &rover_rinex,
             &error);
@@ -641,7 +689,7 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
             bool base_ok = convert_raw_to_rinex(
                 STRFMT_RTCM3,
                 frequency_count,
-                correction_chars,
+                correction_chars.c_str(),
                 base_prefix,
                 &base_rinex,
                 &error);
@@ -660,20 +708,20 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
 
                 if (!run_postpos_output(
                         inputs,
-                        preset_chars,
+                        preset_chars.c_str(),
                         frequency_count,
                         solution_type_id,
                         SOLF_LLH,
-                        output_pos_chars,
+                        output_pos_chars.c_str(),
                         &error)) {
                     if (error.empty()) error = "RTKLIB POS postprocess failed";
                 } else if (!run_postpos_output(
                         inputs,
-                        preset_chars,
+                        preset_chars.c_str(),
                         frequency_count,
                         solution_type_id,
                         SOLF_NMEA,
-                        output_nmea_chars,
+                        output_nmea_chars.c_str(),
                         &error)) {
                     if (error.empty()) error = "RTKLIB NMEA postprocess failed";
                 }
@@ -681,14 +729,6 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
         }
         for (const auto &path : generated_files) std::remove(path.c_str());
     }
-
-    env->ReleaseStringUTFChars(preset, preset_chars);
-    env->ReleaseStringUTFChars(rover_format, rover_chars);
-    env->ReleaseStringUTFChars(solution_type, solution_type_chars);
-    env->ReleaseStringUTFChars(receiver_rx_raw, receiver_rx_chars);
-    env->ReleaseStringUTFChars(correction_rtcm3, correction_chars);
-    env->ReleaseStringUTFChars(output_nmea, output_nmea_chars);
-    env->ReleaseStringUTFChars(output_pos, output_pos_chars);
 
     if (error.empty()) return nullptr;
     return env->NewStringUTF(error.c_str());

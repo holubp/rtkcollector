@@ -63,3 +63,20 @@ def test_native_bridge_defines_rtklib_postprocessing_callbacks():
     assert 'extern "C" int showmsg' in bridge
     assert 'extern "C" void settspan' in bridge
     assert 'extern "C" void settime' in bridge
+
+
+def test_native_postprocess_does_not_pass_null_convrnx_outputs():
+    bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
+
+    assert "outputs[i] = nullptr" not in bridge
+    assert "convrnx(format, &rnxopt, input.c_str(), outputs.data())" in bridge
+
+
+def test_native_bridge_guards_jni_inputs_before_dereferencing():
+    bridge = (REPO_ROOT / "app/src/main/cpp/rtklib_bridge.cpp").read_text(encoding="utf-8")
+
+    assert "class ScopedUtfChars" in bridge
+    assert "if (!preset_chars.ok() || !rover_chars.ok() || !correction_chars.ok())" in bridge
+    assert "!receiver_rx_chars.ok()" in bridge
+    assert "!output_nmea_chars.ok() || !output_pos_chars.ok()" in bridge
+    assert "if (!bytes)" in bridge

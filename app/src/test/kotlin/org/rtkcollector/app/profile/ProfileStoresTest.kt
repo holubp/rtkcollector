@@ -123,10 +123,12 @@ class ProfileStoresTest {
             id = "um980-binary-multihz",
             name = "UM980 multi-Hz binary RTK+PPP",
             runtimeScript = ProfileStores.UM980_BINARY_MULTI_HZ_SCRIPT,
+            satelliteTelemetry = SatelliteTelemetryCapability.UM980_BINARY,
         )
 
         val decoded = CommandProfile.fromJson(profile.toJson())
 
+        assertEquals(SatelliteTelemetryCapability.UM980_BINARY, decoded.satelliteTelemetry)
         assertTrue(decoded.runtimeScript.contains("CONFIG PPP ENABLE E6-HAS"))
         assertTrue(decoded.runtimeScript.contains("MODE ROVER SURVEY"))
         assertTrue(decoded.runtimeScript.contains("CONFIG RTK TIMEOUT 120"))
@@ -140,6 +142,18 @@ class ProfileStoresTest {
         assertTrue(decoded.runtimeScript.contains("STADOPB COM1 1"))
         assertFalse(decoded.runtimeScript.contains("SAVECONFIG", ignoreCase = true))
         assertFalse(decoded.runtimeScript.contains("NCOM20", ignoreCase = true))
+    }
+
+    @Test
+    fun `legacy command profile json defaults to no satellite telemetry capability`() {
+        val decoded = CommandProfile.fromJson(
+            JSONObject()
+                .put("id", "legacy")
+                .put("name", "Legacy")
+                .put("receiverFamily", "generic-nmea-rtcm"),
+        )
+
+        assertEquals(SatelliteTelemetryCapability.NONE, decoded.satelliteTelemetry)
     }
 
     @Test

@@ -51,6 +51,14 @@ Verification:
 - Automated: profile store migration and protected-profile tests.
 - Review: built-in profiles are not directly editable in profile screens.
 
+UM980 built-in command profiles that enable BESTNAV/NMEA monitoring telemetry
+MUST declare their satellite telemetry capability explicitly. Binary UM980
+profiles SHOULD declare UM980 binary telemetry; ASCII/NMEA-oriented UM980
+profiles SHOULD declare UM980 NMEA telemetry.
+
+Verification:
+- Automated: built-in command-profile default tests.
+
 ### RX-UM980-RTKLIB-001: UM980 RTKLIB Input Routing Is Message-Specific
 
 Status: In progress
@@ -81,6 +89,9 @@ Status: Normative
 
 u-blox M8T support MUST treat M8T as a raw/timing/post-processing receiver, not
 as an internal RTK float/fix rover like M8P.
+App-distributed M8T command profiles MUST be protected built-ins and MUST
+declare u-blox NAV-SAT satellite telemetry when their command set enables the
+status messages needed by monitoring.
 
 Verification:
 - Automated: receiver capability tests.

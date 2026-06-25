@@ -93,7 +93,7 @@ with right-aligned `used/visible` counts.
 
 Verification:
 - Automated: satellite monitor dashboard model tests.
-- Manual: dashboard visual review with supported monitor profiles.
+- Manual: dashboard visual review with telemetry-capable command profiles.
 
 ### UI-SATMON-003: Boxed Bars Encode Visible And Used Counts
 
@@ -195,11 +195,13 @@ Status: Normative
 Profile list screens MUST distinguish activation from editing. Profile
 references that are constrained by receiver family or workflow compatibility
 MUST be selectable from controlled lists instead of free-text identifiers.
+Profile-selection dialogs MUST remain scrollable when the available built-in
+and user profile list exceeds the visible dialog area.
 
 Verification:
 - Automated: profile compatibility tests where practical.
 - Manual: settings/profile screens show Activate/Edit/Rename as distinct
-  actions.
+  actions; long profile selectors can scroll to all entries.
 
 ### UI-PROFILE-001: Built-In Profiles Are Viewable And Copyable
 

@@ -1,8 +1,104 @@
 # User Workflows
 
-RtkCollector V1 is a receiver recorder and correction router. It is not a GIS
-app: there are no maps, shapefiles, feature forms or survey-cartography project
-tools.
+RtkCollector V1 is an Android companion for external USB GNSS receivers. It
+records the receiver byte stream, routes NTRIP corrections, helps configure
+receiver-side rover/base workflows and keeps separate session files for later
+inspection or post-processing.
+
+It is not a phone-GNSS app and it is not a GIS app: there are no maps,
+shapefiles, feature forms or survey-cartography project tools.
+
+## Receiver Focus
+
+The app is currently designed and tested around two receiver families:
+
+- **Unicore UM980 / N4**: the main target for in-device RTK, PPP-aware rover
+  monitoring, temporary-base preparation and fixed-base operation.
+- **u-blox M8T**: the main target for raw/timing recording and RTKLIB or
+  external post-processing workflows.
+
+u-blox M8P and ZED-F9P-class receivers may work in similar USB recording,
+NTRIP-to-receiver and raw-message modes if their profiles are configured
+correctly. Precise positioning on those devices is not currently supported or
+field-tested by the author because the author does not have access to those
+devices. Treat them as experimental until somebody validates device-specific
+profiles and field behaviour.
+
+## First-Use Overview
+
+RtkCollector is easiest to understand as three workflows.
+
+### 1. Plain Rover
+
+Use plain rover recording when you only want to capture what the receiver
+outputs.
+
+1. Connect the receiver by USB.
+2. Select a receiver command profile.
+3. Press Start.
+4. Let the app record in the foreground service.
+5. Press Stop and share or inspect the session.
+
+This creates a session folder with `receiver-rx.raw` as the authoritative raw
+receiver stream. Parser, dashboard or monitor failures must not stop that raw
+recording while USB and storage still work.
+
+### 2. Rover With NTRIP
+
+Use rover with NTRIP when Android should act as the NTRIP client.
+
+1. Select a rover workflow and receiver profile.
+2. Select or create an NTRIP caster profile.
+3. Select or type the mountpoint.
+4. Store credentials in the app. Passwords are not written to `session.json`.
+5. Press Start.
+
+The app records the receiver stream, records the incoming correction stream and
+forwards RTCM corrections to the receiver. On UM980, the receiver computes its
+own RTK solution; the app monitors that receiver-reported solution rather than
+pretending to solve it on the phone.
+
+### 3. Temporary Or Fixed Base
+
+Use base workflows when you want a local base near the rover.
+
+For a **temporary base**, place a stationary receiver in a good open-sky
+location and record enough data to determine its coordinate later. That
+coordinate may come from RTK against another base, PPP/static processing,
+receiver PPP where available, or lower-grade fallback averaging.
+
+For a **fixed base**, start only after you have accepted or imported a known
+coordinate. The fixed-base command profile configures the receiver with that
+coordinate and can publish receiver-created RTCM corrections through an NTRIP
+caster profile. A common field pattern is:
+
+1. Determine or import the base coordinate.
+2. Start the fixed-base workflow with RTCM output enabled.
+3. Upload base RTCM to a caster such as rtk2go.
+4. Configure the rover workflow to connect to that rtk2go mountpoint.
+5. Keep both base and rover sessions recorded for traceability.
+
+Base coordinates matter. A wrong base coordinate can produce a precise-looking
+but wrong rover position, so record method, uncertainty, antenna height,
+reference point, datum/frame and source session whenever possible.
+
+## Screenshots To Capture
+
+The user guide and Play listing would benefit from these screenshots:
+
+1. Home screen before recording, showing Workflow, Settings, Receiver,
+   Mountpoint and Storage selectors.
+2. USB permission/device selection flow.
+3. Plain rover recording in progress, with Position/Fix/Files cards visible.
+4. Rover with NTRIP recording in progress, with NTRIP state and correction byte
+   counts visible.
+5. Receiver command profile selector showing built-in UM980 and M8T profiles.
+6. Command profile detail screen in read-only built-in mode.
+7. Satellite monitor card during recording with a telemetry-capable profile.
+8. Session list with completed recordings.
+9. Share/export dialog for a completed session.
+10. Fixed-base or caster-upload setup screen, if that workflow is visually ready
+    enough for publication.
 
 ## Experimental V1 Android UI
 
@@ -133,6 +229,11 @@ profile before editing it. Multiline command fields use a native Android text
 editor so hardware-keyboard arrows and modifier combinations navigate inside the
 field; Tab and Shift+Tab move between fields and restore each field's cursor
 position where possible.
+Command profiles also declare whether they provide satellite telemetry for the
+monitoring card. Use telemetry-capable built-ins, such as the UM980 and M8T
+profiles, when satellite monitoring is required; copied user profiles should
+keep the same telemetry setting only when their commands still enable the
+documented receiver messages.
 
 While a real session is active, the foreground service owns capture. The
 Activity only sends start/stop requests and observes service state.

@@ -107,3 +107,19 @@ unsupported, unavailable or stale rather than inferred from another source.
 Verification:
 - Automated: satellite monitor model tests.
 - Manual: receiver/caster smoke tests for supported profiles.
+
+### SATMON-PROFILE-001: Satellite Telemetry Capability Is Explicit
+
+Status: Normative
+
+Command profiles MUST declare whether they support satellite telemetry and, if
+they do, which receiver/protocol telemetry family they enable. Satellite
+monitoring MUST use that declared capability instead of inferring support from
+profile names, receiver family strings or command-script text. Profiles without
+declared telemetry support MUST show an explicit unsupported state rather than
+referring to a hidden or unavailable monitor profile.
+
+Verification:
+- Automated: command-profile JSON/default-profile tests.
+- Manual: built-in telemetry-capable profiles show a supported waiting state
+  while unsupported profiles show an explicit unsupported state.

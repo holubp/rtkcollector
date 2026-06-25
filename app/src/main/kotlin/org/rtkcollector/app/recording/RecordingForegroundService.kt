@@ -26,6 +26,7 @@ import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.profile.RecordingPolicyProfile
+import org.rtkcollector.app.profile.SatelliteTelemetryCapability
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
@@ -160,6 +161,7 @@ class RecordingForegroundService : Service() {
     private var lastRtklibStatusWriteMillis: Long = 0L
     private var activeWorkflowUsesNtrip: Boolean = false
     private var activeNtripSendToReceiver: Boolean = true
+    private var activeSatelliteTelemetry: SatelliteTelemetryCapability = SatelliteTelemetryCapability.NONE
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
@@ -249,6 +251,9 @@ class RecordingForegroundService : Service() {
         shutdownSent.set(false)
         ntripReconnectRequested.set(false)
         activeWorkflowUsesNtrip = false
+        activeSatelliteTelemetry = SatelliteTelemetryCapability.fromStorageId(
+            intent.getStringExtra(EXTRA_COMMAND_SATELLITE_TELEMETRY),
+        )
         activeNtripRuntimeConfig = null
         routineStateBroadcastRateLimiter.reset()
         recordingHealthMonitor.reset(SystemClock.elapsedRealtime())
@@ -554,6 +559,7 @@ class RecordingForegroundService : Service() {
         } catch (error: Throwable) {
             runCatching { casterUploadController?.stop() }
             casterUploadController = null
+            activeSatelliteTelemetry = SatelliteTelemetryCapability.NONE
             state = state.copy(
                 running = false,
                 lifecycle = RecordingLifecycleState.FAILED,
@@ -1599,6 +1605,7 @@ class RecordingForegroundService : Service() {
         casterUploadController = null
         rtklibWorker = null
         activeWorkflowUsesNtrip = false
+        activeSatelliteTelemetry = SatelliteTelemetryCapability.NONE
         shutdownCommands = emptyList()
         teardownMockLocation()
         solutionCandidates.clear()
@@ -2106,7 +2113,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_SATELLITE_MONITOR_ENGINE, satelliteMonitorEngineLabel())
                 putExtra(EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:UNAVAILABLE;B:UNAVAILABLE;S:UNAVAILABLE")
                 putExtra(EXTRA_STATE_SATELLITE_MONITOR_GROUPS, "")
-                putExtra(EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, "Per-frequency monitor profile not active")
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, satelliteMonitorUnavailableMessage())
                 putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
                 putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
@@ -2180,6 +2187,13 @@ class RecordingForegroundService : Service() {
             "RTKLIB"
         } else {
             "In-device RTK"
+        }
+
+    private fun satelliteMonitorUnavailableMessage(): String =
+        if (activeSatelliteTelemetry.isSupported) {
+            "Waiting for ${activeSatelliteTelemetry.displayName}"
+        } else {
+            "Satellite telemetry not supported by active command profile"
         }
 
     private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980MessageFrequencyTracker) {
@@ -3076,6 +3090,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_UM980_PROFILE_ID = "um980ProfileId"
         const val EXTRA_COMMAND_PROFILE_ID = "commandProfileId"
         const val EXTRA_COMMAND_RECEIVER_FAMILY = "commandReceiverFamily"
+        const val EXTRA_COMMAND_SATELLITE_TELEMETRY = "commandSatelliteTelemetry"
         const val EXTRA_USB_BAUD_PROFILE_ID = "usbBaudProfileId"
         const val EXTRA_NTRIP_CASTER_PROFILE_ID = "ntripCasterProfileId"
         const val EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID = "ntripMountpointProfileId"

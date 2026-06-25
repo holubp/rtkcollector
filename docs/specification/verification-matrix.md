@@ -10,6 +10,7 @@
 | `PRODUCT-USB-001` | Review | User-facing copy and UI label review | Needs review | Android internal GNSS is not implied as a receiver input. |
 | `SATMON-ARCH-001` | Automated + review | `SatelliteMonitorDashboardModelsTest`; future parser/aggregator call-site review | In progress | Current slice covers dashboard model/UI only; live parser aggregation remains planned. |
 | `SATMON-STATE-001` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; supported receiver/caster smoke tests later | In progress | Current slice covers distinct dashboard source labels and unavailable state. |
+| `SATMON-PROFILE-001` | Automated + manual | `ProfileStoresTest`; `ProfileDefaultsTest`; service dashboard message review | In progress | Command profiles now carry explicit satellite telemetry capability. Built-in UM980 and M8T profiles declare telemetry support; live parser aggregation remains planned. |
 | `WF-ROVER-001` | Automated + manual | Workflow validator tests; plain rover smoke test | Needs review | Confirm no NTRIP connection opens. |
 | `WF-ROVER-NTRIP-001` | Automated + manual | NTRIP tests; EUREF/CORS field session | Needs review | Confirm RTK float/fix with correction recording. |
 | `WF-ROVER-RTKLIB-001` | Automated + manual | Workflow classification tests; active recording configuration tests; M8T RTKLIB field session | In progress | Rover + RTKLIB uses Android-side NTRIP as correction input to RTKLIB without requiring NTRIP-to-receiver. Further M8T field validation remains useful. |
@@ -22,9 +23,9 @@
 | `RX-UM980-001` | Automated + manual | UM980 parser tests; binary session replay | Needs review | Mixed-stream parser coverage should keep expanding. |
 | `RX-UM980-RTK-001` | Automated + manual | BESTNAV/ADRNAV/RTKSTATUS/RTCMSTATUS tests; field session | Needs review | Real receiver/caster validation remains important. |
 | `RX-UM980-PPP-001` | Automated + manual | PPPNAV parser/dashboard tests; debug sessions | Passing | Local tests cover label mapping; field regression should continue. |
-| `RX-UM980-PROFILES-001` | Automated + review | Profile store migration/protected-profile tests | Passing | Built-in profiles are protected and copyable. |
+| `RX-UM980-PROFILES-001` | Automated + review | Profile store migration/protected-profile tests; built-in satellite-telemetry default tests | Passing | Built-in profiles are protected, copyable and declare satellite telemetry capability. |
 | `RX-UM980-RTKLIB-001` | Automated + review | RTKLIB input route tests; UM980 sample-readiness tooling | In progress | OBSVMB is direct. OBSVMCMPB is routed through the named `rtkcollector-obsvmcmp-shim`; existing local samples do not contain OBSVMB/OBSVMCMPB frames, so replay validation remains open. |
-| `RX-UBLOX-M8T-001` | Automated + hardware | u-blox parser/capability tests; M8T device test | Not field-tested | First implementation exists. |
+| `RX-UBLOX-M8T-001` | Automated + hardware | u-blox parser/capability tests; M8T built-in profile tests; M8T device test | Not field-tested | First implementation exists. M8T command profiles are protected built-ins and declare NAV-SAT telemetry capability. |
 | `RX-UBLOX-RTKLIB-001` | Automated + hardware | RTKLIB input route tests; RTKLIB profile frequency-count tests; M8T/M8P replay test later | Needs field validation | UBX RAWX/SFRBX route is modelled as direct RTKLIB-EX input and M8T/M8P are explicitly single-frequency unless a receiver-specific profile declares otherwise. |
 | `SESSION-FILES-001` | Automated + manual | Session writer tests; completed sessions | Needs review | Keep artifacts separate by source and purpose. |
 | `SESSION-META-001` | Automated + review | Session metadata tests; session format review | Passing | Metadata includes workflow and solution-policy context and must exclude secrets. |
@@ -64,7 +65,7 @@
 | `UI-BASE-001` | Automated + manual | Dashboard state tests; temporary-base dashboard review | Needs review | Keep controls compact and explicit. |
 | `UI-SETUP-001` | Automated + manual | Active setup resolver tests; settings hub review | In progress | Active settings set is visible in the settings hub. Main-menu refinement remains under review. |
 | `UI-SETUP-002` | Automated + manual | Active setup resolver tests; settings-set editor review | In progress | Policy model and JSON persistence exist; compact editor polish remains. |
-| `UI-PROFILE-002` | Automated + manual | Profile compatibility tests; profile editor smoke test | In progress | Compatibility model and controlled RTKLIB/solution references exist; grouping/reorder UI remains open. |
+| `UI-PROFILE-002` | Automated + manual | Profile compatibility tests; profile editor smoke test; long profile selector smoke test | In progress | Compatibility model and controlled RTKLIB/solution references exist; profile selector dialogs are scrollable. Grouping/reorder UI remains open. |
 | `UI-PROFILE-001` | Automated + manual | Protected-profile tests; profile editor smoke test | Needs review | Built-ins are view-only and copyable. |
 | `UI-KEYBOARD-001` | Manual + review | Hardware keyboard command-editor smoke test | Needs field retest | Arrow keys stay inside native multiline editor; Tab/Shift+Tab traverse fields. |
 | `UI-STORAGE-001` | Manual + review | Storage profile folder-picker smoke test | Needs provider testing | Tree URI is picker-selected and display-only. |

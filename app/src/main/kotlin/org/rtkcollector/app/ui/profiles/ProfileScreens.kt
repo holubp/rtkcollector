@@ -474,8 +474,11 @@ fun ProfileSelectorDialog(
             if (rows.isEmpty()) {
                 Text("No selectable profiles.")
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rows.forEach { row ->
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(rows, key = { it.id }) { row ->
                         ProfileSelectorRow(row = row, onSelect = onSelect)
                     }
                 }

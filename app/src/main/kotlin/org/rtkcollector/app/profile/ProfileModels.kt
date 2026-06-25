@@ -3,6 +3,24 @@ package org.rtkcollector.app.profile
 import org.json.JSONObject
 import org.rtkcollector.core.solution.SolutionSourcePolicy
 
+enum class SatelliteTelemetryCapability(
+    val storageId: String,
+    val displayName: String,
+) {
+    NONE("none", "No satellite telemetry"),
+    UM980_BINARY("um980-binary", "UM980 binary satellite telemetry"),
+    UM980_ASCII_NMEA("um980-ascii-nmea", "UM980 NMEA satellite telemetry"),
+    UBLOX_NAV_SAT("ublox-nav-sat", "u-blox NAV-SAT telemetry"),
+    ;
+
+    val isSupported: Boolean get() = this != NONE
+
+    companion object {
+        fun fromStorageId(value: String?): SatelliteTelemetryCapability =
+            entries.firstOrNull { it.storageId == value } ?: NONE
+    }
+}
+
 data class CommandProfile(
     val id: String,
     val name: String,
@@ -10,6 +28,7 @@ data class CommandProfile(
     val initScript: String = "",
     val runtimeScript: String = "",
     val shutdownScript: String = "",
+    val satelliteTelemetry: SatelliteTelemetryCapability = SatelliteTelemetryCapability.NONE,
     val isProtected: Boolean = false,
 ) {
     fun validate() {
@@ -29,6 +48,7 @@ data class CommandProfile(
         .put("initScript", initScript)
         .put("runtimeScript", runtimeScript)
         .put("shutdownScript", shutdownScript)
+        .put("satelliteTelemetry", satelliteTelemetry.storageId)
 
     companion object {
         fun fromJson(json: JSONObject): CommandProfile = CommandProfile(
@@ -39,6 +59,7 @@ data class CommandProfile(
             initScript = json.optString("initScript", ""),
             runtimeScript = json.optString("runtimeScript", ""),
             shutdownScript = json.optString("shutdownScript", ""),
+            satelliteTelemetry = SatelliteTelemetryCapability.fromStorageId(json.optString("satelliteTelemetry", "")),
         ).also(CommandProfile::validate)
     }
 }

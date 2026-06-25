@@ -4,15 +4,46 @@ RtkCollector is a GPL-3.0-or-later Android GNSS receiver companion for robust
 byte-exact receiver recording, NTRIP correction intake, correction routing,
 receiver control and temporary-base preparation workflows.
 
-The first receiver target is the Unicore UM980 / Unicore N4 family. Other early
-targets are u-blox M8P, u-blox M8T and a generic NMEA + RTCM receiver profile.
+RtkCollector is built for external USB GNSS receivers. It is not a phone-GNSS
+app and it is not a GIS app: there are no maps, shapefiles, feature forms or
+survey project-management tools.
+
+The practical focus is currently:
+
+- Unicore UM980 / Unicore N4 family for in-device RTK/PPP rover and base
+  workflows.
+- u-blox M8T for raw/timing recording and RTKLIB/post-processing style
+  workflows.
+
+u-blox M8P and ZED-F9P-class receivers may work in the same broad USB,
+NTRIP-to-receiver and raw-recording modes where their serial protocol is
+compatible, but precise-positioning workflows on those devices are not
+supported or field-tested by the author because the author does not currently
+have access to those receivers.
+
+## What You Can Use It For
+
+RtkCollector is meant to cover three basic field patterns:
+
+1. Plain rover recording: connect an external receiver and record its byte-exact
+   output for later inspection or post-processing.
+2. Rover with NTRIP: let Android connect to an NTRIP caster, record the
+   correction stream, and forward RTCM corrections to the receiver while
+   continuing to record the receiver stream.
+3. Base setup: record data for a temporary base, accept or import a base
+   coordinate, then run a fixed base that can publish RTCM corrections through a
+   caster such as rtk2go for a rover to consume.
+
+Start with [User Workflows](docs/user-workflows.md) for a practical guide.
+Receiver status is summarised in
+[Supported Receivers](docs/supported-receivers.md).
 
 ## Development Status
 
 This repository is in experimental bootstrap status. The current code includes
-specifications, pure Kotlin workflow/session/correction primitives, a simple
-Android UI and an experimental UM980 USB/NTRIP recording vertical slice. It is
-not a production Android field application.
+specifications, pure Kotlin workflow/session/correction primitives, an Android
+UI and experimental USB/NTRIP recording workflows. It is not yet a production
+Android field application.
 
 The Android UI now opens to an experimental Compose dashboard with compact
 Position, Fix, NTRIP and Files cards, plus Menu and Start/Stop controls that are

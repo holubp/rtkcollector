@@ -203,12 +203,16 @@ class ProfileStores(context: Context) {
     }
 
     private fun defaultCommandProfiles(): List<CommandProfile> =
-        listOf(
+        defaultCommandProfilesForTests()
+
+    companion object {
+        internal fun defaultCommandProfilesForTests(): List<CommandProfile> = listOf(
             CommandProfile(
                 id = "um980-binary-multihz",
                 name = "UM980 multi-Hz binary RTK+PPP",
                 receiverFamily = "um980-n4",
                 runtimeScript = UM980_BINARY_MULTI_HZ_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UM980_BINARY,
                 isProtected = true,
             ),
             CommandProfile(
@@ -216,6 +220,7 @@ class ProfileStores(context: Context) {
                 name = "UM980 multi-Hz binary RTKLIB OBSVMB",
                 receiverFamily = "um980-n4",
                 runtimeScript = UM980_BINARY_MULTI_HZ_RTKLIB_OBSVMB_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UM980_BINARY,
                 isProtected = true,
             ),
             CommandProfile(
@@ -223,6 +228,7 @@ class ProfileStores(context: Context) {
                 name = "UM980 multi-Hz ASCII RTK+PPP",
                 receiverFamily = "um980-n4",
                 runtimeScript = UM980_ASCII_PPP_NMEA_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UM980_ASCII_NMEA,
                 isProtected = true,
             ),
             CommandProfile(
@@ -230,6 +236,7 @@ class ProfileStores(context: Context) {
                 name = "UM980 1 Hz ASCII RTK+PPP",
                 receiverFamily = "um980-n4",
                 runtimeScript = UM980_ASCII_1HZ_RTK_PPP_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UM980_ASCII_NMEA,
                 isProtected = true,
             ),
             CommandProfile(
@@ -237,6 +244,7 @@ class ProfileStores(context: Context) {
                 name = "UM980 base config",
                 receiverFamily = "um980-n4",
                 runtimeScript = UM980_BASE_CONFIG_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UM980_BINARY,
                 isProtected = true,
             ),
             CommandProfile(
@@ -244,18 +252,24 @@ class ProfileStores(context: Context) {
                 name = "u-blox M8T raw 1 Hz safe",
                 receiverFamily = "ublox-m8t",
                 runtimeScript = UBLOX_M8T_RAW_1HZ_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UBLOX_NAV_SAT,
+                isProtected = true,
             ),
             CommandProfile(
                 id = "ublox-m8t-raw-5hz-rtklib-ex",
                 name = "u-blox M8T raw 5 Hz RTKLIB-EX",
                 receiverFamily = "ublox-m8t",
                 runtimeScript = UBLOX_M8T_RAW_5HZ_RTKLIB_EX_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UBLOX_NAV_SAT,
+                isProtected = true,
             ),
             CommandProfile(
                 id = "ublox-m8t-raw-status-mock",
                 name = "u-blox M8T raw + status/mock",
                 receiverFamily = "ublox-m8t",
                 runtimeScript = UBLOX_M8T_RAW_STATUS_MOCK_SCRIPT,
+                satelliteTelemetry = SatelliteTelemetryCapability.UBLOX_NAV_SAT,
+                isProtected = true,
             ),
         )
 
@@ -354,7 +368,6 @@ class ProfileStores(context: Context) {
     private fun defaultSettingsSets(): List<RecordingSettingsSet> =
         listOf(RecordingSettingsSet.builtInRoverNtrip())
 
-    companion object {
         const val OLD_UM980_COMMAND_PROFILE_ID = "um980-default-commands"
         const val UM980_BINARY_MULTI_HZ_PROFILE_ID = "um980-binary-multihz"
         const val UM980_BINARY_MULTI_HZ_RTKLIB_OBSVMB_PROFILE_ID = "um980-binary-multihz-rtklib-obsvmb"

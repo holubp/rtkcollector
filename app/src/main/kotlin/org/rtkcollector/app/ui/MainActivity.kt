@@ -84,6 +84,7 @@ import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.RtklibProfile
+import org.rtkcollector.app.profile.SatelliteTelemetryCapability
 import org.rtkcollector.app.profile.SettingsBackupFile
 import org.rtkcollector.app.profile.SettingsImportValidationResult
 import org.rtkcollector.app.profile.SettingsSetExportOptions
@@ -3485,6 +3486,12 @@ private fun ProfileStores.profileEditorData(
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("receiverFamily", "Receiver family", profile.receiverFamily),
+                    EditableProfileField(
+                        key = "satelliteTelemetry",
+                        label = "Satellite telemetry",
+                        value = profile.satelliteTelemetry.storageId,
+                        optionItems = SATELLITE_TELEMETRY_OPTIONS,
+                    ),
                     EditableProfileField("runtimeScript", "Init script", profile.runtimeScript, multiline = true),
                     EditableProfileField("shutdownScript", "Shutdown script", profile.shutdownScript, multiline = true),
                 ),
@@ -3809,6 +3816,7 @@ private fun ProfileStores.saveProfileEditorData(
                         initScript = "",
                         runtimeScript = values.optional("runtimeScript").orEmpty(),
                         shutdownScript = values.optional("shutdownScript").orEmpty(),
+                        satelliteTelemetry = SatelliteTelemetryCapability.fromStorageId(values.optional("satelliteTelemetry")),
                     )
                 } else {
                     profile
@@ -4136,6 +4144,10 @@ private val WORKFLOW_MODE_OPTIONS = listOf(
     EditableProfileOption(WORKFLOW_BASE_CALIBRATION, "Temporary base"),
     EditableProfileOption(WORKFLOW_FIXED_BASE, "Fixed base"),
 )
+
+private val SATELLITE_TELEMETRY_OPTIONS = SatelliteTelemetryCapability.entries.map { capability ->
+    EditableProfileOption(capability.storageId, capability.displayName)
+}
 
 private val WORKFLOW_ACTIVATION_MODE_OPTIONS = listOf(
     EditableProfileOption(
@@ -4485,6 +4497,7 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_UM980_PROFILE_ID, activeConfig.commandProfileId)
         putExtra(RecordingForegroundService.EXTRA_COMMAND_PROFILE_ID, activeConfig.commandProfileId)
         putExtra(RecordingForegroundService.EXTRA_COMMAND_RECEIVER_FAMILY, activeConfig.commandReceiverFamily)
+        putExtra(RecordingForegroundService.EXTRA_COMMAND_SATELLITE_TELEMETRY, activeConfig.satelliteTelemetry.storageId)
         putExtra(RecordingForegroundService.EXTRA_USB_BAUD_PROFILE_ID, activeConfig.usbBaudProfileId)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_CASTER_PROFILE_ID, resolvedProfiles.ntripCaster?.id)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, resolvedProfiles.ntripMountpoint?.id)
@@ -5331,7 +5344,8 @@ private fun CommandProfile.profileRow(isSelected: Boolean = false): ProfileListR
         isSelected = isSelected,
         summary = listOfNotNull(
             receiverFamily.takeIf(String::isNotBlank),
-            "init + shutdown scripts",
+            satelliteTelemetry.displayName,
+            "command scripts",
         ).joinToString(" · "),
     )
 

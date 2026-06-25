@@ -279,7 +279,7 @@ class DashboardServiceMapperTest {
             putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_ENGINE, "RTKLIB")
             putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:UNAVAILABLE;B:UNAVAILABLE;S:UNAVAILABLE")
             putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_GROUPS, "")
-            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, "Per-frequency monitor profile not active")
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, "Satellite telemetry not supported by active command profile")
         }
 
         val state = dashboardStateFromRecordingIntent(intent)
@@ -289,7 +289,7 @@ class DashboardServiceMapperTest {
         assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.rover.freshness)
         assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.base.freshness)
         assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.solution.freshness)
-        assertEquals("Per-frequency monitor profile not active", state.satelliteMonitor.message)
+        assertEquals("Satellite telemetry not supported by active command profile", state.satelliteMonitor.message)
     }
 
     @Test

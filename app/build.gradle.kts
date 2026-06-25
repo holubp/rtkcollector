@@ -56,7 +56,7 @@ android {
         versionName = "0.1.0"
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
     }
 
@@ -124,9 +124,15 @@ fun validateReleaseBundleNativeLibrary(bundleFile: File) {
         throw GradleException("Release bundle was not created at ${bundleFile.path}.")
     }
     ZipFile(bundleFile).use { zip ->
-        val rtklibEntry = "base/lib/arm64-v8a/librtkcollector_rtklib.so"
-        if (zip.getEntry(rtklibEntry) == null) {
-            throw GradleException("Release bundle is missing $rtklibEntry.")
+        val rtklibEntries = listOf(
+            "base/lib/armeabi-v7a/librtkcollector_rtklib.so",
+            "base/lib/arm64-v8a/librtkcollector_rtklib.so",
+        )
+        val missingEntries = rtklibEntries.filter { zip.getEntry(it) == null }
+        if (missingEntries.isNotEmpty()) {
+            throw GradleException(
+                "Release bundle is missing RTKLIB native libraries: ${missingEntries.joinToString()}.",
+            )
         }
     }
 }

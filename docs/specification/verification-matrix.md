@@ -7,6 +7,9 @@
 | `ARCH-TX-001` | Automated + review | TX artifact tests; serial write path review | Needs review | Include correction injection and command scripts. |
 | `ARCH-CORR-001` | Automated + manual | NTRIP runtime tests; rover+NTRIP session | Needs review | Verify `correction-input.raw` is usable RTCM3. |
 | `PRODUCT-NONGOAL-001` | Review | Dependency and UI review | Passing | No maps/GIS/shapefile scope is allowed. |
+| `PRODUCT-USB-001` | Review | User-facing copy and UI label review | Needs review | Android internal GNSS is not implied as a receiver input. |
+| `SATMON-ARCH-001` | Automated + review | `SatelliteMonitorDashboardModelsTest`; future parser/aggregator call-site review | In progress | Current slice covers dashboard model/UI only; live parser aggregation remains planned. |
+| `SATMON-STATE-001` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; supported receiver/caster smoke tests later | In progress | Current slice covers distinct dashboard source labels and unavailable state. |
 | `WF-ROVER-001` | Automated + manual | Workflow validator tests; plain rover smoke test | Needs review | Confirm no NTRIP connection opens. |
 | `WF-ROVER-NTRIP-001` | Automated + manual | NTRIP tests; EUREF/CORS field session | Needs review | Confirm RTK float/fix with correction recording. |
 | `WF-ROVER-RTKLIB-001` | Automated + manual | Workflow classification tests; active recording configuration tests; M8T RTKLIB field session | In progress | Rover + RTKLIB uses Android-side NTRIP as correction input to RTKLIB without requiring NTRIP-to-receiver. Further M8T field validation remains useful. |
@@ -52,6 +55,12 @@
 | `UI-DASH-003` | Manual + review | Phone portrait dashboard screenshot | Needs review | Live-monitoring cards should switch to single column when needed. |
 | `UI-DASH-004` | Automated + manual | Dashboard state/action tests; dashboard chip smoke test | Needs review | Mock GPS chip is top-level; no placeholder Mark action. |
 | `UI-DASH-005` | Automated + manual | Dashboard formatter/layout tests; dashboard screenshot review | Needs review | Dashboard labels and dynamic/static distance units are consistent across cards. |
+| `UI-SATMON-001` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; dashboard screenshot review | In progress | Main card displays active engine label only; no main-card engine selector. |
+| `UI-SATMON-002` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; dashboard screenshot review | In progress | Preview/model groups constellation first, then frequency. |
+| `UI-SATMON-003` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; dashboard screenshot review | In progress | Boxed bars encode used as saturated prefix inside visible total. |
+| `UI-SATMON-004` | Manual | Dashboard help review | Needs review | R/B/S labels and info affordance are present in UI. |
+| `UI-SATMON-005` | Automated + manual | `DashboardLayoutModelsTest`; dashboard screenshot review | In progress | Light default and satellite-card dark switch are modelled. |
+| `UI-SATMON-006` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; detailed screen screenshot review | In progress | Detailed grouping model supports frequency-primary and constellation-primary modes. |
 | `UI-BASE-001` | Automated + manual | Dashboard state tests; temporary-base dashboard review | Needs review | Keep controls compact and explicit. |
 | `UI-SETUP-001` | Automated + manual | Active setup resolver tests; settings hub review | In progress | Active settings set is visible in the settings hub. Main-menu refinement remains under review. |
 | `UI-SETUP-002` | Automated + manual | Active setup resolver tests; settings-set editor review | In progress | Policy model and JSON persistence exist; compact editor polish remains. |

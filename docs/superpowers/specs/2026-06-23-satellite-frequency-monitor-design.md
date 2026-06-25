@@ -17,7 +17,7 @@ in user-facing text.
 ## Goals
 
 - Show per-frequency satellite counts for rover and base corrections.
-- Group detailed rows by frequency band, such as `L1`, `L2` and `L5`.
+- Group detailed rows by frequency band, such as `L1`, `L2` and `L5` (available bands can be collected from UM980 specification); only bands with are available in current device OR base shall be displayed, unused ones not (e.g., UM980 depends on signalgroup selection)
 - Compare rover and base signal strength side by side where strength metadata
   is available.
 - Distinguish observed, base-present and used-in-solution state clearly.
@@ -38,39 +38,58 @@ in user-facing text.
 ## User Interface
 
 The main recording dashboard gets a compact `Satellites` card that appears only
-while recording, or shows a short inactive state if existing layout constraints
-require a stable card slot.
+while recording. The main card always stays with the active main solution
+engine and does not expose an engine selector. The selected engine label is
+display-only on the compact card. Engine selection belongs to the broader
+workflow/profile policy and detailed monitor views, not to the main dashboard
+card.
 
-The card contains a horizontal segmented/slide selector for the solution
-engine:
-
-- `In-device RTK`
-- `RTKLIB`
-
-The default selection is profile-driven:
+The default main engine is profile-driven:
 
 - UM980/N4 and u-blox M8P internal RTK monitoring profiles default to
   `In-device RTK`.
 - u-blox M8T and similar raw-only monitoring profiles default to `RTKLIB`.
 
-The selector is explicit runtime state for the monitor. The advanced satellite
-monitor screen is bound to the same selection and does not maintain a separate
-engine switch. If the selected engine is unavailable for the active
-receiver/profile, the card and advanced screen show an unavailable state instead
-of silently falling back.
+If the active main engine is unavailable for the receiver/profile, the card and
+advanced screen show an unavailable state instead of silently falling back.
 
-The compact card summarizes, per frequency band:
+The compact card groups first by constellation and then by frequency band. Each
+frequency cell contains two horizontal boxed-bar rows:
 
-- rover observed count;
-- base correction count;
-- matched rover/base count;
-- used-in-solution count when available.
+- `R` for rover observations;
+- `B` for base correction observations.
+
+Each row shows `used/visible` as a right-aligned number. The boxed bar uses
+lower-saturation boxes for visible satellites and higher-saturation boxes for
+satellites used by the active main engine. Used boxes are drawn as a saturated
+prefix inside the visible total. This means the visible count sets the total
+filled extent, and the used count sets the saturated subset.
+
+The card has three labelled freshness dots near the top:
+
+- `R`: rover observation freshness;
+- `B`: base correction observation freshness;
+- `S`: selected-solution usage freshness.
+
+The card has a compact `(i)` affordance in the top-right corner that explains
+the `R/B/S` labels and `used/visible` boxed-bar semantics.
+
+The dashboard follows the normal light application colour scheme by default.
+The dashboard layout settings include a binary dark-mode switch for the
+satellite card only. When enabled, the satellite card uses the dark colour
+scheme from the approved compact-card mockup without changing the rest of the
+application theme.
 
 Tapping the card opens the detailed live `Satellite monitor` screen.
 
-The advanced screen groups rows by frequency band. Each satellite row shows
-rover and base bars side by side when signal strength is available. Colour
-indicates state:
+The advanced screen defaults to grouping rows by frequency band. It also has a
+slider switch that changes the detailed grouping mode to constellation-first,
+with frequency bands nested inside each constellation. The selected grouping is
+only a detailed-view presentation mode; the compact dashboard remains grouped
+by constellation first, with frequency bands nested inside each constellation.
+
+Each satellite row shows rover and base bars side by side when signal strength
+is available. Colour indicates state:
 
 - rover observed and used in the selected solution;
 - rover observed but not used;
@@ -266,7 +285,8 @@ Add focused tests for:
 - unavailable selected engine state;
 - compact dashboard summaries;
 - stale and unavailable source labels;
-- advanced screen binding to the main-card engine selection;
+- advanced screen grouping and detailed source availability without changing
+  the main-card active-engine rule;
 - optional signal-strength bar visibility;
 - RTKLIB per-satellite used/not-used mapping after the RTKLIB bridge exposes
   that status.

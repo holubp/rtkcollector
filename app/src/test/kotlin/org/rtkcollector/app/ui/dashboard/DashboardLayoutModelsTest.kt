@@ -35,6 +35,21 @@ class DashboardLayoutModelsTest {
     }
 
     @Test
+    fun `default satellite card theme follows light dashboard`() {
+        assertEquals(SatelliteMonitorCardThemePreference.LIGHT, SatelliteMonitorCardThemePreference.default)
+        assertEquals("light", SatelliteMonitorCardThemePreference.LIGHT.storageId)
+        assertEquals("Light satellite card", SatelliteMonitorCardThemePreference.LIGHT.displayName)
+    }
+
+    @Test
+    fun `stored satellite card theme ids parse defensively`() {
+        assertEquals(SatelliteMonitorCardThemePreference.DARK, SatelliteMonitorCardThemePreference.fromStorageId("dark"))
+        assertEquals(SatelliteMonitorCardThemePreference.LIGHT, SatelliteMonitorCardThemePreference.fromStorageId("unknown"))
+        assertEquals(SatelliteMonitorCardThemePreference.LIGHT, SatelliteMonitorCardThemePreference.fromStorageId(""))
+        assertEquals(SatelliteMonitorCardThemePreference.LIGHT, SatelliteMonitorCardThemePreference.fromStorageId(null))
+    }
+
+    @Test
     fun `compact dashboard uses two columns on standard wide widths`() {
         assertEquals(2, compactDashboardCardColumnCount(370, 240))
         assertEquals(2, compactDashboardCardColumnCount(340, 240))

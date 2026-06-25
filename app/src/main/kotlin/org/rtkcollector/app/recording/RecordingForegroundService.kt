@@ -2103,6 +2103,10 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_RTKLIB_DECODED_CORRECTION_MESSAGES, state.rtklibDecodedCorrectionMessages)
                 putExtra(EXTRA_STATE_RTKLIB_OUTPUT_NMEA_LINES, state.rtklibOutputNmeaLines)
                 putExtra(EXTRA_STATE_RTKLIB_OUTPUT_POS_LINES, state.rtklibOutputPosLines)
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_ENGINE, satelliteMonitorEngineLabel())
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:UNAVAILABLE;B:UNAVAILABLE;S:UNAVAILABLE")
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_GROUPS, "")
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, "Per-frequency monitor profile not active")
                 putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
                 putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
@@ -2167,6 +2171,16 @@ class RecordingForegroundService : Service() {
             """{"type":"rtklib-status","state":"${snapshot.state.name.jsonEscape()}","fix":${snapshot.latestSolution?.fixClass?.name.jsonStringOrNull()},"latDeg":${snapshot.latestSolution?.latDeg ?: "null"},"lonDeg":${snapshot.latestSolution?.lonDeg ?: "null"},"ellipsoidalHeightM":${snapshot.latestSolution?.ellipsoidalHeightM ?: "null"},"horizontalAccuracyM":${snapshot.latestSolution?.horizontalAccuracyM ?: "null"},"verticalAccuracyM":${snapshot.latestSolution?.verticalAccuracyM ?: "null"},"decodedRoverEpochs":${snapshot.decodedRoverEpochs},"decodedCorrectionMessages":${snapshot.decodedCorrectionMessages},"serverCpuTimeMillis":${snapshot.serverCpuTimeMillis ?: "null"},"serverRoverObservationMessages":${snapshot.serverRoverObservationMessages},"serverBaseObservationMessages":${snapshot.serverBaseObservationMessages},"serverMissingObservationCount":${snapshot.serverMissingObservationCount},"droppedRoverBytes":${snapshot.droppedRoverBytes},"droppedCorrectionBytes":${snapshot.droppedCorrectionBytes},"warning":${snapshot.lastWarning.jsonStringOrNull()},"error":${snapshot.lastError.jsonStringOrNull()}}""",
         )
     }
+
+    private fun satelliteMonitorEngineLabel(): String =
+        if (
+            state.rtklibState.equals("RUNNING", ignoreCase = true) ||
+            state.bestSolutionSource.contains("RTKLIB", ignoreCase = true)
+        ) {
+            "RTKLIB"
+        } else {
+            "In-device RTK"
+        }
 
     private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980MessageFrequencyTracker) {
         val now = System.currentTimeMillis()
@@ -3162,6 +3176,10 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_RTKLIB_DECODED_CORRECTION_MESSAGES = "rtklibDecodedCorrectionMessages"
         const val EXTRA_STATE_RTKLIB_OUTPUT_NMEA_LINES = "rtklibOutputNmeaLines"
         const val EXTRA_STATE_RTKLIB_OUTPUT_POS_LINES = "rtklibOutputPosLines"
+        const val EXTRA_STATE_SATELLITE_MONITOR_ENGINE = "satelliteMonitorEngine"
+        const val EXTRA_STATE_SATELLITE_MONITOR_SOURCES = "satelliteMonitorSources"
+        const val EXTRA_STATE_SATELLITE_MONITOR_GROUPS = "satelliteMonitorGroups"
+        const val EXTRA_STATE_SATELLITE_MONITOR_MESSAGE = "satelliteMonitorMessage"
         const val EXTRA_STATE_GGA_FIX_QUALITY = "ggaFixQuality"
         const val EXTRA_STATE_BESTNAV_POSITION_TYPE = "bestnavPositionType"
         const val EXTRA_STATE_PPP_STATUS = "pppStatus"

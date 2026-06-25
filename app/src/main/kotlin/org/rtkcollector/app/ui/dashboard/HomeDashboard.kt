@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -55,6 +57,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -76,6 +79,8 @@ private val DashboardSeparatorHeight = 4.dp
 private val PositionDashboardCardHeight = 180.dp
 private val FixDashboardCardHeight = 282.dp
 private val RtklibDashboardCardHeight = 206.dp
+private val SatelliteDashboardCardHeight = 150.dp
+private const val SatelliteMonitorCompactFrequencyColumns = 3
 private val CorrectionsDashboardCardHeight = 292.dp
 private val RecordingDashboardCardHeight = 162.dp
 private val SetupProfilesDashboardCardHeight = 160.dp
@@ -86,6 +91,7 @@ fun HomeDashboard(
     state: DashboardState,
     layoutPreference: DashboardLayoutPreference = DashboardLayoutPreference.default,
     distanceUnitPreference: DashboardDistanceUnitPreference = DashboardDistanceUnitPreference.default,
+    satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference = SatelliteMonitorCardThemePreference.default,
     startInProgress: Boolean = false,
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
@@ -100,6 +106,7 @@ fun HomeDashboard(
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit = { _, _ -> },
     onStopCoordinateAveraging: () -> Unit = {},
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit = {},
+    onSatelliteMonitorDetails: () -> Unit = {},
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
     val context = LocalContext.current
@@ -194,6 +201,7 @@ fun HomeDashboard(
                         state = state,
                         status = state.status,
                         distanceUnitPreference = distanceUnitPreference,
+                        satelliteMonitorThemePreference = satelliteMonitorThemePreference,
                         onWorkflow = onWorkflow,
                         onSettingsSet = onSettingsSet,
                         onMountpoint = onNtrip,
@@ -206,12 +214,14 @@ fun HomeDashboard(
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
                         onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+                        onSatelliteMonitorDetails = onSatelliteMonitorDetails,
                     )
                 } else {
                     CompactDashboard(
                         state = state,
                         status = state.status,
                         distanceUnitPreference = distanceUnitPreference,
+                        satelliteMonitorThemePreference = satelliteMonitorThemePreference,
                         availableWidthDp = maxWidth.value.toInt(),
                         availableHeightDp = maxHeight.value.toInt(),
                         onWorkflow = onWorkflow,
@@ -226,6 +236,7 @@ fun HomeDashboard(
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
                         onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+                        onSatelliteMonitorDetails = onSatelliteMonitorDetails,
                     )
                 }
             }
@@ -395,6 +406,7 @@ private fun CompactDashboard(
     state: DashboardState,
     status: DashboardStatus,
     distanceUnitPreference: DashboardDistanceUnitPreference,
+    satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference,
     availableWidthDp: Int,
     availableHeightDp: Int,
     onWorkflow: () -> Unit,
@@ -409,6 +421,7 @@ private fun CompactDashboard(
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
+    onSatelliteMonitorDetails: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -428,6 +441,7 @@ private fun CompactDashboard(
         DashboardCards(
             state = state,
             distanceUnitPreference = distanceUnitPreference,
+            satelliteMonitorThemePreference = satelliteMonitorThemePreference,
             availableWidthDp = availableWidthDp,
             availableHeightDp = availableHeightDp,
             onSettingsSet = onSettingsSet,
@@ -436,6 +450,7 @@ private fun CompactDashboard(
             onStartCoordinateAveraging = onStartCoordinateAveraging,
             onStopCoordinateAveraging = onStopCoordinateAveraging,
             onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+            onSatelliteMonitorDetails = onSatelliteMonitorDetails,
         )
     }
 }
@@ -445,6 +460,7 @@ private fun RailDashboard(
     state: DashboardState,
     status: DashboardStatus,
     distanceUnitPreference: DashboardDistanceUnitPreference,
+    satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onMountpoint: () -> Unit,
@@ -457,6 +473,7 @@ private fun RailDashboard(
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
+    onSatelliteMonitorDetails: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -508,6 +525,7 @@ private fun RailDashboard(
         DashboardCards(
             state = state,
             distanceUnitPreference = distanceUnitPreference,
+            satelliteMonitorThemePreference = satelliteMonitorThemePreference,
             onSettingsSet = onSettingsSet,
             onHelp = onHelp,
             modifier = Modifier.weight(1f),
@@ -515,6 +533,7 @@ private fun RailDashboard(
             onStartCoordinateAveraging = onStartCoordinateAveraging,
             onStopCoordinateAveraging = onStopCoordinateAveraging,
             onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+            onSatelliteMonitorDetails = onSatelliteMonitorDetails,
         )
     }
 }
@@ -700,6 +719,7 @@ private fun String.isMissingDashboardValue(): Boolean {
 private fun DashboardCards(
     state: DashboardState,
     distanceUnitPreference: DashboardDistanceUnitPreference,
+    satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference,
     modifier: Modifier = Modifier,
     availableWidthDp: Int? = null,
     availableHeightDp: Int? = null,
@@ -709,6 +729,7 @@ private fun DashboardCards(
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
+    onSatelliteMonitorDetails: () -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val useTwoColumns = compactDashboardCardColumnCount(
@@ -744,6 +765,14 @@ private fun DashboardCards(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         FixCard(state = state, distanceUnitPreference = distanceUnitPreference, onHelp = onHelp)
+                        if (state.isRecording) {
+                            SatelliteMonitorCard(
+                                state = state.satelliteMonitor,
+                                themePreference = satelliteMonitorThemePreference,
+                                onHelp = onHelp,
+                                onOpenDetails = onSatelliteMonitorDetails,
+                            )
+                        }
                         state.rtklib?.let { RtklibCard(it, distanceUnitPreference) }
                         RecordingCard(state = state, onHelp = onHelp)
                     }
@@ -759,6 +788,14 @@ private fun DashboardCards(
                     onHelp = onHelp,
                 )
                 FixCard(state = state, distanceUnitPreference = distanceUnitPreference, onHelp = onHelp)
+                if (state.isRecording) {
+                    SatelliteMonitorCard(
+                        state = state.satelliteMonitor,
+                        themePreference = satelliteMonitorThemePreference,
+                        onHelp = onHelp,
+                        onOpenDetails = onSatelliteMonitorDetails,
+                    )
+                }
                 state.rtklib?.let { RtklibCard(it, distanceUnitPreference) }
                 CorrectionsCard(state = state, onHelp = onHelp)
                 RecordingCard(state = state, onHelp = onHelp)
@@ -1040,6 +1077,291 @@ private fun RtklibCard(
 }
 
 @Composable
+private fun SatelliteMonitorCard(
+    state: SatelliteMonitorDashboardState,
+    themePreference: SatelliteMonitorCardThemePreference,
+    onHelp: (HelpTopic) -> Unit,
+    onOpenDetails: () -> Unit,
+) {
+    val colors = satelliteMonitorCardColors(themePreference)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = SatelliteDashboardCardHeight)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open satellite monitor details"
+            }
+            .clickable(onClick = onOpenDetails),
+        colors = CardDefaults.cardColors(containerColor = colors.background),
+        border = BorderStroke(1.dp, colors.border),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(DashboardCardHeaderHeight),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Satellites",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.title,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = state.engineLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.mutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                SatelliteMonitorInfoIcon(
+                    colors = colors,
+                    onClick = { onHelp(HelpTopic.SATELLITE_MONITOR) },
+                )
+            }
+            SatelliteMonitorSourceDots(state.sources, colors)
+            if (state.hasFrequencyGroups) {
+                state.constellations.forEach { constellation ->
+                    SatelliteConstellationGroupRow(
+                        group = constellation,
+                        colors = colors,
+                    )
+                }
+            } else {
+                Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.mutedText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SatelliteMonitorInfoIcon(
+    colors: SatelliteMonitorCardColors,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .width(24.dp)
+            .height(18.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Satellite monitor help"
+            }
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.small,
+        color = colors.infoBackground,
+        border = BorderStroke(1.dp, colors.border),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = "(i)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = colors.mutedText,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SatelliteMonitorSourceDots(
+    sources: SatelliteMonitorSourceStatuses,
+    colors: SatelliteMonitorCardColors,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SatelliteMonitorSourceDot(sources.rover, colors)
+        SatelliteMonitorSourceDot(sources.base, colors)
+        SatelliteMonitorSourceDot(sources.solution, colors)
+    }
+}
+
+@Composable
+private fun SatelliteMonitorSourceDot(
+    source: SatelliteMonitorSourceStatus,
+    colors: SatelliteMonitorCardColors,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = source.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.mutedText,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        Surface(
+            modifier = Modifier.size(7.dp),
+            shape = MaterialTheme.shapes.small,
+            color = colors.dotColor(source.freshness),
+            border = BorderStroke(1.dp, colors.border),
+            content = {},
+        )
+    }
+}
+
+@Composable
+private fun SatelliteConstellationGroupRow(
+    group: SatelliteMonitorConstellationGroup,
+    colors: SatelliteMonitorCardColors,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            text = group.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.mutedText,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        group.frequencyRows(SatelliteMonitorCompactFrequencyColumns).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                row.forEach { frequency ->
+                    SatelliteFrequencyBox(
+                        frequency = frequency,
+                        colors = colors,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(SatelliteMonitorCompactFrequencyColumns - row.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SatelliteFrequencyBox(
+    frequency: SatelliteMonitorFrequencyRow,
+    colors: SatelliteMonitorCardColors,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = colors.frequencyBackground,
+        border = BorderStroke(1.dp, colors.border),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = frequency.bandLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.title,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            SatelliteSignalCountRow(
+                sourceLabel = "R",
+                count = frequency.rover,
+                visibleColor = colors.roverVisible,
+                usedColor = colors.roverUsed,
+                colors = colors,
+            )
+            SatelliteSignalCountRow(
+                sourceLabel = "B",
+                count = frequency.base,
+                visibleColor = colors.baseVisible,
+                usedColor = colors.baseUsed,
+                colors = colors,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SatelliteSignalCountRow(
+    sourceLabel: String,
+    count: SatelliteMonitorSignalCount,
+    visibleColor: Color,
+    usedColor: Color,
+    colors: SatelliteMonitorCardColors,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = sourceLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.mutedText,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        SatelliteBoxedBar(
+            count = count,
+            visibleColor = visibleColor,
+            usedColor = usedColor,
+            emptyColor = colors.emptySegment,
+            borderColor = colors.segmentBorder,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = count.displayValue,
+            modifier = Modifier.width(28.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.bodyText,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun SatelliteBoxedBar(
+    count: SatelliteMonitorSignalCount,
+    visibleColor: Color,
+    usedColor: Color,
+    emptyColor: Color,
+    borderColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.height(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        count.boxedSegments(totalSegments = SatelliteMonitorBoxedBarSegments).forEach { segment ->
+            Surface(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                shape = MaterialTheme.shapes.small,
+                color = when (segment) {
+                    SatelliteMonitorBarSegment.USED -> usedColor
+                    SatelliteMonitorBarSegment.VISIBLE -> visibleColor
+                    SatelliteMonitorBarSegment.EMPTY -> emptyColor
+                },
+                border = BorderStroke(1.dp, borderColor),
+                content = {},
+            )
+        }
+    }
+}
+
+@Composable
 private fun CorrectionsCard(
     state: DashboardState,
     onHelp: (HelpTopic) -> Unit,
@@ -1071,6 +1393,80 @@ private fun CorrectionsCard(
                 Metric("Upload error", it)
             }
         }
+    }
+}
+
+private const val SatelliteMonitorBoxedBarSegments = 10
+
+private data class SatelliteMonitorCardColors(
+    val background: Color,
+    val frequencyBackground: Color,
+    val infoBackground: Color,
+    val border: Color,
+    val segmentBorder: Color,
+    val emptySegment: Color,
+    val title: Color,
+    val bodyText: Color,
+    val mutedText: Color,
+    val roverVisible: Color,
+    val roverUsed: Color,
+    val baseVisible: Color,
+    val baseUsed: Color,
+    val freshDot: Color,
+    val staleDot: Color,
+    val unavailableDot: Color,
+) {
+    fun dotColor(freshness: SatelliteMonitorSourceFreshness): Color =
+        when (freshness) {
+            SatelliteMonitorSourceFreshness.FRESH -> freshDot
+            SatelliteMonitorSourceFreshness.STALE -> staleDot
+            SatelliteMonitorSourceFreshness.UNAVAILABLE -> unavailableDot
+        }
+}
+
+@Composable
+private fun satelliteMonitorCardColors(
+    preference: SatelliteMonitorCardThemePreference,
+): SatelliteMonitorCardColors {
+    val rover = Color(0xFF2F7FD8)
+    val base = Color(0xFFE6B73D)
+    return when (preference) {
+        SatelliteMonitorCardThemePreference.LIGHT -> SatelliteMonitorCardColors(
+            background = MaterialTheme.colorScheme.surfaceContainerLow,
+            frequencyBackground = MaterialTheme.colorScheme.surface,
+            infoBackground = MaterialTheme.colorScheme.surface,
+            border = MaterialTheme.colorScheme.outlineVariant,
+            segmentBorder = MaterialTheme.colorScheme.outlineVariant,
+            emptySegment = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.48f),
+            title = MaterialTheme.colorScheme.primary,
+            bodyText = MaterialTheme.colorScheme.onSurface,
+            mutedText = MaterialTheme.colorScheme.onSurfaceVariant,
+            roverVisible = rover.copy(alpha = 0.32f),
+            roverUsed = rover,
+            baseVisible = base.copy(alpha = 0.38f),
+            baseUsed = base,
+            freshDot = Color(0xFF2E7D32),
+            staleDot = Color(0xFFE0A100),
+            unavailableDot = MaterialTheme.colorScheme.outline,
+        )
+        SatelliteMonitorCardThemePreference.DARK -> SatelliteMonitorCardColors(
+            background = Color(0xFF111827),
+            frequencyBackground = Color(0xFF172235),
+            infoBackground = Color(0xFF101827),
+            border = Color(0xFF2C3B53),
+            segmentBorder = Color(0xFF26344A),
+            emptySegment = Color(0xFF202B3D),
+            title = Color(0xFF9CC9FF),
+            bodyText = Color(0xFFE5EDF8),
+            mutedText = Color(0xFFAAB7C8),
+            roverVisible = Color(0xFF2F7FD8).copy(alpha = 0.42f),
+            roverUsed = Color(0xFF5AA9FF),
+            baseVisible = Color(0xFFE6B73D).copy(alpha = 0.44f),
+            baseUsed = Color(0xFFFFD45A),
+            freshDot = Color(0xFF65D46E),
+            staleDot = Color(0xFFFFC64D),
+            unavailableDot = Color(0xFF64748B),
+        )
     }
 }
 
@@ -1324,6 +1720,26 @@ private fun HomeDashboardRailPreview() {
     }
 }
 
+@Preview(showBackground = true, widthDp = 390, heightDp = 780)
+@Composable
+private fun HomeDashboardSatelliteDarkPreview() {
+    MaterialTheme {
+        HomeDashboard(
+            state = previewRunningState(),
+            satelliteMonitorThemePreference = SatelliteMonitorCardThemePreference.DARK,
+            onPrimaryAction = {},
+            onMenu = {},
+            onNtrip = {},
+            onUsbPermission = {},
+            onMockGps = {},
+            onWorkflow = {},
+            onSettingsSet = {},
+            onReceiver = {},
+            onStorage = {},
+        )
+    }
+}
+
 private fun previewRunningState(): DashboardState =
     DashboardState.running(
         status = DashboardStatus(
@@ -1369,6 +1785,7 @@ private fun previewRunningState(): DashboardState =
             nmeaBytes = "431 kB",
             zipShareEnabled = false,
         ),
+        satelliteMonitor = SatelliteMonitorDashboardState.preview(),
     )
 
 private fun previewReadyMissingState(): DashboardState =

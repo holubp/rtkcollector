@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -54,6 +55,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -128,6 +130,7 @@ import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.DashboardDistanceUnitPreference
+import org.rtkcollector.app.ui.dashboard.SatelliteMonitorCardThemePreference
 import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
 import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.FixCardState
@@ -164,6 +167,7 @@ import org.rtkcollector.app.ui.imports.SettingsImportScreen
 import org.rtkcollector.app.ui.imports.settingsImportUriFromIntent
 import org.rtkcollector.app.ui.sessions.SessionsScreen
 import org.rtkcollector.app.ui.settings.SettingsHub
+import org.rtkcollector.app.ui.satellite.SatelliteMonitorScreen
 import org.rtkcollector.app.ui.usb.UsbDeviceChoice
 import org.rtkcollector.app.ui.usb.UsbStartAccessAction
 import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
@@ -260,6 +264,9 @@ fun RtkCollectorApp(
     }
     var dashboardDistanceUnits by rememberSaveable(stateSaver = DashboardDistanceUnitPreferenceSaver) {
         mutableStateOf(DashboardDistanceUnitPreference.default)
+    }
+    var satelliteMonitorCardTheme by rememberSaveable(stateSaver = SatelliteMonitorCardThemePreferenceSaver) {
+        mutableStateOf(SatelliteMonitorCardThemePreference.default)
     }
     var showDashboardLayoutDialog by remember { mutableStateOf(false) }
     var showMockGpsDialog by remember { mutableStateOf(false) }
@@ -851,6 +858,7 @@ fun RtkCollectorApp(
                     state = state,
                     layoutPreference = dashboardLayout,
                     distanceUnitPreference = dashboardDistanceUnits,
+                    satelliteMonitorThemePreference = satelliteMonitorCardTheme,
                     startInProgress = startInProgress,
                     onPrimaryAction = {
                         if (state.isRecording) {
@@ -969,6 +977,11 @@ fun RtkCollectorApp(
                             Toast.LENGTH_LONG,
                         ).show()
                     },
+                    onSatelliteMonitorDetails = { screen = AppScreen.SATELLITE_MONITOR },
+                )
+                AppScreen.SATELLITE_MONITOR -> SatelliteMonitorScreen(
+                    state = state.satelliteMonitor,
+                    onBack = { screen = AppScreen.HOME },
                 )
                 AppScreen.SETTINGS ->
                     SettingsHub(
@@ -992,7 +1005,7 @@ fun RtkCollectorApp(
                             }
                         },
                         onBaseCoordinates = { screen = AppScreen.BASE_COORDINATES },
-                        dashboardLayoutLabel = "${dashboardLayout.displayName}; ${dashboardDistanceUnits.displayName}",
+                        dashboardLayoutLabel = "${dashboardLayout.displayName}; ${dashboardDistanceUnits.displayName}; ${satelliteMonitorCardTheme.displayName}",
                         onDashboardLayout = { showDashboardLayoutDialog = true },
                         onNtripCaster = { screen = AppScreen.NTRIP_CASTER },
                         onNtripCasterUpload = { screen = AppScreen.NTRIP_CASTER_UPLOAD },
@@ -2352,12 +2365,16 @@ fun RtkCollectorApp(
                 DashboardLayoutDialog(
                     selected = dashboardLayout,
                     selectedDistanceUnits = dashboardDistanceUnits,
+                    selectedSatelliteTheme = satelliteMonitorCardTheme,
                     onSelect = { layout ->
                         dashboardLayout = layout
                         showDashboardLayoutDialog = false
                     },
                     onDistanceUnitsSelect = { unitPreference ->
                         dashboardDistanceUnits = unitPreference
+                    },
+                    onSatelliteThemeSelect = { theme ->
+                        satelliteMonitorCardTheme = theme
                     },
                     onDismiss = { showDashboardLayoutDialog = false },
                 )
@@ -2426,8 +2443,10 @@ private fun SettingsExportDialog(
 private fun DashboardLayoutDialog(
     selected: DashboardLayoutPreference,
     selectedDistanceUnits: DashboardDistanceUnitPreference,
+    selectedSatelliteTheme: SatelliteMonitorCardThemePreference,
     onSelect: (DashboardLayoutPreference) -> Unit,
     onDistanceUnitsSelect: (DashboardDistanceUnitPreference) -> Unit,
+    onSatelliteThemeSelect: (SatelliteMonitorCardThemePreference) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -2463,6 +2482,34 @@ private fun DashboardLayoutDialog(
                         val suffix = if (unitPreference == selectedDistanceUnits) " (selected)" else ""
                         Text("${unitPreference.displayName}$suffix")
                     }
+                }
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Satellite card",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Dark mode",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Switch(
+                        checked = selectedSatelliteTheme == SatelliteMonitorCardThemePreference.DARK,
+                        onCheckedChange = { enabled ->
+                            onSatelliteThemeSelect(
+                                if (enabled) {
+                                    SatelliteMonitorCardThemePreference.DARK
+                                } else {
+                                    SatelliteMonitorCardThemePreference.LIGHT
+                                },
+                            )
+                        },
+                    )
                 }
             }
         },
@@ -4027,6 +4074,7 @@ private fun List<RecordingSettingsSet>.referenceProfile(kind: ProfileKind, id: S
 
 private enum class AppScreen {
     HOME,
+    SATELLITE_MONITOR,
     SETTINGS,
     NTRIP_CASTER,
     NTRIP_CASTER_UPLOAD,
@@ -4196,6 +4244,11 @@ private val DashboardDistanceUnitPreferenceSaver: Saver<DashboardDistanceUnitPre
     restore = { DashboardDistanceUnitPreference.fromStorageId(it) },
 )
 
+private val SatelliteMonitorCardThemePreferenceSaver: Saver<SatelliteMonitorCardThemePreference, String> = Saver(
+    save = { it.storageId },
+    restore = { SatelliteMonitorCardThemePreference.fromStorageId(it) },
+)
+
 private fun ProfileKind.backScreen(): AppScreen =
     when (this) {
         ProfileKind.SETTINGS_SET -> AppScreen.SETTINGS_SETS
@@ -4213,6 +4266,7 @@ private fun ProfileKind.backScreen(): AppScreen =
 private fun AppScreen.backScreen(editorTarget: ProfileEditorTarget?): AppScreen =
     when (this) {
         AppScreen.HOME -> AppScreen.HOME
+        AppScreen.SATELLITE_MONITOR -> AppScreen.HOME
         AppScreen.SETTINGS -> AppScreen.HOME
         AppScreen.NTRIP_MOUNTPOINT,
         AppScreen.SETTINGS_SET_SELECTOR,

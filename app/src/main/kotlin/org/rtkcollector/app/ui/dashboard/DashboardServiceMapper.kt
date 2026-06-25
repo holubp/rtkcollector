@@ -97,6 +97,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         uploadLastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR),
     )
     val rtklib = rtklibCardFrom(intent)
+    val satelliteMonitor = satelliteMonitorFrom(intent)
     val files = FilesCardState(
         sessionLocation = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SESSION_PATH) ?: "n/a",
         sessionTotalBytes = formatBytes(
@@ -136,6 +137,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             files = files,
             profiles = profiles,
             mockGps = mockGps,
+            satelliteMonitor = satelliteMonitor,
             lastError = lastError,
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
@@ -152,12 +154,98 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             files = files,
             profiles = profiles,
             mockGps = mockGps,
+            satelliteMonitor = satelliteMonitor.takeIf { it.hasFrequencyGroups }
+                ?: SatelliteMonitorDashboardState.unavailable(message = "Satellite monitor starts when recording"),
             lastError = lastError,
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
         )
     }
 }
+
+private fun satelliteMonitorFrom(intent: Intent): SatelliteMonitorDashboardState {
+    val engineLabel = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_ENGINE)
+        ?.takeIf { it.isNotBlank() }
+        ?: "In-device RTK"
+    val sources = satelliteMonitorSourcesFrom(
+        intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_SOURCES),
+    )
+    val message = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_MESSAGE)
+        ?.takeIf { it.isNotBlank() }
+        ?: "Satellite monitor unavailable"
+    val groupText = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_GROUPS)
+        ?.takeIf { it.isNotBlank() }
+        ?: return SatelliteMonitorDashboardState.unavailable(
+            engineLabel = engineLabel,
+            sources = sources,
+            message = message,
+        )
+    val groups = groupText
+        .split(';')
+        .mapNotNull(::satelliteMonitorFrequencyFrom)
+        .groupBy { it.first }
+        .map { (constellation, rows) ->
+            SatelliteMonitorConstellationGroup(
+                label = constellation,
+                frequencies = rows.map { it.second },
+            )
+        }
+    if (groups.isEmpty()) {
+        return SatelliteMonitorDashboardState.unavailable(
+            engineLabel = engineLabel,
+            sources = sources,
+            message = message,
+        )
+    }
+    return SatelliteMonitorDashboardState(
+        engineLabel = engineLabel,
+        sources = sources,
+        constellations = groups,
+        message = "Live satellite monitor",
+    )
+}
+
+private fun satelliteMonitorFrequencyFrom(value: String): Pair<String, SatelliteMonitorFrequencyRow>? {
+    val parts = value.split('|')
+    if (parts.size != 6) return null
+    val constellation = parts[0].trim().takeIf { it.isNotBlank() } ?: return null
+    val band = parts[1].trim().takeIf { it.isNotBlank() } ?: return null
+    return Pair(
+        constellation,
+        SatelliteMonitorFrequencyRow(
+            bandLabel = band,
+            rover = SatelliteMonitorSignalCount(
+                used = parts[2].toIntOrNull() ?: return null,
+                visible = parts[3].toIntOrNull() ?: return null,
+            ),
+            base = SatelliteMonitorSignalCount(
+                used = parts[4].toIntOrNull() ?: return null,
+                visible = parts[5].toIntOrNull() ?: return null,
+            ),
+        ),
+    )
+}
+
+private fun satelliteMonitorSourcesFrom(value: String?): SatelliteMonitorSourceStatuses {
+    val parsed = value
+        ?.split(';')
+        ?.mapNotNull { item ->
+            val parts = item.split(':', limit = 2)
+            if (parts.size != 2) return@mapNotNull null
+            parts[0].trim().uppercase() to sourceFreshnessFrom(parts[1])
+        }
+        ?.toMap()
+        .orEmpty()
+    return SatelliteMonitorSourceStatuses(
+        rover = SatelliteMonitorSourceStatus("R", parsed["R"] ?: SatelliteMonitorSourceFreshness.UNAVAILABLE),
+        base = SatelliteMonitorSourceStatus("B", parsed["B"] ?: SatelliteMonitorSourceFreshness.UNAVAILABLE),
+        solution = SatelliteMonitorSourceStatus("S", parsed["S"] ?: SatelliteMonitorSourceFreshness.UNAVAILABLE),
+    )
+}
+
+private fun sourceFreshnessFrom(value: String): SatelliteMonitorSourceFreshness =
+    runCatching { SatelliteMonitorSourceFreshness.valueOf(value.trim().uppercase()) }
+        .getOrDefault(SatelliteMonitorSourceFreshness.UNAVAILABLE)
 
 private fun rtklibCardFrom(intent: Intent): RtklibCardState? {
     val state = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RTKLIB_STATE)

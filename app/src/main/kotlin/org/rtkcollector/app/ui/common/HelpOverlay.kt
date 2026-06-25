@@ -39,6 +39,10 @@ enum class HelpTopic(
         title = "Settings",
         body = "Settings are grouped by session setup, receiver and USB, corrections, and sessions. Dashboard tiles select active profiles; detailed editing stays here.",
     ),
+    SATELLITE_MONITOR(
+        title = "Satellite monitor",
+        body = "R is rover observations, B is base correction observations and S is selected-solution usage. Each row shows used/visible satellites: muted boxes are visible, saturated boxes are used.",
+    ),
 }
 
 @Composable

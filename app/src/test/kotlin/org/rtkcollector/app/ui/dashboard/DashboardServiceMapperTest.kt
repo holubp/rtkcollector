@@ -260,6 +260,63 @@ class DashboardServiceMapperTest {
     }
 
     @Test
+    fun `satellite monitor remains unavailable without explicit monitor payload`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITES, "8/12")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertFalse(state.satelliteMonitor.hasFrequencyGroups)
+        assertEquals("Satellite monitor unavailable", state.satelliteMonitor.message)
+    }
+
+    @Test
+    fun `satellite monitor maps explicit unavailable payload from service`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_ENGINE, "RTKLIB")
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:UNAVAILABLE;B:UNAVAILABLE;S:UNAVAILABLE")
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_GROUPS, "")
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, "Per-frequency monitor profile not active")
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertFalse(state.satelliteMonitor.hasFrequencyGroups)
+        assertEquals("RTKLIB", state.satelliteMonitor.engineLabel)
+        assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.rover.freshness)
+        assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.base.freshness)
+        assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.solution.freshness)
+        assertEquals("Per-frequency monitor profile not active", state.satelliteMonitor.message)
+    }
+
+    @Test
+    fun `satellite monitor maps explicit constellation frequency payload`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_ENGINE, "RTKLIB")
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:FRESH;B:STALE;S:UNAVAILABLE")
+            putExtra(
+                RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_GROUPS,
+                "GPS|L1|8|11|9|12;GPS|L2|6|9|7|10;Galileo|E1|4|6|5|8",
+            )
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals("RTKLIB", state.satelliteMonitor.engineLabel)
+        assertEquals(SatelliteMonitorSourceFreshness.FRESH, state.satelliteMonitor.sources.rover.freshness)
+        assertEquals(SatelliteMonitorSourceFreshness.STALE, state.satelliteMonitor.sources.base.freshness)
+        assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.solution.freshness)
+        assertEquals(listOf("GPS", "Galileo"), state.satelliteMonitor.constellations.map { it.label })
+        assertEquals(listOf("L1", "L2"), state.satelliteMonitor.constellations.first().frequencies.map { it.bandLabel })
+        assertEquals("8/11", state.satelliteMonitor.constellations.first().frequencies.first().rover.displayValue)
+        assertEquals("9/12", state.satelliteMonitor.constellations.first().frequencies.first().base.displayValue)
+    }
+
+    @Test
     fun `rtklib card maps position height and accuracy`() {
         val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

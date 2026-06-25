@@ -70,6 +70,84 @@ Verification:
 - Automated: dashboard formatter and layout preference tests.
 - Manual: live dashboard review in portrait and landscape.
 
+### UI-SATMON-001: Compact Satellite Card Uses Main Engine
+
+Status: Normative
+
+During recording, the dashboard SHOULD expose a compact `Satellites` card for
+satellite-frequency monitoring when monitor state is available or explicitly
+unavailable. The card MUST stay with the active main solution engine and MUST
+NOT expose an engine switch on the main dashboard.
+
+Verification:
+- Automated: satellite monitor dashboard model tests.
+- Manual: dashboard visual review in portrait and landscape.
+
+### UI-SATMON-002: Compact Satellite Card Groups Constellation Then Frequency
+
+Status: Normative
+
+The compact `Satellites` card MUST group first by constellation and then by
+frequency band. Each frequency cell MUST show rover (`R`) and base (`B`) rows
+with right-aligned `used/visible` counts.
+
+Verification:
+- Automated: satellite monitor dashboard model tests.
+- Manual: dashboard visual review with supported monitor profiles.
+
+### UI-SATMON-003: Boxed Bars Encode Visible And Used Counts
+
+Status: Normative
+
+The compact `Satellites` card MUST render boxed horizontal bars for rover and
+base rows. Lower-saturation boxes represent visible satellites. Higher
+saturation boxes represent satellites used by the active main engine. Used
+boxes MUST be drawn as a saturated prefix inside the visible total.
+
+Verification:
+- Automated: `SatelliteMonitorDashboardModelsTest` boxed segment tests.
+- Manual: dashboard visual review.
+
+### UI-SATMON-004: Source Freshness Labels Are Learnable
+
+Status: Normative
+
+The compact `Satellites` card MUST label source freshness dots as `R`, `B` and
+`S`, meaning rover observations, base correction observations and selected
+solution usage. The card MUST include an information affordance explaining
+these labels and the `used/visible` boxed-bar semantics.
+
+Verification:
+- Manual: dashboard help review.
+
+### UI-SATMON-005: Satellite Card Has Light Default And Optional Dark Style
+
+Status: Normative
+
+The compact satellite card MUST follow the normal light dashboard colour scheme
+by default. Dashboard layout settings MUST provide a binary switch for applying
+the approved dark satellite-card colour scheme without changing the rest of the
+application theme.
+
+Verification:
+- Automated: dashboard layout preference tests.
+- Manual: dashboard visual review in light and satellite-card dark modes.
+
+### UI-SATMON-006: Detailed Satellite Monitor Supports Grouping Switch
+
+Status: Normative
+
+Tapping the compact `Satellites` card SHOULD open a detailed `Satellite
+monitor` screen. The detailed screen MUST default to frequency-band primary
+grouping and MUST provide a slider switch to view constellation-primary
+grouping with frequency bands nested underneath. This detailed grouping switch
+MUST NOT change the compact dashboard grouping, which remains constellation
+first and frequency second.
+
+Verification:
+- Automated: satellite monitor dashboard model grouping tests.
+- Manual: detailed screen visual review in both grouping modes.
+
 ### UI-BASE-001: Base Coordinate Actions Are Compact And Explicit
 
 Status: Normative

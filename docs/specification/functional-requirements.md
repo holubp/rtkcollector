@@ -67,3 +67,43 @@ collection or cartographic survey project-management dependencies.
 Verification:
 - Review: dependency and UI review for every feature branch.
 
+### PRODUCT-USB-001: External USB Receiver Scope Is Explicit
+
+Status: Normative
+
+RtkCollector currently targets external USB GNSS receivers. Features that
+display receiver, correction, RTKLIB or satellite-monitoring state MUST NOT
+imply Android internal GNSS is a supported receiver input unless a future
+specification explicitly adds that workflow.
+
+Verification:
+- Review: user-facing copy and UI labels avoid Android internal GNSS input
+  claims.
+
+## Satellite Monitoring
+
+### SATMON-ARCH-001: Satellite Monitor Is Advisory
+
+Status: Normative
+
+Satellite-monitor UI, parser, aggregation and selected-engine usage failures
+MUST NOT stop, alter or delay byte-exact receiver recording, app-to-receiver TX
+capture, correction input capture, NTRIP routing, RTKLIB workers or session
+writers.
+
+Verification:
+- Automated: satellite monitor model/UI tests where practical.
+- Review: satellite monitor call sites run after raw byte persistence and
+  remain advisory.
+
+### SATMON-STATE-001: Satellite Source Semantics Stay Separate
+
+Status: Normative
+
+Satellite monitoring MUST keep rover-observed, base-present and
+selected-solution-used states separate. Missing source data MUST be displayed as
+unsupported, unavailable or stale rather than inferred from another source.
+
+Verification:
+- Automated: satellite monitor model tests.
+- Manual: receiver/caster smoke tests for supported profiles.

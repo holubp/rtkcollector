@@ -10,6 +10,7 @@ data class DashboardState(
     val files: FilesCardState,
     val profiles: ProfilesCardState,
     val mockGps: MockGpsDashboardState = MockGpsDashboardState(),
+    val satelliteMonitor: SatelliteMonitorDashboardState = SatelliteMonitorDashboardState.unavailable(),
     val primaryAction: DashboardAction,
     val secondaryActions: List<DashboardAction>,
     val lastError: String? = null,
@@ -26,6 +27,7 @@ data class DashboardState(
                 rtklib = planned.rtklib,
                 profiles = planned.profiles,
                 mockGps = planned.mockGps,
+                satelliteMonitor = planned.satelliteMonitor,
             )
         }
 
@@ -42,6 +44,9 @@ data class DashboardState(
             files: FilesCardState = FilesCardState(),
             profiles: ProfilesCardState = ProfilesCardState(),
             mockGps: MockGpsDashboardState = MockGpsDashboardState(),
+            satelliteMonitor: SatelliteMonitorDashboardState = SatelliteMonitorDashboardState.unavailable(
+                message = "Satellite monitor starts when recording",
+            ),
             lastError: String? = null,
             errorCategory: String = "NONE",
             errorSeverity: String = "NONE",
@@ -62,6 +67,7 @@ data class DashboardState(
                 files = files,
                 profiles = profiles,
                 mockGps = mockGps,
+                satelliteMonitor = satelliteMonitor,
                 primaryAction = DashboardAction("Start", DashboardActionKind.START),
                 secondaryActions = listOf(DashboardAction("USB access", DashboardActionKind.USB_PERMISSION)),
                 lastError = lastError,
@@ -78,6 +84,7 @@ data class DashboardState(
             files: FilesCardState,
             profiles: ProfilesCardState = ProfilesCardState(),
             mockGps: MockGpsDashboardState = MockGpsDashboardState(),
+            satelliteMonitor: SatelliteMonitorDashboardState = SatelliteMonitorDashboardState.unavailable(),
             lastError: String? = null,
             errorCategory: String = "NONE",
             errorSeverity: String = "NONE",
@@ -92,6 +99,7 @@ data class DashboardState(
                 files = files,
                 profiles = profiles,
                 mockGps = mockGps,
+                satelliteMonitor = satelliteMonitor,
                 primaryAction = DashboardAction("Stop", DashboardActionKind.STOP),
                 secondaryActions = listOf(
                     DashboardAction("NTRIP", DashboardActionKind.NTRIP),

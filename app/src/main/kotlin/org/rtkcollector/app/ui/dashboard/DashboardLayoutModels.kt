@@ -30,3 +30,19 @@ enum class DashboardDistanceUnitPreference(
             entries.firstOrNull { it.storageId == value } ?: default
     }
 }
+
+enum class SatelliteMonitorCardThemePreference(
+    val storageId: String,
+    val displayName: String,
+) {
+    LIGHT("light", "Light satellite card"),
+    DARK("dark", "Dark satellite card"),
+    ;
+
+    companion object {
+        val default: SatelliteMonitorCardThemePreference = LIGHT
+
+        fun fromStorageId(value: String?): SatelliteMonitorCardThemePreference =
+            entries.firstOrNull { it.storageId == value } ?: default
+    }
+}

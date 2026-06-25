@@ -245,6 +245,45 @@ class RtklibWorkerTest {
         assertEquals(listOf("pos-second"), second.posLines)
     }
 
+    @Test
+    fun `native bridge parses optional RTKLIB satellite usage field`() {
+        val api = object : FakeNativeApi() {
+            override fun snapshot(handle: Long): Array<String> = arrayOf(
+                "RUNNING",
+                "",
+                "",
+                "",
+                "",
+                "RTK_FIXED",
+                "1234",
+                "50.1",
+                "14.2",
+                "300.0",
+                "0.01",
+                "0.02",
+                "2",
+                "4",
+                "5",
+                "G07,1C,45.5;E11,5X,39",
+            )
+        }
+        val backend = RtklibNativeBridge(loadLibrary = {}, nativeApi = api).create()
+
+        assertTrue(backend.start(validConfig()).started)
+        val snapshot = backend.snapshot()
+
+        assertEquals(4, snapshot.decodedRoverEpochs)
+        assertEquals(5, snapshot.decodedCorrectionMessages)
+        assertEquals(
+            listOf(
+                RtklibSatelliteUsage("G07", "1C", 45.5),
+                RtklibSatelliteUsage("E11", "5X", 39.0),
+            ),
+            snapshot.latestSolution?.satelliteUsages,
+        )
+        backend.close()
+    }
+
     private fun validConfig(): RtklibConfig {
         val workflow = WorkflowExamples.roverWithRtklibRealtime(ReceiverCapabilityFixtures.ubloxM8p0())
         return RtklibConfig(
@@ -297,7 +336,7 @@ class RtklibWorkerTest {
         override fun stop() = Unit
     }
 
-    private class FakeNativeApi : RtklibNativeBridge.NativeApi {
+    private open class FakeNativeApi : RtklibNativeBridge.NativeApi {
         var frequencyCount: Int = -1
         var serverCycleMillis: Int = -1
         var serverBufferBytes: Int = -1
@@ -327,7 +366,7 @@ class RtklibWorkerTest {
         override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> =
             arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
 
-        override fun snapshot(handle: Long): Array<String> =
+        override open fun snapshot(handle: Long): Array<String> =
             arrayOf("RUNNING", "", "", "", "", "", "", "", "", "", "", "", "", "0", "0")
 
         override fun postprocess(

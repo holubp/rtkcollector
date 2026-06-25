@@ -27,6 +27,13 @@ data class RtklibSolutionSnapshot(
     val horizontalAccuracyM: Double? = null,
     val verticalAccuracyM: Double? = null,
     val satellitesUsed: Int? = null,
+    val satelliteUsages: List<RtklibSatelliteUsage> = emptyList(),
+)
+
+data class RtklibSatelliteUsage(
+    val satelliteId: String,
+    val observationCode: String,
+    val roverCn0DbHz: Double? = null,
 )
 
 data class RtklibNativeOutputBatch(

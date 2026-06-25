@@ -69,7 +69,9 @@ data class SatelliteMonitorConstellationGroup(
     val frequencies: List<SatelliteMonitorFrequencyRow>,
 ) {
     fun frequencyRows(maxColumns: Int): List<List<SatelliteMonitorFrequencyRow>> =
-        frequencies.chunked(maxColumns.coerceAtLeast(1))
+        frequencies
+            .sortedBy { it.bandLabel }
+            .chunked(maxColumns.coerceAtLeast(1))
 }
 
 data class SatelliteMonitorDetailGroup(
@@ -161,19 +163,23 @@ fun SatelliteMonitorDashboardState.detailGroups(
         SatelliteMonitorDetailGroupingMode.CONSTELLATION -> constellations.map { constellation ->
             SatelliteMonitorDetailGroup(
                 primaryLabel = constellation.label,
-                sections = constellation.frequencies.map { frequency ->
-                    SatelliteMonitorDetailSection(
-                        secondaryLabel = frequency.bandLabel,
-                        frequencies = listOf(frequency),
-                    )
-                },
+                sections = constellation.frequencies
+                    .sortedBy { it.bandLabel }
+                    .map { frequency ->
+                        SatelliteMonitorDetailSection(
+                            secondaryLabel = frequency.bandLabel,
+                            frequencies = listOf(frequency),
+                        )
+                    },
             )
         }
         SatelliteMonitorDetailGroupingMode.FREQUENCY -> constellations
             .flatMap { constellation ->
-                constellation.frequencies.map { frequency ->
-                    constellation.label to frequency
-                }
+                constellation.frequencies
+                    .sortedBy { it.bandLabel }
+                    .map { frequency ->
+                        constellation.label to frequency
+                    }
             }
             .groupBy { (_, frequency) -> frequency.bandLabel }
             .toSortedMap()

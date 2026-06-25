@@ -59,13 +59,25 @@ import org.rtkcollector.core.correction.NtripRuntimeController
 import org.rtkcollector.core.correction.NtripRuntimeSnapshot
 import org.rtkcollector.core.correction.NtripRuntimeState
 import org.rtkcollector.core.correction.Rtcm3Extractor
+import org.rtkcollector.core.correction.Rtcm3MsmParser
 import org.rtkcollector.core.correction.Rtcm3ReferenceStation
 import org.rtkcollector.core.correction.Rtcm3ReferenceStationParser
+import org.rtkcollector.core.correction.Rtcm3MsmSignal
+import org.rtkcollector.core.correction.SatelliteConstellation as RtcmSatelliteConstellation
+import org.rtkcollector.core.correction.SatelliteFrequencyBand as RtcmSatelliteFrequencyBand
+import org.rtkcollector.core.quality.SatelliteConstellation as MonitorSatelliteConstellation
+import org.rtkcollector.core.quality.SatelliteMonitorEngine
+import org.rtkcollector.core.quality.SatelliteMonitorInputBatch
+import org.rtkcollector.core.quality.SatelliteMonitorSource
+import org.rtkcollector.core.quality.SatelliteSignalKey
+import org.rtkcollector.core.quality.SatelliteSignalObservation
 import org.rtkcollector.core.rtklib.RtklibConfig
 import org.rtkcollector.core.rtklib.RtklibEngineSnapshot
 import org.rtkcollector.core.rtklib.RtklibNativeBridge
 import org.rtkcollector.core.rtklib.RtklibOutputWriters
 import org.rtkcollector.core.rtklib.RtklibPreset
+import org.rtkcollector.core.rtklib.RtklibSatelliteUsage
+import org.rtkcollector.core.solution.SolutionEngine
 import org.rtkcollector.core.rtklib.RtklibWorker
 import org.rtkcollector.core.session.AntennaMetadata
 import org.rtkcollector.core.session.NtripSessionMetadata
@@ -109,6 +121,7 @@ import org.rtkcollector.receiver.ublox.UbloxNavDopParser
 import org.rtkcollector.receiver.ublox.UbloxNavPvtParser
 import org.rtkcollector.receiver.ublox.UbloxNavSatParser
 import org.rtkcollector.receiver.ublox.UbloxNmeaExporter
+import org.rtkcollector.receiver.ublox.UbloxRawxParser
 import org.rtkcollector.receiver.ublox.UbloxScriptCompiler
 import org.rtkcollector.receiver.ublox.UbloxStreamParser
 import org.rtkcollector.receiver.ublox.UbloxTelemetry
@@ -162,6 +175,8 @@ class RecordingForegroundService : Service() {
     private var activeWorkflowUsesNtrip: Boolean = false
     private var activeNtripSendToReceiver: Boolean = true
     private var activeSatelliteTelemetry: SatelliteTelemetryCapability = SatelliteTelemetryCapability.NONE
+    private var activeSatelliteTelemetryObserved: Boolean = false
+    private val satelliteMonitorController = SatelliteMonitorController()
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
@@ -254,6 +269,7 @@ class RecordingForegroundService : Service() {
         activeSatelliteTelemetry = SatelliteTelemetryCapability.fromStorageId(
             intent.getStringExtra(EXTRA_COMMAND_SATELLITE_TELEMETRY),
         )
+        activeSatelliteTelemetryObserved = false
         activeNtripRuntimeConfig = null
         routineStateBroadcastRateLimiter.reset()
         recordingHealthMonitor.reset(SystemClock.elapsedRealtime())
@@ -560,6 +576,7 @@ class RecordingForegroundService : Service() {
             runCatching { casterUploadController?.stop() }
             casterUploadController = null
             activeSatelliteTelemetry = SatelliteTelemetryCapability.NONE
+            activeSatelliteTelemetryObserved = false
             state = state.copy(
                 running = false,
                 lifecycle = RecordingLifecycleState.FAILED,
@@ -801,6 +818,7 @@ class RecordingForegroundService : Service() {
                     """{"type":"ntrip-rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"}}""",
                 )
             }
+            recordSatelliteMonitorRtcmMsm(frame)
             val referenceStation = Rtcm3ReferenceStationParser.parse(frame)
             state = if (referenceStation != null) {
                 state.withRtcmReferenceStation(referenceStation).copy(rtcmFrames = state.rtcmFrames + 1)
@@ -815,6 +833,137 @@ class RecordingForegroundService : Service() {
             activeWorkflowUsesNtrip &&
             ntripController != null &&
             state.ntripState == NtripRuntimeState.STREAMING.name
+
+    private fun recordSatelliteMonitorRtcmMsm(frame: org.rtkcollector.core.correction.Rtcm3Frame) {
+        if (!activeSatelliteTelemetry.isSupported) return
+        val parsed = Rtcm3MsmParser.parse(frame)
+        if (parsed.signals.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val observations = parsed.signals.mapNotNull { signal ->
+            signal.toBaseMonitorObservation(now)
+        }
+        if (observations.isEmpty()) return
+        markSatelliteTelemetryObserved()
+        listOf(SatelliteMonitorEngine.IN_DEVICE_RTK, SatelliteMonitorEngine.RTKLIB).forEach { engine ->
+            satelliteMonitorController.offer(
+                SatelliteMonitorInputBatch(
+                    engine = engine,
+                    source = SatelliteMonitorSource.BASE,
+                    receivedAtEpochMillis = now,
+                    observations = observations,
+                ),
+            )
+        }
+    }
+
+    private fun offerSatelliteMonitorObservations(
+        engines: Iterable<SatelliteMonitorEngine>,
+        source: SatelliteMonitorSource,
+        receivedAtEpochMillis: Long,
+        observations: List<SatelliteSignalObservation>,
+    ) {
+        if (!activeSatelliteTelemetry.isSupported || observations.isEmpty()) return
+        markSatelliteTelemetryObserved()
+        engines.forEach { engine ->
+            satelliteMonitorController.offer(
+                SatelliteMonitorInputBatch(
+                    engine = engine,
+                    source = source,
+                    receivedAtEpochMillis = receivedAtEpochMillis,
+                    observations = observations,
+                ),
+            )
+        }
+    }
+
+    private fun receiverObservationMonitorEngines(): List<SatelliteMonitorEngine> =
+        listOf(SatelliteMonitorEngine.IN_DEVICE_RTK, SatelliteMonitorEngine.RTKLIB)
+
+    private fun RtklibSatelliteUsage.toRtklibMonitorObservation(observedAtEpochMillis: Long): SatelliteSignalObservation? {
+        val key = toMonitorSignalKey() ?: return null
+        return SatelliteSignalObservation(
+            key = key,
+            source = SatelliteMonitorSource.SOLUTION,
+            observedAtEpochMillis = observedAtEpochMillis,
+            cn0DbHz = roverCn0DbHz,
+            used = true,
+        )
+    }
+
+    private fun RtklibSatelliteUsage.toMonitorSignalKey(): SatelliteSignalKey? {
+        val constellation = satelliteId.firstOrNull()?.toMonitorConstellation() ?: return null
+        val svid = satelliteId.drop(1).toIntOrNull() ?: return null
+        if (constellation == MonitorSatelliteConstellation.UNKNOWN || svid <= 0) return null
+        val band = observationCode.firstOrNull()?.toMonitorObservationBand() ?: return null
+        return SatelliteSignalKey(
+            constellation = constellation,
+            svid = svid,
+            band = band,
+            signalCode = observationCode,
+        )
+    }
+
+    private fun Char.toMonitorConstellation(): MonitorSatelliteConstellation =
+        when (uppercaseChar()) {
+            'G' -> MonitorSatelliteConstellation.GPS
+            'R' -> MonitorSatelliteConstellation.GLONASS
+            'E' -> MonitorSatelliteConstellation.GALILEO
+            'C' -> MonitorSatelliteConstellation.BEIDOU
+            'J' -> MonitorSatelliteConstellation.QZSS
+            'S' -> MonitorSatelliteConstellation.SBAS
+            else -> MonitorSatelliteConstellation.UNKNOWN
+        }
+
+    private fun Char.toMonitorObservationBand(): String? =
+        when (this) {
+            '1' -> "L1"
+            '2' -> "L2"
+            '3' -> "L3"
+            '5' -> "L5"
+            '6' -> "L6"
+            '7' -> "L7"
+            '8' -> "L8"
+            '9' -> "L9"
+            else -> null
+        }
+
+    private fun Rtcm3MsmSignal.toBaseMonitorObservation(nowEpochMillis: Long): SatelliteSignalObservation? {
+        val constellation = key.constellation.toMonitorConstellation()
+        val band = key.band.toMonitorBandLabel()
+        if (constellation == MonitorSatelliteConstellation.UNKNOWN || band == null) return null
+        return SatelliteSignalObservation(
+            key = SatelliteSignalKey(
+                constellation = constellation,
+                svid = key.svid,
+                band = band,
+                signalCode = key.signalCode,
+            ),
+            source = SatelliteMonitorSource.BASE,
+            observedAtEpochMillis = nowEpochMillis,
+            cn0DbHz = base.cn0DbHz,
+            used = false,
+        )
+    }
+
+    private fun RtcmSatelliteConstellation.toMonitorConstellation(): MonitorSatelliteConstellation =
+        when (this) {
+            RtcmSatelliteConstellation.GPS -> MonitorSatelliteConstellation.GPS
+            RtcmSatelliteConstellation.GLONASS -> MonitorSatelliteConstellation.GLONASS
+            RtcmSatelliteConstellation.GALILEO -> MonitorSatelliteConstellation.GALILEO
+            RtcmSatelliteConstellation.BEIDOU -> MonitorSatelliteConstellation.BEIDOU
+            RtcmSatelliteConstellation.QZSS -> MonitorSatelliteConstellation.QZSS
+            RtcmSatelliteConstellation.SBAS -> MonitorSatelliteConstellation.SBAS
+            RtcmSatelliteConstellation.UNKNOWN -> MonitorSatelliteConstellation.UNKNOWN
+        }
+
+    private fun RtcmSatelliteFrequencyBand.toMonitorBandLabel(): String? =
+        when (this) {
+            RtcmSatelliteFrequencyBand.L1 -> "L1"
+            RtcmSatelliteFrequencyBand.L2 -> "L2"
+            RtcmSatelliteFrequencyBand.L5 -> "L5"
+            RtcmSatelliteFrequencyBand.L6 -> "L6"
+            RtcmSatelliteFrequencyBand.UNKNOWN -> null
+        }
 
     private fun shouldExpectReceiverProtocolFrames(): Boolean =
         running.get() &&
@@ -1606,6 +1755,8 @@ class RecordingForegroundService : Service() {
         rtklibWorker = null
         activeWorkflowUsesNtrip = false
         activeSatelliteTelemetry = SatelliteTelemetryCapability.NONE
+        activeSatelliteTelemetryObserved = false
+        satelliteMonitorController.clear()
         shutdownCommands = emptyList()
         teardownMockLocation()
         solutionCandidates.clear()
@@ -2038,6 +2189,14 @@ class RecordingForegroundService : Service() {
                 )?.let { candidate ->
                     solutionCandidates[candidate.sourceId] = candidate
                 }
+                offerSatelliteMonitorObservations(
+                    engines = listOf(SatelliteMonitorEngine.RTKLIB),
+                    source = SatelliteMonitorSource.SOLUTION,
+                    receivedAtEpochMillis = rtklibSolution.timestampMillis,
+                    observations = rtklibSolution.satelliteUsages.mapNotNull { usage ->
+                        usage.toRtklibMonitorObservation(rtklibSolution.timestampMillis)
+                    },
+                )
             }
             state = state.copy(
                 rtklibState = snapshot.state.name,
@@ -2062,6 +2221,7 @@ class RecordingForegroundService : Service() {
                 rtklibOutputPosLines = snapshot.outputPosLines,
             )
         }
+        val satelliteMonitor = satelliteMonitorBroadcastPayload()
         sendBroadcast(
             Intent(ACTION_STATE).apply {
                 setPackage(packageName)
@@ -2110,10 +2270,10 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_RTKLIB_DECODED_CORRECTION_MESSAGES, state.rtklibDecodedCorrectionMessages)
                 putExtra(EXTRA_STATE_RTKLIB_OUTPUT_NMEA_LINES, state.rtklibOutputNmeaLines)
                 putExtra(EXTRA_STATE_RTKLIB_OUTPUT_POS_LINES, state.rtklibOutputPosLines)
-                putExtra(EXTRA_STATE_SATELLITE_MONITOR_ENGINE, satelliteMonitorEngineLabel())
-                putExtra(EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:UNAVAILABLE;B:UNAVAILABLE;S:UNAVAILABLE")
-                putExtra(EXTRA_STATE_SATELLITE_MONITOR_GROUPS, "")
-                putExtra(EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, satelliteMonitorUnavailableMessage())
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_ENGINE, satelliteMonitor.engineLabel)
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_SOURCES, satelliteMonitor.sources)
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_GROUPS, satelliteMonitor.groups)
+                putExtra(EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, satelliteMonitor.message)
                 putExtra(EXTRA_STATE_GGA_FIX_QUALITY, state.ggaFixQuality ?: -1)
                 putExtra(EXTRA_STATE_BESTNAV_POSITION_TYPE, state.bestnavPositionType)
                 putExtra(EXTRA_STATE_PPP_STATUS, state.pppStatus)
@@ -2179,22 +2339,53 @@ class RecordingForegroundService : Service() {
         )
     }
 
-    private fun satelliteMonitorEngineLabel(): String =
-        if (
-            state.rtklibState.equals("RUNNING", ignoreCase = true) ||
-            state.bestSolutionSource.contains("RTKLIB", ignoreCase = true)
-        ) {
-            "RTKLIB"
+    private fun satelliteMonitorBroadcastPayload(): SatelliteMonitorBroadcastPayload {
+        val payload = satelliteMonitorController.compactPayload(
+            engine = satelliteMonitorEngine(),
+            nowEpochMillis = System.currentTimeMillis(),
+        )
+        return if (payload.groups.isBlank()) {
+            payload.copy(message = satelliteMonitorUnavailableMessage())
         } else {
-            "In-device RTK"
+            payload
+        }
+    }
+
+    private fun satelliteMonitorEngine(): SatelliteMonitorEngine =
+        when (screenSolutionPolicy) {
+            SolutionSourcePolicy.RTKLIB_ONLY -> SatelliteMonitorEngine.RTKLIB
+            SolutionSourcePolicy.DEVICE_INTERNAL_ONLY -> SatelliteMonitorEngine.IN_DEVICE_RTK
+            SolutionSourcePolicy.OFF -> SatelliteMonitorEngine.IN_DEVICE_RTK
+            SolutionSourcePolicy.AUTO_BEST ->
+                solutionCandidates[state.bestSolutionSource]?.engine
+                    ?.toSatelliteMonitorEngine()
+                    ?: if (state.bestSolutionSource.contains("RTKLIB", ignoreCase = true)) {
+                        SatelliteMonitorEngine.RTKLIB
+                    } else {
+                        SatelliteMonitorEngine.IN_DEVICE_RTK
+                    }
+        }
+
+    private fun SolutionEngine.toSatelliteMonitorEngine(): SatelliteMonitorEngine =
+        when (this) {
+            SolutionEngine.RTKLIB_REALTIME -> SatelliteMonitorEngine.RTKLIB
+            SolutionEngine.DEVICE_INTERNAL,
+            SolutionEngine.RECEIVER_PPP,
+            SolutionEngine.GENERIC_NMEA,
+            -> SatelliteMonitorEngine.IN_DEVICE_RTK
         }
 
     private fun satelliteMonitorUnavailableMessage(): String =
+        satelliteMonitorUnavailableMessage(
+            capability = activeSatelliteTelemetry,
+            telemetryObserved = activeSatelliteTelemetryObserved,
+        )
+
+    private fun markSatelliteTelemetryObserved() {
         if (activeSatelliteTelemetry.isSupported) {
-            "Waiting for ${activeSatelliteTelemetry.displayName}"
-        } else {
-            "Satellite telemetry not supported by active command profile"
+            activeSatelliteTelemetryObserved = true
         }
+    }
 
     private fun recordBinaryFrequency(frame: ByteArray, frequencyTracker: Um980MessageFrequencyTracker) {
         val now = System.currentTimeMillis()
@@ -2204,6 +2395,7 @@ class RecordingForegroundService : Service() {
             142 -> frequencyTracker.record(Um980MessageKind.ADRNAV, now, receiverNow)
             509 -> frequencyTracker.record(Um980MessageKind.RTKSTATUS, now, receiverNow)
             1026 -> frequencyTracker.record(Um980MessageKind.PPPNAV, now, receiverNow)
+            1041 -> frequencyTracker.record(Um980MessageKind.BESTSAT, now, receiverNow)
             2118 -> frequencyTracker.record(Um980MessageKind.BESTNAV, now, receiverNow)
         }
     }
@@ -2238,8 +2430,15 @@ class RecordingForegroundService : Service() {
                             }
                         }
                     }
-                    record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x15.toByte() ->
+                    record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x15.toByte() -> {
                         ubloxFrequencyTracker.record(UbloxMessageKind.RAWX, nowMillis)
+                        offerSatelliteMonitorObservations(
+                            engines = receiverObservationMonitorEngines(),
+                            source = SatelliteMonitorSource.ROVER,
+                            receivedAtEpochMillis = nowMillis,
+                            observations = UbloxRawxParser.parse(record.bytes, nowMillis),
+                        )
+                    }
                     record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x13.toByte() ->
                         ubloxFrequencyTracker.record(UbloxMessageKind.SFRBX, nowMillis)
                     record.bytes.getOrNull(2) == 0x0D.toByte() && record.bytes.getOrNull(3) == 0x03.toByte() ->
@@ -2247,6 +2446,13 @@ class RecordingForegroundService : Service() {
                     record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x35.toByte() -> {
                         ubloxFrequencyTracker.record(UbloxMessageKind.NAV_SAT, nowMillis)
                         UbloxNavSatParser.parse(record.bytes, nowMillis)?.let { telemetry ->
+                            markSatelliteTelemetryObserved()
+                            offerSatelliteMonitorObservations(
+                                engines = listOf(SatelliteMonitorEngine.IN_DEVICE_RTK),
+                                source = SatelliteMonitorSource.SOLUTION,
+                                receivedAtEpochMillis = nowMillis,
+                                observations = telemetry.satelliteSignalObservations,
+                            )
                             lastUbloxNavSatAtMillis = nowMillis
                             state = state.copy(
                                 satellitesUsed = telemetry.satellitesUsed,
@@ -2636,6 +2842,7 @@ class RecordingForegroundService : Service() {
                                     }
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
+                                    markSatelliteTelemetryObserved()
                                     state = state.copy(
                                         satellitesUsed = dop.satellitesUsed ?: state.satellitesUsed,
                                         pdop = dop.pdop?.let { "%.1f".format(java.util.Locale.US, it) } ?: state.pdop,
@@ -2658,6 +2865,7 @@ class RecordingForegroundService : Service() {
                                     )
                                 }
                                 gsvParser.accept(record.bytes).forEach { view ->
+                                    markSatelliteTelemetryObserved()
                                     val satellitesInView = gsvTracker.accept(view)
                                     state = state.copy(
                                         satellitesInView = satellitesInView ?: state.satellitesInView,
@@ -2713,7 +2921,22 @@ class RecordingForegroundService : Service() {
                             }
                             "unicore_binary" -> {
                                 recordBinaryFrequency(record.bytes, frequencyTracker)
+                                val now = System.currentTimeMillis()
+                                offerSatelliteMonitorObservations(
+                                    engines = receiverObservationMonitorEngines(),
+                                    source = SatelliteMonitorSource.ROVER,
+                                    receivedAtEpochMillis = now,
+                                    observations = Um980BinaryParser.parseObsvmbObservations(record.bytes) +
+                                        Um980BinaryParser.parseObsvmcmpbObservations(record.bytes),
+                                )
+                                offerSatelliteMonitorObservations(
+                                    engines = listOf(SatelliteMonitorEngine.IN_DEVICE_RTK),
+                                    source = SatelliteMonitorSource.SOLUTION,
+                                    receivedAtEpochMillis = now,
+                                    observations = Um980BinaryParser.parseBestsatbObservations(record.bytes),
+                                )
                                 Um980BinaryParser.parseBestnavb(record.bytes)?.let { telemetry ->
+                                    markSatelliteTelemetryObserved()
                                     if (exportJsonSolution) {
                                         sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
                                     }
@@ -2731,6 +2954,7 @@ class RecordingForegroundService : Service() {
                                     }
                                 }
                                 Um980BinaryParser.parseAdrnavb(record.bytes)?.let { telemetry ->
+                                    markSatelliteTelemetryObserved()
                                     if (exportJsonSolution) {
                                         sessionWriters.appendReceiverSolutionJson(telemetry.toJson())
                                     }
@@ -2738,6 +2962,7 @@ class RecordingForegroundService : Service() {
                                         .withReceiverRtkTelemetry(telemetry)
                                 }
                                 Um980BinaryParser.parsePppnavb(record.bytes)?.let { telemetry ->
+                                    markSatelliteTelemetryObserved()
                                     if (exportJsonSolution) {
                                         sessionWriters.appendReceiverPppSolutionJson(telemetry.toJson())
                                     }
@@ -2750,18 +2975,21 @@ class RecordingForegroundService : Service() {
                                     }
                                 }
                                 Um980BinaryParser.parseRtkstatusb(record.bytes)?.let { telemetry ->
+                                    markSatelliteTelemetryObserved()
                                     if (exportJsonSolution) {
                                         sessionWriters.appendQualityLiveJson(telemetry.toJson())
                                     }
                                     state = state.withReceiverRtkTelemetry(telemetry)
                                 }
                                 Um980BinaryParser.parseRtcmstatusb(record.bytes)?.let { telemetry ->
+                                    markSatelliteTelemetryObserved()
                                     if (exportJsonSolution) {
                                         sessionWriters.appendQualityLiveJson(telemetry.toJson())
                                     }
                                     state = state.withRtcmDecodedTelemetry(telemetry)
                                 }
                                 Um980BinaryParser.parseStadopb(record.bytes)?.let { telemetry ->
+                                    markSatelliteTelemetryObserved()
                                     if (exportJsonSolution) {
                                         sessionWriters.appendQualityLiveJson(telemetry.toJson())
                                     }
@@ -2802,6 +3030,7 @@ class RecordingForegroundService : Service() {
                         sessionWriters.appendQualityLiveJson(
                             """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"},"baseCasterUploadOffered":${baseUploadOffered ?: "null"}}""",
                         )
+                        recordSatelliteMonitorRtcmMsm(frame)
                         val referenceStation = Rtcm3ReferenceStationParser.parse(frame)
                         state = if (referenceStation != null) {
                             state.withRtcmReferenceStation(referenceStation).copy(rtcmFrames = state.rtcmFrames + 1)

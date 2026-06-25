@@ -57,6 +57,7 @@ constexpr int SERVER_STREAM_BASE = 1;
 constexpr int SERVER_STREAM_NMEA = 3;
 constexpr int SERVER_STREAM_POS = 4;
 constexpr int RINEX_OUTPUT_FILE_COUNT = 9;
+constexpr int MAX_SATELLITE_USAGE_ENTRIES = 96;
 
 struct NativeResult {
     std::string state = "RUNNING";
@@ -72,6 +73,7 @@ struct NativeResult {
     std::string h_acc_m;
     std::string v_acc_m;
     std::string satellites_used;
+    std::string satellite_usage;
 };
 
 class ScopedUtfChars {
@@ -378,11 +380,13 @@ static void drain_solution_streams(RtklibEngineHandle *engine, NativeResult *res
 
 static void update_result_from_server(RtklibEngineHandle *engine, NativeResult *result) {
     sol_t sol{};
+    ssat_t satellite_status[MAXSAT]{};
     uint64_t rover_messages = 0;
     uint64_t base_messages = 0;
 
     rtksvrlock(&engine->server);
     sol = engine->server.rtk.sol;
+    std::memcpy(satellite_status, engine->server.rtk.ssat, sizeof(satellite_status));
     for (int i = 0; i < 10; i++) {
         rover_messages += static_cast<uint64_t>(engine->server.nmsg[SERVER_STREAM_ROVER][i]);
         base_messages += static_cast<uint64_t>(engine->server.nmsg[SERVER_STREAM_BASE][i]);
@@ -402,6 +406,30 @@ static void update_result_from_server(RtklibEngineHandle *engine, NativeResult *
     result->lon_deg = double_to_string(pos[1] * R2D);
     result->height_m = double_to_string(pos[2]);
     result->satellites_used = long_to_string(sol.ns);
+    result->satellite_usage.clear();
+    int usage_entries = 0;
+    for (int sat = 1; sat <= MAXSAT && usage_entries < MAX_SATELLITE_USAGE_ENTRIES; sat++) {
+        char sat_id[8] = {0};
+        satno2id(sat, sat_id);
+        if (sat_id[0] == '\0') continue;
+        const ssat_t &status = satellite_status[sat - 1];
+        for (int freq = 0; freq < NFREQ && usage_entries < MAX_SATELLITE_USAGE_ENTRIES; freq++) {
+            if (!status.vsat[freq]) continue;
+            int code = status.code[freq][0] != CODE_NONE ? status.code[freq][0] : status.code[freq][1];
+            if (code == CODE_NONE) continue;
+            const char *obs_code = code2obs(static_cast<uint8_t>(code));
+            if (!obs_code || obs_code[0] == '\0') continue;
+            if (!result->satellite_usage.empty()) result->satellite_usage.push_back(';');
+            result->satellite_usage.append(sat_id);
+            result->satellite_usage.push_back(',');
+            result->satellite_usage.append(obs_code);
+            result->satellite_usage.push_back(',');
+            if (status.snr_rover[freq] > 0.0f) {
+                result->satellite_usage.append(double_to_string(status.snr_rover[freq]));
+            }
+            usage_entries++;
+        }
+    }
     if (sol.qr[0] > 0.0 && sol.qr[1] > 0.0) {
         result->h_acc_m = double_to_string(std::sqrt(sol.qr[0] + sol.qr[1]));
     }
@@ -465,15 +493,16 @@ static jobjectArray to_java_result(JNIEnv *env, const RtklibEngineHandle *engine
         result.satellites_used,
         decoded_rover,
         decoded_correction,
+        result.satellite_usage,
     };
     jclass string_class = env->FindClass("java/lang/String");
     if (!string_class) return nullptr;
     jstring empty = env->NewStringUTF("");
     if (!empty) return nullptr;
-    jobjectArray array = env->NewObjectArray(15, string_class, empty);
+    jobjectArray array = env->NewObjectArray(16, string_class, empty);
     env->DeleteLocalRef(empty);
     if (!array) return nullptr;
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 16; i++) {
         jstring item = env->NewStringUTF(values[i].c_str());
         if (!item) return nullptr;
         env->SetObjectArrayElement(array, i, item);

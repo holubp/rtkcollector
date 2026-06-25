@@ -298,6 +298,7 @@ class DashboardServiceMapperTest {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
             putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_ENGINE, "RTKLIB")
             putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:FRESH;B:STALE;S:UNAVAILABLE")
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_MESSAGE, "Per-frequency used counts inferred")
             putExtra(
                 RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_GROUPS,
                 "GPS|L1|8|11|9|12;GPS|L2|6|9|7|10;Galileo|E1|4|6|5|8",
@@ -310,10 +311,33 @@ class DashboardServiceMapperTest {
         assertEquals(SatelliteMonitorSourceFreshness.FRESH, state.satelliteMonitor.sources.rover.freshness)
         assertEquals(SatelliteMonitorSourceFreshness.STALE, state.satelliteMonitor.sources.base.freshness)
         assertEquals(SatelliteMonitorSourceFreshness.UNAVAILABLE, state.satelliteMonitor.sources.solution.freshness)
-        assertEquals(listOf("GPS", "Galileo"), state.satelliteMonitor.constellations.map { it.label })
-        assertEquals(listOf("L1", "L2"), state.satelliteMonitor.constellations.first().frequencies.map { it.bandLabel })
-        assertEquals("8/11", state.satelliteMonitor.constellations.first().frequencies.first().rover.displayValue)
-        assertEquals("9/12", state.satelliteMonitor.constellations.first().frequencies.first().base.displayValue)
+        val gpsGroup = state.satelliteMonitor.constellations.single { it.label == "GPS" }
+        val galileoGroup = state.satelliteMonitor.constellations.single { it.label == "Galileo" }
+        assertEquals(listOf("L1", "L2"), gpsGroup.frequencies.map { it.bandLabel })
+        assertEquals("8/11", gpsGroup.frequencies.first().rover.displayValue)
+        assertEquals("9/12", gpsGroup.frequencies.first().base.displayValue)
+        assertEquals(listOf("E1"), galileoGroup.frequencies.map { it.bandLabel })
+        assertEquals("Per-frequency used counts inferred", state.satelliteMonitor.message)
+    }
+
+    @Test
+    fun `satellite monitor payload is normalized to deterministic constellation and frequency order`() {
+        val intent = Intent(RecordingForegroundService.ACTION_STATE).apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_ENGINE, "RTKLIB")
+            putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:FRESH;B:FRESH;S:UNAVAILABLE")
+            putExtra(
+                RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_GROUPS,
+                "GPS|L5|1|3|0|2;GPS|L1|2|4|1|1;Galileo|E1|4|4|2|3",
+            )
+        }
+
+        val state = dashboardStateFromRecordingIntent(intent)
+
+        assertEquals(listOf("Galileo", "GPS"), state.satelliteMonitor.constellations.map { it.label })
+        assertEquals(listOf("L1", "L5"), state.satelliteMonitor.constellations.last().frequencies.map { it.bandLabel })
+        assertEquals("2/4", state.satelliteMonitor.constellations.last().frequencies[0].rover.displayValue)
+        assertEquals("1/1", state.satelliteMonitor.constellations.last().frequencies[0].base.displayValue)
     }
 
     @Test

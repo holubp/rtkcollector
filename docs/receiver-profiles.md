@@ -23,7 +23,8 @@ The bootstrap driver declares capabilities and placeholders only. It does not
 hard-code operational UM980 commands.
 
 The V1 COM1 binary monitoring profile should include `BESTNAVB`, `ADRNAVB`,
-`PPPNAVB`, `RTKSTATUSB`, `RTCMSTATUSB ONCHANGED`, `OBSVMCMPB` and `STADOPB`.
+`PPPNAVB`, `RTKSTATUSB`, `RTCMSTATUSB ONCHANGED`, `OBSVMCMPB`, `BESTSATB` and
+`STADOPB`.
 Android is the NTRIP client; UM980 internal NTRIP-client commands are not part
 of the V1 profile. Normal recording start commands are runtime commands only:
 writing `SAVECONFIG` requires an explicit warned user action from the command
@@ -51,6 +52,6 @@ profile editor.
 - Useful for static/base recording and post-processing workflows.
 
 V1 practical support starts with M8T raw/timing recording. Built-in profiles
-enable UBX `RXM-RAWX`, `RXM-SFRBX`, `TIM-TM2` and, where selected, `NAV-PVT`
-for live dashboard and mock-location output. M8T is not treated as an internal
-RTK float/fix rover.
+enable UBX `RXM-RAWX`, `RXM-SFRBX`, `TIM-TM2`, `NAV-SAT` and, where selected,
+`NAV-PVT` for live dashboard, satellite monitor and mock-location output. M8T
+is not treated as an internal RTK float/fix rover.

@@ -1322,7 +1322,7 @@ private fun SatelliteSignalCountRow(
         )
         Text(
             text = count.displayValue,
-            modifier = Modifier.width(28.dp),
+            modifier = Modifier.width(40.dp),
             style = MaterialTheme.typography.labelSmall,
             color = colors.bodyText,
             fontWeight = FontWeight.SemiBold,
@@ -1348,7 +1348,7 @@ private fun SatelliteBoxedBar(
         count.boxedSegments(totalSegments = SatelliteMonitorBoxedBarSegments).forEach { segment ->
             Surface(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
-                shape = MaterialTheme.shapes.small,
+                shape = MaterialTheme.shapes.extraSmall,
                 color = when (segment) {
                     SatelliteMonitorBarSegment.USED -> usedColor
                     SatelliteMonitorBarSegment.VISIBLE -> visibleColor

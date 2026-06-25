@@ -61,7 +61,7 @@ Verification:
 
 ### RX-UM980-RTKLIB-001: UM980 RTKLIB Input Routing Is Message-Specific
 
-Status: In progress
+Status: Implemented, not field-tested
 
 UM980 RTKLIB routing MUST distinguish direct RTKLIB-EX compatible observation
 messages from compact or app-specific observation messages. OBSVMB MAY be
@@ -70,9 +70,10 @@ and the RTKLIB-EX capability model declares `input_unicore` support. OBSVMCMPB
 MUST require a named converter or explicit RTKLIB-EX decoder support before it
 is accepted as RTKLIB input. The current Android native build declares the
 named `rtkcollector-obsvmcmp-shim`, which patches the pinned RTKLIB-EX Unicore
-decoder to accept message id 138 through the OBSVMB decoder path. This remains
-field/replay-validation-sensitive until a debug capture with actual
-`OBSVMCMPB` observation frames is available.
+decoder to accept message id 138 through the OBSVMB decoder path. Advisory
+satellite-monitor parsing for `OBSVMB`, `OBSVMCMPB` and `BESTSATB` is
+implemented, but solution validation remains field/replay-sensitive until a
+debug capture with actual `OBSVMCMPB` observation frames is available.
 
 Verification:
 - Automated: RTKLIB input route tests for OBSVMB direct and named OBSVMCMPB
@@ -99,7 +100,7 @@ Verification:
 
 ### RX-UBLOX-RTKLIB-001: u-blox Raw Input Is First-Class RTKLIB Input
 
-Status: Future
+Status: Implemented, not field-tested
 
 u-blox profiles that emit UBX RXM-RAWX and RXM-SFRBX MUST be eligible for a
 direct RTKLIB-EX route through the UBX decoder. The route model MUST preserve
@@ -109,6 +110,9 @@ u-blox M8T and M8P profiles MUST be treated as single-frequency RTKLIB inputs
 unless a future receiver-specific profile declares otherwise. RTKLIB runtime
 configuration MUST pass this frequency count explicitly instead of relying on
 RTKLIB's default dual-frequency processing option.
+The advisory monitor parses `RXM-RAWX` rover visibility and `NAV-SAT`
+selected-satellite usage when the active built-in profile declares u-blox
+telemetry support. Fresh M8T/M8P replay or hardware validation remains open.
 
 Verification:
 - Automated: RTKLIB input route tests for u-blox RAWX/SFRBX direct routing.

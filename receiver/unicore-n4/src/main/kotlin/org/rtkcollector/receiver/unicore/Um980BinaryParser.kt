@@ -1,19 +1,30 @@
 package org.rtkcollector.receiver.unicore
 
+import org.rtkcollector.core.quality.SatelliteConstellation
+import org.rtkcollector.core.quality.SatelliteMonitorSource
+import org.rtkcollector.core.quality.SatelliteSignalKey
+import org.rtkcollector.core.quality.SatelliteSignalObservation
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 object Um980BinaryParser {
+    private const val OBSVMB_MESSAGE_ID = 12
+    private const val OBSVMCMPB_MESSAGE_ID = 138
     private const val UNICORE_BINARY_CRC32_POLY = 0xEDB88320u
     private const val ADRNAVB_MESSAGE_ID = 142
     private const val RTKSTATUSB_MESSAGE_ID = 509
     private const val PPPNAVB_MESSAGE_ID = 1026
     private const val STADOPB_MESSAGE_ID = 954
+    private const val BESTSATB_MESSAGE_ID = 1041
     private const val BESTNAVB_MESSAGE_ID = 2118
     private const val RTCMSTATUSB_MESSAGE_ID = 2125
     private const val BINARY_HEADER_LENGTH = 24
     private const val CRC_LENGTH = 4
     private const val MAX_BINARY_PAYLOAD_LENGTH = 4096
+    private const val SATELLITE_MONITOR_COUNT_LENGTH = 4
+    private const val OBSVMB_RECORD_LENGTH = 40
+    private const val OBSVMCMPB_RECORD_LENGTH = 24
+    private const val BESTSATB_RECORD_LENGTH = 16
     private const val NAV_COMMON_MIN_PAYLOAD_LENGTH = 72
     private const val RTKSTATUSB_MIN_PAYLOAD_LENGTH = 56
     private const val RTCMSTATUSB_MIN_PAYLOAD_LENGTH = 22
@@ -192,6 +203,91 @@ object Um980BinaryParser {
         )
     }
 
+    fun parseObsvmbObservations(frame: ByteArray): List<SatelliteSignalObservation> {
+        val payload = payloadFor(frame, OBSVMB_MESSAGE_ID) ?: return emptyList()
+        if (payload.size < SATELLITE_MONITOR_COUNT_LENGTH) return emptyList()
+        val count = payload.intLe(0)
+        if (!isReasonableRecordSet(payload.size, count, OBSVMB_RECORD_LENGTH)) return emptyList()
+        val observedAt = receiverTimestampMillis(frame) ?: 0L
+        return buildList {
+            repeat(count) { index ->
+                val offset = SATELLITE_MONITOR_COUNT_LENGTH + index * OBSVMB_RECORD_LENGTH
+                val svid = payload.u16Le(offset + 2)
+                val trackingStatus = payload.intLe(offset + 36)
+                observationKeyFromTrackingStatus(svid, trackingStatus)?.let { key ->
+                    add(
+                        SatelliteSignalObservation(
+                            key = key,
+                            source = SatelliteMonitorSource.ROVER,
+                            observedAtEpochMillis = observedAt,
+                            cn0DbHz = payload.i16Le(offset + 28) / 100.0,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun parseObsvmcmpbObservations(frame: ByteArray): List<SatelliteSignalObservation> {
+        val payload = payloadFor(frame, OBSVMCMPB_MESSAGE_ID) ?: return emptyList()
+        if (payload.size < SATELLITE_MONITOR_COUNT_LENGTH) return emptyList()
+        val count = payload.intLe(0)
+        if (!isReasonableRecordSet(payload.size, count, OBSVMCMPB_RECORD_LENGTH)) return emptyList()
+        val observedAt = receiverTimestampMillis(frame) ?: 0L
+        return buildList {
+            repeat(count) { index ->
+                val offset = SATELLITE_MONITOR_COUNT_LENGTH + index * OBSVMCMPB_RECORD_LENGTH
+                val record = payload.copyOfRange(offset, offset + OBSVMCMPB_RECORD_LENGTH)
+                val trackingStatus = record.bitsLe(0, 32).toInt()
+                val svid = record.bitsLe(136, 8).toInt()
+                val cn0DbHz = 20.0 + record.bitsLe(165, 5).toDouble()
+                observationKeyFromTrackingStatus(svid, trackingStatus)?.let { key ->
+                    add(
+                        SatelliteSignalObservation(
+                            key = key,
+                            source = SatelliteMonitorSource.ROVER,
+                            observedAtEpochMillis = observedAt,
+                            cn0DbHz = cn0DbHz,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun parseBestsatbObservations(frame: ByteArray): List<SatelliteSignalObservation> {
+        val payload = payloadFor(frame, BESTSATB_MESSAGE_ID) ?: return emptyList()
+        if (payload.size < SATELLITE_MONITOR_COUNT_LENGTH) return emptyList()
+        val count = payload.intLe(0)
+        if (!isReasonableRecordSet(payload.size, count, BESTSATB_RECORD_LENGTH)) return emptyList()
+        val observedAt = receiverTimestampMillis(frame) ?: 0L
+        return buildList {
+            repeat(count) { index ->
+                val offset = SATELLITE_MONITOR_COUNT_LENGTH + index * BESTSATB_RECORD_LENGTH
+                val constellation = Um980SatelliteMapping.constellationForSystem(payload.intLe(offset))
+                val svid = payload.u16Le(offset + 4)
+                val signalMask = payload.intLe(offset + 12)
+                if (constellation == SatelliteConstellation.UNKNOWN || svid <= 0 || signalMask == 0) {
+                    return@repeat
+                }
+                val signals = Um980SatelliteMapping.bestsatSignalsFor(constellation, signalMask)
+                val keys = signals
+                    .map { signal -> SatelliteSignalKey(constellation, svid, signal.band, signal.signalCode) }
+                    .ifEmpty { listOf(SatelliteSignalKey(constellation, svid, SatelliteSignalKey.BAND_ANY)) }
+                keys.forEach { key ->
+                    add(
+                        SatelliteSignalObservation(
+                            key = key,
+                            source = SatelliteMonitorSource.SOLUTION,
+                            observedAtEpochMillis = observedAt,
+                            used = true,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
     fun parseStadopb(frame: ByteArray): Um980Telemetry? {
         if (!isValidFrame(frame)) return null
         if (messageId(frame) != STADOPB_MESSAGE_ID) return null
@@ -271,7 +367,67 @@ object Um980BinaryParser {
             java.time.Instant.parse("1980-01-06T00:00:00Z")
                 .plus(java.time.Duration.ofDays(gpsWeek.toLong() * 7L))
                 .plusMillis(towMillis)
-                .minusSeconds(18)
-                .toString()
+            .minusSeconds(18)
+            .toString()
         }.getOrNull()
+
+    private fun payloadFor(frame: ByteArray, expectedMessageId: Int): ByteArray? {
+        if (!isValidFrame(frame)) return null
+        if (messageId(frame) != expectedMessageId) return null
+        val payloadLength = u16(frame, 6)
+        return frame.copyOfRange(BINARY_HEADER_LENGTH, BINARY_HEADER_LENGTH + payloadLength)
+    }
+
+    private fun isReasonableRecordSet(payloadSize: Int, count: Int, recordLength: Int): Boolean =
+        count >= 0 &&
+            count <= (MAX_BINARY_PAYLOAD_LENGTH / recordLength) &&
+            SATELLITE_MONITOR_COUNT_LENGTH + count * recordLength <= payloadSize
+
+    private fun observationKeyFromTrackingStatus(svid: Int, trackingStatus: Int): SatelliteSignalKey? {
+        if (svid <= 0) return null
+        val constellation = Um980SatelliteMapping.constellationForSystem((trackingStatus ushr 16) and 0x7)
+        if (constellation == SatelliteConstellation.UNKNOWN) return null
+        val signalType = (trackingStatus ushr 21) and 0x1f
+        val l2cFlag = ((trackingStatus ushr 26) and 0x1) != 0
+        val signal = Um980SatelliteMapping.bandAndSignalForTrackingStatus(
+            constellation = constellation,
+            signalType = signalType,
+            l2cFlag = l2cFlag,
+        ) ?: return null
+        return SatelliteSignalKey(
+            constellation = constellation,
+            svid = svid,
+            band = signal.band,
+            signalCode = signal.signalCode,
+        )
+    }
+
+    private fun ByteArray.intLe(offset: Int): Int =
+        (this[offset].toInt() and 0xff) or
+            ((this[offset + 1].toInt() and 0xff) shl 8) or
+            ((this[offset + 2].toInt() and 0xff) shl 16) or
+            ((this[offset + 3].toInt() and 0xff) shl 24)
+
+    private fun ByteArray.u16Le(offset: Int): Int =
+        (this[offset].toInt() and 0xff) or ((this[offset + 1].toInt() and 0xff) shl 8)
+
+    private fun ByteArray.i16Le(offset: Int): Int =
+        ByteBuffer.wrap(this, offset, Short.SIZE_BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .short
+            .toInt()
+
+    private fun ByteArray.bitsLe(startBit: Int, bitCount: Int): Long {
+        require(bitCount in 0..Long.SIZE_BITS)
+        var value = 0L
+        for (bit in 0 until bitCount) {
+            val absoluteBit = startBit + bit
+            val byteIndex = absoluteBit / 8
+            val bitIndex = absoluteBit % 8
+            if (((this[byteIndex].toInt() ushr bitIndex) and 0x1) != 0) {
+                value = value or (1L shl bit)
+            }
+        }
+        return value
+    }
 }

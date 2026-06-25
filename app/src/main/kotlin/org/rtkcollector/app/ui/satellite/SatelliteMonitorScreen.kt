@@ -192,6 +192,7 @@ private fun DetailSignalRow(
             count.boxedSegments(DetailBarSegments).forEach { segment ->
                 Surface(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
+                    shape = MaterialTheme.shapes.extraSmall,
                     color = when (segment) {
                         SatelliteMonitorBarSegment.USED -> color
                         SatelliteMonitorBarSegment.VISIBLE -> color.copy(alpha = 0.34f)

@@ -4,7 +4,12 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.Test
+import org.rtkcollector.core.quality.SatelliteConstellation
+import org.rtkcollector.core.quality.SatelliteMonitorSource
+import org.rtkcollector.core.quality.SatelliteSignalKey
+import org.rtkcollector.core.quality.SatelliteSignalObservation
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -164,6 +169,143 @@ class Um980BinaryParserTest {
     }
 
     @Test
+    fun `parses documented OBSVMB rover observations into shared satellite keys`() {
+        val frame = obsvmbFrame(
+            observationRecord(
+                system = 0,
+                prn = 7,
+                signalType = 0,
+                cn0Times100 = 4525,
+            ),
+            observationRecord(
+                system = 0,
+                prn = 9,
+                signalType = 9,
+                l2cFlag = true,
+                cn0Times100 = 4100,
+            ),
+            observationRecord(
+                system = 3,
+                prn = 11,
+                signalType = 12,
+                cn0Times100 = 3850,
+            ),
+            observationRecord(
+                system = 4,
+                prn = 21,
+                signalType = 21,
+                cn0Times100 = 3675,
+            ),
+        )
+
+        val observations = Um980BinaryParser.parseObsvmbObservations(frame)
+
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GPS, 7, "L1", "L1"),
+                SatelliteSignalKey(SatelliteConstellation.GPS, 9, "L2", "L2C"),
+                SatelliteSignalKey(SatelliteConstellation.GALILEO, 11, "E5A", "E5A"),
+                SatelliteSignalKey(SatelliteConstellation.BEIDOU, 21, "B3", "B3I"),
+            ),
+            observations.map { it.key },
+        )
+        assertEquals(List(4) { SatelliteMonitorSource.ROVER }, observations.map { it.source })
+        assertEquals(listOf(false, false, false, false), observations.map { it.used })
+        assertEquals(listOf(45.25, 41.0, 38.5, 36.75), observations.map { it.cn0DbHz })
+    }
+
+    @Test
+    fun `parses documented OBSVMCMPB rover observations into shared satellite keys`() {
+        val frame = obsvmcmpbFrame(
+            compressedObservationRecord(
+                system = 0,
+                prn = 15,
+                signalType = 3,
+                cn0DbHz = 44,
+            ),
+            compressedObservationRecord(
+                system = 5,
+                prn = 195,
+                signalType = 27,
+                cn0DbHz = 40,
+            ),
+            compressedObservationRecord(
+                system = 4,
+                prn = 10,
+                signalType = 12,
+                cn0DbHz = 35,
+            ),
+        )
+
+        val observations = Um980BinaryParser.parseObsvmcmpbObservations(frame)
+
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GPS, 15, "L1", "L1C"),
+                SatelliteSignalKey(SatelliteConstellation.QZSS, 195, "L6", "L6E"),
+                SatelliteSignalKey(SatelliteConstellation.BEIDOU, 10, "B2", "B2A"),
+            ),
+            observations.map { it.key },
+        )
+        assertEquals(listOf(44.0, 40.0, 35.0), observations.map { it.cn0DbHz })
+    }
+
+    @Test
+    fun `parses documented BESTSATB solution usage and falls back to satellite level when needed`() {
+        val frame = bestsatbFrame(
+            bestsatEntry(system = 0, satelliteId = 7, signalMask = 0x05),
+            bestsatEntry(system = 1, satelliteId = 43, signalMask = 0x03),
+            bestsatEntry(system = 4, satelliteId = 10, signalMask = 0x06),
+            bestsatEntry(system = 5, satelliteId = 195, signalMask = 0x17),
+        )
+
+        val observations = Um980BinaryParser.parseBestsatbObservations(frame)
+
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GPS, 7, "L1", "L1"),
+                SatelliteSignalKey(SatelliteConstellation.GPS, 7, "L5", "L5"),
+                SatelliteSignalKey(SatelliteConstellation.GLONASS, 43, "L1", "L1"),
+                SatelliteSignalKey(SatelliteConstellation.GLONASS, 43, "L2", "L2"),
+                SatelliteSignalKey(SatelliteConstellation.BEIDOU, 10, "B2", "B2"),
+                SatelliteSignalKey(SatelliteConstellation.BEIDOU, 10, "B3", "B3"),
+                SatelliteSignalKey(SatelliteConstellation.QZSS, 195, SatelliteSignalKey.BAND_ANY),
+            ),
+            observations.map { it.key },
+        )
+        assertEquals(List(observations.size) { SatelliteMonitorSource.SOLUTION }, observations.map { it.source })
+        assertTrue(observations.all { it.used })
+    }
+
+    @Test
+    fun `malformed UM980 satellite monitor frames return empty and do not throw`() {
+        assertEquals(
+            emptyList<SatelliteSignalObservation>(),
+            assertDoesNotThrow {
+                Um980BinaryParser.parseObsvmbObservations(unicoreFrame(12, byteArrayOf(1, 0, 0, 0)))
+            },
+        )
+        assertEquals(
+            emptyList<SatelliteSignalObservation>(),
+            assertDoesNotThrow {
+                Um980BinaryParser.parseObsvmcmpbObservations(unicoreFrame(138, byteArrayOf(1, 0, 0, 0)))
+            },
+        )
+        assertEquals(
+            emptyList<SatelliteSignalObservation>(),
+            assertDoesNotThrow {
+                Um980BinaryParser.parseBestsatbObservations(unicoreFrame(1041, byteArrayOf(1, 0, 0, 0)))
+            },
+        )
+        assertEquals(
+            emptyList<SatelliteSignalObservation>(),
+            assertDoesNotThrow {
+                Um980BinaryParser.parseObsvmbObservations(byteArrayOf(0xAA.toByte(), 0x44, 0xB5.toByte()))
+            },
+        )
+    }
+
+    @Test
     fun `returns null for non BESTNAVB message id`() {
         val frame = bestnavbFrame(messageId = 999)
 
@@ -285,6 +427,86 @@ class Um980BinaryParserTest {
             return frame
         }
 
+        private fun obsvmbFrame(vararg records: ByteArray): ByteArray {
+            val payload = ByteBuffer.allocate(4 + records.size * 40).order(ByteOrder.LITTLE_ENDIAN).apply {
+                putInt(records.size)
+                records.forEach { put(it) }
+            }.array()
+            return unicoreFrame(12, payload)
+        }
+
+        private fun observationRecord(
+            system: Int,
+            prn: Int,
+            signalType: Int,
+            cn0Times100: Int,
+            l2cFlag: Boolean = false,
+        ): ByteArray =
+            ByteBuffer.allocate(40).order(ByteOrder.LITTLE_ENDIAN).apply {
+                putShort(0, 0)
+                putShort(2, prn.toShort())
+                putDouble(4, 20_000_000.0 + prn)
+                putDouble(12, 100_000_000.0 + prn)
+                putShort(20, 1)
+                putShort(22, 10)
+                putFloat(24, -1234.5f)
+                putShort(28, cn0Times100.toShort())
+                putShort(30, 0)
+                putFloat(32, 12.5f)
+                putInt(36, observationStatus(system = system, signalType = signalType, l2cFlag = l2cFlag))
+            }.array()
+
+        private fun obsvmcmpbFrame(vararg records: ByteArray): ByteArray {
+            val payload = ByteBuffer.allocate(4 + records.size * 24).order(ByteOrder.LITTLE_ENDIAN).apply {
+                putInt(records.size)
+                records.forEach { put(it) }
+            }.array()
+            return unicoreFrame(138, payload)
+        }
+
+        private fun compressedObservationRecord(
+            system: Int,
+            prn: Int,
+            signalType: Int,
+            cn0DbHz: Int,
+            l2cFlag: Boolean = false,
+        ): ByteArray {
+            val record = ByteArray(24)
+            setBits(record, 0, 32, observationStatus(system = system, signalType = signalType, l2cFlag = l2cFlag).toLong())
+            setBits(record, 32, 28, 4_096)
+            setBits(record, 60, 36, 128_000)
+            setBits(record, 96, 32, 65_536)
+            setBits(record, 128, 4, 0)
+            setBits(record, 132, 4, 0)
+            setBits(record, 136, 8, prn.toLong())
+            setBits(record, 144, 21, 128)
+            setBits(record, 165, 5, (cn0DbHz - 20).toLong())
+            setBits(record, 170, 6, 7)
+            return record
+        }
+
+        private fun bestsatbFrame(vararg entries: ByteArray): ByteArray {
+            val payload = ByteBuffer.allocate(4 + entries.size * 16).order(ByteOrder.LITTLE_ENDIAN).apply {
+                putInt(entries.size)
+                entries.forEach { put(it) }
+            }.array()
+            return unicoreFrame(1041, payload)
+        }
+
+        private fun bestsatEntry(
+            system: Int,
+            satelliteId: Int,
+            signalMask: Int,
+            glonassFrequencyChannel: Int = 0,
+        ): ByteArray =
+            ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN).apply {
+                putInt(0, system)
+                putShort(4, satelliteId.toShort())
+                putShort(6, glonassFrequencyChannel.toShort())
+                putInt(8, 0)
+                putInt(12, signalMask)
+            }.array()
+
         private fun unicoreFrame(messageId: Int, payload: ByteArray): ByteArray {
             val frame = ByteArray(24 + payload.size + 4)
             frame[0] = 0xAA.toByte()
@@ -297,6 +519,36 @@ class Um980BinaryParserTest {
             payload.copyInto(frame, destinationOffset = 24)
             putU32(frame, 24 + payload.size, crc32(frame, 0, 24 + payload.size).toInt())
             return frame
+        }
+
+        private fun observationStatus(
+            system: Int,
+            signalType: Int,
+            l2cFlag: Boolean,
+        ): Int {
+            var status = 0
+            status = status or (1 shl 10)
+            status = status or (1 shl 12)
+            status = status or ((system and 0x7) shl 16)
+            status = status or ((signalType and 0x1f) shl 21)
+            if (l2cFlag) {
+                status = status or (1 shl 26)
+            }
+            return status
+        }
+
+        private fun setBits(bytes: ByteArray, startBit: Int, bitCount: Int, value: Long) {
+            for (bit in 0 until bitCount) {
+                val absoluteBit = startBit + bit
+                val byteIndex = absoluteBit / 8
+                val bitIndex = absoluteBit % 8
+                val mask = 1 shl bitIndex
+                if (((value ushr bit) and 1L) != 0L) {
+                    bytes[byteIndex] = (bytes[byteIndex].toInt() or mask).toByte()
+                } else {
+                    bytes[byteIndex] = (bytes[byteIndex].toInt() and mask.inv()).toByte()
+                }
+            }
         }
 
         private fun putU16(bytes: ByteArray, offset: Int, value: Int) {

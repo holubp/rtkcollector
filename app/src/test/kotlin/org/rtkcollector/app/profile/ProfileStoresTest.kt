@@ -139,6 +139,7 @@ class ProfileStoresTest {
         assertTrue(decoded.runtimeScript.contains("RTKSTATUSB COM1 1"))
         assertTrue(decoded.runtimeScript.contains("RTCMSTATUSB COM1 ONCHANGED"))
         assertTrue(decoded.runtimeScript.contains("OBSVMCMPB COM1 0.25"))
+        assertTrue(decoded.runtimeScript.contains("BESTSATB COM1 1"))
         assertTrue(decoded.runtimeScript.contains("STADOPB COM1 1"))
         assertFalse(decoded.runtimeScript.contains("SAVECONFIG", ignoreCase = true))
         assertFalse(decoded.runtimeScript.contains("NCOM20", ignoreCase = true))
@@ -304,6 +305,7 @@ class ProfileStoresTest {
         assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("PPPNAVB COM1 1"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("RTKSTATUSB COM1 1"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("RTCMSTATUSB COM1 ONCHANGED"))
+        assertTrue(migrated.first { it.id == ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID }.runtimeScript.contains("BESTSATB COM1 1"))
         assertTrue(migrated.first { it.id == ProfileStores.UM980_ASCII_PPP_NMEA_PROFILE_ID }.runtimeScript.contains("CONFIG PPP ENABLE E6-HAS"))
         assertTrue(migrated.all { it.isProtected })
     }

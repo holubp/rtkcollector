@@ -292,6 +292,7 @@ private data class NativeResult(
                     horizontalAccuracyM = value(10).toDoubleOrNull(),
                     verticalAccuracyM = value(11).toDoubleOrNull(),
                     satellitesUsed = value(12).toIntOrNull(),
+                    satelliteUsages = parseSatelliteUsages(value(15)),
                 )
             } else {
                 null
@@ -309,3 +310,22 @@ private data class NativeResult(
         }
     }
 }
+
+private fun parseSatelliteUsages(value: String): List<RtklibSatelliteUsage> =
+    value.splitToSequence(';')
+        .filter(String::isNotBlank)
+        .mapNotNull { item ->
+            val fields = item.split(',')
+            val satelliteId = fields.getOrNull(0).orEmpty()
+            val observationCode = fields.getOrNull(1).orEmpty()
+            if (satelliteId.isBlank() || observationCode.isBlank()) {
+                null
+            } else {
+                RtklibSatelliteUsage(
+                    satelliteId = satelliteId,
+                    observationCode = observationCode,
+                    roverCn0DbHz = fields.getOrNull(2)?.toDoubleOrNull(),
+                )
+            }
+        }
+        .toList()

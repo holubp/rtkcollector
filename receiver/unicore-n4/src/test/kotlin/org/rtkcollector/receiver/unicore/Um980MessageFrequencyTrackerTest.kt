@@ -12,7 +12,7 @@ class Um980MessageFrequencyTrackerTest {
 
         val display = tracker.display(timestampMillis = 2_000L)
 
-        assertEquals("Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 1/20/-/-/-/- Hz", display)
+        assertEquals("Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM/BESTSAT 1/20/-/-/-/-/- Hz", display)
     }
 
     @Test
@@ -20,7 +20,7 @@ class Um980MessageFrequencyTrackerTest {
         val tracker = Um980MessageFrequencyTracker(windowMillis = 1_000)
         tracker.record(Um980MessageKind.GGA, timestampMillis = 0L)
 
-        assertEquals("Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz", tracker.display(2_000L))
+        assertEquals("Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM/BESTSAT -/-/-/-/-/-/- Hz", tracker.display(2_000L))
     }
 
     @Test
@@ -35,7 +35,7 @@ class Um980MessageFrequencyTrackerTest {
         }
 
         assertEquals(
-            "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM 20/-/-/-/-/- Hz",
+            "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM/BESTSAT 20/-/-/-/-/-/- Hz",
             tracker.display(timestampMillis = 104_000L, receiverTimestampMillis = 2_000L),
         )
     }

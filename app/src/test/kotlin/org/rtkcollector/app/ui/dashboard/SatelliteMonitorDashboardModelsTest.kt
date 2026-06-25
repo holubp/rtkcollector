@@ -82,6 +82,20 @@ class SatelliteMonitorDashboardModelsTest {
     }
 
     @Test
+    fun `compact frequency rows are sorted by band label before chunking`() {
+        val group = SatelliteMonitorConstellationGroup(
+            label = "GPS",
+            frequencies = listOf(
+                SatelliteMonitorFrequencyRow("L5", SatelliteMonitorSignalCount(1, 2), SatelliteMonitorSignalCount(1, 2)),
+                SatelliteMonitorFrequencyRow("L1", SatelliteMonitorSignalCount(1, 2), SatelliteMonitorSignalCount(1, 2)),
+                SatelliteMonitorFrequencyRow("L2", SatelliteMonitorSignalCount(1, 2), SatelliteMonitorSignalCount(1, 2)),
+            ),
+        )
+
+        assertEquals(listOf("L1", "L2", "L5"), group.frequencyRows(maxColumns = 10).flatten().map { it.bandLabel })
+    }
+
+    @Test
     fun `detailed frequency primary grouping flattens constellations by band`() {
         val groups = SatelliteMonitorDashboardState.preview().detailGroups(SatelliteMonitorDetailGroupingMode.FREQUENCY)
 
@@ -96,5 +110,36 @@ class SatelliteMonitorDashboardModelsTest {
 
         assertEquals(listOf("GPS", "Galileo"), groups.map { it.primaryLabel })
         assertEquals(listOf("L1", "L2", "L5"), groups.first().sections.map { it.secondaryLabel })
+    }
+
+    @Test
+    fun `detail frequency grouping keeps per-constellation counts when sorted order changes source payload`() {
+        val state = SatelliteMonitorDashboardState(
+            engineLabel = "RTKLIB",
+            sources = SatelliteMonitorSourceStatuses(),
+            constellations = listOf(
+                SatelliteMonitorConstellationGroup(
+                    label = "Galileo",
+                    frequencies = listOf(
+                        SatelliteMonitorFrequencyRow("E5", SatelliteMonitorSignalCount(2, 2), SatelliteMonitorSignalCount(1, 1)),
+                        SatelliteMonitorFrequencyRow("E1", SatelliteMonitorSignalCount(3, 4), SatelliteMonitorSignalCount(2, 3)),
+                    ),
+                ),
+                SatelliteMonitorConstellationGroup(
+                    label = "GPS",
+                    frequencies = listOf(
+                        SatelliteMonitorFrequencyRow("L5", SatelliteMonitorSignalCount(0, 2), SatelliteMonitorSignalCount(0, 2)),
+                        SatelliteMonitorFrequencyRow("L1", SatelliteMonitorSignalCount(1, 2), SatelliteMonitorSignalCount(1, 2)),
+                    ),
+                ),
+            ),
+            message = "mock",
+        )
+
+        val groups = state.detailGroups(SatelliteMonitorDetailGroupingMode.CONSTELLATION)
+
+        assertEquals(listOf("Galileo", "GPS"), groups.map { it.primaryLabel })
+        assertEquals(listOf("E1", "E5"), groups.first().sections.map { it.secondaryLabel })
+        assertEquals("3/4", groups.first().sections.first().frequencies.first().rover.displayValue)
     }
 }

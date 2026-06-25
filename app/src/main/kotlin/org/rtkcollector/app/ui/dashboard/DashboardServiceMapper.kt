@@ -187,9 +187,12 @@ private fun satelliteMonitorFrom(intent: Intent): SatelliteMonitorDashboardState
         .map { (constellation, rows) ->
             SatelliteMonitorConstellationGroup(
                 label = constellation,
-                frequencies = rows.map { it.second },
+                frequencies = rows
+                    .map { it.second }
+                    .sortedBy { it.bandLabel },
             )
         }
+        .sortedBy { it.label }
     if (groups.isEmpty()) {
         return SatelliteMonitorDashboardState.unavailable(
             engineLabel = engineLabel,
@@ -201,7 +204,7 @@ private fun satelliteMonitorFrom(intent: Intent): SatelliteMonitorDashboardState
         engineLabel = engineLabel,
         sources = sources,
         constellations = groups,
-        message = "Live satellite monitor",
+        message = message,
     )
 }
 

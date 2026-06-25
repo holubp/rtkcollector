@@ -3,6 +3,7 @@ package org.rtkcollector.receiver.ublox
 import org.rtkcollector.core.solution.FixClass
 import org.rtkcollector.core.solution.SolutionCandidate
 import org.rtkcollector.core.solution.SolutionEngine
+import org.rtkcollector.core.quality.SatelliteSignalObservation
 
 data class UbloxTelemetry(
     val source: String,
@@ -45,6 +46,7 @@ data class UbloxNavSatTelemetry(
     val updatedAtMillis: Long,
     val satellitesInView: Int,
     val satellitesUsed: Int,
+    val satelliteSignalObservations: List<SatelliteSignalObservation> = emptyList(),
 )
 
 data class UbloxNavDopTelemetry(

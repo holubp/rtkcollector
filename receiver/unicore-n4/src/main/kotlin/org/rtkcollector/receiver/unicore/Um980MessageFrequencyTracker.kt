@@ -9,6 +9,7 @@ enum class Um980MessageKind(val label: String) {
     ADRNAV("ADRNAV"),
     RTKSTATUS("RTKSTATUS"),
     OBSVM("OBSVM"),
+    BESTSAT("BESTSAT"),
 }
 
 class Um980MessageFrequencyTracker(private val windowMillis: Long = 10_000L) {
@@ -25,6 +26,7 @@ class Um980MessageFrequencyTracker(private val windowMillis: Long = 10_000L) {
         Um980MessageKind.ADRNAV,
         Um980MessageKind.RTKSTATUS,
         Um980MessageKind.OBSVM,
+        Um980MessageKind.BESTSAT,
     )
 
     fun record(
@@ -46,7 +48,7 @@ class Um980MessageFrequencyTracker(private val windowMillis: Long = 10_000L) {
             val count = samples[kind]?.size ?: 0
             if (count == 0) "-" else formatHz(count * 1_000.0 / windowMillis)
         }
-        return "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM $values Hz"
+        return "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM/BESTSAT $values Hz"
     }
 
     private fun prune(now: Long, receiverNow: Long?) {

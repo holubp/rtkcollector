@@ -402,7 +402,7 @@ class ProfileStores(context: Context) {
             PPPNAVB COM1 1
             RTKSTATUSB COM1 1
             RTCMSTATUSB COM1 ONCHANGED
-            OBSVMCMPB COM1 0.25
+            OBSVMCMPB COM1 0.2
             BESTSATB COM1 1
             STADOPB COM1 1
             GPSEPHB COM1 300
@@ -437,7 +437,7 @@ class ProfileStores(context: Context) {
             PPPNAVB COM1 1
             RTKSTATUSB COM1 1
             RTCMSTATUSB COM1 ONCHANGED
-            OBSVMB COM1 0.25
+            OBSVMB COM1 0.2
             BESTSATB COM1 1
             STADOPB COM1 1
             GPSEPHB COM1 300

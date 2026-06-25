@@ -272,6 +272,12 @@ and synced on app update; copy one before editing it. This profile sends
 binary receiver-solution, raw-observation, DOP, ephemeris and ionosphere/time
 logs while avoiding high-rate NMEA chatter:
 
+For UM980 continuous output logs, use only receiver-supported frequencies:
+1, 2, 5, 10, 20 or 50 Hz. In command syntax this means periods such as `1`,
+`0.5`, `0.2`, `0.1`, `0.05` or `0.02`. RtkCollector checks this when recording
+starts and warns before starting if a continuous output uses an unsupported
+period such as `0.25`.
+
 ```text
 UNLOG COM1
 MODE ROVER SURVEY
@@ -288,7 +294,7 @@ ADRNAVB COM1 1
 PPPNAVB COM1 1
 RTKSTATUSB COM1 1
 RTCMSTATUSB COM1 ONCHANGED
-OBSVMCMPB COM1 0.25
+OBSVMCMPB COM1 0.2
 STADOPB COM1 1
 GPSEPHB COM1 300
 GLOEPHB COM1 300

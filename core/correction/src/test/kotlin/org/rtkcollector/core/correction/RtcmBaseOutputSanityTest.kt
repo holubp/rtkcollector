@@ -37,7 +37,7 @@ class RtcmBaseOutputSanityTest {
                 "UNLOG COM1",
                 "MODE ROVER",
                 "BESTNAVB COM1 0.05",
-                "OBSVMCMPB COM1 0.25",
+                "OBSVMCMPB COM1 0.2",
                 "STADOPB COM1 1",
             ),
         )

@@ -213,7 +213,7 @@ class ActiveRecordingConfigTest {
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
                 receiverProfileId = "um980-n4",
             ),
-            commandProfile = CommandProfile("commands", "Commands", runtimeScript = "MODE ROVER\nOBSVMB COM1 0.25"),
+            commandProfile = CommandProfile("commands", "Commands", runtimeScript = "MODE ROVER\nOBSVMB COM1 0.2"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
@@ -247,7 +247,7 @@ class ActiveRecordingConfigTest {
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
                 receiverProfileId = "um980-n4",
             ),
-            commandProfile = CommandProfile("commands", "Commands", runtimeScript = "MODE ROVER\nOBSVMCMPB COM1 0.25"),
+            commandProfile = CommandProfile("commands", "Commands", runtimeScript = "MODE ROVER\nOBSVMCMPB COM1 0.2"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
@@ -681,6 +681,71 @@ class ActiveRecordingConfigTest {
         val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
 
         assertEquals("Rover workflow cannot start with a command profile that sets MODE BASE.", error.message)
+    }
+
+    @Test
+    fun `um980 workflow rejects unsupported periodic output frequency before start`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                receiverFamily = "um980",
+                runtimeScript = """
+                    MODE ROVER SURVEY
+                    BESTNAVB COM1 0.25
+                    OBSVMCMPB COM1 0.2
+                    GPSEPHB COM1 300
+                    RTCMSTATUSB COM1 ONCHANGED
+                """.trimIndent(),
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertEquals(
+            "Unsupported UM980 output frequency in `BESTNAVB COM1 0.25`: use 1, 2, 5, 10, 20, or 50 Hz.",
+            error.message,
+        )
+    }
+
+    @Test
+    fun `um980 workflow accepts supported output frequencies and non-periodic outputs before start`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+            commandProfile = CommandProfile(
+                id = "commands",
+                name = "Commands",
+                receiverFamily = "um980",
+                runtimeScript = """
+                    MODE ROVER SURVEY
+                    BESTNAVB COM1 0.05
+                    OBSVMCMPB COM1 0.2
+                    ADRNAVB COM1 1
+                    GNGGA 0.2
+                    GPSEPHB COM1 300
+                    GALIONB ONCHANGED
+                """.trimIndent(),
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Rover + NTRIP",
+            workflowUsesNtrip = true,
+            passwordLookup = { null },
+        )
+
+        config.validateForStart()
     }
 
     @Test

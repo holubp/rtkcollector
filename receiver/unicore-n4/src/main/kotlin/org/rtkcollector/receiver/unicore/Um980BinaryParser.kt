@@ -383,24 +383,8 @@ object Um980BinaryParser {
             count <= (MAX_BINARY_PAYLOAD_LENGTH / recordLength) &&
             SATELLITE_MONITOR_COUNT_LENGTH + count * recordLength <= payloadSize
 
-    private fun observationKeyFromTrackingStatus(svid: Int, trackingStatus: Int): SatelliteSignalKey? {
-        if (svid <= 0) return null
-        val constellation = Um980SatelliteMapping.constellationForSystem((trackingStatus ushr 16) and 0x7)
-        if (constellation == SatelliteConstellation.UNKNOWN) return null
-        val signalType = (trackingStatus ushr 21) and 0x1f
-        val l2cFlag = ((trackingStatus ushr 26) and 0x1) != 0
-        val signal = Um980SatelliteMapping.bandAndSignalForTrackingStatus(
-            constellation = constellation,
-            signalType = signalType,
-            l2cFlag = l2cFlag,
-        ) ?: return null
-        return SatelliteSignalKey(
-            constellation = constellation,
-            svid = svid,
-            band = signal.band,
-            signalCode = signal.signalCode,
-        )
-    }
+    private fun observationKeyFromTrackingStatus(svid: Int, trackingStatus: Int): SatelliteSignalKey? =
+        Um980SatelliteMapping.signalKeyFromTrackingStatus(svid, trackingStatus)
 
     private fun ByteArray.intLe(offset: Int): Int =
         (this[offset].toInt() and 0xff) or

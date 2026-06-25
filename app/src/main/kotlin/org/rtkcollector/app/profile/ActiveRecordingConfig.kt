@@ -5,6 +5,7 @@ import org.rtkcollector.core.rtklib.RtklibSnapshot
 import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.workflow.SessionArtifact
 import org.rtkcollector.receiver.ublox.UbloxBaudCommands
+import org.rtkcollector.receiver.unicore.Um980OutputFrequencyValidator
 
 data class ActiveRecordingConfig(
     val workflowId: String,
@@ -46,6 +47,10 @@ data class ActiveRecordingConfig(
     }
 
     fun validateForStart() {
+        validateUm980OutputFrequenciesForStart(
+            receiverFamily = commandReceiverFamily,
+            commands = initCommands + baudSwitchCommands + modeCommands,
+        )
         if (rtklib.enabled) {
             require(rtklib.validationErrors.isEmpty()) { rtklib.validationErrors.joinToString(" ") }
         }
@@ -432,6 +437,18 @@ internal fun validateWorkflowModeCommandsForStart(workflowId: String?, modeComma
         }
     }
 }
+
+internal fun validateUm980OutputFrequenciesForStart(receiverFamily: String?, commands: List<String>) {
+    if (!receiverFamily.orEmpty().isUm980ReceiverFamily()) return
+    Um980OutputFrequencyValidator.validateCommands(commands)?.let { error ->
+        throw IllegalArgumentException(error)
+    }
+}
+
+private fun String.isUm980ReceiverFamily(): Boolean =
+    contains("um980", ignoreCase = true) ||
+        contains("unicore", ignoreCase = true) ||
+        contains("n4", ignoreCase = true)
 
 private const val WORKFLOW_PLAIN_ROVER = "plain-rover"
 private const val WORKFLOW_ROVER_NTRIP = "rover-ntrip"

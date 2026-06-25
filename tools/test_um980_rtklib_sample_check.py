@@ -26,7 +26,7 @@ def test_count_unicore_messages_resyncs_and_counts_known_frames():
 
 def test_classify_init_script_distinguishes_obsvmb_from_compact_obsvmcmpb():
     assert classify_init_script("OBSVMB COM1 1") == (True, False)
-    assert classify_init_script("OBSVMCMPB COM1 0.25") == (False, True)
+    assert classify_init_script("OBSVMCMPB COM1 0.2") == (False, True)
     assert classify_init_script("", "um980-binary-multihz") == (False, True)
 
 
@@ -57,7 +57,7 @@ def test_inspect_session_zip_reports_compact_obsvmcmpb_as_converter_required(tmp
     session_zip = tmp_path / "session.zip"
     with zipfile.ZipFile(session_zip, "w") as archive:
         archive.writestr("receiver-rx.raw", unicore_frame(2118) + unicore_frame(138))
-        archive.writestr("init-script.txt", "OBSVMCMPB COM1 0.25\n")
+        archive.writestr("init-script.txt", "OBSVMCMPB COM1 0.2\n")
         archive.writestr("correction-input.raw", b"\xd3\x00\x00")
 
     report = inspect_session(session_zip)
@@ -71,7 +71,7 @@ def test_inspect_session_zip_reports_configured_compact_profile_without_observat
     session_zip = tmp_path / "session.zip"
     with zipfile.ZipFile(session_zip, "w") as archive:
         archive.writestr("receiver-rx.raw", unicore_frame(2118))
-        archive.writestr("init-script.txt", "OBSVMCMPB COM1 0.25\n")
+        archive.writestr("init-script.txt", "OBSVMCMPB COM1 0.2\n")
         archive.writestr("correction-input.raw", b"\xd3\x00\x00")
 
     report = inspect_session(session_zip)

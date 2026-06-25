@@ -2,6 +2,9 @@ package org.rtkcollector.receiver.unicore
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.rtkcollector.core.quality.SatelliteConstellation
+import org.rtkcollector.core.quality.SatelliteMonitorSource
+import org.rtkcollector.core.quality.SatelliteSignalKey
 
 class Um980LiveParsersTest {
     @Test
@@ -56,6 +59,7 @@ class Um980LiveParsersTest {
         assertEquals(1.2, dop.pdop)
         assertEquals(0.8, dop.hdop)
         assertEquals(0.9, dop.vdop)
+        assertEquals(listOf(4, 5, 9, 12, 24, 25, 29, 31, 32, 36, 40, 45), dop.usedSatelliteIds)
     }
 
     @Test
@@ -67,6 +71,65 @@ class Um980LiveParsersTest {
         requireNotNull(view)
         assertEquals("GNGSV", view.talker)
         assertEquals(31, view.satellitesInView)
+        assertEquals(listOf(1, 2, 3, 4), view.satellites.map { it.svid })
+        assertEquals(listOf(42.0, 40.0, 35.0, 30.0), view.satellites.map { it.cn0DbHz })
+    }
+
+    @Test
+    fun `maps NMEA GSV rows to rover satellite monitor observations`() {
+        val view = NmeaGsvParser().parseLine(
+            "\$GPGSV,2,1,07,05,12,210,18,15,65,265,35,17,32,107,25,20,70,182,38,6*68",
+        )
+
+        requireNotNull(view)
+        val observations = NmeaSatelliteMonitorMapper.visibleObservations(view, observedAtEpochMillis = 12_345L)
+
+        assertEquals(4, observations.size)
+        assertEquals(List(4) { SatelliteMonitorSource.ROVER }, observations.map { it.source })
+        assertEquals(List(4) { SatelliteConstellation.GPS }, observations.map { it.key.constellation })
+        assertEquals(List(4) { "L2" }, observations.map { it.key.band })
+        assertEquals(listOf(5, 15, 17, 20), observations.map { it.key.svid })
+        assertEquals(listOf(18.0, 35.0, 25.0, 38.0), observations.map { it.cn0DbHz })
+    }
+
+    @Test
+    fun `maps NMEA GSA rows to satellite-level solution usage`() {
+        val dop = NmeaGsaParser().parseLine(
+            "\$GNGSA,M,3,12,20,37,32,19,,,,,,,,2.6,2.2,1.3,4*32",
+        )
+
+        requireNotNull(dop)
+        val observations = NmeaSatelliteMonitorMapper.solutionUsageObservations(dop, observedAtEpochMillis = 12_345L)
+
+        assertEquals(5, observations.size)
+        assertEquals(List(5) { SatelliteMonitorSource.SOLUTION }, observations.map { it.source })
+        assertEquals(List(5) { SatelliteConstellation.BEIDOU }, observations.map { it.key.constellation })
+        assertEquals(List(5) { SatelliteSignalKey.BAND_ANY }, observations.map { it.key.band })
+        assertEquals(List(5) { true }, observations.map { it.used })
+        assertEquals(listOf(12, 20, 37, 32, 19), observations.map { it.key.svid })
+    }
+
+    @Test
+    fun `maps UM980 OBSVMA rows to rover satellite monitor observations`() {
+        val epoch = Um980ObsvmaParser().parseLine(
+            "#OBSVMA,94,GPS,FINE,2190,117395000,0,0,18,2;" +
+                "2," +
+                "0,7,21720097.812,114139892.254585,52,181,-2263.222,4525,0,6262.010,${trackingStatus(system = 0, signalType = 0)}," +
+                "0,9,21162081.928,111207490.841520,349,1600,-225.810,4100,0,0.000,${trackingStatus(system = 0, signalType = 17)}*deadbeef",
+        )
+
+        requireNotNull(epoch)
+        assertEquals(2, epoch.observations.size)
+        assertEquals(2190L * 604_800_000L + 117_395_000L, epoch.observedAtEpochMillis)
+        assertEquals(List(2) { SatelliteMonitorSource.ROVER }, epoch.observations.map { it.source })
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GPS, 7, "L1", "L1"),
+                SatelliteSignalKey(SatelliteConstellation.GPS, 9, "L2", "L2C"),
+            ),
+            epoch.observations.map { it.key },
+        )
+        assertEquals(listOf(45.25, 41.0), epoch.observations.map { it.cn0DbHz })
     }
 
     @Test
@@ -125,5 +188,12 @@ class Um980LiveParsersTest {
 
         assertEquals(1, fixes.size)
         assertEquals(1, fixes.single().fixQuality)
+    }
+
+    private companion object {
+        fun trackingStatus(system: Int, signalType: Int, l2cFlag: Boolean = false): Int =
+            (system shl 16) or
+                (signalType shl 21) or
+                (if (l2cFlag) 1 shl 26 else 0)
     }
 }

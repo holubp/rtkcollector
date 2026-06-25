@@ -554,7 +554,7 @@ git commit -m "Complete satellite monitor bar UI"
   - same-id/same-name built-ins sync to current app defaults on update.
 - [ ] Add or update UM980/N4 monitor-ready built-ins:
   - rover with NTRIP and in-device RTK;
-  - command list includes `OBSVMCMPB COM1 0.25` for practical bandwidth;
+  - command list includes live-validated `OBSVMCMPB COM1 0.2` for practical bandwidth;
   - command list includes `BESTSATB COM1 1` for solution usage;
   - keep existing `BESTNAVB`, `RTKSTATUSB`, `RTCMSTATUSB`, `STADOPB` outputs;
   - do not switch the receiver into base mode for rover workflows.

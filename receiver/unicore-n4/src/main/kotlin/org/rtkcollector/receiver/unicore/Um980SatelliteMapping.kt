@@ -1,6 +1,7 @@
 package org.rtkcollector.receiver.unicore
 
 import org.rtkcollector.core.quality.SatelliteConstellation
+import org.rtkcollector.core.quality.SatelliteSignalKey
 
 internal data class Um980BandAndSignal(
     val band: String,
@@ -74,6 +75,25 @@ internal object Um980SatelliteMapping {
 
             SatelliteConstellation.UNKNOWN -> null
         }
+
+    fun signalKeyFromTrackingStatus(svid: Int, trackingStatus: Int): SatelliteSignalKey? {
+        if (svid <= 0) return null
+        val constellation = constellationForSystem((trackingStatus ushr 16) and 0x7)
+        if (constellation == SatelliteConstellation.UNKNOWN) return null
+        val signalType = (trackingStatus ushr 21) and 0x1f
+        val l2cFlag = ((trackingStatus ushr 26) and 0x1) != 0
+        val signal = bandAndSignalForTrackingStatus(
+            constellation = constellation,
+            signalType = signalType,
+            l2cFlag = l2cFlag,
+        ) ?: return null
+        return SatelliteSignalKey(
+            constellation = constellation,
+            svid = svid,
+            band = signal.band,
+            signalCode = signal.signalCode,
+        )
+    }
 
     fun bestsatSignalsFor(
         constellation: SatelliteConstellation,

@@ -27,6 +27,7 @@ import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.SatelliteTelemetryCapability
+import org.rtkcollector.app.profile.validateUm980OutputFrequenciesForStart
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
@@ -96,6 +97,7 @@ import org.rtkcollector.receiver.unicore.NmeaGsaParser
 import org.rtkcollector.receiver.unicore.NmeaGstParser
 import org.rtkcollector.receiver.unicore.NmeaGsvInViewTracker
 import org.rtkcollector.receiver.unicore.NmeaGsvParser
+import org.rtkcollector.receiver.unicore.NmeaSatelliteMonitorMapper
 import org.rtkcollector.receiver.unicore.Um980AsciiSolution
 import org.rtkcollector.receiver.unicore.Um980AsciiSolutionParser
 import org.rtkcollector.receiver.unicore.Um980BinaryParser
@@ -104,6 +106,7 @@ import org.rtkcollector.receiver.unicore.Um980MessageKind
 import org.rtkcollector.receiver.unicore.Um980ModeParser
 import org.rtkcollector.receiver.unicore.Um980NmeaExporter
 import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
+import org.rtkcollector.receiver.unicore.Um980ObsvmaParser
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudPlan
 import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
@@ -334,6 +337,7 @@ class RecordingForegroundService : Service() {
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
             shutdownCommands = intent.getStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS).orEmpty().validatedCommands()
             validateWorkflowModeCommandsForStart(intent.getStringExtra(EXTRA_WORKFLOW_ID), initCommands + baudSwitchCommands + modeCommands)
+            validateUm980OutputFrequenciesForStart(activeReceiverFamily, initCommands + baudSwitchCommands + modeCommands)
             val preflight = RecordingStartPreflight.validate(
                 RecordingStartPreflight.Input(
                     workflowUsesNtrip = workflowUsesNtrip,
@@ -2787,6 +2791,7 @@ class RecordingForegroundService : Service() {
         val gsvTracker = NmeaGsvInViewTracker()
         val nmeaExporter = NmeaSentenceExtractor()
         val solutionParser = Um980AsciiSolutionParser()
+        val obsvmaParser = Um980ObsvmaParser()
         val streamParser = Um980StreamParser()
         val frequencyTracker = Um980MessageFrequencyTracker()
         val rtcmExtractor = Rtcm3Extractor(validateCrc = true)
@@ -2843,6 +2848,16 @@ class RecordingForegroundService : Service() {
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
                                     markSatelliteTelemetryObserved()
+                                    val now = System.currentTimeMillis()
+                                    offerSatelliteMonitorObservations(
+                                        engines = listOf(SatelliteMonitorEngine.IN_DEVICE_RTK),
+                                        source = SatelliteMonitorSource.SOLUTION,
+                                        receivedAtEpochMillis = now,
+                                        observations = NmeaSatelliteMonitorMapper.solutionUsageObservations(
+                                            dop = dop,
+                                            observedAtEpochMillis = now,
+                                        ),
+                                    )
                                     state = state.copy(
                                         satellitesUsed = dop.satellitesUsed ?: state.satellitesUsed,
                                         pdop = dop.pdop?.let { "%.1f".format(java.util.Locale.US, it) } ?: state.pdop,
@@ -2866,6 +2881,16 @@ class RecordingForegroundService : Service() {
                                 }
                                 gsvParser.accept(record.bytes).forEach { view ->
                                     markSatelliteTelemetryObserved()
+                                    val now = System.currentTimeMillis()
+                                    offerSatelliteMonitorObservations(
+                                        engines = receiverObservationMonitorEngines(),
+                                        source = SatelliteMonitorSource.ROVER,
+                                        receivedAtEpochMillis = now,
+                                        observations = NmeaSatelliteMonitorMapper.visibleObservations(
+                                            view = view,
+                                            observedAtEpochMillis = now,
+                                        ),
+                                    )
                                     val satellitesInView = gsvTracker.accept(view)
                                     state = state.copy(
                                         satellitesInView = satellitesInView ?: state.satellitesInView,
@@ -2877,6 +2902,15 @@ class RecordingForegroundService : Service() {
                                 }
                             }
                             "unicore_ascii" -> {
+                                obsvmaParser.accept(record.bytes).forEach { epoch ->
+                                    markSatelliteTelemetryObserved()
+                                    offerSatelliteMonitorObservations(
+                                        engines = receiverObservationMonitorEngines(),
+                                        source = SatelliteMonitorSource.ROVER,
+                                        receivedAtEpochMillis = System.currentTimeMillis(),
+                                        observations = epoch.observations,
+                                    )
+                                }
                                 solutionParser.accept(record.bytes).forEach { solution ->
                                     when (solution.logName) {
                                         "PPPNAVA" -> {

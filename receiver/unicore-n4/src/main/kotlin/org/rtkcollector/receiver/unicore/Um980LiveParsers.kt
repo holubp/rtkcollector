@@ -1,5 +1,9 @@
 package org.rtkcollector.receiver.unicore
 
+import org.rtkcollector.core.quality.SatelliteConstellation
+import org.rtkcollector.core.quality.SatelliteMonitorSource
+import org.rtkcollector.core.quality.SatelliteSignalKey
+import org.rtkcollector.core.quality.SatelliteSignalObservation
 import java.nio.charset.StandardCharsets
 
 data class NmeaGgaFix(
@@ -26,6 +30,8 @@ data class NmeaGsaDop(
     val pdop: Double?,
     val hdop: Double?,
     val vdop: Double?,
+    val usedSatelliteIds: List<Int> = emptyList(),
+    val systemId: String? = null,
 )
 
 data class NmeaGstError(
@@ -40,6 +46,12 @@ data class NmeaGsvView(
     val talker: String,
     val satellitesInView: Int?,
     val signalId: String? = null,
+    val satellites: List<NmeaGsvSatellite> = emptyList(),
+)
+
+data class NmeaGsvSatellite(
+    val svid: Int,
+    val cn0DbHz: Double?,
 )
 
 class NmeaGsvInViewTracker {
@@ -76,6 +88,11 @@ data class Um980AsciiSolution(
     val latDeg: Double?,
     val lonDeg: Double?,
     val heightM: Double?,
+)
+
+data class Um980ObsvmaEpoch(
+    val observedAtEpochMillis: Long,
+    val observations: List<SatelliteSignalObservation>,
 )
 
 class NmeaGgaParser {
@@ -170,12 +187,25 @@ class NmeaGsvParser {
         val fields = line.substringBefore('*').split(',')
         if (fields.size < 4) return null
         val payloadFieldCount = fields.size - 4
+        val signalId = fields.lastOrNull()
+            ?.takeIf { payloadFieldCount > 0 && payloadFieldCount % 4 == 1 }
+            ?.takeIf(String::isNotBlank)
+        val satelliteFieldEnd = fields.size - if (signalId == null) 0 else 1
+        val satellites = fields
+            .subList(4, satelliteFieldEnd)
+            .chunked(4)
+            .mapNotNull { satelliteFields ->
+                val svid = satelliteFields.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                NmeaGsvSatellite(
+                    svid = svid,
+                    cn0DbHz = satelliteFields.getOrNull(3)?.toDoubleOrNull(),
+                )
+            }
         return NmeaGsvView(
             talker = fields[0].removePrefix("$"),
             satellitesInView = fields[3].toIntOrNull(),
-            signalId = fields.lastOrNull()
-                ?.takeIf { payloadFieldCount > 0 && payloadFieldCount % 4 == 1 }
-                ?.takeIf(String::isNotBlank),
+            signalId = signalId,
+            satellites = satellites,
         )
     }
 }
@@ -212,8 +242,118 @@ class NmeaGsaParser {
             pdop = fields[15].toDoubleOrNull(),
             hdop = fields[16].toDoubleOrNull(),
             vdop = fields[17].toDoubleOrNull(),
+            usedSatelliteIds = fields.drop(3).take(12).mapNotNull { it.toIntOrNull() },
+            systemId = fields.getOrNull(18)?.takeIf(String::isNotBlank),
         )
     }
+}
+
+object NmeaSatelliteMonitorMapper {
+    fun visibleObservations(
+        view: NmeaGsvView,
+        observedAtEpochMillis: Long,
+    ): List<SatelliteSignalObservation> {
+        val constellation = constellationForTalker(view.talker) ?: return emptyList()
+        val band = bandFor(constellation, view.signalId) ?: SatelliteSignalKey.BAND_ANY
+        val signalCode = view.signalId?.takeIf(String::isNotBlank)?.let { "NMEA-$it" }
+        return view.satellites.map { satellite ->
+            SatelliteSignalObservation(
+                key = SatelliteSignalKey(
+                    constellation = constellation,
+                    svid = satellite.svid,
+                    band = band,
+                    signalCode = signalCode,
+                ),
+                source = SatelliteMonitorSource.ROVER,
+                observedAtEpochMillis = observedAtEpochMillis,
+                cn0DbHz = satellite.cn0DbHz,
+            )
+        }
+    }
+
+    fun solutionUsageObservations(
+        dop: NmeaGsaDop,
+        observedAtEpochMillis: Long,
+    ): List<SatelliteSignalObservation> {
+        val constellation = dop.systemId
+            ?.let(::constellationForSystemId)
+            ?: constellationForTalker(dop.talker)
+            ?: return emptyList()
+        return dop.usedSatelliteIds.map { svid ->
+            SatelliteSignalObservation(
+                key = SatelliteSignalKey(
+                    constellation = constellation,
+                    svid = svid,
+                    band = SatelliteSignalKey.BAND_ANY,
+                ),
+                source = SatelliteMonitorSource.SOLUTION,
+                observedAtEpochMillis = observedAtEpochMillis,
+                used = true,
+            )
+        }
+    }
+
+    private fun constellationForTalker(talker: String): SatelliteConstellation? =
+        when (talker.uppercase().take(2)) {
+            "GP" -> SatelliteConstellation.GPS
+            "GL" -> SatelliteConstellation.GLONASS
+            "GA" -> SatelliteConstellation.GALILEO
+            "GB", "BD" -> SatelliteConstellation.BEIDOU
+            "GQ" -> SatelliteConstellation.QZSS
+            else -> null
+        }
+
+    private fun constellationForSystemId(systemId: String): SatelliteConstellation? =
+        when (systemId.trim()) {
+            "1" -> SatelliteConstellation.GPS
+            "2" -> SatelliteConstellation.GLONASS
+            "3" -> SatelliteConstellation.GALILEO
+            "4" -> SatelliteConstellation.BEIDOU
+            "5" -> SatelliteConstellation.QZSS
+            else -> null
+        }
+
+    private fun bandFor(constellation: SatelliteConstellation, signalId: String?): String? =
+        when (constellation) {
+            SatelliteConstellation.GPS,
+            SatelliteConstellation.QZSS -> when (signalId) {
+                null, "1", "2", "3", "9" -> "L1"
+                "4", "5", "6" -> "L2"
+                "7", "8" -> "L5"
+                else -> null
+            }
+
+            SatelliteConstellation.GLONASS -> when (signalId) {
+                null, "1", "2" -> "L1"
+                "3", "4" -> "L2"
+                "5" -> "L3"
+                else -> null
+            }
+
+            SatelliteConstellation.GALILEO -> when (signalId) {
+                null, "1" -> "E1"
+                "2", "3" -> "E5A"
+                "4", "5" -> "E5B"
+                "6" -> "E6"
+                "7" -> "E5"
+                else -> null
+            }
+
+            SatelliteConstellation.BEIDOU -> when (signalId) {
+                null, "1", "2", "8" -> "B1"
+                "3", "4", "5" -> "B2"
+                "6", "7" -> "B3"
+                else -> null
+            }
+
+            SatelliteConstellation.SBAS -> when (signalId) {
+                null, "1" -> "L1"
+                "7", "8" -> "L5"
+                else -> null
+            }
+
+            SatelliteConstellation.UNKNOWN -> null
+        }
 }
 
 class NmeaGstParser {
@@ -295,5 +435,91 @@ class Um980AsciiSolutionParser {
 
     private companion object {
         val SUPPORTED_SOLUTION_LOGS = setOf("BESTNAVA", "PPPNAVA", "ADRNAVA")
+    }
+}
+
+class Um980ObsvmaParser {
+    private val lineBuffer = StringBuilder()
+
+    fun accept(bytes: ByteArray): List<Um980ObsvmaEpoch> =
+        acceptText(bytes.toString(StandardCharsets.US_ASCII))
+
+    fun acceptText(text: String): List<Um980ObsvmaEpoch> {
+        val epochs = mutableListOf<Um980ObsvmaEpoch>()
+        text.forEach { character ->
+            if (character == '\n') {
+                parseLine(lineBuffer.toString().trim())?.let(epochs::add)
+                lineBuffer.clear()
+            } else if (character != '\r') {
+                lineBuffer.append(character)
+            }
+        }
+        return epochs
+    }
+
+    fun parseLine(line: String): Um980ObsvmaEpoch? {
+        if (!line.startsWith("#OBSVMA", ignoreCase = true) || !line.contains(';')) {
+            return null
+        }
+        val headerFields = line.substringBefore(';').substringBefore('*').split(',')
+        val gpsWeek = headerFields.getOrNull(4)?.toLongOrNull()
+        val towMillis = headerFields.getOrNull(5)?.toLongOrNull()
+        val observedAt = if (gpsWeek != null && towMillis != null) {
+            gpsWeek * GPS_WEEK_MILLIS + towMillis
+        } else {
+            0L
+        }
+        val payloadFields = line.substringAfter(';')
+            .substringBefore('*')
+            .replace('|', ',')
+            .split(',')
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+        val declaredCount = payloadFields.firstOrNull()?.toIntOrNull() ?: return null
+        val recordFields = payloadFields.drop(1)
+        if (declaredCount < 0 || recordFields.size < OBSVMA_RECORD_FIELD_COUNT) {
+            return Um980ObsvmaEpoch(observedAt, emptyList())
+        }
+        val observations = buildList {
+            recordFields
+                .chunked(OBSVMA_RECORD_FIELD_COUNT)
+                .take(declaredCount)
+                .forEach { fields ->
+                    if (fields.size < OBSVMA_RECORD_FIELD_COUNT) {
+                        return@forEach
+                    }
+                    val svid = fields.getOrNull(1)?.toIntOrNull() ?: return@forEach
+                    val cn0DbHz = fields.getOrNull(7)?.toDoubleOrNull()?.let { raw ->
+                        if (raw > 100.0) raw / 100.0 else raw
+                    }
+                    val trackingStatus = fields.getOrNull(10)?.toIntAutoOrNull() ?: return@forEach
+                    val key = Um980SatelliteMapping.signalKeyFromTrackingStatus(
+                        svid = svid,
+                        trackingStatus = trackingStatus,
+                    ) ?: return@forEach
+                    add(
+                        SatelliteSignalObservation(
+                            key = key,
+                            source = SatelliteMonitorSource.ROVER,
+                            observedAtEpochMillis = observedAt,
+                            cn0DbHz = cn0DbHz,
+                        ),
+                    )
+                }
+        }
+        return Um980ObsvmaEpoch(observedAt, observations)
+    }
+
+    private fun String.toIntAutoOrNull(): Int? =
+        trim().let { value ->
+            when {
+                value.startsWith("0x", ignoreCase = true) -> value.drop(2).toUIntOrNull(16)?.toInt()
+                else -> value.toIntOrNull()
+            }
+        }
+
+    private companion object {
+        const val GPS_WEEK_MILLIS = 604_800_000L
+        const val OBSVMA_RECORD_FIELD_COUNT = 11
     }
 }

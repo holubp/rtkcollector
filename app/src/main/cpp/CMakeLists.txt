@@ -88,3 +88,10 @@ target_compile_features(rtkcollector_rtklib PRIVATE cxx_std_17)
 
 find_library(log-lib log)
 target_link_libraries(rtkcollector_rtklib PRIVATE ${log-lib})
+
+target_link_options(
+    rtkcollector_rtklib
+    PRIVATE
+    "-Wl,-z,max-page-size=16384"
+    "-Wl,-z,common-page-size=16384"
+)

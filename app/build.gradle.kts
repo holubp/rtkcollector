@@ -1,4 +1,6 @@
 import java.util.Properties
+import java.util.zip.ZipFile
+import org.gradle.api.GradleException
 
 plugins {
     id("com.android.application")
@@ -25,6 +27,22 @@ val rtklibNativeBuildAvailable = localSdkDir()
     ?.listFiles()
     ?.any { it.resolve("source.properties").isFile }
     ?: false
+val rtklibNativeReleaseTaskNames = setOf(
+    "assembleRelease",
+    "bundleRelease",
+    "validateGooglePlayReleaseBuildInputs",
+    "validateGooglePlayReleaseBundle",
+)
+val rtklibNativeReleaseRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.substringAfterLast(":") in rtklibNativeReleaseTaskNames
+}
+
+if (rtklibNativeReleaseRequested && !rtklibNativeBuildAvailable) {
+    throw GradleException(
+        "Release builds require Android NDK so librtkcollector_rtklib.so is packaged. " +
+            "Install an Android NDK in Android Studio/SDK Manager before building a Google Play release.",
+    )
+}
 
 android {
     namespace = "org.rtkcollector.app"
@@ -36,6 +54,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildFeatures {
@@ -46,6 +68,20 @@ android {
         externalNativeBuild {
             cmake {
                 path = file("src/main/cpp/CMakeLists.txt")
+            }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    buildTypes {
+        release {
+            ndk {
+                debugSymbolLevel = "FULL"
             }
         }
     }
@@ -81,4 +117,52 @@ tasks.register("unitTestClasses") {
     group = "build"
     description = "Compatibility alias for tools that request JVM-style unit test classes in the Android app module."
     dependsOn("compileDebugUnitTestKotlin", "compileDebugUnitTestJavaWithJavac", "processDebugUnitTestJavaRes")
+}
+
+fun validateReleaseBundleNativeLibrary(bundleFile: File) {
+    if (!bundleFile.isFile) {
+        throw GradleException("Release bundle was not created at ${bundleFile.path}.")
+    }
+    ZipFile(bundleFile).use { zip ->
+        val rtklibEntry = "base/lib/arm64-v8a/librtkcollector_rtklib.so"
+        if (zip.getEntry(rtklibEntry) == null) {
+            throw GradleException("Release bundle is missing $rtklibEntry.")
+        }
+    }
+}
+
+val validateGooglePlayReleaseBuildInputs = tasks.register("validateGooglePlayReleaseBuildInputs") {
+    group = "verification"
+    description = "Checks that Google Play release builds cannot silently omit the RTKLIB native backend."
+    doLast {
+        if (!rtklibNativeBuildAvailable) {
+            throw GradleException(
+                "Android NDK was not found. Release bundles must include librtkcollector_rtklib.so.",
+            )
+        }
+        val rtklibSource = rootProject.file("third_party/rtklib-ex/upstream/src/rtklib.h")
+        if (!rtklibSource.isFile) {
+            throw GradleException(
+                "RTKLIB-EX source checkout is missing at ${rtklibSource.path}. Run tools/update_rtklib_ex.py first.",
+            )
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    dependsOn(validateGooglePlayReleaseBuildInputs)
+}
+
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    dependsOn(validateGooglePlayReleaseBuildInputs)
+    doLast {
+        val bundleFile = layout.buildDirectory.file("outputs/bundle/release/app-release.aab").get().asFile
+        validateReleaseBundleNativeLibrary(bundleFile)
+    }
+}
+
+tasks.register("validateGooglePlayReleaseBundle") {
+    group = "verification"
+    description = "Builds the release AAB and verifies it contains the RTKLIB native library for Play delivery."
+    dependsOn("bundleRelease")
 }

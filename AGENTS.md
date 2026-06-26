@@ -259,6 +259,11 @@ Prefer the strongest feasible verification for the touched code:
   exact receiver/USB/baud assumptions.
 - UM980 live parsers must be byte-level for mixed NMEA, UM980 ASCII and UM980
   binary streams. Do not feed arbitrary binary bytes into line-oriented parsers.
+- UM980 satellite-monitor messages do not share one universal constellation or
+  satellite-ID layout. `OBSVMB`/`OBSVMCMPB` use channel tracking status, while
+  `BESTSATB` uses the manual's Satellite System enum and a split 32-bit
+  Satellite ID field; keep message-specific tests for both documented and
+  observed firmware layouts.
 - RTCM MSM decoders must parse the complete MSM header before satellite and
   signal masks, including external clock indicator, divergence-free smoothing
   indicator and smoothing interval fields. When changing MSM parsing, verify

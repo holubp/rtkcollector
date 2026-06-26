@@ -19,6 +19,16 @@ internal object Um980SatelliteMapping {
         else -> SatelliteConstellation.UNKNOWN
     }
 
+    fun bestsatConstellationForSystem(system: Int): SatelliteConstellation = when (system) {
+        0 -> SatelliteConstellation.GPS
+        1 -> SatelliteConstellation.GLONASS
+        2 -> SatelliteConstellation.SBAS
+        5 -> SatelliteConstellation.GALILEO
+        6 -> SatelliteConstellation.BEIDOU
+        7 -> SatelliteConstellation.QZSS
+        else -> SatelliteConstellation.UNKNOWN
+    }
+
     fun bandAndSignalForTrackingStatus(
         constellation: SatelliteConstellation,
         signalType: Int,
@@ -80,6 +90,7 @@ internal object Um980SatelliteMapping {
         if (svid <= 0) return null
         val constellation = constellationForSystem((trackingStatus ushr 16) and 0x7)
         if (constellation == SatelliteConstellation.UNKNOWN) return null
+        val monitorSvid = normalizeMonitorSvid(constellation, svid) ?: return null
         val signalType = (trackingStatus ushr 21) and 0x1f
         val l2cFlag = ((trackingStatus ushr 26) and 0x1) != 0
         val signal = bandAndSignalForTrackingStatus(
@@ -89,11 +100,50 @@ internal object Um980SatelliteMapping {
         ) ?: return null
         return SatelliteSignalKey(
             constellation = constellation,
-            svid = svid,
+            svid = monitorSvid,
             band = signal.band,
             signalCode = signal.signalCode,
         )
     }
+
+    fun bestsatMonitorSvid(
+        constellation: SatelliteConstellation,
+        satelliteIdLow: Int,
+        satelliteIdHigh: Int,
+    ): Int? {
+        // The UM980 manual describes the low half as the satellite identifier,
+        // but field captures encode the monitor PRN in the high half for
+        // BESTSATB. Accept both layouts so the monitor stays compatible with
+        // documented and observed firmware output.
+        return when (constellation) {
+            SatelliteConstellation.GLONASS ->
+                normalizeGlonassMonitorSvid(satelliteIdHigh)
+                    ?: normalizeGlonassMonitorSvid(satelliteIdLow)
+
+            else ->
+                normalizeMonitorSvid(constellation, satelliteIdHigh)
+                    ?: normalizeMonitorSvid(constellation, satelliteIdLow)
+        }
+    }
+
+    private fun normalizeMonitorSvid(
+        constellation: SatelliteConstellation,
+        svid: Int,
+    ): Int? =
+        when {
+            svid <= 0 -> null
+            constellation == SatelliteConstellation.GLONASS && svid in GLONASS_UNICORE_PRN_RANGE ->
+                svid - GLONASS_UNICORE_PRN_OFFSET
+
+            else -> svid
+        }
+
+    private fun normalizeGlonassMonitorSvid(svid: Int): Int? =
+        when {
+            svid in GLONASS_UNICORE_PRN_RANGE -> svid - GLONASS_UNICORE_PRN_OFFSET
+            svid in GLONASS_RINEX_SLOT_RANGE -> svid
+            else -> null
+        }
 
     fun bestsatSignalsFor(
         constellation: SatelliteConstellation,
@@ -101,6 +151,12 @@ internal object Um980SatelliteMapping {
     ): List<Um980BandAndSignal> {
         val entries = when (constellation) {
             SatelliteConstellation.GPS -> listOf(
+                0x01 to Um980BandAndSignal("L1", "L1"),
+                0x02 to Um980BandAndSignal("L2", "L2"),
+                0x04 to Um980BandAndSignal("L5", "L5"),
+            )
+
+            SatelliteConstellation.QZSS -> listOf(
                 0x01 to Um980BandAndSignal("L1", "L1"),
                 0x02 to Um980BandAndSignal("L2", "L2"),
                 0x04 to Um980BandAndSignal("L5", "L5"),
@@ -122,6 +178,7 @@ internal object Um980SatelliteMapping {
                 0x01 to Um980BandAndSignal("E1", "E1"),
                 0x02 to Um980BandAndSignal("E5A", "E5A"),
                 0x04 to Um980BandAndSignal("E5B", "E5B"),
+                0x08 to Um980BandAndSignal("E5", "ALTBOC"),
             )
 
             else -> emptyList()
@@ -130,4 +187,8 @@ internal object Um980SatelliteMapping {
             .filter { (mask, _) -> signalMask and mask != 0 }
             .map { (_, bandInfo) -> bandInfo }
     }
+
+    private val GLONASS_UNICORE_PRN_RANGE = 38..61
+    private val GLONASS_RINEX_SLOT_RANGE = 1..24
+    private const val GLONASS_UNICORE_PRN_OFFSET = 37
 }

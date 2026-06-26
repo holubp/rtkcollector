@@ -251,12 +251,31 @@ class Um980BinaryParserTest {
     }
 
     @Test
+    fun `normalizes OBSVMCMPB GLONASS satellite ids to RINEX slots`() {
+        val frame = obsvmcmpbFrame(
+            compressedObservationRecord(
+                system = 1,
+                prn = 40,
+                signalType = 0,
+                cn0DbHz = 43,
+            ),
+        )
+
+        val observations = Um980BinaryParser.parseObsvmcmpbObservations(frame)
+
+        assertEquals(
+            listOf(SatelliteSignalKey(SatelliteConstellation.GLONASS, 3, "L1", "L1")),
+            observations.map { it.key },
+        )
+    }
+
+    @Test
     fun `parses documented BESTSATB solution usage and falls back to satellite level when needed`() {
         val frame = bestsatbFrame(
-            bestsatEntry(system = 0, satelliteId = 7, signalMask = 0x05),
-            bestsatEntry(system = 1, satelliteId = 43, signalMask = 0x03),
-            bestsatEntry(system = 4, satelliteId = 10, signalMask = 0x06),
-            bestsatEntry(system = 5, satelliteId = 195, signalMask = 0x17),
+            bestsatEntry(system = 0, satelliteIdLow = 7, signalMask = 0x05),
+            bestsatEntry(system = 1, satelliteIdLow = 43, signalMask = 0x03),
+            bestsatEntry(system = 6, satelliteIdLow = 10, signalMask = 0x06),
+            bestsatEntry(system = 2, satelliteIdLow = 120, signalMask = 0x17),
         )
 
         val observations = Um980BinaryParser.parseBestsatbObservations(frame)
@@ -265,16 +284,86 @@ class Um980BinaryParserTest {
             listOf(
                 SatelliteSignalKey(SatelliteConstellation.GPS, 7, "L1", "L1"),
                 SatelliteSignalKey(SatelliteConstellation.GPS, 7, "L5", "L5"),
-                SatelliteSignalKey(SatelliteConstellation.GLONASS, 43, "L1", "L1"),
-                SatelliteSignalKey(SatelliteConstellation.GLONASS, 43, "L2", "L2"),
+                SatelliteSignalKey(SatelliteConstellation.GLONASS, 6, "L1", "L1"),
+                SatelliteSignalKey(SatelliteConstellation.GLONASS, 6, "L2", "L2"),
                 SatelliteSignalKey(SatelliteConstellation.BEIDOU, 10, "B2", "B2"),
                 SatelliteSignalKey(SatelliteConstellation.BEIDOU, 10, "B3", "B3"),
-                SatelliteSignalKey(SatelliteConstellation.QZSS, 195, SatelliteSignalKey.BAND_ANY),
+                SatelliteSignalKey(SatelliteConstellation.SBAS, 120, SatelliteSignalKey.BAND_ANY),
             ),
             observations.map { it.key },
         )
         assertEquals(List(observations.size) { SatelliteMonitorSource.SOLUTION }, observations.map { it.source })
         assertTrue(observations.all { it.used })
+    }
+
+    @Test
+    fun `normalizes BESTSATB GLONASS monitor ids from receiver prn field`() {
+        val frame = bestsatbFrame(
+            bestsatEntry(system = 1, satelliteIdLow = 12, signalMask = 0x03, satelliteIdHigh = 40),
+        )
+
+        val observations = Um980BinaryParser.parseBestsatbObservations(frame)
+
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GLONASS, 3, "L1", "L1"),
+                SatelliteSignalKey(SatelliteConstellation.GLONASS, 3, "L2", "L2"),
+            ),
+            observations.map { it.key },
+        )
+    }
+
+    @Test
+    fun `uses observed BESTSATB high satellite id half for non GLONASS monitor ids`() {
+        val frame = bestsatbFrame(
+            bestsatEntry(system = 0, satelliteIdLow = 0, signalMask = 0x01, satelliteIdHigh = 17),
+        )
+
+        val observations = Um980BinaryParser.parseBestsatbObservations(frame)
+
+        assertEquals(
+            listOf(SatelliteSignalKey(SatelliteConstellation.GPS, 17, "L1", "L1")),
+            observations.map { it.key },
+        )
+    }
+
+    @Test
+    fun `falls back to documented BESTSATB low satellite id half`() {
+        val frame = bestsatbFrame(
+            bestsatEntry(system = 0, satelliteIdLow = 17, signalMask = 0x01, satelliteIdHigh = 0),
+            bestsatEntry(system = 1, satelliteIdLow = 43, signalMask = 0x01, satelliteIdHigh = 0xffff),
+        )
+
+        val observations = Um980BinaryParser.parseBestsatbObservations(frame)
+
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GPS, 17, "L1", "L1"),
+                SatelliteSignalKey(SatelliteConstellation.GLONASS, 6, "L1", "L1"),
+            ),
+            observations.map { it.key },
+        )
+    }
+
+    @Test
+    fun `maps documented BESTSATB satellite system enum`() {
+        val frame = bestsatbFrame(
+            bestsatEntry(system = 5, satelliteIdLow = 0, signalMask = 0x09, satelliteIdHigh = 30),
+            bestsatEntry(system = 6, satelliteIdLow = 0, signalMask = 0x01, satelliteIdHigh = 21),
+            bestsatEntry(system = 7, satelliteIdLow = 0, signalMask = 0x01, satelliteIdHigh = 195),
+        )
+
+        val observations = Um980BinaryParser.parseBestsatbObservations(frame)
+
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GALILEO, 30, "E1", "E1"),
+                SatelliteSignalKey(SatelliteConstellation.GALILEO, 30, "E5", "ALTBOC"),
+                SatelliteSignalKey(SatelliteConstellation.BEIDOU, 21, "B1", "B1"),
+                SatelliteSignalKey(SatelliteConstellation.QZSS, 195, "L1", "L1"),
+            ),
+            observations.map { it.key },
+        )
     }
 
     @Test
@@ -495,14 +584,14 @@ class Um980BinaryParserTest {
 
         private fun bestsatEntry(
             system: Int,
-            satelliteId: Int,
+            satelliteIdLow: Int,
             signalMask: Int,
-            glonassFrequencyChannel: Int = 0,
+            satelliteIdHigh: Int = 0,
         ): ByteArray =
             ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN).apply {
                 putInt(0, system)
-                putShort(4, satelliteId.toShort())
-                putShort(6, glonassFrequencyChannel.toShort())
+                putShort(4, satelliteIdLow.toShort())
+                putShort(6, satelliteIdHigh.toShort())
                 putInt(8, 0)
                 putInt(12, signalMask)
             }.array()

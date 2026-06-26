@@ -72,8 +72,12 @@ is accepted as RTKLIB input. The current Android native build declares the
 named `rtkcollector-obsvmcmp-shim`, which patches the pinned RTKLIB-EX Unicore
 decoder to accept message id 138 through the OBSVMB decoder path. Advisory
 satellite-monitor parsing for `OBSVMB`, `OBSVMCMPB` and `BESTSATB` is
-implemented, but solution validation remains field/replay-sensitive until a
-debug capture with actual `OBSVMCMPB` observation frames is available.
+implemented. Replay validation with a UM980 `OBSVMCMPB` + `BESTSATB` capture
+confirmed that `BESTSATB` monitor keys need the manual's `BESTSATB` Satellite
+System enum, split Satellite ID handling and message-specific satellite-id
+normalisation before they can be compared with rover observations and RTCM MSM
+satellite IDs. Broader solution validation remains
+field/replay-sensitive across receiver firmware and caster streams.
 
 Verification:
 - Automated: RTKLIB input route tests for OBSVMB direct and named OBSVMCMPB

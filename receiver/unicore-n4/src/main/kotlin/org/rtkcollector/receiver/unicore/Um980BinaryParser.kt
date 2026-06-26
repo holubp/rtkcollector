@@ -264,8 +264,12 @@ object Um980BinaryParser {
         return buildList {
             repeat(count) { index ->
                 val offset = SATELLITE_MONITOR_COUNT_LENGTH + index * BESTSATB_RECORD_LENGTH
-                val constellation = Um980SatelliteMapping.constellationForSystem(payload.intLe(offset))
-                val svid = payload.u16Le(offset + 4)
+                val constellation = Um980SatelliteMapping.bestsatConstellationForSystem(payload.intLe(offset))
+                val svid = Um980SatelliteMapping.bestsatMonitorSvid(
+                    constellation = constellation,
+                    satelliteIdLow = payload.u16Le(offset + 4),
+                    satelliteIdHigh = payload.u16Le(offset + 6),
+                ) ?: return@repeat
                 val signalMask = payload.intLe(offset + 12)
                 if (constellation == SatelliteConstellation.UNKNOWN || svid <= 0 || signalMask == 0) {
                     return@repeat

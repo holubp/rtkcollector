@@ -268,8 +268,10 @@ sh gradlew :core:workflow:test :core:rtklib:test :core:session:test \
 Do not mark RTKLIB-EX native integration as fully validated until
 `assembleDebug` has run on a host with a working NDK and at least one suitable
 replay or field session has exercised the selected rover observation route.
-Current UM980 debug samples may show `OBSVMCMPB` in the init profile while
-containing no actual `OBSVMB`/`OBSVMCMPB` observation frames; check that with:
+Some older UM980 debug samples may show `OBSVMCMPB` in the init profile while
+containing no actual `OBSVMB`/`OBSVMCMPB` observation frames. Newer replay
+captures with actual observation frames are still field evidence, not committed
+test fixtures. Check a local sample with:
 
 ```bash
 python3 tools/um980_rtklib_sample_check.py samples/session-*

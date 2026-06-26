@@ -22,7 +22,7 @@ object Um980RuntimeProfiles {
                 "VERSIONB",
                 "BESTNAVB $comPort 0.05",
                 "PPPNAVB $comPort 1",
-                "OBSVMCMPB $comPort 0.2",
+                "OBSVMCMPB $comPort 0.5",
                 "STADOPB $comPort 1",
                 "GPSEPHB $comPort 300",
                 "GLOEPHB $comPort 300",

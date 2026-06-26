@@ -138,7 +138,7 @@ class ProfileStoresTest {
         assertTrue(decoded.runtimeScript.contains("PPPNAVB COM1 1"))
         assertTrue(decoded.runtimeScript.contains("RTKSTATUSB COM1 1"))
         assertTrue(decoded.runtimeScript.contains("RTCMSTATUSB COM1 ONCHANGED"))
-        assertTrue(decoded.runtimeScript.contains("OBSVMCMPB COM1 0.2"))
+        assertTrue(decoded.runtimeScript.contains("OBSVMCMPB COM1 0.5"))
         assertTrue(decoded.runtimeScript.contains("BESTSATB COM1 1"))
         assertTrue(decoded.runtimeScript.contains("STADOPB COM1 1"))
         assertFalse(decoded.runtimeScript.contains("SAVECONFIG", ignoreCase = true))
@@ -197,7 +197,7 @@ class ProfileStoresTest {
         assertTrue(script.contains("MODE BASE TIME 120 2.5"))
         assertTrue(script.contains("RTCM1006 COM1 10"))
         assertTrue(script.contains("RTCM1074 COM1 1"))
-        assertTrue(script.contains("OBSVMCMPB COM1 1"))
+        assertTrue(script.contains("OBSVMCMPB COM1 0.5"))
         assertFalse(script.contains("SAVECONFIG", ignoreCase = true))
     }
 

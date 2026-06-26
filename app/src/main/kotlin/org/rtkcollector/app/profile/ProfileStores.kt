@@ -402,7 +402,7 @@ class ProfileStores(context: Context) {
             PPPNAVB COM1 1
             RTKSTATUSB COM1 1
             RTCMSTATUSB COM1 ONCHANGED
-            OBSVMCMPB COM1 0.2
+            OBSVMCMPB COM1 0.5
             BESTSATB COM1 1
             STADOPB COM1 1
             GPSEPHB COM1 300
@@ -529,7 +529,7 @@ class ProfileStores(context: Context) {
             RTCM1114 COM1 1
             RTCM1124 COM1 1
             RTCM1230 COM1 10
-            OBSVMCMPB COM1 1
+            OBSVMCMPB COM1 0.5
         """.trimIndent()
 
         val UBLOX_M8T_RAW_1HZ_SCRIPT: String = UbloxM8tProfiles.raw1HzSafe

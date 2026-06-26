@@ -17,7 +17,7 @@ class Um980RuntimeProfileTest {
             commands = listOf(
                 "UNLOG COM1",
                 "BESTNAVB COM1 0.2",
-                "OBSVMCMPB COM1 1",
+                "OBSVMCMPB COM1 0.5",
             ),
         )
 
@@ -25,7 +25,7 @@ class Um980RuntimeProfileTest {
             listOf(
                 "UNLOG COM1\r\n",
                 "BESTNAVB COM1 0.2\r\n",
-                "OBSVMCMPB COM1 1\r\n",
+                "OBSVMCMPB COM1 0.5\r\n",
             ),
             profile.renderExecutableCommands(),
         )
@@ -105,7 +105,7 @@ class Um980RuntimeProfileTest {
         assertTrue(profile.commands.any { it == "CONFIG MMP ENABLE" })
         assertTrue(profile.commands.any { it == "CONFIG PPP ENABLE E6-HAS" })
         assertFalse(profile.commands.any { it.matches(Regex("CONFIG COM[1-8] \\d+")) })
-        assertTrue(profile.commands.any { it == "OBSVMCMPB COM1 0.2" })
+        assertTrue(profile.commands.any { it == "OBSVMCMPB COM1 0.5" })
         assertTrue(profile.commands.any { it == "BESTNAVB COM1 0.05" })
         assertTrue(profile.commands.any { it == "PPPNAVB COM1 1" })
         assertTrue(profile.commands.any { it == "STADOPB COM1 1" })

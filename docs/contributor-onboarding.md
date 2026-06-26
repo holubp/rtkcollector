@@ -265,6 +265,19 @@ sh gradlew :core:workflow:test :core:rtklib:test :core:session:test \
   :receiver:unicore-n4:test :receiver:ublox-m8:test :app:compileDebugKotlin
 ```
 
+After Android Gradle Plugin or app build-task changes, verify Android Studio
+compatibility task names before handing the build back to users:
+
+```bash
+sh gradlew :app:unitTestClasses :app:androidTestClasses --dry-run
+```
+
+These aliases intentionally map old IDE-requested task names to current AGP
+tasks. On Termux/aarch64, use dry-run for this task-selection check: executing
+the real Android-test resource compile can still hit the known non-runnable
+Maven `aapt2` binary. Run full Android-test/resource packaging on Windows
+Android Studio, CI or another host with working Android SDK native tools.
+
 Do not mark RTKLIB-EX native integration as fully validated until
 `assembleDebug` has run on a host with a working NDK and at least one suitable
 replay or field session has exercised the selected rover observation route.

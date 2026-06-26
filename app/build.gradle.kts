@@ -120,6 +120,12 @@ tasks.register("unitTestClasses") {
     dependsOn("compileDebugUnitTestKotlin", "compileDebugUnitTestJavaWithJavac", "processDebugUnitTestJavaRes")
 }
 
+tasks.register("androidTestClasses") {
+    group = "build"
+    description = "Compatibility alias for tools that request Android instrumentation test classes in the app module."
+    dependsOn("compileDebugAndroidTestSources")
+}
+
 fun validateReleaseBundleNativeLibrary(bundleFile: File) {
     if (!bundleFile.isFile) {
         throw GradleException("Release bundle was not created at ${bundleFile.path}.")

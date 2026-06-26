@@ -34,6 +34,35 @@ class Rtcm3MsmParserTest {
     }
 
     @Test
+    fun `parses euref gps msm5 signal ids including l1`() {
+        val frame = RtcmMsmTestFrameBuilder(messageType = 1075, stationId = 1022)
+            .satellite(8)
+            .signal(2)
+            .signal(10)
+            .signal(15)
+            .signal(23)
+            .cell(satellite = 8, signal = 2, cn0DbHz = null)
+            .cell(satellite = 8, signal = 10, cn0DbHz = null)
+            .cell(satellite = 8, signal = 15, cn0DbHz = null)
+            .cell(satellite = 8, signal = 23, cn0DbHz = null)
+            .build()
+
+        val result = Rtcm3MsmParser.parse(frame)
+
+        require(result.diagnostic == null) { "Unexpected diagnostic: ${result.diagnostic}" }
+
+        assertEquals(
+            listOf(
+                SatelliteFrequencyBand.L1,
+                SatelliteFrequencyBand.L2,
+                SatelliteFrequencyBand.L2,
+                SatelliteFrequencyBand.L5,
+            ),
+            result.signals.map { it.key.band },
+        )
+    }
+
+    @Test
     fun `parses galileo msm signal ids using rtklib band table`() {
         val frame = RtcmMsmTestFrameBuilder(messageType = 1091, stationId = 77)
             .satellite(4)
@@ -167,6 +196,9 @@ private class RtcmMsmTestFrameBuilder(
             .unsigned(0, 3)
             .unsigned(0, 7)
             .unsigned(0, 2)
+            .unsigned(0, 2)
+            .unsigned(0, 1)
+            .unsigned(0, 3)
             .mask64(satellites)
             .mask32(signals)
             .cellMask(satellites, signals, cells)

@@ -20,6 +20,9 @@ object Rtcm3MsmParser {
             bits.skip(3)
             bits.skip(7)
             bits.skip(2)
+            bits.skip(2)
+            bits.skip(1)
+            bits.skip(3)
 
             val satellites = readMask(bits, 64)
             val signals = readMask(bits, 32)

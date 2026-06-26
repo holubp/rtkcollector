@@ -259,6 +259,11 @@ Prefer the strongest feasible verification for the touched code:
   exact receiver/USB/baud assumptions.
 - UM980 live parsers must be byte-level for mixed NMEA, UM980 ASCII and UM980
   binary streams. Do not feed arbitrary binary bytes into line-oriented parsers.
+- RTCM MSM decoders must parse the complete MSM header before satellite and
+  signal masks, including external clock indicator, divergence-free smoothing
+  indicator and smoothing interval fields. When changing MSM parsing, verify
+  signal IDs against an independent decoder such as RTKLIB `convbin` or a
+  matching archived RINEX observation header.
 - Derived `receiver-solution.nmea` exports must preserve sub-second UTC from
   structured/binary receiver telemetry and must not copy binary/noise fragments
   that merely look like dollar-prefixed lines.

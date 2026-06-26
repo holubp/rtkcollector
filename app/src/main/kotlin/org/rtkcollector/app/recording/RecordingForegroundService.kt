@@ -65,7 +65,6 @@ import org.rtkcollector.core.correction.Rtcm3ReferenceStation
 import org.rtkcollector.core.correction.Rtcm3ReferenceStationParser
 import org.rtkcollector.core.correction.Rtcm3MsmSignal
 import org.rtkcollector.core.correction.SatelliteConstellation as RtcmSatelliteConstellation
-import org.rtkcollector.core.correction.SatelliteFrequencyBand as RtcmSatelliteFrequencyBand
 import org.rtkcollector.core.quality.SatelliteConstellation as MonitorSatelliteConstellation
 import org.rtkcollector.core.quality.SatelliteMonitorEngine
 import org.rtkcollector.core.quality.SatelliteMonitorInputBatch
@@ -933,8 +932,8 @@ class RecordingForegroundService : Service() {
 
     private fun Rtcm3MsmSignal.toBaseMonitorObservation(nowEpochMillis: Long): SatelliteSignalObservation? {
         val constellation = key.constellation.toMonitorConstellation()
-        val band = key.band.toMonitorBandLabel()
-        if (constellation == MonitorSatelliteConstellation.UNKNOWN || band == null) return null
+        val band = key.band.toSatelliteMonitorBandLabel()
+        if (constellation == MonitorSatelliteConstellation.UNKNOWN) return null
         return SatelliteSignalObservation(
             key = SatelliteSignalKey(
                 constellation = constellation,
@@ -958,20 +957,6 @@ class RecordingForegroundService : Service() {
             RtcmSatelliteConstellation.QZSS -> MonitorSatelliteConstellation.QZSS
             RtcmSatelliteConstellation.SBAS -> MonitorSatelliteConstellation.SBAS
             RtcmSatelliteConstellation.UNKNOWN -> MonitorSatelliteConstellation.UNKNOWN
-        }
-
-    private fun RtcmSatelliteFrequencyBand.toMonitorBandLabel(): String? =
-        when (this) {
-            RtcmSatelliteFrequencyBand.L1 -> "L1"
-            RtcmSatelliteFrequencyBand.L2 -> "L2"
-            RtcmSatelliteFrequencyBand.L3 -> "L3"
-            RtcmSatelliteFrequencyBand.L4 -> "L4"
-            RtcmSatelliteFrequencyBand.L5 -> "L5"
-            RtcmSatelliteFrequencyBand.L6 -> "L6"
-            RtcmSatelliteFrequencyBand.L7 -> "L7"
-            RtcmSatelliteFrequencyBand.L8 -> "L8"
-            RtcmSatelliteFrequencyBand.L9 -> "L9"
-            RtcmSatelliteFrequencyBand.UNKNOWN -> null
         }
 
     private fun shouldExpectReceiverProtocolFrames(): Boolean =

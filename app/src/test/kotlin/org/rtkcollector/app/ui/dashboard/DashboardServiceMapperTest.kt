@@ -328,16 +328,16 @@ class DashboardServiceMapperTest {
             putExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_SOURCES, "R:FRESH;B:FRESH;S:UNAVAILABLE")
             putExtra(
                 RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_GROUPS,
-                "GPS|L5|1|3|0|2;GPS|L1|2|4|1|1;Galileo|E1|4|4|2|3",
+                "BeiDou|L6|1|2|1|1;GPS|L5|1|3|0|2;GPS|L1|2|4|1|1;GLONASS|L2|2|3|1|2;Galileo|E1|4|4|2|3",
             )
         }
 
         val state = dashboardStateFromRecordingIntent(intent)
 
-        assertEquals(listOf("Galileo", "GPS"), state.satelliteMonitor.constellations.map { it.label })
-        assertEquals(listOf("L1", "L5"), state.satelliteMonitor.constellations.last().frequencies.map { it.bandLabel })
-        assertEquals("2/4", state.satelliteMonitor.constellations.last().frequencies[0].rover.displayValue)
-        assertEquals("1/1", state.satelliteMonitor.constellations.last().frequencies[0].base.displayValue)
+        assertEquals(listOf("GPS", "Galileo", "GLONASS", "BeiDou"), state.satelliteMonitor.constellations.map { it.label })
+        assertEquals(listOf("L1", "L5"), state.satelliteMonitor.constellations.first().frequencies.map { it.bandLabel })
+        assertEquals("2/4", state.satelliteMonitor.constellations.first().frequencies[0].rover.displayValue)
+        assertEquals("1/1", state.satelliteMonitor.constellations.first().frequencies[0].base.displayValue)
     }
 
     @Test

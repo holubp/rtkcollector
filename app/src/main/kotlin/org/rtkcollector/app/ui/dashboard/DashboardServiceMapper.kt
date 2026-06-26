@@ -192,7 +192,7 @@ private fun satelliteMonitorFrom(intent: Intent): SatelliteMonitorDashboardState
                     .sortedBy { it.bandLabel },
             )
         }
-        .sortedBy { it.label }
+        .sortedWith(compareBy<SatelliteMonitorConstellationGroup> { it.label.constellationSortRank() }.thenBy { it.label })
     if (groups.isEmpty()) {
         return SatelliteMonitorDashboardState.unavailable(
             engineLabel = engineLabel,
@@ -228,6 +228,14 @@ private fun satelliteMonitorFrequencyFrom(value: String): Pair<String, Satellite
         ),
     )
 }
+
+private fun String.constellationSortRank(): Int =
+    when (trim().uppercase()) {
+        "GPS" -> 0
+        "GALILEO", "GAL" -> 1
+        "GLONASS", "GLO" -> 2
+        else -> 3
+    }
 
 private fun satelliteMonitorSourcesFrom(value: String?): SatelliteMonitorSourceStatuses {
     val parsed = value

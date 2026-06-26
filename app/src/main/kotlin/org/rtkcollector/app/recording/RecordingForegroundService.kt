@@ -964,8 +964,13 @@ class RecordingForegroundService : Service() {
         when (this) {
             RtcmSatelliteFrequencyBand.L1 -> "L1"
             RtcmSatelliteFrequencyBand.L2 -> "L2"
+            RtcmSatelliteFrequencyBand.L3 -> "L3"
+            RtcmSatelliteFrequencyBand.L4 -> "L4"
             RtcmSatelliteFrequencyBand.L5 -> "L5"
             RtcmSatelliteFrequencyBand.L6 -> "L6"
+            RtcmSatelliteFrequencyBand.L7 -> "L7"
+            RtcmSatelliteFrequencyBand.L8 -> "L8"
+            RtcmSatelliteFrequencyBand.L9 -> "L9"
             RtcmSatelliteFrequencyBand.UNKNOWN -> null
         }
 

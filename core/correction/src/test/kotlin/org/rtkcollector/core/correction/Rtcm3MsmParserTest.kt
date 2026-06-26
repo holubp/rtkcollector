@@ -34,7 +34,7 @@ class Rtcm3MsmParserTest {
     }
 
     @Test
-    fun `parses gnss-agnostic code values for galileo msm`() {
+    fun `parses galileo msm signal ids using rtklib band table`() {
         val frame = RtcmMsmTestFrameBuilder(messageType = 1091, stationId = 77)
             .satellite(4)
             .signal(2)
@@ -50,7 +50,7 @@ class Rtcm3MsmParserTest {
         assertEquals(1091, result.messageType)
         assertEquals(SatelliteConstellation.GALILEO, result.signals.single { it.key.svid == 4 && it.key.signalCode == "MSM2" }.key.constellation)
         val bands = result.signals.mapTo(mutableSetOf()) { it.key.band }
-        assertEquals(setOf(SatelliteFrequencyBand.L1, SatelliteFrequencyBand.L5), bands)
+        assertEquals(setOf(SatelliteFrequencyBand.L1, SatelliteFrequencyBand.L6), bands)
     }
 
     @Test
@@ -82,6 +82,65 @@ class Rtcm3MsmParserTest {
 
         assertEquals(47.0, result.signals.single().base.cn0DbHz!!, 0.5)
         assertFalse(result.signals.single().key.signalCode.isNullOrBlank())
+    }
+
+    @Test
+    fun `maps rtklib-defined msm signal ids and leaves reserved ids unknown`() {
+        val gps = RtcmMsmTestFrameBuilder(messageType = 1075, stationId = 1022)
+            .satellite(8)
+            .signal(8)
+            .signal(16)
+            .signal(21)
+            .signal(29)
+            .cell(satellite = 8, signal = 8, cn0DbHz = null)
+            .cell(satellite = 8, signal = 16, cn0DbHz = null)
+            .cell(satellite = 8, signal = 21, cn0DbHz = null)
+            .cell(satellite = 8, signal = 29, cn0DbHz = null)
+            .build()
+        val galileo = RtcmMsmTestFrameBuilder(messageType = 1095, stationId = 1022)
+            .satellite(8)
+            .signal(8)
+            .signal(14)
+            .signal(22)
+            .cell(satellite = 8, signal = 8, cn0DbHz = null)
+            .cell(satellite = 8, signal = 14, cn0DbHz = null)
+            .cell(satellite = 8, signal = 22, cn0DbHz = null)
+            .build()
+        val beidou = RtcmMsmTestFrameBuilder(messageType = 1125, stationId = 1022)
+            .satellite(30)
+            .signal(8)
+            .signal(14)
+            .signal(22)
+            .cell(satellite = 30, signal = 8, cn0DbHz = null)
+            .cell(satellite = 30, signal = 14, cn0DbHz = null)
+            .cell(satellite = 30, signal = 22, cn0DbHz = null)
+            .build()
+
+        assertEquals(
+            listOf(
+                SatelliteFrequencyBand.L2,
+                SatelliteFrequencyBand.L2,
+                SatelliteFrequencyBand.UNKNOWN,
+                SatelliteFrequencyBand.UNKNOWN,
+            ),
+            Rtcm3MsmParser.parse(gps).signals.map { it.key.band },
+        )
+        assertEquals(
+            listOf(
+                SatelliteFrequencyBand.L6,
+                SatelliteFrequencyBand.valueOf("L7"),
+                SatelliteFrequencyBand.L5,
+            ),
+            Rtcm3MsmParser.parse(galileo).signals.map { it.key.band },
+        )
+        assertEquals(
+            listOf(
+                SatelliteFrequencyBand.L6,
+                SatelliteFrequencyBand.valueOf("L7"),
+                SatelliteFrequencyBand.L5,
+            ),
+            Rtcm3MsmParser.parse(beidou).signals.map { it.key.band },
+        )
     }
 }
 

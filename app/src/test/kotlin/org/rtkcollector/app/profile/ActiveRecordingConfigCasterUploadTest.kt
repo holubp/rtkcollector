@@ -11,6 +11,13 @@ class ActiveRecordingConfigCasterUploadTest {
         val config = activeConfig(
             workflowId = "fixed-base",
             hasAcceptedBaseCoordinate = true,
+            uploadProfile = NtripCasterUploadProfile(
+                id = "upload",
+                name = "Upload",
+                host = "caster.example.org",
+                port = 2101,
+                mountpoint = "BASEOUT",
+            ),
         )
 
         assertTrue(config.casterUpload.enabled)
@@ -20,6 +27,41 @@ class ActiveRecordingConfigCasterUploadTest {
         assertEquals("password", config.casterUpload.password)
         assertTrue("BASE_CASTER_UPLOAD_RTCM3" in config.expectedSessionArtifactNames)
         config.validateForStart()
+    }
+
+    @Test
+    fun `active caster upload config carries retry and safety policy`() {
+        val config = activeConfig(
+            workflowId = "fixed-base",
+            hasAcceptedBaseCoordinate = true,
+            uploadProfile = NtripCasterUploadProfile(
+                id = "rtk2go",
+                name = "RTK2go",
+                host = "www.rtk2go.com",
+                mountpoint = "BASEOUT",
+                retryMode = NtripCasterUploadRetryMode.FIXED,
+                fixedReconnectDelaySeconds = 15,
+                adaptiveInitialDelaySeconds = 30,
+                adaptiveMaxDelaySeconds = 60,
+                stopAfterFailuresEnabled = false,
+                stopAfterConsecutiveFailures = 9,
+                safetyRulesEnabled = false,
+                safetyMaxBitrateKbps = 40,
+                safetyBitrateWindowSeconds = 70,
+                safetyMaxSessionUploadMb = 700,
+            ),
+        )
+
+        assertEquals(NtripCasterUploadRetryMode.FIXED, config.casterUpload.retryMode)
+        assertEquals(15, config.casterUpload.fixedReconnectDelaySeconds)
+        assertEquals(30, config.casterUpload.adaptiveInitialDelaySeconds)
+        assertEquals(60, config.casterUpload.adaptiveMaxDelaySeconds)
+        assertEquals(false, config.casterUpload.stopAfterFailuresEnabled)
+        assertEquals(9, config.casterUpload.stopAfterConsecutiveFailures)
+        assertEquals(40, config.casterUpload.safetyMaxBitrateKbps)
+        assertEquals(70, config.casterUpload.safetyBitrateWindowSeconds)
+        assertEquals(700, config.casterUpload.safetyMaxSessionUploadMb)
+        assertTrue(config.casterUpload.effectiveSafetyRulesEnabled)
     }
 
     @Test
@@ -87,6 +129,13 @@ class ActiveRecordingConfigCasterUploadTest {
     private fun activeConfig(
         workflowId: String,
         hasAcceptedBaseCoordinate: Boolean,
+        uploadProfile: NtripCasterUploadProfile = NtripCasterUploadProfile(
+            id = "upload",
+            name = "Upload",
+            host = "caster.example.org",
+            mountpoint = "BASEOUT",
+            username = "user",
+        ),
         runtimeScript: String = BASE_RTCM_SCRIPT,
     ): ActiveRecordingConfig =
         ActiveRecordingConfig.resolve(
@@ -101,13 +150,7 @@ class ActiveRecordingConfigCasterUploadTest {
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = null,
             ntripMountpointProfile = null,
-            ntripCasterUploadProfile = NtripCasterUploadProfile(
-                id = "upload",
-                name = "Upload",
-                host = "caster.example.org",
-                mountpoint = "BASEOUT",
-                username = "user",
-            ),
+            ntripCasterUploadProfile = uploadProfile,
             recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
             storageProfile = StorageProfile("storage", "Storage"),
             workflowName = "Fixed base",

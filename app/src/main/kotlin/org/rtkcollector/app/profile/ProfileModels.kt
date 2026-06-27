@@ -21,6 +21,19 @@ enum class SatelliteTelemetryCapability(
     }
 }
 
+enum class NtripCasterUploadRetryMode {
+    ADAPTIVE,
+    FIXED,
+    ;
+
+    companion object {
+        fun fromStorageValue(value: String?): NtripCasterUploadRetryMode =
+            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: ADAPTIVE
+    }
+}
+
+private val RTK2GO_HOSTS = setOf("rtk2go.com", "www.rtk2go.com")
+
 data class CommandProfile(
     val id: String,
     val name: String,
@@ -174,6 +187,16 @@ data class NtripCasterUploadProfile(
     val username: String = "",
     val secretId: String = "",
     val protocolPolicy: String = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+    val retryMode: NtripCasterUploadRetryMode = NtripCasterUploadRetryMode.ADAPTIVE,
+    val fixedReconnectDelaySeconds: Int = 10,
+    val adaptiveInitialDelaySeconds: Int = 10,
+    val adaptiveMaxDelaySeconds: Int = 300,
+    val stopAfterFailuresEnabled: Boolean = true,
+    val stopAfterConsecutiveFailures: Int = 5,
+    val safetyRulesEnabled: Boolean = false,
+    val safetyMaxBitrateKbps: Int = 35,
+    val safetyBitrateWindowSeconds: Int = 60,
+    val safetyMaxSessionUploadMb: Int = 500,
     val enabledByDefault: Boolean = false,
     val isProtected: Boolean = false,
 ) {
@@ -182,6 +205,23 @@ data class NtripCasterUploadProfile(
         require(name.isNotBlank()) { "NTRIP caster upload profile name must not be blank." }
         require(port in 1..65535) { "NTRIP caster upload port must be 1..65535." }
         require(protocolPolicy in PROTOCOL_POLICIES) { "NTRIP caster upload protocol policy is invalid." }
+        if (retryMode == NtripCasterUploadRetryMode.FIXED) {
+            require(fixedReconnectDelaySeconds >= 10) {
+                "Fixed reconnect delay must be at least 10 seconds."
+            }
+        }
+        require(adaptiveInitialDelaySeconds >= 10) {
+            "Adaptive initial reconnect delay must be at least 10 seconds."
+        }
+        require(adaptiveMaxDelaySeconds >= adaptiveInitialDelaySeconds) {
+            "Adaptive maximum reconnect delay must be greater than or equal to the initial delay."
+        }
+        require(stopAfterConsecutiveFailures >= 1) {
+            "Stop-after-failures count must be at least 1."
+        }
+        require(safetyMaxBitrateKbps >= 1) { "Safety bitrate threshold must be positive." }
+        require(safetyBitrateWindowSeconds >= 1) { "Safety bitrate window must be positive." }
+        require(safetyMaxSessionUploadMb >= 1) { "Safety session upload limit must be positive." }
     }
 
     fun validateForStart() {
@@ -204,7 +244,23 @@ data class NtripCasterUploadProfile(
         .put("username", username)
         .put("secretId", secretId)
         .put("protocolPolicy", protocolPolicy)
+        .put("retryMode", retryMode.name)
+        .put("fixedReconnectDelaySeconds", fixedReconnectDelaySeconds)
+        .put("adaptiveInitialDelaySeconds", adaptiveInitialDelaySeconds)
+        .put("adaptiveMaxDelaySeconds", adaptiveMaxDelaySeconds)
+        .put("stopAfterFailuresEnabled", stopAfterFailuresEnabled)
+        .put("stopAfterConsecutiveFailures", stopAfterConsecutiveFailures)
+        .put("safetyRulesEnabled", safetyRulesEnabled)
+        .put("safetyMaxBitrateKbps", safetyMaxBitrateKbps)
+        .put("safetyBitrateWindowSeconds", safetyBitrateWindowSeconds)
+        .put("safetyMaxSessionUploadMb", safetyMaxSessionUploadMb)
         .put("enabledByDefault", enabledByDefault)
+
+    val isRtk2goHost: Boolean
+        get() = host.trim().lowercase() in RTK2GO_HOSTS
+
+    val effectiveSafetyRulesEnabled: Boolean
+        get() = safetyRulesEnabled || isRtk2goHost
 
     companion object {
         val PROTOCOL_POLICIES = setOf(
@@ -223,6 +279,16 @@ data class NtripCasterUploadProfile(
             username = json.optString("username", ""),
             secretId = json.optString("secretId", ""),
             protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
+            retryMode = NtripCasterUploadRetryMode.fromStorageValue(json.optString("retryMode", "")),
+            fixedReconnectDelaySeconds = json.optInt("fixedReconnectDelaySeconds", 10),
+            adaptiveInitialDelaySeconds = json.optInt("adaptiveInitialDelaySeconds", 10),
+            adaptiveMaxDelaySeconds = json.optInt("adaptiveMaxDelaySeconds", 300),
+            stopAfterFailuresEnabled = json.optBoolean("stopAfterFailuresEnabled", true),
+            stopAfterConsecutiveFailures = json.optInt("stopAfterConsecutiveFailures", 5),
+            safetyRulesEnabled = json.optBoolean("safetyRulesEnabled", false),
+            safetyMaxBitrateKbps = json.optInt("safetyMaxBitrateKbps", 35),
+            safetyBitrateWindowSeconds = json.optInt("safetyBitrateWindowSeconds", 60),
+            safetyMaxSessionUploadMb = json.optInt("safetyMaxSessionUploadMb", 500),
             enabledByDefault = json.optBoolean("enabledByDefault", false),
         ).also(NtripCasterUploadProfile::validate)
     }

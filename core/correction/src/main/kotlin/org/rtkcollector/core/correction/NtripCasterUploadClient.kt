@@ -59,6 +59,8 @@ enum class NtripCasterUploadFailureKind {
     AUTHENTICATION_FAILED,
     AUTHORIZATION_FAILED,
     UNSUPPORTED_RESPONSE,
+    NO_RTCM_DATA,
+    SAFETY_STOP,
     STREAM_FAILED,
 }
 
@@ -66,6 +68,7 @@ data class NtripCasterUploadFailure(
     val kind: NtripCasterUploadFailureKind,
     val message: String,
     val state: NtripConnectionState,
+    val stopReason: NtripCasterUploadStopReason? = null,
     val cause: Throwable? = null,
 )
 
@@ -125,15 +128,23 @@ class NtripCasterUploadClient(
             }.fold(
                 onSuccess = { NtripCasterUploadResult.Completed(counting.bytesWritten) },
                 onFailure = {
+                    val failureKind = when {
+                        cancelled.get() -> NtripCasterUploadFailureKind.CANCELLED
+                        it is NtripCasterUploadNoDataException -> NtripCasterUploadFailureKind.NO_RTCM_DATA
+                        it is NtripCasterUploadSafetyException -> NtripCasterUploadFailureKind.SAFETY_STOP
+                        else -> NtripCasterUploadFailureKind.STREAM_FAILED
+                    }
                     NtripCasterUploadResult.Failure(
                         NtripCasterUploadFailure(
-                            kind = if (cancelled.get()) {
-                                NtripCasterUploadFailureKind.CANCELLED
-                            } else {
-                                NtripCasterUploadFailureKind.STREAM_FAILED
-                            },
+                            kind = failureKind,
                             message = it.message ?: "NTRIP caster upload stream failed.",
                             state = if (cancelled.get()) NtripConnectionState.STOPPED else NtripConnectionState.STREAMING,
+                            stopReason = (it as? NtripCasterUploadSafetyException)?.stopReason
+                                ?: if (it is NtripCasterUploadNoDataException) {
+                                    NtripCasterUploadStopReason.NO_RTCM_DATA
+                                } else {
+                                    null
+                                },
                             cause = it,
                         ),
                     )

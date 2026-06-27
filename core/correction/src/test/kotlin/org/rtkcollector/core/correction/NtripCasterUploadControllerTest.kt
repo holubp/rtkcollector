@@ -157,7 +157,7 @@ class NtripCasterUploadControllerTest {
     }
 
     @Test
-    fun `connected upload with no RTCM for watchdog interval is retryable no data failure`() {
+    fun `connected upload with no RTCM for watchdog interval stops upload`() {
         val attempts = AtomicInteger()
         val eventKinds = Collections.synchronizedList(mutableListOf<String>())
         val clock = AtomicLong(0L)
@@ -189,12 +189,14 @@ class NtripCasterUploadControllerTest {
         )
         assertTrue(enteredStreaming.await(2, TimeUnit.SECONDS))
         clock.set(12_001L)
-        waitUntil { attempts.get() >= 2 }
+        waitUntil { controller.snapshot().state == "STOPPED" }
 
+        assertEquals(1, attempts.get())
         assertEquals(NtripCasterUploadStopReason.NO_RTCM_DATA.name, controller.snapshot().stopReason)
         assertNull(controller.snapshot().lastError)
         assertTrue(eventKinds.contains("no_data"))
-        assertTrue(eventKinds.contains("retry_scheduled"))
+        assertTrue(eventKinds.contains("safety_stop"))
+        assertFalse(eventKinds.contains("retry_scheduled"))
         controller.stop()
     }
 

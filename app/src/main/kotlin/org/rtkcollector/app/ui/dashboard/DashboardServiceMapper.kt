@@ -198,7 +198,7 @@ private fun casterUploadCardFrom(intent: Intent): CasterUploadCardState {
         messageRateLabels = casterUploadMessageRateLabels(
             intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_MESSAGE_RATES),
         ),
-        droppedLabel = droppedBytes.takeIf { it > 0 }?.let { formatBytes(it) },
+        droppedLabel = formatBytes(droppedBytes),
         lastErrorLabel = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR)
             ?.takeIf { it.isNotBlank() },
         stopReasonLabel = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_REASON)
@@ -221,7 +221,29 @@ private fun casterUploadCardFrom(intent: Intent): CasterUploadCardState {
             safetyEnabled -> "Safety on"
             else -> "Safety off"
         },
+        safetyThresholdLabels = casterUploadSafetyThresholdLabels(intent),
+        retryPolicyLabel = casterUploadRetryPolicyLabel(intent),
     )
+}
+
+private fun casterUploadSafetyThresholdLabels(intent: Intent): List<String> =
+    listOf(
+        "${intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_MAX_BITRATE_KBPS, 35)} kbps over " +
+            "${intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_BITRATE_WINDOW_SECONDS, 60)} s",
+        "${intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_MAX_SESSION_UPLOAD_MB, 500)} MB session cap",
+        "${intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_NO_DATA_TIMEOUT_SECONDS, 12)} s no-data watchdog",
+    )
+
+private fun casterUploadRetryPolicyLabel(intent: Intent): String {
+    val mode = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_RETRY_MODE)
+        ?.takeIf { it.isNotBlank() }
+        ?: "n/a"
+    val limit = intent.getIntExtra(
+        RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_AFTER_CONSECUTIVE_FAILURES,
+        5,
+    )
+    return "${mode.lowercase().replaceFirstChar(Char::uppercaseChar)}, stop after $limit failure" +
+        (if (limit == 1) "" else "s")
 }
 
 private fun displayCasterUploadStatus(value: String): String =

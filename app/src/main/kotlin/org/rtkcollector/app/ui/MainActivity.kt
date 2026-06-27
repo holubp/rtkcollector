@@ -5306,6 +5306,14 @@ private fun ProfileStores.plannedDashboardState(
                         profile.safetyRulesEnabled -> "Safety on"
                         else -> "Safety off"
                     },
+                    safetyThresholdLabels = listOf(
+                        "${profile.safetyMaxBitrateKbps} kbps over ${profile.safetyBitrateWindowSeconds} s",
+                        "${profile.safetyMaxSessionUploadMb} MB session cap",
+                        "12 s no-data watchdog",
+                    ),
+                    retryPolicyLabel = "${profile.retryMode.name.lowercase().replaceFirstChar(Char::uppercaseChar)}, " +
+                        "stop after ${profile.stopAfterConsecutiveFailures} failure" +
+                        (if (profile.stopAfterConsecutiveFailures == 1) "" else "s"),
                 )
             }
             ?: CasterUploadCardState(),

@@ -1432,7 +1432,7 @@ private fun CasterUploadCard(
         }
         state.retryLabel?.let { Metric("Retry", it) }
         state.safetyLabel?.let { Metric("Safety", it) }
-        state.droppedLabel?.let { Metric("Dropped", it) }
+        Metric("Dropped", state.droppedLabel)
         state.stopReasonLabel?.let { Metric("Stop", it) }
         state.lastErrorLabel?.let { Metric("Error", it) }
     }
@@ -1500,7 +1500,7 @@ fun CasterUploadMonitorScreen(
             TidyMetricRow("Uploaded", state.uploadedLabel)
             TidyMetricRow("Bitrate", state.bitrateLabel)
             TidyMetricRow("Total RTCM", state.totalRtcmHzLabel)
-            state.droppedLabel?.let { TidyMetricRow("Dropped", it) }
+            TidyMetricRow("Dropped", state.droppedLabel)
 
             Text("RTCM message rates", style = MaterialTheme.typography.titleSmall)
             if (state.messageRateLabels.isEmpty()) {
@@ -1517,7 +1517,19 @@ fun CasterUploadMonitorScreen(
 
             Text("Retry and safety", style = MaterialTheme.typography.titleSmall)
             TidyMetricRow("Retry", state.retryLabel ?: "n/a")
+            TidyMetricRow("Retry policy", state.retryPolicyLabel ?: "n/a")
             TidyMetricRow("Safety", state.safetyLabel ?: "n/a")
+            state.safetyThresholdLabels.forEachIndexed { index, label ->
+                TidyMetricRow(
+                    label = when (index) {
+                        0 -> "Bitrate limit"
+                        1 -> "Volume limit"
+                        2 -> "Watchdog"
+                        else -> "Safety"
+                    },
+                    value = label,
+                )
+            }
             Text(
                 text = "The uploader sends only valid RTCM3 frames extracted from the receiver stream. Receiver telemetry such as OBSVM, OBSVMCMPB, BESTSAT and NMEA is not uploaded.",
                 style = MaterialTheme.typography.bodySmall,

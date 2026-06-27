@@ -538,6 +538,15 @@ class RecordingForegroundService : Service() {
                     baseCasterUploadRetryMode = config.policy.retry.mode.name,
                     baseCasterUploadSafetyEnabled = config.policy.safety.enabled,
                     baseCasterUploadSafetyForced = config.policy.safety.forced,
+                    baseCasterUploadSafetyMaxBitrateKbps = config.policy.safety.maxBitrateKbps.toInt(),
+                    baseCasterUploadSafetyBitrateWindowSeconds =
+                        (config.policy.safety.bitrateWindowMillis / 1_000L).toInt(),
+                    baseCasterUploadSafetyMaxSessionUploadMb =
+                        (config.policy.safety.maxSessionUploadBytes / 1024L / 1024L).toInt(),
+                    baseCasterUploadNoDataTimeoutSeconds =
+                        (config.policy.safety.noDataTimeoutMillis / 1_000L).toInt(),
+                    baseCasterUploadStopAfterConsecutiveFailures =
+                        config.policy.retry.stopAfterConsecutiveFailures,
                 )
             }
 
@@ -1844,6 +1853,11 @@ class RecordingForegroundService : Service() {
             baseCasterUploadConsecutiveFailures = 0,
             baseCasterUploadSafetyEnabled = false,
             baseCasterUploadSafetyForced = false,
+            baseCasterUploadSafetyMaxBitrateKbps = 35,
+            baseCasterUploadSafetyBitrateWindowSeconds = 60,
+            baseCasterUploadSafetyMaxSessionUploadMb = 500,
+            baseCasterUploadNoDataTimeoutSeconds = 12,
+            baseCasterUploadStopAfterConsecutiveFailures = 5,
             baseCasterUploadStopReason = null,
             rtklibState = "Disabled",
             rtklibRoutePlan = "n/a",
@@ -2328,6 +2342,26 @@ class RecordingForegroundService : Service() {
                 )
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_ENABLED, state.baseCasterUploadSafetyEnabled)
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_FORCED, state.baseCasterUploadSafetyForced)
+                putExtra(
+                    EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_MAX_BITRATE_KBPS,
+                    state.baseCasterUploadSafetyMaxBitrateKbps,
+                )
+                putExtra(
+                    EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_BITRATE_WINDOW_SECONDS,
+                    state.baseCasterUploadSafetyBitrateWindowSeconds,
+                )
+                putExtra(
+                    EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_MAX_SESSION_UPLOAD_MB,
+                    state.baseCasterUploadSafetyMaxSessionUploadMb,
+                )
+                putExtra(
+                    EXTRA_STATE_BASE_CASTER_UPLOAD_NO_DATA_TIMEOUT_SECONDS,
+                    state.baseCasterUploadNoDataTimeoutSeconds,
+                )
+                putExtra(
+                    EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_AFTER_CONSECUTIVE_FAILURES,
+                    state.baseCasterUploadStopAfterConsecutiveFailures,
+                )
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_REASON, state.baseCasterUploadStopReason)
                 putExtra(EXTRA_STATE_RTKLIB_STATE, state.rtklibState)
                 putExtra(EXTRA_STATE_RTKLIB_ROUTE_PLAN, state.rtklibRoutePlan)
@@ -3548,6 +3582,14 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_CONSECUTIVE_FAILURES = "baseCasterUploadConsecutiveFailures"
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_ENABLED = "baseCasterUploadSafetyEnabled"
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_FORCED = "baseCasterUploadSafetyForced"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_MAX_BITRATE_KBPS = "baseCasterUploadStateSafetyMaxBitrateKbps"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_BITRATE_WINDOW_SECONDS =
+            "baseCasterUploadStateSafetyBitrateWindowSeconds"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_MAX_SESSION_UPLOAD_MB =
+            "baseCasterUploadStateSafetyMaxSessionUploadMb"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_NO_DATA_TIMEOUT_SECONDS = "baseCasterUploadNoDataTimeoutSeconds"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_AFTER_CONSECUTIVE_FAILURES =
+            "baseCasterUploadStateStopAfterConsecutiveFailures"
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_REASON = "baseCasterUploadStopReason"
         const val EXTRA_STATE_RTKLIB_STATE = "rtklibState"
         const val EXTRA_STATE_RTKLIB_ROUTE_PLAN = "rtklibRoutePlan"

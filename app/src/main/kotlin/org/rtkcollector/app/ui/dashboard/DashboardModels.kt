@@ -483,11 +483,13 @@ data class CasterUploadCardState(
     val bitrateLabel: String = "0.0 kbps",
     val totalRtcmHzLabel: String = "0.0 Hz",
     val messageRateLabels: List<String> = emptyList(),
-    val droppedLabel: String? = null,
+    val droppedLabel: String = "0 B",
     val lastErrorLabel: String? = null,
     val stopReasonLabel: String? = null,
     val retryLabel: String? = null,
     val safetyLabel: String? = null,
+    val safetyThresholdLabels: List<String> = emptyList(),
+    val retryPolicyLabel: String? = null,
 )
 
 data class RtklibCardState(

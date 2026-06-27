@@ -268,6 +268,11 @@ class NtripCasterUploadController(
                     lastError.set(null)
                     stopReason.set(NtripCasterUploadStopReason.NO_RTCM_DATA.name)
                     emitEvent("no_data", failure.message)
+                    emitEvent("safety_stop", failure.message)
+                    currentRetryDelayMillis.set(null)
+                    state.set("STOPPED")
+                    running = false
+                    return
                 } else {
                     lastError.set(failure.message)
                 }

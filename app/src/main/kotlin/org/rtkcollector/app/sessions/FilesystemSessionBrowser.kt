@@ -3,6 +3,7 @@ package org.rtkcollector.app.sessions
 import org.json.JSONObject
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.name
 
@@ -14,7 +15,7 @@ object FilesystemSessionBrowser {
     ): SessionBrowserState {
         val currentPath = currentSessionLocation
             ?.takeIf { it.isNotBlank() && !it.startsWith("content://") }
-            ?.let { Path.of(it) }
+            ?.let { Paths.get(it) }
         val currentEntry = currentPath
             ?.takeIf(Files::exists)
             ?.let { path ->

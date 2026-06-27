@@ -12,7 +12,8 @@ requests by default and has a controlled v1 compatibility retry for caster
 responses that indicate protocol-version incompatibility. Authentication and
 authorization failures such as HTTP `401` and `403` are non-retryable field
 errors, not reconnect loops. In code and artifacts the Android-to-receiver path
-is called receiver TX. Experimental V1 can also upload fixed-base RTCM to an
+is called receiver TX. Base caster upload is separate and occurs from already-
+recorded receiver bytes. Experimental V1 can also upload fixed-base RTCM to an
 external NTRIP caster, but the app still does not administer or host a caster.
 
 Some strict casters reject generic application-style `User-Agent` values even
@@ -67,10 +68,16 @@ arriving while the active workflow expects corrections, the runtime treats this
 as a degraded correction-stream failure and reconnects. This must not stop raw
 receiver recording. Recovery is recorded only after correction bytes resume.
 
+Caster upload retry policies are separate and explicit and must enforce a minimum
+`10s` reconnect delay in fixed mode and adaptive initial delay.
+
 ## Correction Routing
 
 - RTCM bytes from NTRIP must be validated enough to avoid obvious framing
   mistakes once the RTCM extractor exists.
+- Base-upload worker input comes from valid RTCM3 frames only extracted from
+  `receiver-rx.raw` after those bytes have been written. OBSVM/OBSVMCMPB,
+  BESTSAT and NMEA telemetry are not uploaded.
 - Correction age must be monitored.
 - Serial TX injection must use a queue separate from raw receiver RX capture.
 - All correction bytes received from NTRIP are written to `correction-input.raw`
@@ -109,9 +116,20 @@ must confirm:
 - at least one RTCM MSM observation message is expected.
 
 Network failures put upload into a degraded reconnect state while recording
-continues. Authentication or authorisation failures stop upload retries until
-the configuration changes. Upload state, uploaded bytes, dropped bytes and final
-status are exposed through the service state and redacted session metadata.
+continues. Reconnect waits follow the configured retry policy and enforce the
+`>=10s` floor where required. Authentication or authorisation failures stop
+upload retries until the configuration changes.
+
+RTK2go host profiles force uploader safety rules. Upload stops for that host when
+bitrate or session-volume safety limits are hit, and this state is surfaced as a
+safety stop reason. Non-RTK2go hosts may enable equivalent safety manually.
+High-rate RTCM upload sessions can consume significant mobile data and can trigger
+public caster service limits; operators should consider this before enabling
+always-on upload from metered links.
+
+Upload state, uploaded bytes, dropped bytes, bitrate, RTCM frame rates (total and
+per-message type), and final status are exposed through the service state and
+redacted session metadata.
 
 ## Secrets
 

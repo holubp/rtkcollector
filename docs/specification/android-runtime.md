@@ -153,6 +153,79 @@ Verification:
 - Manual: rover + NTRIP dashboard last update stays near current UTC time
   during receiver RTCM telemetry updates.
 
+## Base Caster Upload
+
+### ANDROID-UPLOAD-001: Upload Must Remain Advisory and Not Block Capture
+
+Status: Normative
+
+Caster upload MUST never read from or block raw capture paths. The upload path can
+only process bytes already appended to `receiver-rx.raw`, and upload failures,
+retries or safety stops MUST NOT stop, delay or mutate raw recording while USB
+transport and storage remain functional.
+
+Verification:
+- Automated: service call-site review confirms upload starts from the raw capture
+  runtime after writers are open.
+- Manual: force upload outage while recording is active; `receiver-rx.raw` growth
+  remains continuous.
+
+### ANDROID-UPLOAD-002: Upload Retry Policy Is Bounded and 10-Second Minimum
+
+Status: Normative
+
+Upload retries MUST be in configured fixed or adaptive mode with explicit minimum
+bounds. Fixed reconnect delay MUST be `>=10s`. Adaptive initial delay MUST be
+`>=10s`, and adaptive maximum delay MUST be at least the initial value.
+Reconnect delays under ten seconds MUST be rejected at profile validation or
+runtime mapping time.
+
+Verification:
+- Automated: profile validation tests and controller retry-schedule tests.
+- Review: service/runtime policy mapping enforces lower bounds before controller
+  start.
+
+### ANDROID-UPLOAD-003: Upload No-Data Watchdog and Safety Stops Are Explicit
+
+Status: Normative
+
+The upload runtime MUST stop upload as a terminal safety action only if post-connection
+no-data watchdog expires without successful uploads, or if safety limits trigger.
+Safety triggers include sustained bitrate and per-session volume thresholds. Safety
+stop reasons MUST remain in upload monitor and final summary while keeping receiver
+capture active.
+
+Verification:
+- Automated: upload controller tests for no-data watchdog and safety stop paths.
+- Manual: offline caster and high-rate upload simulation show explicit safety stop
+  reason.
+
+### ANDROID-UPLOAD-004: RTK2go Hosts Force Safety Rules
+
+Status: Normative
+
+When uploader host detection identifies RTK2go, safety rules MUST be forced and
+non-disableable for that host. The runtime state MUST distinguish forced safety
+from user-disabled safety.
+
+Verification:
+- Automated: mapping tests for RTK2go host detection and forced safety flag.
+- Review: runtime policy payload carries forced safety state to service monitor.
+
+### ANDROID-UPLOAD-005: Upload Telemetry Uses Actual RTCM Frames
+
+Status: Normative
+
+Upload telemetry MUST be derived from frames that are actually offered for upload,
+including uploaded bytes, dropped bytes, current bitrate, total RTCM upload rate,
+and per-message rates. It MUST NOT be derived from configured command output
+settings alone.
+
+Verification:
+- Automated: uploader controller snapshot tests and dashboard mapper tests.
+- Manual: detailed monitor shows total and per-message rates while upload is
+  active.
+
 ## Storage
 
 ### ANDROID-STORAGE-001: SAF Tree Access Is Explicit And Persisted

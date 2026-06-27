@@ -55,6 +55,104 @@ Verification:
 - Automated: NTRIP runtime/session writer tests.
 - Manual: rover + NTRIP session contains usable RTCM3 correction stream.
 
+### CORR-UPLOAD-001: Caster Upload Uses RTCM3 Frames Only
+
+Status: Normative
+
+Base upload MUST send only valid RTCM3 frames extracted from `receiver-rx.raw` to
+the caster upload pipeline. Non-RTCM payloads, including OBSVM/OBSVMCMPB/BESTSAT
+and NMEA records, MUST NOT be uploaded. Validity is a precondition for upload;
+invalid RTCM must remain in `base-caster-upload.rtcm3` for audit and be marked
+as dropped from upload.
+
+Verification:
+- Automated: `NtripCasterUploadControllerTest` valid/invalid frame coverage.
+- Manual: replay session with mixed OBSVM/RTCM confirms only RTCM bytes are offered
+  to upload.
+
+### CORR-UPLOAD-002: Caster Upload Is Isolated From Receiver Capture
+
+Status: Normative
+
+Caster upload MUST be advisory and downstream from byte-exact raw recording. Upload
+shall consume receiver data only after bytes have been written to `receiver-rx.raw`.
+Upload failures, backoff and safety stops MUST NOT stop, delay or mutate
+`receiver-rx.raw` while USB transport and storage are functional.
+
+Verification:
+- Automated: uploader-controller tests and service call-site review.
+- Manual: live upload outage while recording keeps `receiver-rx.raw` growing and
+  upload state degrades only.
+
+### CORR-UPLOAD-003: Caster Upload Monitor Is Always Discoverable When Configured
+
+Status: Normative
+
+When caster upload is configured and enabled, the runtime and dashboard state must
+expose upload monitor fields before and during recording. The monitor MUST show at
+least current state, retry status, last error, uploaded/dropped bytes, upload
+bitrate, valid RTCM frame rate and per-RTCM-type rates.
+
+Verification:
+- Automated: dashboard state/model mapper tests.
+- Manual: home dashboard and detailed upload monitor show upload telemetry.
+
+### CORR-UPLOAD-004: Caster Upload Uses Bounded Retry Policy
+
+Status: Normative
+
+The uploader retry policy MUST be explicit and bounded. The app MUST support
+fixed-reconnect and adaptive-reconnect modes with bounded delays. Fixed reconnect
+delay MUST be at least `10s`.
+
+Verification:
+- Automated: upload policy and controller retry tests.
+- Manual: network interruption reproduces capped bounded reconnect in logs/monitor.
+
+### CORR-UPLOAD-005: Caster Upload Safety Is Enforced and Bounded
+
+Status: Normative
+
+When safety is enabled (or RTK2go host-enforced), caster upload MUST:
+
+- stop after consecutive failure limit is exceeded;
+- stop when a post-connect no-RTCM watchdog expires;
+- stop when bitrate exceeds configured sustained bitrate limit over the configured
+  window; and
+- stop when per-session uploaded volume exceeds configured MB cap.
+
+Safety stop reasons MUST be surfaced in monitor state and final upload status.
+
+Verification:
+- Automated: upload controller tests covering retry limit, no-data watchdog, bitrate
+  cap and session cap.
+- Review: service runtime path maps controller stop reasons to persisted redacted
+  session metadata and state.
+
+### CORR-UPLOAD-006: RTK2go Hosts Must Enforce Safety
+
+Status: Normative
+
+When the uploader host is RTK2go, safety rules MUST be enforced regardless of user
+selection. This includes enabling bitrate/session-volume caps and session watchdog
+logic where applicable. Non-RTK2go hosts MAY keep safety disabled by default.
+
+Verification:
+- Automated: RTK2go host unit coverage and active-config mapping tests.
+- Review: runtime extras and service config show `safetyForced` and selected host.
+
+### CORR-UPLOAD-007: Credentials Are Redacted From Upload Metadata
+
+Status: Normative
+
+Runtime upload metadata and diagnostics must not include credentials. Passwords,
+tokens and full secret values MUST be redacted before writing upload events,
+session metadata, and exported artifacts.
+
+Verification:
+- Automated: session metadata/event redaction tests where available.
+- Manual: confirm session metadata and events omit plaintext credentials.
+
 ## Product Boundaries
 
 ### PRODUCT-NONGOAL-001: No GIS Application Scope

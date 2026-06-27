@@ -160,6 +160,42 @@ Verification:
 - Automated: dashboard state tests for base candidate generation.
 - Manual: temporary-base dashboard review in portrait and landscape.
 
+### UI-UPLOAD-001: Caster Upload Card Is Visible When Enabled
+
+Status: Normative
+
+When caster upload is configured and enabled for the active workflow, the Home
+dashboard MUST show a dedicated compact `Caster upload` card outside the rover
+correction card, including before recording starts. The card may remain compact
+while recording and should be reachable in portrait and landscape layouts.
+
+Verification:
+- Automated: dashboard visibility/model tests for upload card.
+- Manual: screenshot review shows card visible before session start and during
+  active recording.
+
+### UI-UPLOAD-002: Upload Monitor Surfaces State, Errors, Retry and Throughput
+
+Status: Normative
+
+The upload card and detailed upload monitor MUST show:
+
+- uploader state and last error or safety-stop reason,
+- retry mode, delay and failure/limit status,
+- uploaded and dropped bytes,
+- current bitrate,
+- total valid RTCM upload rate in Hz,
+- per-RTCM-message-type upload rates, and
+- safety status (enabled, forced and thresholds).
+
+Tapping the card MUST open a detailed upload monitor screen with the same
+monitoring categories.
+
+Verification:
+- Automated: dashboard state and mapper tests for upload telemetry fields.
+- Manual: detailed upload monitor shows state/retry/volume/bitrate/RTCM rates and
+  stop reason.
+
 ## Profile Editors
 
 ### UI-SETUP-001: Active Settings Set Is Visible In Settings

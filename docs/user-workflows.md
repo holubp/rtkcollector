@@ -106,7 +106,9 @@ The Android UI lets the user choose a workflow and receiver profile. The derived
 workflow details and expected recording artifacts are shown before validation.
 The Home screen uses a Compose dashboard that shows the effective session
 configuration and live telemetry in compact cards: Position, Fix, NTRIP and
-Files. Detailed profile editing is reached from Menu.
+Files. When a caster-upload profile is enabled for the active workflow, a
+compact `Caster upload` card is also shown. Detailed profile editing is reached
+from Menu.
 The dashboard configuration tiles are intentionally lean selectors: Workflow
 selects the active workflow, Settings selects the active settings set,
 Mountpoint selects or overrides the active NTRIP mountpoint, Receiver selects a
@@ -125,6 +127,7 @@ It also provides the experimental real-recording controls:
 - recording policies for derived NMEA/JSONL exports, NTRIP correction input,
   optional remote-base raw observations where a source supports them, and an
   optional Android mock-location publisher (described below);
+- dedicated caster upload monitoring in the home dashboard and full upload monitor;
 - selectable PPP-to-GGA quality mapping for generated NMEA, defaulting to `2`
   with `5` and `9` available for compatibility with downstream consumers;
 - storage profiles, with app-private storage as the default and Android SAF
@@ -568,13 +571,22 @@ User flow:
    is needed.
 6. Record base status and RTCM output/extracted RTCM where supported.
 
+When caster upload is configured and enabled, the upload monitor shows live upload
+state, last error/safety stop, retry mode/delay/failure count, upload bytes,
+bitrate, total RTCM upload Hz and per-message RTCM rates.
+
+Only valid RTCM3 frames are uploaded. OBSVM/OBSVMCMPB/BESTSAT/NMEA lines are
+not uploaded.
+
 When caster upload is enabled, the selected command profile must emit minimum
 RTCM base data. The app rejects upload start if the command script has no
 base-position RTCM message or no MSM observation message. During recording,
 valid RTCM extracted from receiver RX is written to `base-caster-upload.rtcm3`
 and uploaded through a bounded background uploader. Caster outage or
 authentication failure degrades only upload; `receiver-rx.raw` recording
-continues.
+continues. RTK2go upload profiles force safety rules, and reconnect delays below
+10 seconds are rejected. High-rate RTCM upload and long sessions can quickly
+consume mobile data and can hit public caster quotas.
 
 A fixed base must not start directly from a temporary-base recording. The base
 coordinate must be accepted first. The V1 UI rejects starts where manual

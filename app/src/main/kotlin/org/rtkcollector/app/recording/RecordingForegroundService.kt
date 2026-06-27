@@ -48,8 +48,13 @@ import org.rtkcollector.core.capture.RecordingHealthMonitor
 import org.rtkcollector.core.correction.DefaultNtripRuntimeClient
 import org.rtkcollector.core.correction.NtripClient
 import org.rtkcollector.core.correction.NtripCasterUploadController
+import org.rtkcollector.core.correction.NtripCasterUploadEvent
+import org.rtkcollector.core.correction.NtripCasterUploadPolicy
 import org.rtkcollector.core.correction.NtripCasterUploadRequest
+import org.rtkcollector.core.correction.NtripCasterUploadRetryMode as CoreCasterUploadRetryMode
+import org.rtkcollector.core.correction.NtripCasterUploadRetryPolicy
 import org.rtkcollector.core.correction.NtripCasterUploadRuntimeConfig
+import org.rtkcollector.core.correction.NtripCasterUploadSafetyPolicy
 import org.rtkcollector.core.correction.NtripCasterUploadSnapshot
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripProtocolVersion
@@ -458,7 +463,9 @@ class RecordingForegroundService : Service() {
             startRtklibWorkerIfEnabled(intent, sessionWriters)
             val casterUploadConfig = casterUploadRuntimeConfig(intent)
             val uploadController = casterUploadConfig?.let {
-                NtripCasterUploadController().also { controller ->
+                NtripCasterUploadController(
+                    eventSink = { event -> sessionWriters.appendCasterUploadEvent(event) },
+                ).also { controller ->
                     casterUploadController = controller
                 }
             }
@@ -528,6 +535,9 @@ class RecordingForegroundService : Service() {
                 state = state.copy(
                     baseCasterUploadState = "CONNECTING",
                     baseCasterUploadUrl = config.mountpointUrl,
+                    baseCasterUploadRetryMode = config.policy.retry.mode.name,
+                    baseCasterUploadSafetyEnabled = config.policy.safety.enabled,
+                    baseCasterUploadSafetyForced = config.policy.safety.forced,
                 )
             }
 
@@ -1320,6 +1330,56 @@ class RecordingForegroundService : Service() {
         } else {
             null
         }
+        val retryMode = when (
+            intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_RETRY_MODE)?.uppercase()
+        ) {
+            "FIXED" -> CoreCasterUploadRetryMode.FIXED
+            else -> CoreCasterUploadRetryMode.ADAPTIVE
+        }
+        val policy = NtripCasterUploadPolicy(
+            retry = NtripCasterUploadRetryPolicy(
+                mode = retryMode,
+                fixedReconnectDelayMillis = intent.getIntExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_FIXED_RECONNECT_DELAY_SECONDS,
+                    10,
+                ).coerceAtLeast(10) * 1_000L,
+                adaptiveInitialDelayMillis = intent.getIntExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_INITIAL_DELAY_SECONDS,
+                    10,
+                ).coerceAtLeast(10) * 1_000L,
+                adaptiveMaxDelayMillis = intent.getIntExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_MAX_DELAY_SECONDS,
+                    300,
+                ).coerceAtLeast(
+                    intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_INITIAL_DELAY_SECONDS, 10)
+                        .coerceAtLeast(10),
+                ) * 1_000L,
+                stopAfterFailuresEnabled = intent.getBooleanExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_FAILURES_ENABLED,
+                    true,
+                ),
+                stopAfterConsecutiveFailures = intent.getIntExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_CONSECUTIVE_FAILURES,
+                    5,
+                ).coerceAtLeast(1),
+            ),
+            safety = NtripCasterUploadSafetyPolicy(
+                enabled = intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_ENABLED, false),
+                forced = intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_FORCED, false),
+                maxBitrateKbps = intent.getIntExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_BITRATE_KBPS,
+                    35,
+                ).coerceAtLeast(1).toDouble(),
+                bitrateWindowMillis = intent.getIntExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_SAFETY_BITRATE_WINDOW_SECONDS,
+                    60,
+                ).coerceAtLeast(1) * 1_000L,
+                maxSessionUploadBytes = intent.getIntExtra(
+                    EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_SESSION_UPLOAD_MB,
+                    500,
+                ).coerceAtLeast(1) * 1024L * 1024L,
+            ),
+        )
         return NtripCasterUploadRuntimeConfig(
             request = NtripCasterUploadRequest(
                 host = host,
@@ -1330,6 +1390,7 @@ class RecordingForegroundService : Service() {
                     intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY),
                 ),
             ),
+            policy = policy,
         )
     }
 
@@ -1682,7 +1743,7 @@ class RecordingForegroundService : Service() {
         casterUploadSnapshot?.let { snapshot ->
             runCatching {
                 writers?.appendEventJson(
-                    """{"type":"base-caster-upload-final","state":"${snapshot.state.jsonEscape()}","uploadedBytes":${snapshot.bytesUploaded},"droppedBytes":${snapshot.bytesDropped},"url":"${snapshot.mountpointUrl.jsonEscape()}","lastError":${snapshot.lastError.jsonStringOrNull()}}""",
+                    """{"type":"base-caster-upload-final","state":"${snapshot.state.jsonEscape()}","uploadedBytes":${snapshot.bytesUploaded},"droppedBytes":${snapshot.bytesDropped},"bitrateKbps":${snapshot.bitrateKbps},"rtcmHz":${snapshot.totalRtcmHz},"stopReason":${snapshot.stopReason.jsonStringOrNull()},"url":"${snapshot.mountpointUrl.jsonEscape()}","lastError":${snapshot.lastError.jsonStringOrNull()}}""",
                 )
             }
         }
@@ -1775,6 +1836,15 @@ class RecordingForegroundService : Service() {
             baseCasterUploadBytes = 0,
             baseCasterUploadDroppedBytes = 0,
             baseCasterUploadLastError = null,
+            baseCasterUploadBitrateKbps = 0.0,
+            baseCasterUploadRtcmHz = 0.0,
+            baseCasterUploadMessageRates = "",
+            baseCasterUploadRetryMode = "",
+            baseCasterUploadRetryDelaySeconds = 0,
+            baseCasterUploadConsecutiveFailures = 0,
+            baseCasterUploadSafetyEnabled = false,
+            baseCasterUploadSafetyForced = false,
+            baseCasterUploadStopReason = null,
             rtklibState = "Disabled",
             rtklibRoutePlan = "n/a",
             rtklibSnapshotId = "n/a",
@@ -2247,6 +2317,18 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES, state.baseCasterUploadBytes)
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES, state.baseCasterUploadDroppedBytes)
                 putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR, state.baseCasterUploadLastError)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_BITRATE_KBPS, state.baseCasterUploadBitrateKbps)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_RTCM_HZ, state.baseCasterUploadRtcmHz)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_MESSAGE_RATES, state.baseCasterUploadMessageRates)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_RETRY_MODE, state.baseCasterUploadRetryMode)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_RETRY_DELAY_SECONDS, state.baseCasterUploadRetryDelaySeconds)
+                putExtra(
+                    EXTRA_STATE_BASE_CASTER_UPLOAD_CONSECUTIVE_FAILURES,
+                    state.baseCasterUploadConsecutiveFailures,
+                )
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_ENABLED, state.baseCasterUploadSafetyEnabled)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_FORCED, state.baseCasterUploadSafetyForced)
+                putExtra(EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_REASON, state.baseCasterUploadStopReason)
                 putExtra(EXTRA_STATE_RTKLIB_STATE, state.rtklibState)
                 putExtra(EXTRA_STATE_RTKLIB_ROUTE_PLAN, state.rtklibRoutePlan)
                 putExtra(EXTRA_STATE_RTKLIB_SNAPSHOT_ID, state.rtklibSnapshotId)
@@ -3046,7 +3128,7 @@ class RecordingForegroundService : Service() {
                         }
                         val baseUploadOffered = if (casterUploadController != null && frame.crcValid == true) {
                             sessionWriters.appendBaseCasterUploadRtcm(frame.bytes)
-                            casterUploadController.offer(frame.bytes)
+                            casterUploadController.offer(frame.bytes, frame.messageType)
                         } else {
                             null
                         }
@@ -3190,9 +3272,27 @@ class RecordingForegroundService : Service() {
             baseCasterUploadBytes = snapshot.bytesUploaded,
             baseCasterUploadDroppedBytes = snapshot.bytesDropped,
             baseCasterUploadLastError = snapshot.lastError,
+            baseCasterUploadBitrateKbps = snapshot.bitrateKbps,
+            baseCasterUploadRtcmHz = snapshot.totalRtcmHz,
+            baseCasterUploadMessageRates = snapshot.messageRates.joinToString(",") { rate ->
+                "${rate.messageType}=${"%.2f".format(java.util.Locale.US, rate.hz)}"
+            },
+            baseCasterUploadRetryDelaySeconds = snapshot.currentRetryDelayMillis
+                ?.let { (it / 1_000L).toInt() }
+                ?: 0,
+            baseCasterUploadConsecutiveFailures = snapshot.consecutiveFailures,
+            baseCasterUploadSafetyEnabled = snapshot.safetyEnabled,
+            baseCasterUploadSafetyForced = snapshot.safetyForced,
+            baseCasterUploadStopReason = snapshot.stopReason,
             lastError = if (uploadHasProblem) snapshot.lastError else lastError,
             errorCategory = if (uploadHasProblem) RecordingErrorCategory.NTRIP else errorCategory,
             errorSeverity = if (uploadHasProblem) RecordingErrorSeverity.DEGRADED else errorSeverity,
+        )
+    }
+
+    private fun RecordingSessionWriters.appendCasterUploadEvent(event: NtripCasterUploadEvent) {
+        appendEventJson(
+            """{"type":"base-caster-upload","kind":"${event.kind.jsonEscape()}","message":"${event.message.jsonEscape()}","timestampMillis":${event.timestampMillis}}""",
         )
     }
 
@@ -3389,6 +3489,19 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BASE_CASTER_UPLOAD_SECRET_REF = "baseCasterUploadSecretRef"
         const val EXTRA_BASE_CASTER_UPLOAD_PASSWORD = "baseCasterUploadPassword"
         const val EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY = "baseCasterUploadProtocolPolicy"
+        const val EXTRA_BASE_CASTER_UPLOAD_RETRY_MODE = "baseCasterUploadRetryMode"
+        const val EXTRA_BASE_CASTER_UPLOAD_FIXED_RECONNECT_DELAY_SECONDS = "baseCasterUploadFixedReconnectDelaySeconds"
+        const val EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_INITIAL_DELAY_SECONDS = "baseCasterUploadAdaptiveInitialDelaySeconds"
+        const val EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_MAX_DELAY_SECONDS = "baseCasterUploadAdaptiveMaxDelaySeconds"
+        const val EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_FAILURES_ENABLED = "baseCasterUploadStopAfterFailuresEnabled"
+        const val EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_CONSECUTIVE_FAILURES =
+            "baseCasterUploadStopAfterConsecutiveFailures"
+        const val EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_ENABLED = "baseCasterUploadSafetyRulesEnabled"
+        const val EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_FORCED = "baseCasterUploadSafetyRulesForced"
+        const val EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_BITRATE_KBPS = "baseCasterUploadSafetyMaxBitrateKbps"
+        const val EXTRA_BASE_CASTER_UPLOAD_SAFETY_BITRATE_WINDOW_SECONDS =
+            "baseCasterUploadSafetyBitrateWindowSeconds"
+        const val EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_SESSION_UPLOAD_MB = "baseCasterUploadSafetyMaxSessionUploadMb"
         const val EXTRA_BASE_CASTER_UPLOAD_FINAL_STATUS = "baseCasterUploadFinalStatus"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
         const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"
@@ -3427,6 +3540,15 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES = "baseCasterUploadBytes"
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES = "baseCasterUploadDroppedBytes"
         const val EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR = "baseCasterUploadLastError"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_BITRATE_KBPS = "baseCasterUploadBitrateKbps"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_RTCM_HZ = "baseCasterUploadRtcmHz"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_MESSAGE_RATES = "baseCasterUploadMessageRates"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_RETRY_MODE = "baseCasterUploadStateRetryMode"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_RETRY_DELAY_SECONDS = "baseCasterUploadRetryDelaySeconds"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_CONSECUTIVE_FAILURES = "baseCasterUploadConsecutiveFailures"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_ENABLED = "baseCasterUploadSafetyEnabled"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_FORCED = "baseCasterUploadSafetyForced"
+        const val EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_REASON = "baseCasterUploadStopReason"
         const val EXTRA_STATE_RTKLIB_STATE = "rtklibState"
         const val EXTRA_STATE_RTKLIB_ROUTE_PLAN = "rtklibRoutePlan"
         const val EXTRA_STATE_RTKLIB_SNAPSHOT_ID = "rtklibSnapshotId"

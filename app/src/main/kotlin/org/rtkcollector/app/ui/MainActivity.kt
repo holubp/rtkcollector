@@ -76,6 +76,7 @@ import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.NtripCasterUploadProfile
+import org.rtkcollector.app.profile.NtripCasterUploadRetryMode
 import org.rtkcollector.app.profile.NtripCasterProfile
 import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.NtripMountpointOverride
@@ -133,6 +134,8 @@ import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
 import org.rtkcollector.app.ui.dashboard.DashboardDistanceUnitPreference
 import org.rtkcollector.app.ui.dashboard.SatelliteMonitorCardThemePreference
 import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
+import org.rtkcollector.app.ui.dashboard.CasterUploadCardState
+import org.rtkcollector.app.ui.dashboard.CasterUploadMonitorScreen
 import org.rtkcollector.app.ui.dashboard.CoordinatePair
 import org.rtkcollector.app.ui.dashboard.FixCardState
 import org.rtkcollector.app.ui.dashboard.ProfilesCardState
@@ -979,9 +982,14 @@ fun RtkCollectorApp(
                         ).show()
                     },
                     onSatelliteMonitorDetails = { screen = AppScreen.SATELLITE_MONITOR },
+                    onCasterUploadDetails = { screen = AppScreen.CASTER_UPLOAD_MONITOR },
                 )
                 AppScreen.SATELLITE_MONITOR -> SatelliteMonitorScreen(
                     state = state.satelliteMonitor,
+                    onBack = { screen = AppScreen.HOME },
+                )
+                AppScreen.CASTER_UPLOAD_MONITOR -> CasterUploadMonitorScreen(
+                    state = state.casterUpload,
                     onBack = { screen = AppScreen.HOME },
                 )
                 AppScreen.SETTINGS ->
@@ -3396,6 +3404,69 @@ private fun ProfileStores.profileEditorData(
                         optionItems = NTRIP_PROTOCOL_POLICY_OPTIONS,
                     ),
                     EditableProfileField(
+                        key = "retryMode",
+                        label = "Retry mode",
+                        value = profile.retryMode.name,
+                        optionItems = listOf(
+                            EditableProfileOption(NtripCasterUploadRetryMode.ADAPTIVE.name, "Adaptive"),
+                            EditableProfileOption(NtripCasterUploadRetryMode.FIXED.name, "Fixed"),
+                        ),
+                    ),
+                    EditableProfileField(
+                        "fixedReconnectDelaySeconds",
+                        "Fixed reconnect delay seconds (minimum 10; values under 10 cannot be entered)",
+                        profile.fixedReconnectDelaySeconds.toString(),
+                        errorText = "Minimum 10 seconds.".takeIf { profile.fixedReconnectDelaySeconds < 10 },
+                    ),
+                    EditableProfileField(
+                        "adaptiveInitialDelaySeconds",
+                        "Adaptive initial delay seconds (minimum 10)",
+                        profile.adaptiveInitialDelaySeconds.toString(),
+                        errorText = "Minimum 10 seconds.".takeIf { profile.adaptiveInitialDelaySeconds < 10 },
+                    ),
+                    EditableProfileField(
+                        "adaptiveMaxDelaySeconds",
+                        "Adaptive maximum delay seconds",
+                        profile.adaptiveMaxDelaySeconds.toString(),
+                    ),
+                    EditableProfileField(
+                        key = "stopAfterFailuresEnabled",
+                        label = "Stop after repeated failures",
+                        value = profile.stopAfterFailuresEnabled.toString(),
+                        boolean = true,
+                    ),
+                    EditableProfileField(
+                        "stopAfterConsecutiveFailures",
+                        "Failure count before stop",
+                        profile.stopAfterConsecutiveFailures.toString(),
+                    ),
+                    EditableProfileField(
+                        key = "safetyRulesEnabled",
+                        label = if (profile.isRtk2goHost) {
+                            "RTK2go safety rules (required for RTK2go)"
+                        } else {
+                            "RTK2go safety rules"
+                        },
+                        value = profile.effectiveSafetyRulesEnabled.toString(),
+                        boolean = true,
+                        readOnly = profile.isRtk2goHost,
+                    ),
+                    EditableProfileField(
+                        "safetyMaxBitrateKbps",
+                        "Safety max bitrate kbps",
+                        profile.safetyMaxBitrateKbps.toString(),
+                    ),
+                    EditableProfileField(
+                        "safetyBitrateWindowSeconds",
+                        "Safety bitrate window seconds",
+                        profile.safetyBitrateWindowSeconds.toString(),
+                    ),
+                    EditableProfileField(
+                        "safetyMaxSessionUploadMb",
+                        "Safety session upload limit MB",
+                        profile.safetyMaxSessionUploadMb.toString(),
+                    ),
+                    EditableProfileField(
                         key = "enabledByDefault",
                         label = "Enabled by default",
                         value = profile.enabledByDefault.toString(),
@@ -3764,8 +3835,38 @@ private fun ProfileStores.saveProfileEditorData(
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
                             "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
                         },
+                        retryMode = NtripCasterUploadRetryMode.fromStorageValue(values.optional("retryMode")),
+                        fixedReconnectDelaySeconds = values.optional("fixedReconnectDelaySeconds")
+                            ?.toIntOrNull()
+                            ?.coerceAtLeast(10)
+                            ?: 10,
+                        adaptiveInitialDelaySeconds = values.optional("adaptiveInitialDelaySeconds")
+                            ?.toIntOrNull()
+                            ?.coerceAtLeast(10)
+                            ?: 10,
+                        adaptiveMaxDelaySeconds = values.optional("adaptiveMaxDelaySeconds")
+                            ?.toIntOrNull()
+                            ?: 300,
+                        stopAfterFailuresEnabled = values.optional("stopAfterFailuresEnabled").toBooleanStrictOrFalse(),
+                        stopAfterConsecutiveFailures = values.optional("stopAfterConsecutiveFailures")
+                            ?.toIntOrNull()
+                            ?.coerceAtLeast(1)
+                            ?: 5,
+                        safetyRulesEnabled = values.optional("safetyRulesEnabled").toBooleanStrictOrFalse(),
+                        safetyMaxBitrateKbps = values.optional("safetyMaxBitrateKbps")
+                            ?.toIntOrNull()
+                            ?.coerceAtLeast(1)
+                            ?: 35,
+                        safetyBitrateWindowSeconds = values.optional("safetyBitrateWindowSeconds")
+                            ?.toIntOrNull()
+                            ?.coerceAtLeast(1)
+                            ?: 60,
+                        safetyMaxSessionUploadMb = values.optional("safetyMaxSessionUploadMb")
+                            ?.toIntOrNull()
+                            ?.coerceAtLeast(1)
+                            ?: 500,
                         enabledByDefault = values.optional("enabledByDefault").toBooleanStrictOrFalse(),
-                    )
+                    ).also(NtripCasterUploadProfile::validate)
                 } else {
                     profile
                 }
@@ -4083,6 +4184,7 @@ private fun List<RecordingSettingsSet>.referenceProfile(kind: ProfileKind, id: S
 private enum class AppScreen {
     HOME,
     SATELLITE_MONITOR,
+    CASTER_UPLOAD_MONITOR,
     SETTINGS,
     NTRIP_CASTER,
     NTRIP_CASTER_UPLOAD,
@@ -4279,6 +4381,7 @@ private fun AppScreen.backScreen(editorTarget: ProfileEditorTarget?): AppScreen 
     when (this) {
         AppScreen.HOME -> AppScreen.HOME
         AppScreen.SATELLITE_MONITOR -> AppScreen.HOME
+        AppScreen.CASTER_UPLOAD_MONITOR -> AppScreen.HOME
         AppScreen.SETTINGS -> AppScreen.HOME
         AppScreen.NTRIP_MOUNTPOINT,
         AppScreen.SETTINGS_SET_SELECTOR,
@@ -4490,6 +4593,47 @@ private fun buildDashboardStartIntent(
         )
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PASSWORD, activeConfig.casterUpload.password.orEmpty())
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY, activeConfig.casterUpload.protocolPolicy)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_RETRY_MODE, activeConfig.casterUpload.retryMode.name)
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_FIXED_RECONNECT_DELAY_SECONDS,
+            activeConfig.casterUpload.fixedReconnectDelaySeconds,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_INITIAL_DELAY_SECONDS,
+            activeConfig.casterUpload.adaptiveInitialDelaySeconds,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_MAX_DELAY_SECONDS,
+            activeConfig.casterUpload.adaptiveMaxDelaySeconds,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_FAILURES_ENABLED,
+            activeConfig.casterUpload.stopAfterFailuresEnabled,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_CONSECUTIVE_FAILURES,
+            activeConfig.casterUpload.stopAfterConsecutiveFailures,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_ENABLED,
+            activeConfig.casterUpload.safetyRulesEnabled,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_FORCED,
+            activeConfig.casterUpload.effectiveSafetyRulesEnabled && !activeConfig.casterUpload.safetyRulesEnabled,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_BITRATE_KBPS,
+            activeConfig.casterUpload.safetyMaxBitrateKbps,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_SAFETY_BITRATE_WINDOW_SECONDS,
+            activeConfig.casterUpload.safetyBitrateWindowSeconds,
+        )
+        putExtra(
+            RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_SESSION_UPLOAD_MB,
+            activeConfig.casterUpload.safetyMaxSessionUploadMb,
+        )
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_ID, activeConfig.workflowId)
         putExtra(RecordingForegroundService.EXTRA_WORKFLOW_NAME, activeConfig.workflowName)
         putExtra(RecordingForegroundService.EXTRA_RECEIVER_ROLE, workflowId.receiverRoleForSession())
@@ -5108,6 +5252,11 @@ private fun ProfileStores.plannedDashboardState(
     val rtklibProfile = selected?.rtklibProfileRef?.id?.let { id ->
         rtklibProfiles().firstOrNull { it.id == id }
     }
+    val casterUploadProfile = selected?.ntripCasterUploadProfileRef?.id?.let { id ->
+        ntripCasterUploadProfiles().firstOrNull { it.id == id }
+    }
+    val casterUploadEnabled = casterUploadProfile != null &&
+        (selected.baseCasterUploadEnabled || casterUploadProfile.enabledByDefault)
     val mockEnabled = selected?.overrides?.recordingOutput?.enableMockLocation
         ?: recordingPolicyProfile?.enableMockLocation
         ?: false
@@ -5144,6 +5293,22 @@ private fun ProfileStores.plannedDashboardState(
             storageLocationProfile = selectedStorageLabel(selectedSettingsSetId),
         ),
         mockGps = MockGpsDashboardState(enabled = mockEnabled, rateHz = mockRateHz),
+        casterUpload = casterUploadProfile
+            ?.takeIf { casterUploadEnabled }
+            ?.let { profile ->
+                CasterUploadCardState(
+                    enabled = true,
+                    statusLabel = "Configured",
+                    mountpointLabel = "${profile.host}:${profile.port}/${profile.mountpoint.trimStart('/')}",
+                    retryLabel = profile.retryMode.name.lowercase().replaceFirstChar(Char::uppercaseChar),
+                    safetyLabel = when {
+                        profile.effectiveSafetyRulesEnabled && !profile.safetyRulesEnabled -> "Safety forced"
+                        profile.safetyRulesEnabled -> "Safety on"
+                        else -> "Safety off"
+                    },
+                )
+            }
+            ?: CasterUploadCardState(),
     )
 }
 

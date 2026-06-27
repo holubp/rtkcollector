@@ -6,6 +6,7 @@ data class DashboardState(
     val position: PositionCardState,
     val fix: FixCardState,
     val ntrip: NtripCardState,
+    val casterUpload: CasterUploadCardState = CasterUploadCardState(),
     val rtklib: RtklibCardState? = null,
     val files: FilesCardState,
     val profiles: ProfilesCardState,
@@ -27,6 +28,7 @@ data class DashboardState(
                 rtklib = planned.rtklib,
                 profiles = planned.profiles,
                 mockGps = planned.mockGps,
+                casterUpload = planned.casterUpload,
                 satelliteMonitor = planned.satelliteMonitor,
             )
         }
@@ -40,6 +42,7 @@ data class DashboardState(
             position: PositionCardState = PositionCardState(),
             fix: FixCardState = FixCardState(),
             ntrip: NtripCardState = NtripCardState(),
+            casterUpload: CasterUploadCardState = CasterUploadCardState(),
             rtklib: RtklibCardState? = null,
             files: FilesCardState = FilesCardState(),
             profiles: ProfilesCardState = ProfilesCardState(),
@@ -63,6 +66,7 @@ data class DashboardState(
                 position = position,
                 fix = fix,
                 ntrip = ntrip,
+                casterUpload = casterUpload,
                 rtklib = rtklib,
                 files = files,
                 profiles = profiles,
@@ -80,6 +84,7 @@ data class DashboardState(
             position: PositionCardState,
             fix: FixCardState,
             ntrip: NtripCardState,
+            casterUpload: CasterUploadCardState = CasterUploadCardState(),
             rtklib: RtklibCardState? = null,
             files: FilesCardState,
             profiles: ProfilesCardState = ProfilesCardState(),
@@ -95,6 +100,7 @@ data class DashboardState(
                 position = position,
                 fix = fix,
                 ntrip = ntrip,
+                casterUpload = casterUpload,
                 rtklib = rtklib,
                 files = files,
                 profiles = profiles,
@@ -467,6 +473,21 @@ data class NtripCardState(
     val uploadBytes: String = "0 B",
     val uploadDroppedBytes: String = "0 B",
     val uploadLastError: String? = null,
+)
+
+data class CasterUploadCardState(
+    val enabled: Boolean = false,
+    val statusLabel: String = "Not configured",
+    val mountpointLabel: String = "",
+    val uploadedLabel: String = "0 B",
+    val bitrateLabel: String = "0.0 kbps",
+    val totalRtcmHzLabel: String = "0.0 Hz",
+    val messageRateLabels: List<String> = emptyList(),
+    val droppedLabel: String? = null,
+    val lastErrorLabel: String? = null,
+    val stopReasonLabel: String? = null,
+    val retryLabel: String? = null,
+    val safetyLabel: String? = null,
 )
 
 data class RtklibCardState(

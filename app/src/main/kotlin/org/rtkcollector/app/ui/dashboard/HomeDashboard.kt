@@ -82,6 +82,7 @@ private val RtklibDashboardCardHeight = 206.dp
 private val SatelliteDashboardCardHeight = 150.dp
 private const val SatelliteMonitorCompactFrequencyColumns = 3
 private val CorrectionsDashboardCardHeight = 292.dp
+private val CasterUploadDashboardCardHeight = 188.dp
 private val RecordingDashboardCardHeight = 162.dp
 private val SetupProfilesDashboardCardHeight = 160.dp
 
@@ -107,6 +108,7 @@ fun HomeDashboard(
     onStopCoordinateAveraging: () -> Unit = {},
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit = {},
     onSatelliteMonitorDetails: () -> Unit = {},
+    onCasterUploadDetails: () -> Unit = {},
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
     val context = LocalContext.current
@@ -215,6 +217,7 @@ fun HomeDashboard(
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
                         onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
                         onSatelliteMonitorDetails = onSatelliteMonitorDetails,
+                        onCasterUploadDetails = onCasterUploadDetails,
                     )
                 } else {
                     CompactDashboard(
@@ -237,6 +240,7 @@ fun HomeDashboard(
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
                         onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
                         onSatelliteMonitorDetails = onSatelliteMonitorDetails,
+                        onCasterUploadDetails = onCasterUploadDetails,
                     )
                 }
             }
@@ -422,6 +426,7 @@ private fun CompactDashboard(
     onStopCoordinateAveraging: () -> Unit,
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
     onSatelliteMonitorDetails: () -> Unit,
+    onCasterUploadDetails: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -451,6 +456,7 @@ private fun CompactDashboard(
             onStopCoordinateAveraging = onStopCoordinateAveraging,
             onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
             onSatelliteMonitorDetails = onSatelliteMonitorDetails,
+            onCasterUploadDetails = onCasterUploadDetails,
         )
     }
 }
@@ -474,6 +480,7 @@ private fun RailDashboard(
     onStopCoordinateAveraging: () -> Unit,
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
     onSatelliteMonitorDetails: () -> Unit,
+    onCasterUploadDetails: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -534,6 +541,7 @@ private fun RailDashboard(
             onStopCoordinateAveraging = onStopCoordinateAveraging,
             onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
             onSatelliteMonitorDetails = onSatelliteMonitorDetails,
+            onCasterUploadDetails = onCasterUploadDetails,
         )
     }
 }
@@ -730,6 +738,7 @@ private fun DashboardCards(
     onStopCoordinateAveraging: () -> Unit,
     onUseCurrentCoordinateAsManualBase: (BaseCoordinateCandidate) -> Unit,
     onSatelliteMonitorDetails: () -> Unit,
+    onCasterUploadDetails: () -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val useTwoColumns = compactDashboardCardColumnCount(
@@ -759,6 +768,13 @@ private fun DashboardCards(
                             onHelp = onHelp,
                         )
                         CorrectionsCard(state = state, onHelp = onHelp)
+                        if (state.casterUpload.enabled) {
+                            CasterUploadCard(
+                                state = state.casterUpload,
+                                onOpenDetails = onCasterUploadDetails,
+                                onHelp = onHelp,
+                            )
+                        }
                     }
                     Column(
                         modifier = Modifier.weight(1f),
@@ -798,6 +814,13 @@ private fun DashboardCards(
                 }
                 state.rtklib?.let { RtklibCard(it, distanceUnitPreference) }
                 CorrectionsCard(state = state, onHelp = onHelp)
+                if (state.casterUpload.enabled) {
+                    CasterUploadCard(
+                        state = state.casterUpload,
+                        onOpenDetails = onCasterUploadDetails,
+                        onHelp = onHelp,
+                    )
+                }
                 RecordingCard(state = state, onHelp = onHelp)
             }
             SetupProfilesCard(state = state, onSettingsSet = onSettingsSet)
@@ -1383,15 +1406,123 @@ private fun CorrectionsCard(
         Metric("NTRIP received", state.ntrip.transferred)
         Metric("Saved corrections", state.files.ntripBytes)
         Metric("Forwarded to receiver", state.files.txToReceiverBytes)
-        if (!state.ntrip.uploadUrl.equals("n/a", ignoreCase = true)) {
-            DashedSeparator()
-            Metric("Upload", state.ntrip.uploadStatus)
-            Metric("Upload URL", state.ntrip.uploadUrl)
-            Metric("Uploaded", state.ntrip.uploadBytes)
-            Metric("Dropped upload", state.ntrip.uploadDroppedBytes)
-            state.ntrip.uploadLastError?.takeIf { it.isNotBlank() }?.let {
-                Metric("Upload error", it)
+    }
+}
+
+@Composable
+private fun CasterUploadCard(
+    state: CasterUploadCardState,
+    onOpenDetails: () -> Unit,
+    onHelp: (HelpTopic) -> Unit,
+) {
+    DashboardCard(
+        title = "Caster upload",
+        cardHeight = CasterUploadDashboardCardHeight,
+        helpTopic = HelpTopic.NTRIP_URL,
+        onHelp = onHelp,
+        modifier = Modifier.clickable(onClick = onOpenDetails),
+    ) {
+        MajorValue(state.statusLabel)
+        Metric("Mountpoint", state.mountpointLabel.ifBlank { "n/a" })
+        Metric("Uploaded", state.uploadedLabel)
+        Metric("Bitrate", state.bitrateLabel)
+        Metric("RTCM", state.totalRtcmHzLabel)
+        if (state.messageRateLabels.isNotEmpty()) {
+            CasterUploadTypeGrid(state.messageRateLabels)
+        }
+        state.retryLabel?.let { Metric("Retry", it) }
+        state.safetyLabel?.let { Metric("Safety", it) }
+        state.droppedLabel?.let { Metric("Dropped", it) }
+        state.stopReasonLabel?.let { Metric("Stop", it) }
+        state.lastErrorLabel?.let { Metric("Error", it) }
+    }
+}
+
+@Composable
+private fun CasterUploadTypeGrid(labels: List<String>) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        labels.take(3).forEach { label ->
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = MaterialTheme.shapes.extraSmall,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CasterUploadMonitorScreen(
+    state: CasterUploadCardState,
+    onBack: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("NTRIP caster upload") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) {
+                        Text("Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("State", style = MaterialTheme.typography.titleSmall)
+            TidyMetricRow("Status", state.statusLabel)
+            TidyMetricRow("Mountpoint", state.mountpointLabel.ifBlank { "n/a" })
+            state.lastErrorLabel?.let { TidyMetricRow("Last error", it) }
+            state.stopReasonLabel?.let { TidyMetricRow("Stop reason", it) }
+
+            Text("Traffic", style = MaterialTheme.typography.titleSmall)
+            TidyMetricRow("Uploaded", state.uploadedLabel)
+            TidyMetricRow("Bitrate", state.bitrateLabel)
+            TidyMetricRow("Total RTCM", state.totalRtcmHzLabel)
+            state.droppedLabel?.let { TidyMetricRow("Dropped", it) }
+
+            Text("RTCM message rates", style = MaterialTheme.typography.titleSmall)
+            if (state.messageRateLabels.isEmpty()) {
+                Text(
+                    text = "No uploaded RTCM frames measured yet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                state.messageRateLabels.forEach { label ->
+                    TidyMetricRow(label.substringBefore(' '), label.substringAfter(' ', missingDelimiterValue = label))
+                }
+            }
+
+            Text("Retry and safety", style = MaterialTheme.typography.titleSmall)
+            TidyMetricRow("Retry", state.retryLabel ?: "n/a")
+            TidyMetricRow("Safety", state.safetyLabel ?: "n/a")
+            Text(
+                text = "The uploader sends only valid RTCM3 frames extracted from the receiver stream. Receiver telemetry such as OBSVM, OBSVMCMPB, BESTSAT and NMEA is not uploaded.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

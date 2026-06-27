@@ -96,6 +96,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         ),
         uploadLastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR),
     )
+    val casterUpload = casterUploadCardFrom(intent)
     val rtklib = rtklibCardFrom(intent)
     val satelliteMonitor = satelliteMonitorFrom(intent)
     val files = FilesCardState(
@@ -133,6 +134,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             position = position,
             fix = fix,
             ntrip = ntrip,
+            casterUpload = casterUpload,
             rtklib = rtklib,
             files = files,
             profiles = profiles,
@@ -151,6 +153,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             position = position,
             fix = fix,
             ntrip = ntrip,
+            casterUpload = casterUpload,
             files = files,
             profiles = profiles,
             mockGps = mockGps,
@@ -162,6 +165,98 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         )
     }
 }
+
+private fun casterUploadCardFrom(intent: Intent): CasterUploadCardState {
+    val url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_URL)
+        ?.takeIf { it.isNotBlank() }
+        ?: "n/a"
+    val state = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_STATE)
+        ?.takeIf { it.isNotBlank() }
+        ?: "Disabled"
+    val enabled = !url.equals("n/a", ignoreCase = true) ||
+        !state.equals("Disabled", ignoreCase = true)
+    val droppedBytes = intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_DROPPED_BYTES, 0)
+    val retryDelay = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_RETRY_DELAY_SECONDS, 0)
+    val failures = intent.getIntExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_CONSECUTIVE_FAILURES, 0)
+    val retryMode = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_RETRY_MODE)
+        ?.takeIf { it.isNotBlank() }
+    val safetyEnabled = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_ENABLED, false)
+    val safetyForced = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_SAFETY_FORCED, false)
+    return CasterUploadCardState(
+        enabled = enabled,
+        statusLabel = displayCasterUploadStatus(state),
+        mountpointLabel = url,
+        uploadedLabel = formatBytes(intent.getLongExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_BYTES, 0)),
+        bitrateLabel = "%.1f kbps".format(
+            java.util.Locale.US,
+            intent.getDoubleExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_BITRATE_KBPS, 0.0),
+        ),
+        totalRtcmHzLabel = "%.1f Hz".format(
+            java.util.Locale.US,
+            intent.getDoubleExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_RTCM_HZ, 0.0),
+        ),
+        messageRateLabels = casterUploadMessageRateLabels(
+            intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_MESSAGE_RATES),
+        ),
+        droppedLabel = droppedBytes.takeIf { it > 0 }?.let { formatBytes(it) },
+        lastErrorLabel = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_LAST_ERROR)
+            ?.takeIf { it.isNotBlank() },
+        stopReasonLabel = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_STOP_REASON)
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::displayCasterUploadStopReason),
+        retryLabel = buildString {
+            retryMode?.let { append(it.lowercase().replaceFirstChar(Char::uppercaseChar)) }
+            if (retryDelay > 0) {
+                if (isNotEmpty()) append(", ")
+                append("retry in ${retryDelay}s")
+            }
+            if (failures > 0) {
+                if (isNotEmpty()) append(", ")
+                append("$failures failure")
+                if (failures != 1) append('s')
+            }
+        }.takeIf { it.isNotBlank() },
+        safetyLabel = when {
+            safetyForced -> "Safety forced"
+            safetyEnabled -> "Safety on"
+            else -> "Safety off"
+        },
+    )
+}
+
+private fun displayCasterUploadStatus(value: String): String =
+    when (value.uppercase()) {
+        "CONNECTING" -> "Connecting"
+        "AUTHENTICATING" -> "Authenticating"
+        "STREAMING" -> "Streaming"
+        "RECONNECT_WAIT" -> "Retrying"
+        "DEGRADED" -> "Degraded"
+        "AUTH_ERROR" -> "Auth error"
+        "STOPPED" -> "Stopped"
+        "IDLE" -> "Configured"
+        else -> value.lowercase().replaceFirstChar(Char::uppercaseChar)
+    }
+
+private fun displayCasterUploadStopReason(value: String): String =
+    when (value.uppercase()) {
+        "NO_RTCM_DATA" -> "No RTCM data"
+        "BITRATE_LIMIT" -> "Safety stop: bitrate"
+        "SESSION_VOLUME_LIMIT" -> "Safety stop: volume"
+        "RETRY_LIMIT" -> "Retry limit reached"
+        else -> value.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercaseChar)
+    }
+
+private fun casterUploadMessageRateLabels(value: String?): List<String> =
+    value
+        ?.split(',')
+        ?.mapNotNull { item ->
+            val parts = item.split('=', limit = 2)
+            if (parts.size != 2) return@mapNotNull null
+            val type = parts[0].trim().toIntOrNull() ?: return@mapNotNull null
+            val hz = parts[1].trim().toDoubleOrNull() ?: return@mapNotNull null
+            "$type ${"%.1f".format(java.util.Locale.US, hz)} Hz"
+        }
+        .orEmpty()
 
 private fun satelliteMonitorFrom(intent: Intent): SatelliteMonitorDashboardState {
     val engineLabel = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SATELLITE_MONITOR_ENGINE)

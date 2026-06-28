@@ -2,6 +2,7 @@ package org.rtkcollector.app.base
 
 import kotlin.math.abs
 import org.rtkcollector.app.profile.CommandProfile
+import org.rtkcollector.app.profile.RecordingSettingsSet
 
 private const val FIXED_BASE_LAT_LON_TOLERANCE_DEGREES = 1e-9
 private const val FIXED_BASE_ALTITUDE_TOLERANCE_METERS = 0.0005
@@ -32,11 +33,21 @@ object FixedBaseCommandValidator {
         require(parsedModeBase.matches(selectedBaseCoordinate)) { FIXED_BASE_MISMATCH_ERROR }
     }
 
+    fun isCommandProfileUsedByOtherSettingsSet(
+        settingsSets: List<RecordingSettingsSet>,
+        selectedSettingsSetId: String,
+        commandProfileId: String,
+    ): Boolean =
+        settingsSets.any { set ->
+            set.id != selectedSettingsSetId && set.commandProfileRef.id == commandProfileId
+        }
+
     internal fun parseVisibleFixedCoordinateModeBase(runtimeScript: String): ParsedFixedBaseModeBase? =
         runtimeScript.lineSequence()
             .map(String::trim)
-            .firstOrNull { line -> line.startsWith("MODE BASE ", ignoreCase = true) }
-            ?.let(::parseFixedCoordinateModeBaseLine)
+            .filter { line -> line.startsWith("MODE BASE ", ignoreCase = true) }
+            .mapNotNull(::parseFixedCoordinateModeBaseLine)
+            .firstOrNull()
 
     private fun parseFixedCoordinateModeBaseLine(line: String): ParsedFixedBaseModeBase? {
         val parts = line.split(Regex("\\s+"))

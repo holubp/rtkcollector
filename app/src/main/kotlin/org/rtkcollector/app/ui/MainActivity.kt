@@ -459,6 +459,20 @@ fun RtkCollectorApp(
             ).show()
             return
         }
+        if (
+            FixedBaseCommandValidator.isCommandProfileUsedByOtherSettingsSet(
+                settingsSets = settingsSets,
+                selectedSettingsSetId = selectedSettingsSetId,
+                commandProfileId = selectedProfile.id,
+            )
+        ) {
+            Toast.makeText(
+                context,
+                "Create a new fixed-base profile because the selected command profile is used by another settings set.",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
         val materializedProfile = runCatching {
             val modeBaseCommand = coordinate.toFixedBaseModeCommand()
             val result = FixedBaseProfileMaterializer.materialize(selectedProfile.runtimeScript, modeBaseCommand)
@@ -1056,6 +1070,14 @@ fun RtkCollectorApp(
                             Toast.makeText(
                                 context,
                                 "Base candidate requires a valid latitude and longitude.",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            return@HomeDashboard
+                        }
+                        if (acceptedCoordinate.mslAltitudeM == null) {
+                            Toast.makeText(
+                                context,
+                                "Fixed-base MODE BASE requires MSL altitude; use an averaged or imported base coordinate with altitude.",
                                 Toast.LENGTH_LONG,
                             ).show()
                             return@HomeDashboard
@@ -2473,14 +2495,14 @@ fun RtkCollectorApp(
                         )
                     },
                     confirmButton = {
-                        TextButton(onClick = { overwriteSelectedCommandProfileForFixedBase(coordinate) }) {
-                            Text("Overwrite selected")
+                        TextButton(onClick = { createFixedBaseCommandProfile(coordinate) }) {
+                            Text("Create new profile")
                         }
                     },
                     dismissButton = {
                         Row {
-                            TextButton(onClick = { createFixedBaseCommandProfile(coordinate) }) {
-                                Text("Create new profile")
+                            TextButton(onClick = { overwriteSelectedCommandProfileForFixedBase(coordinate) }) {
+                                Text("Overwrite selected")
                             }
                             TextButton(onClick = { pendingFixedBaseCoordinate = null }) {
                                 Text("Cancel")

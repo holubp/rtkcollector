@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.rtkcollector.app.profile.CommandProfile
+import org.rtkcollector.app.profile.ProfileReference
+import org.rtkcollector.app.profile.RecordingSettingsSet
 
 class FixedBaseCommandValidatorTest {
     @Test
@@ -74,6 +76,57 @@ class FixedBaseCommandValidatorTest {
         )
     }
 
+    @Test
+    fun `fixed base start uses later valid mode base line when survey line appears first`() {
+        val profile = CommandProfile(
+            id = "fixed",
+            name = "Fixed",
+            receiverFamily = "unicore",
+            runtimeScript = "UNLOG COM1\nMODE BASE TIME 120 2.5\nMODE BASE 49.463759313 15.451254479 707.8\nGNGGA 1",
+        )
+
+        assertDoesNotThrow {
+            FixedBaseCommandValidator.validateSelectedCoordinateMatchesProfile(
+                commandProfile = profile,
+                selectedBaseCoordinate = sampleCoordinate(),
+            )
+        }
+    }
+
+    @Test
+    fun `fixed base overwrite detects command profile shared by another settings set`() {
+        val settingsSets = listOf(
+            sampleSettingsSet(id = "current", commandProfileId = "commands-1"),
+            sampleSettingsSet(id = "other", commandProfileId = "commands-1"),
+        )
+
+        assertEquals(
+            true,
+            FixedBaseCommandValidator.isCommandProfileUsedByOtherSettingsSet(
+                settingsSets = settingsSets,
+                selectedSettingsSetId = "current",
+                commandProfileId = "commands-1",
+            ),
+        )
+    }
+
+    @Test
+    fun `fixed base overwrite allows command profile used only by selected settings set`() {
+        val settingsSets = listOf(
+            sampleSettingsSet(id = "current", commandProfileId = "commands-1"),
+            sampleSettingsSet(id = "other", commandProfileId = "commands-2"),
+        )
+
+        assertEquals(
+            false,
+            FixedBaseCommandValidator.isCommandProfileUsedByOtherSettingsSet(
+                settingsSets = settingsSets,
+                selectedSettingsSetId = "current",
+                commandProfileId = "commands-1",
+            ),
+        )
+    }
+
     private fun sampleCoordinate(
         latDeg: Double = 49.463759313,
         lonDeg: Double = 15.451254479,
@@ -99,5 +152,20 @@ class FixedBaseCommandValidatorTest {
             antennaReferencePoint = "ARP",
             sourceSessionId = "session-1",
             sourceDescription = "Temporary base average",
+        )
+
+    private fun sampleSettingsSet(
+        id: String,
+        commandProfileId: String,
+    ): RecordingSettingsSet =
+        RecordingSettingsSet(
+            id = id,
+            name = id,
+            workflowId = "workflow-rover",
+            receiverProfileId = "receiver-1",
+            commandProfileRef = ProfileReference(commandProfileId, commandProfileId),
+            usbBaudProfileRef = ProfileReference("baud-1", "Baud"),
+            recordingOutputProfileRef = ProfileReference("output-1", "Output"),
+            storageProfileRef = ProfileReference("storage-1", "Storage"),
         )
 }

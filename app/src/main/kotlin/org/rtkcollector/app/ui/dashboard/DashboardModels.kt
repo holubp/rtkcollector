@@ -1,5 +1,9 @@
 package org.rtkcollector.app.ui.dashboard
 
+import org.rtkcollector.app.profile.NtripCasterUploadProfile
+import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.ui.profiles.ProfileListRow
+
 data class DashboardState(
     val isRecording: Boolean,
     val status: DashboardStatus,
@@ -38,6 +42,7 @@ data class DashboardState(
             workflow: String,
             mountpoint: String,
             receiver: String,
+            upload: String = "Off",
             storage: String,
             position: PositionCardState = PositionCardState(),
             fix: FixCardState = FixCardState(),
@@ -60,6 +65,7 @@ data class DashboardState(
                     workflow = workflow,
                     mountpoint = mountpoint,
                     receiver = receiver,
+                    upload = upload,
                     storage = storage,
                     settingsSet = profiles.settingsSet,
                 ),
@@ -134,6 +140,7 @@ data class DashboardStatus(
     val workflow: String = "n/a",
     val mountpoint: String = "n/a",
     val receiver: String = "n/a",
+    val upload: String = "Off",
     val storage: String = "n/a",
 )
 
@@ -168,6 +175,7 @@ internal enum class DashboardSetupItem(val label: String) {
     WORKFLOW("Workflow"),
     MOUNTPOINT("Mountpoint"),
     RECEIVER("Receiver"),
+    UPLOAD("Upload"),
     STORAGE("Storage"),
 }
 
@@ -175,8 +183,42 @@ internal val defaultDashboardSetupItems: List<DashboardSetupItem> = listOf(
     DashboardSetupItem.WORKFLOW,
     DashboardSetupItem.MOUNTPOINT,
     DashboardSetupItem.RECEIVER,
+    DashboardSetupItem.UPLOAD,
     DashboardSetupItem.STORAGE,
 )
+
+internal fun dashboardUploadSelectorRows(
+    profiles: List<NtripCasterUploadProfile>,
+    selectedSettingsSet: RecordingSettingsSet?,
+): List<ProfileListRow> {
+    val selectedProfileId = selectedSettingsSet?.ntripCasterUploadProfileRef?.id
+    val selectedProfile = selectedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
+    val uploadEnabled = selectedProfile != null &&
+        (selectedSettingsSet.baseCasterUploadEnabled || selectedProfile.enabledByDefault)
+    return buildList {
+        add(
+            ProfileListRow(
+                id = "off",
+                name = "Off",
+                isProtected = false,
+                hasLocalOverrides = false,
+                isSelected = !uploadEnabled,
+            ),
+        )
+        profiles.forEach { profile ->
+            add(
+                ProfileListRow(
+                    id = profile.id,
+                    name = profile.name,
+                    isProtected = profile.isProtected,
+                    hasLocalOverrides = false,
+                    isSelected = uploadEnabled && profile.id == selectedProfileId,
+                    summary = if (profile.enabledByDefault) "Enabled by default" else "",
+                ),
+            )
+        }
+    }
+}
 
 data class PositionCardState(
     val latLon: String = "n/a",

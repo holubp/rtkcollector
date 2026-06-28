@@ -12,6 +12,7 @@ class DashboardStateTest {
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
             receiver = "UM980",
+            upload = "Off",
             storage = "SAF folder",
         )
 
@@ -21,6 +22,7 @@ class DashboardStateTest {
         assertEquals(listOf(DashboardAction("USB access", DashboardActionKind.USB_PERMISSION)), state.secondaryActions)
         assertEquals("Rover + NTRIP", state.status.workflow)
         assertEquals("TUBO00CZE0", state.status.mountpoint)
+        assertEquals("Off", state.status.upload)
     }
 
     @Test
@@ -29,6 +31,7 @@ class DashboardStateTest {
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
             receiver = "UM980",
+            upload = "Off",
             storage = "SAF folder",
             files = FilesCardState(
                 sessionLocation = "content://session/current",
@@ -83,6 +86,7 @@ class DashboardStateTest {
             workflow = "n/a",
             mountpoint = "a",
             receiver = "n/a",
+            upload = "Off",
             storage = "n/a",
             files = FilesCardState(sessionLocation = "content://session/current", receiverRxBytes = "123 B"),
         )
@@ -90,6 +94,7 @@ class DashboardStateTest {
             workflow = "Rover + NTRIP",
             mountpoint = "n/a",
             receiver = "UM980",
+            upload = "RTK2go BASE01",
             storage = "App-private external storage",
             profiles = ProfilesCardState(settingsSet = "UM980 rover + NTRIP"),
         )
@@ -99,10 +104,24 @@ class DashboardStateTest {
         assertEquals("Rover + NTRIP", merged.status.workflow)
         assertEquals("n/a", merged.status.mountpoint)
         assertEquals("UM980", merged.status.receiver)
+        assertEquals("RTK2go BASE01", merged.status.upload)
         assertEquals("App-private external storage", merged.status.storage)
         assertEquals(planned.mockGps, merged.mockGps)
         assertEquals("content://session/current", merged.files.sessionLocation)
         assertEquals("123 B", merged.files.receiverRxBytes)
+    }
+
+    @Test
+    fun `planned dashboard status carries upload label`() {
+        val state = DashboardState.planned(
+            workflow = "Fixed base",
+            mountpoint = "n/a",
+            receiver = "UM980",
+            upload = "Off",
+            storage = "App-private external storage",
+        )
+
+        assertEquals("Off", state.status.upload)
     }
 
     @Test

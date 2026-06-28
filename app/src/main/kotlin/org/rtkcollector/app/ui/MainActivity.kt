@@ -143,6 +143,7 @@ import org.rtkcollector.app.ui.dashboard.RtklibCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.MockGpsDashboardState
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
+import org.rtkcollector.app.ui.dashboard.dashboardUploadSelectorRows
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.dashboard.formatBytes
 import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
@@ -917,6 +918,13 @@ fun RtkCollectorApp(
                             Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
                         } else {
                             dashboardSelector = DashboardSelector.RECEIVER
+                        }
+                    },
+                    onUpload = {
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing NTRIP upload.", Toast.LENGTH_LONG).show()
+                        } else {
+                            dashboardSelector = DashboardSelector.UPLOAD
                         }
                     },
                     onStorage = {
@@ -2346,6 +2354,22 @@ fun RtkCollectorApp(
                                     profileStore.saveSettingsSets(settingsSets)
                                     refreshProfileUi(settingsSets)
                                 }
+                            }
+                            DashboardSelector.UPLOAD -> {
+                                settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+                                    if (id == "off") {
+                                        set.copy(baseCasterUploadEnabled = false)
+                                    } else {
+                                        profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == id }?.let { profile ->
+                                            set.copy(
+                                                ntripCasterUploadProfileRef = ProfileReference(profile.id, profile.name),
+                                                baseCasterUploadEnabled = true,
+                                            )
+                                        } ?: set
+                                    }
+                                }
+                                profileStore.saveSettingsSets(settingsSets)
+                                refreshProfileUi(settingsSets)
                             }
                             DashboardSelector.STORAGE -> {
                                 profileStore.storageProfiles().firstOrNull { it.id == id }?.let { profile ->
@@ -4371,6 +4395,7 @@ private enum class DashboardSelector(val title: String) {
     WORKFLOW("Select workflow"),
     MOUNTPOINT("Select NTRIP mountpoint"),
     RECEIVER("Select receiver command profile"),
+    UPLOAD("Select NTRIP upload"),
     STORAGE("Select storage profile"),
 }
 
@@ -5270,6 +5295,15 @@ private fun ProfileStores.selectedRecordingOutputProfileLabel(selectedSettingsSe
         ?: settingsSet.recordingOutputProfileRef.name
 }
 
+private fun RecordingSettingsSet?.selectedUploadLabel(
+    uploadProfiles: List<NtripCasterUploadProfile>,
+): String {
+    val profile = this?.ntripCasterUploadProfileRef?.id
+        ?.let { id -> uploadProfiles.firstOrNull { it.id == id } }
+    val enabled = profile != null && (baseCasterUploadEnabled || profile.enabledByDefault)
+    return if (enabled) profile.name else "Off"
+}
+
 private fun ProfileStores.selectedCasterMountpoints(selectedSettingsSetId: String): List<String> {
     val resolution = resolveSelectedNtripProfiles(selectedSettingsSetId) ?: return emptyList()
     return resolution.caster?.sourcetableMountpoints.orEmpty()
@@ -5292,8 +5326,9 @@ private fun ProfileStores.plannedDashboardState(
     val rtklibProfile = selected?.rtklibProfileRef?.id?.let { id ->
         rtklibProfiles().firstOrNull { it.id == id }
     }
+    val uploadProfiles = ntripCasterUploadProfiles()
     val casterUploadProfile = selected?.ntripCasterUploadProfileRef?.id?.let { id ->
-        ntripCasterUploadProfiles().firstOrNull { it.id == id }
+        uploadProfiles.firstOrNull { it.id == id }
     }
     val casterUploadEnabled = casterUploadProfile != null &&
         (selected.baseCasterUploadEnabled || casterUploadProfile.enabledByDefault)
@@ -5307,6 +5342,7 @@ private fun ProfileStores.plannedDashboardState(
         workflow = selectedWorkflowId.workflowLabel(),
         mountpoint = mountpoint,
         receiver = selectedReceiverLabel(selectedSettingsSetId),
+        upload = selected.selectedUploadLabel(uploadProfiles),
         storage = selectedStorageLabel(selectedSettingsSetId),
         fix = FixCardState(
             receiverFrequency = receiverFrequencyForFamily(selectedCommandProfile?.receiverFamily),
@@ -5759,6 +5795,10 @@ private fun dashboardSelectorRows(
         DashboardSelector.RECEIVER -> profileStore.commandProfiles().map { profile ->
             profile.profileRow(isSelected = profile.id == selectedSettingsSet?.commandProfileRef?.id)
         }
+        DashboardSelector.UPLOAD -> dashboardUploadSelectorRows(
+            profiles = profileStore.ntripCasterUploadProfiles(),
+            selectedSettingsSet = selectedSettingsSet,
+        )
         DashboardSelector.STORAGE -> profileStore.storageProfiles().map { profile ->
             profile.profileRow(isSelected = profile.id == selectedSettingsSet?.storageProfileRef?.id)
         }

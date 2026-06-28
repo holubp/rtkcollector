@@ -72,9 +72,9 @@ class DashboardLayoutModelsTest {
     }
 
     @Test
-    fun `default setup strip excludes settings profile details`() {
+    fun `default setup strip includes upload selector`() {
         assertEquals(
-            listOf("Workflow", "Mountpoint", "Receiver", "Storage"),
+            listOf("Workflow", "Mountpoint", "Receiver", "Upload", "Storage"),
             defaultDashboardSetupItems.map { it.label },
         )
     }

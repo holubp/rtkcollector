@@ -102,6 +102,7 @@ fun HomeDashboard(
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onReceiver: () -> Unit,
+    onUpload: () -> Unit,
     onStorage: () -> Unit,
     coordinateAveraging: CoordinateAveragingState = CoordinateAveragingState(),
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit = { _, _ -> },
@@ -208,6 +209,7 @@ fun HomeDashboard(
                         onSettingsSet = onSettingsSet,
                         onMountpoint = onNtrip,
                         onReceiver = onReceiver,
+                        onUpload = onUpload,
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
@@ -231,6 +233,7 @@ fun HomeDashboard(
                         onSettingsSet = onSettingsSet,
                         onMountpoint = onNtrip,
                         onReceiver = onReceiver,
+                        onUpload = onUpload,
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
@@ -417,6 +420,7 @@ private fun CompactDashboard(
     onSettingsSet: () -> Unit,
     onMountpoint: () -> Unit,
     onReceiver: () -> Unit,
+    onUpload: () -> Unit,
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
@@ -440,6 +444,7 @@ private fun CompactDashboard(
             onWorkflow = onWorkflow,
             onMountpoint = onMountpoint,
             onReceiver = onReceiver,
+            onUpload = onUpload,
             onStorage = onStorage,
         )
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
@@ -471,6 +476,7 @@ private fun RailDashboard(
     onSettingsSet: () -> Unit,
     onMountpoint: () -> Unit,
     onReceiver: () -> Unit,
+    onUpload: () -> Unit,
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
@@ -523,6 +529,7 @@ private fun RailDashboard(
                             DashboardSetupItem.WORKFLOW -> onWorkflow
                             DashboardSetupItem.MOUNTPOINT -> onMountpoint
                             DashboardSetupItem.RECEIVER -> onReceiver
+                            DashboardSetupItem.UPLOAD -> onUpload
                             DashboardSetupItem.STORAGE -> onStorage
                         },
                     )
@@ -577,6 +584,7 @@ private fun SetupStrip(
     onWorkflow: () -> Unit,
     onMountpoint: () -> Unit,
     onReceiver: () -> Unit,
+    onUpload: () -> Unit,
     onStorage: () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -596,6 +604,7 @@ private fun SetupStrip(
                                 DashboardSetupItem.WORKFLOW -> onWorkflow
                                 DashboardSetupItem.MOUNTPOINT -> onMountpoint
                                 DashboardSetupItem.RECEIVER -> onReceiver
+                                DashboardSetupItem.UPLOAD -> onUpload
                                 DashboardSetupItem.STORAGE -> onStorage
                             },
                         )
@@ -611,6 +620,7 @@ private fun DashboardStatus.valueFor(item: DashboardSetupItem): String =
         DashboardSetupItem.WORKFLOW -> workflow
         DashboardSetupItem.MOUNTPOINT -> mountpoint
         DashboardSetupItem.RECEIVER -> receiver
+        DashboardSetupItem.UPLOAD -> upload
         DashboardSetupItem.STORAGE -> storage
     }
 
@@ -1800,6 +1810,7 @@ private fun HomeDashboardPortraitPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
+            onUpload = {},
             onStorage = {},
         )
     }
@@ -1819,6 +1830,7 @@ private fun HomeDashboardReadyMissingPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
+            onUpload = {},
             onStorage = {},
         )
     }
@@ -1838,6 +1850,7 @@ private fun HomeDashboardLandscapePreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
+            onUpload = {},
             onStorage = {},
         )
     }
@@ -1858,6 +1871,7 @@ private fun HomeDashboardRailPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
+            onUpload = {},
             onStorage = {},
         )
     }
@@ -1878,6 +1892,7 @@ private fun HomeDashboardSatelliteDarkPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onReceiver = {},
+            onUpload = {},
             onStorage = {},
         )
     }

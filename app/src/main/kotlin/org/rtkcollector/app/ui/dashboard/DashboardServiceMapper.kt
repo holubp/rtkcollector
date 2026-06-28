@@ -8,11 +8,16 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val lastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR)
     val errorCategory = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_CATEGORY) ?: "NONE"
     val errorSeverity = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_SEVERITY) ?: "NONE"
+    val uploadLabel = dashboardUploadStatusLabel(
+        uploadState = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_STATE),
+        uploadUrl = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_BASE_CASTER_UPLOAD_URL),
+    )
     val status = DashboardStatus(
         settingsSet = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_SET_LABEL) ?: "n/a",
         workflow = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_WORKFLOW_LABEL) ?: "n/a",
         mountpoint = mountpointFromUrl(intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL)),
         receiver = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_LABEL) ?: "n/a",
+        upload = uploadLabel,
         storage = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_STORAGE_LABEL) ?: "n/a",
     )
     val receiverFamily = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_FAMILY)
@@ -149,6 +154,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             workflow = status.workflow,
             mountpoint = status.mountpoint,
             receiver = status.receiver,
+            upload = status.upload,
             storage = status.storage,
             position = position,
             fix = fix,
@@ -163,6 +169,19 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
         )
+    }
+}
+
+private fun dashboardUploadStatusLabel(
+    uploadState: String?,
+    uploadUrl: String?,
+): String {
+    val state = uploadState?.takeIf { it.isNotBlank() } ?: "Disabled"
+    val url = uploadUrl?.takeIf { it.isNotBlank() }
+    return if (state.equals("Disabled", ignoreCase = true) && url == null) {
+        "Off"
+    } else {
+        url ?: state
     }
 }
 

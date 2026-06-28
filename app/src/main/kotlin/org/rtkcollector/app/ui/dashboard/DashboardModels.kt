@@ -193,11 +193,8 @@ internal fun dashboardUploadSelectorRows(
     selectedSettingsSet: RecordingSettingsSet?,
 ): List<ProfileListRow> {
     val selectedProfileId = selectedSettingsSet?.ntripCasterUploadProfileRef?.id
-    val selectedProfile = selectedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
-    val uploadEnabled = selectedSettingsSet
-        ?.let { settingsSet ->
-            selectedProfileId == settingsSet.ntripCasterUploadProfileRef?.id && settingsSet.baseCasterUploadEnabled
-        } ?: false
+    val uploadEnabled = selectedSettingsSet?.baseCasterUploadEnabled == true &&
+        profiles.any { profile -> isNtripCasterUploadProfileSelected(selectedSettingsSet, profile) }
     return buildList {
         add(
             ProfileListRow(
@@ -222,6 +219,13 @@ internal fun dashboardUploadSelectorRows(
         }
     }
 }
+
+internal fun isNtripCasterUploadProfileSelected(
+    settingsSet: RecordingSettingsSet?,
+    profile: NtripCasterUploadProfile,
+): Boolean =
+    settingsSet?.baseCasterUploadEnabled == true &&
+        settingsSet.ntripCasterUploadProfileRef?.id == profile.id
 
 data class PositionCardState(
     val latLon: String = "n/a",

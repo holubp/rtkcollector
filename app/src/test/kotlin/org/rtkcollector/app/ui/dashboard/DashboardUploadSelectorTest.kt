@@ -73,4 +73,21 @@ class DashboardUploadSelectorTest {
 
         assertTrue(rows.first { it.id == UploadSelectorOffProfileId }.isSelected)
     }
+
+    @Test
+    fun `profile row selection requires explicit settings set upload enablement`() {
+        val profile = NtripCasterUploadProfile(
+            id = "upload",
+            name = "Upload",
+            enabledByDefault = true,
+        )
+        val off = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterUploadProfileRef = ProfileReference("upload", "Upload"),
+            baseCasterUploadEnabled = false,
+        )
+        val on = off.copy(baseCasterUploadEnabled = true)
+
+        assertEquals(false, isNtripCasterUploadProfileSelected(off, profile))
+        assertEquals(true, isNtripCasterUploadProfileSelected(on, profile))
+    }
 }

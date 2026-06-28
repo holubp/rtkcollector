@@ -147,6 +147,7 @@ import org.rtkcollector.app.ui.dashboard.dashboardUploadSelectorRows
 import org.rtkcollector.app.ui.dashboard.UploadSelectorOffProfileId
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.dashboard.formatBytes
+import org.rtkcollector.app.ui.dashboard.isNtripCasterUploadProfileSelected
 import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
 import org.rtkcollector.app.ui.dashboard.serviceCoordinateAveragingState
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
@@ -1172,9 +1173,10 @@ fun RtkCollectorApp(
                     title = "NTRIP caster upload",
                     rows = profileStore.ntripCasterUploadProfiles().map {
                         it.profileRow(
-                            isSelected = settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }
-                                ?.ntripCasterUploadProfileRef
-                                ?.id == it.id,
+                            isSelected = isNtripCasterUploadProfileSelected(
+                                settingsSet = settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId },
+                                profile = it,
+                            ),
                         )
                     },
                     onSelect = { id ->

@@ -1,6 +1,9 @@
 package org.rtkcollector.app.profile
 
+import org.rtkcollector.core.correction.DEFAULT_NTRIP_USER_AGENT
+import org.rtkcollector.core.correction.NtripSourceUploadRequest
 import org.rtkcollector.core.correction.Um980RtcmBaseOutputSanity
+import org.rtkcollector.core.correction.normalizeSourceUploadMountpoint
 import org.rtkcollector.core.rtklib.RtklibSnapshot
 import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.workflow.SessionArtifact
@@ -63,6 +66,14 @@ data class ActiveRecordingConfig(
             require(casterUpload.host.isNotBlank()) { "NTRIP caster upload host is required for ${workflowName}." }
             require(casterUpload.port in 1..65535) { "NTRIP caster upload port must be 1..65535." }
             require(casterUpload.mountpoint.isNotBlank()) { "NTRIP caster upload mountpoint is required for ${workflowName}." }
+            normalizeSourceUploadMountpoint(casterUpload.mountpoint)
+            if (casterUpload.protocolPolicy == "NTRIP_V1_ONLY") {
+                NtripSourceUploadRequest(
+                    mountpoint = casterUpload.mountpoint,
+                    password = casterUpload.password.orEmpty(),
+                    sourceAgent = DEFAULT_NTRIP_USER_AGENT,
+                )
+            }
             require(workflowId == WORKFLOW_FIXED_BASE || workflowId == WORKFLOW_BASE_CALIBRATION) {
                 "NTRIP caster upload is only available for base workflows."
             }

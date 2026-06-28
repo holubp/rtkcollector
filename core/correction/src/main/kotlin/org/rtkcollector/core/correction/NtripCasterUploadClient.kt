@@ -25,31 +25,81 @@ data class NtripCasterUploadRequest(
             requireNoUploadCrLf("username", it.username)
             requireNoUploadCrLf("password", it.password)
         }
+        when (protocolVersion) {
+            NtripProtocolVersion.NTRIP_V1 -> {
+                NtripSourceUploadRequest(
+                    mountpoint = mountpoint,
+                    password = credentials?.password.orEmpty(),
+                    sourceAgent = userAgent,
+                )
+            }
+            NtripProtocolVersion.NTRIP_V2 -> {
+                normalizeSourceUploadMountpoint(mountpoint)
+            }
+        }
     }
 
     fun render(): String {
-        val path = mountpoint.trimStart('/')
-        val sourcePassword = credentials?.password.orEmpty()
+        if (protocolVersion == NtripProtocolVersion.NTRIP_V1) {
+            return NtripSourceUploadRequest(
+                mountpoint = mountpoint,
+                password = credentials?.password.orEmpty(),
+                sourceAgent = userAgent,
+            ).render()
+        }
+        val path = normalizeSourceUploadMountpoint(mountpoint)
         val lines = buildList {
-            add(
-                when (protocolVersion) {
-                    NtripProtocolVersion.NTRIP_V2 -> "SOURCE $sourcePassword /$path HTTP/1.1"
-                    NtripProtocolVersion.NTRIP_V1 -> "SOURCE $sourcePassword /$path HTTP/1.0"
-                },
-            )
+            add("POST $path HTTP/1.1")
             add("Host: $host:$port")
             add("User-Agent: $userAgent")
-            add(
-                when (protocolVersion) {
-                    NtripProtocolVersion.NTRIP_V2 -> "Ntrip-Version: Ntrip/2.0"
-                    NtripProtocolVersion.NTRIP_V1 -> "Ntrip-Version: Ntrip/1.0"
-                },
-            )
+            add("Ntrip-Version: Ntrip/2.0")
             add("Connection: close")
+            add("Content-Type: gnss/data")
+            add("Transfer-Encoding: chunked")
             credentials?.let { add("Authorization: Basic ${uploadBasicAuthToken(it)}") }
         }
         return lines.joinToString(separator = "\r\n", postfix = "\r\n\r\n")
     }
+}
+
+data class NtripSourceUploadRequest(
+    val mountpoint: String,
+    val password: String,
+    val sourceAgent: String,
+) {
+    val normalizedMountpoint: String = normalizeSourceUploadMountpoint(mountpoint)
+
+    init {
+        require(password.isNotBlank()) { "NTRIP v1 source upload requires a source password." }
+        require(sourceAgent.isNotBlank()) { "NTRIP v1 source upload agent must not be blank." }
+        requireNoUploadCrLf("source password", password)
+        requireNoUploadCrLf("source agent", sourceAgent)
+    }
+
+    fun render(): String =
+        "SOURCE $password $normalizedMountpoint\r\n" +
+            "Source-Agent: $sourceAgent\r\n" +
+            "\r\n"
+}
+
+fun normalizeSourceUploadMountpoint(value: String): String {
+    require('\r' !in value && '\n' !in value && '\t' !in value) {
+        "NTRIP source upload mountpoint must not contain control whitespace."
+    }
+    val trimmed = value.trim()
+    require(trimmed.isNotBlank()) { "NTRIP source upload mountpoint must not be blank." }
+    require(!trimmed.contains("HTTP/", ignoreCase = true)) {
+        "NTRIP source upload mountpoint must not contain HTTP syntax."
+    }
+    require(trimmed.none(Char::isWhitespace)) {
+        "NTRIP source upload mountpoint must not contain whitespace."
+    }
+    val body = trimmed.trim('/')
+    require(body.isNotBlank()) { "NTRIP source upload mountpoint must not be blank." }
+    require('/' !in body) {
+        "NTRIP source upload mountpoint must not contain embedded slashes."
+    }
+    return "/$body"
 }
 
 enum class NtripCasterUploadFailureKind {
@@ -110,7 +160,17 @@ class NtripCasterUploadClient(
         activeSocket = socket
         return socket.use {
             onState(NtripConnectionState.AUTHENTICATING)
-            socket.output.write(request.render().toByteArray(Charsets.US_ASCII))
+            val renderedRequest = runCatching { request.render() }.getOrElse {
+                return NtripCasterUploadResult.Failure(
+                    NtripCasterUploadFailure(
+                        kind = NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE,
+                        message = it.message ?: "NTRIP caster upload request is invalid.",
+                        state = NtripConnectionState.AUTHENTICATING,
+                        cause = it,
+                    ),
+                )
+            }
+            socket.output.write(renderedRequest.toByteArray(Charsets.US_ASCII))
             socket.output.flush()
             val response = socket.input.readHeaderText()
             classifyResponse(response)?.let { failure ->
@@ -121,7 +181,11 @@ class NtripCasterUploadClient(
                 return stoppedFailure()
             }
             onState(NtripConnectionState.STREAMING)
-            val counting = CountingOutputStream(socket.output)
+            val streamedOutput = when (request.protocolVersion) {
+                NtripProtocolVersion.NTRIP_V1 -> socket.output
+                NtripProtocolVersion.NTRIP_V2 -> ChunkedTransferOutputStream(socket.output)
+            }
+            val counting = CountingOutputStream(streamedOutput)
             runCatching {
                 writeRtcmBytes(counting)
                 counting.flush()
@@ -169,21 +233,26 @@ class NtripCasterUploadClient(
             )
         }
         val firstLine = response.lineSequence().firstOrNull().orEmpty()
-        if (
+        val accepted = if (request.protocolVersion == NtripProtocolVersion.NTRIP_V1) {
+            firstLine.startsWith("ICY 200", ignoreCase = true)
+        } else {
             firstLine.startsWith("ICY 200", ignoreCase = true) ||
-            firstLine.startsWith("HTTP/1.1 200", ignoreCase = true) ||
-            firstLine.startsWith("HTTP/1.0 200", ignoreCase = true)
-        ) {
+                firstLine.startsWith("HTTP/1.1 200", ignoreCase = true) ||
+                firstLine.startsWith("HTTP/1.0 200", ignoreCase = true)
+        }
+        if (accepted) {
             return null
         }
         val kind = when {
-            firstLine.contains("401") -> NtripCasterUploadFailureKind.AUTHENTICATION_FAILED
+            firstLine.contains("401") ||
+                firstLine.contains("bad password", ignoreCase = true) ||
+                firstLine.contains("unauthorized", ignoreCase = true) -> NtripCasterUploadFailureKind.AUTHENTICATION_FAILED
             firstLine.contains("403") -> NtripCasterUploadFailureKind.AUTHORIZATION_FAILED
             else -> NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE
         }
         return NtripCasterUploadFailure(
             kind = kind,
-            message = "NTRIP caster upload rejected SOURCE request: $firstLine",
+            message = "NTRIP caster upload rejected source upload request: $firstLine",
             state = NtripConnectionState.AUTHENTICATING,
         )
     }
@@ -212,6 +281,23 @@ private class CountingOutputStream(
     override fun write(buffer: ByteArray, offset: Int, length: Int) {
         out.write(buffer, offset, length)
         bytesWritten += length.toLong()
+    }
+}
+
+private class ChunkedTransferOutputStream(
+    output: OutputStream,
+) : FilterOutputStream(output) {
+    override fun write(b: Int) {
+        write(byteArrayOf(b.toByte()))
+    }
+
+    override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        if (length <= 0) return
+        val header = length.toString(radix = 16).toByteArray(Charsets.US_ASCII)
+        out.write(header)
+        out.write(byteArrayOf('\r'.code.toByte(), '\n'.code.toByte()))
+        out.write(buffer, offset, length)
+        out.write(byteArrayOf('\r'.code.toByte(), '\n'.code.toByte()))
     }
 }
 

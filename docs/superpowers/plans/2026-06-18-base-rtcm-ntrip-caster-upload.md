@@ -445,7 +445,7 @@ data class NtripCasterUploadRequest(
 )
 ```
 
-- [ ] Render a caster-upload request as `SOURCE <password-or-empty> /<mountpoint> HTTP/1.1` for NTRIP v2-compatible upload.
+- [ ] Render a caster-upload request as `POST /<mountpoint> HTTP/1.1` with chunked transfer for NTRIP v2-compatible upload.
 - [ ] Include:
   - `Host`;
   - `User-Agent`;
@@ -709,4 +709,3 @@ Complete base caster upload implementation
 - NTRIP caster administration.
 - Map, GIS, shapefile, feature collection, or cartographic survey UI.
 - Non-UM980 receiver-specific RTCM base-output command generation.
-

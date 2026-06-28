@@ -2,6 +2,7 @@ package org.rtkcollector.core.correction
 
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -13,17 +14,89 @@ import java.io.OutputStream
 
 class NtripCasterUploadClientTest {
     @Test
-    fun `request renders ntrip v2 source upload headers`() {
-        val request = defaultRequest()
+    fun `v1 request renders classic bkg source upload header`() {
+        val request = defaultRequest(
+            mountpoint = "UM980BASE",
+            credentials = NtripCredentials(username = "ignored", password = "pass123"),
+            userAgent = "NTRIP RtkCollector/test",
+            protocolVersion = NtripProtocolVersion.NTRIP_V1,
+        )
 
         val rendered = request.render()
 
-        assertTrue(rendered.startsWith("SOURCE password /BASE HTTP/1.1\r\n"))
+        assertEquals(
+            "SOURCE pass123 /UM980BASE\r\n" +
+                "Source-Agent: NTRIP RtkCollector/test\r\n" +
+                "\r\n",
+            rendered,
+        )
+        assertFalse(rendered.contains("GET"))
+        assertFalse(rendered.contains("POST"))
+        assertFalse(rendered.contains("HTTP/1.0"))
+        assertFalse(rendered.contains("HTTP/1.1"))
+        assertFalse(rendered.contains("Authorization"))
+        assertFalse(rendered.contains("ignored"))
+    }
+
+    @Test
+    fun `v2 request renders http post source upload headers`() {
+        val request = defaultRequest(protocolVersion = NtripProtocolVersion.NTRIP_V2)
+
+        val rendered = request.render()
+
+        assertTrue(rendered.startsWith("POST /BASE HTTP/1.1\r\n"))
         assertTrue(rendered.contains("Host: caster.example:2101\r\n"))
         assertTrue(rendered.contains("User-Agent: RtkCollectorTest/1\r\n"))
         assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
         assertTrue(rendered.contains("Connection: close\r\n"))
+        assertTrue(rendered.contains("Content-Type: gnss/data\r\n"))
+        assertTrue(rendered.contains("Transfer-Encoding: chunked\r\n"))
         assertTrue(rendered.contains("Authorization: Basic dXBsb2FkZXI6cGFzc3dvcmQ=\r\n"))
+        assertFalse(rendered.startsWith("SOURCE "))
+        assertFalse(rendered.contains("SOURCE password"))
+    }
+
+    @Test
+    fun `source mountpoint is normalized`() {
+        listOf(
+            "UM980BASE",
+            "/UM980BASE",
+            " UM980BASE ",
+            "/UM980BASE/",
+        ).forEach { mountpoint ->
+            val v1Rendered = defaultRequest(
+                mountpoint = mountpoint,
+                protocolVersion = NtripProtocolVersion.NTRIP_V1,
+            ).render()
+            val v2Rendered = defaultRequest(
+                mountpoint = mountpoint,
+                protocolVersion = NtripProtocolVersion.NTRIP_V2,
+            ).render()
+
+            assertTrue(v1Rendered.startsWith("SOURCE password /UM980BASE\r\n"), mountpoint)
+            assertFalse(v1Rendered.startsWith("SOURCE password /UM980BASE/\r\n"), mountpoint)
+            assertTrue(v2Rendered.startsWith("POST /UM980BASE HTTP/1.1\r\n"), mountpoint)
+            assertFalse(v2Rendered.startsWith("POST /UM980BASE/ HTTP/1.1\r\n"), mountpoint)
+        }
+    }
+
+    @Test
+    fun `source mountpoint rejects request injection and embedded paths`() {
+        listOf(
+            "UM980BASE HTTP/1.1",
+            "UM980\nBASE",
+            "UM980\rBASE",
+            "UM980\tBASE",
+            "UM980/BASE",
+            "/UM980/BASE",
+        ).forEach { mountpoint ->
+            assertThrows(IllegalArgumentException::class.java) {
+                defaultRequest(mountpoint = mountpoint, protocolVersion = NtripProtocolVersion.NTRIP_V1)
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                defaultRequest(mountpoint = mountpoint, protocolVersion = NtripProtocolVersion.NTRIP_V2)
+            }
+        }
     }
 
     @Test
@@ -47,15 +120,103 @@ class NtripCasterUploadClientTest {
 
     @Test
     fun `accepted response uploads bytes to socket`() {
-        val socket = FakeUploadSocket("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
-        val client = NtripCasterUploadClient(defaultRequest(), FakeUploadConnector(socket))
+        val socket = FakeUploadSocket("ICY 200 OK\r\n\r\n".toByteArray())
+        val client = NtripCasterUploadClient(
+            defaultRequest(
+                mountpoint = "UM980BASE",
+                credentials = NtripCredentials(username = "ignored", password = "pass123"),
+                protocolVersion = NtripProtocolVersion.NTRIP_V1,
+            ),
+            FakeUploadConnector(socket),
+        )
 
         val result = client.connectOnce { output -> output.write(byteArrayOf(0xD3.toByte(), 0x00, 0x01)) }
 
         assertInstanceOf(NtripCasterUploadResult.Completed::class.java, result)
         assertEquals(3, (result as NtripCasterUploadResult.Completed).bytesUploaded)
-        assertTrue(socket.outputText().startsWith("SOURCE password /BASE HTTP/1.1\r\n"))
+        assertTrue(socket.outputText().startsWith("SOURCE pass123 /UM980BASE\r\n"))
+        assertEquals("SOURCE pass123 /UM980BASE", socket.outputText().lineSequence().first())
         assertArrayEquals(byteArrayOf(0xD3.toByte(), 0x00, 0x01), socket.uploadPayload())
+    }
+
+    @Test
+    fun `v2 accepted response uploads chunked bytes to socket`() {
+        val socket = FakeUploadSocket("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
+        val client = NtripCasterUploadClient(
+            defaultRequest(
+                mountpoint = "UM980BASE",
+                credentials = NtripCredentials(username = "base01", password = "pass123"),
+                protocolVersion = NtripProtocolVersion.NTRIP_V2,
+            ),
+            FakeUploadConnector(socket),
+        )
+
+        val result = client.connectOnce { output -> output.write(byteArrayOf(0xD3.toByte(), 0x00, 0x01)) }
+
+        assertInstanceOf(NtripCasterUploadResult.Completed::class.java, result)
+        assertEquals(3, (result as NtripCasterUploadResult.Completed).bytesUploaded)
+        assertEquals("POST /UM980BASE HTTP/1.1", socket.outputText().lineSequence().first())
+        assertArrayEquals(
+            byteArrayOf(
+                '3'.code.toByte(),
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+                0xD3.toByte(),
+                0x00,
+                0x01,
+                '\r'.code.toByte(),
+                '\n'.code.toByte(),
+            ),
+            socket.uploadPayload(),
+        )
+    }
+
+    @Test
+    fun `v1 source upload rejects non icy accepted response`() {
+        val client = NtripCasterUploadClient(
+            defaultRequest(protocolVersion = NtripProtocolVersion.NTRIP_V1),
+            FakeUploadConnector(FakeUploadSocket("HTTP/1.1 200 OK\r\n\r\n".toByteArray())),
+        )
+
+        val result = client.connectOnce { error("must not write") }
+
+        assertInstanceOf(NtripCasterUploadResult.Failure::class.java, result)
+        assertEquals(
+            NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE,
+            (result as NtripCasterUploadResult.Failure).failure.kind,
+        )
+    }
+
+    @Test
+    fun `bad password response is authentication failure`() {
+        val client = NtripCasterUploadClient(
+            defaultRequest(protocolVersion = NtripProtocolVersion.NTRIP_V1),
+            FakeUploadConnector(FakeUploadSocket("ERROR - Bad Password\r\n\r\n".toByteArray())),
+        )
+
+        val result = client.connectOnce { error("must not write") }
+
+        assertInstanceOf(NtripCasterUploadResult.Failure::class.java, result)
+        assertEquals(
+            NtripCasterUploadFailureKind.AUTHENTICATION_FAILED,
+            (result as NtripCasterUploadResult.Failure).failure.kind,
+        )
+    }
+
+    @Test
+    fun `unauthorized response is authentication failure`() {
+        val client = NtripCasterUploadClient(
+            defaultRequest(protocolVersion = NtripProtocolVersion.NTRIP_V1),
+            FakeUploadConnector(FakeUploadSocket("HTTP/1.1 401 Unauthorized\r\n\r\n".toByteArray())),
+        )
+
+        val result = client.connectOnce { error("must not write") }
+
+        assertInstanceOf(NtripCasterUploadResult.Failure::class.java, result)
+        assertEquals(
+            NtripCasterUploadFailureKind.AUTHENTICATION_FAILED,
+            (result as NtripCasterUploadResult.Failure).failure.kind,
+        )
     }
 
     @Test
@@ -113,13 +274,19 @@ class NtripCasterUploadClientTest {
         assertTrue(socket.closed)
     }
 
-    private fun defaultRequest(): NtripCasterUploadRequest =
+    private fun defaultRequest(
+        mountpoint: String = "BASE",
+        credentials: NtripCredentials = NtripCredentials(username = "uploader", password = "password"),
+        userAgent: String = "RtkCollectorTest/1",
+        protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
+    ): NtripCasterUploadRequest =
         NtripCasterUploadRequest(
             host = "caster.example",
             port = 2101,
-            mountpoint = "BASE",
-            credentials = NtripCredentials(username = "uploader", password = "password"),
-            userAgent = "RtkCollectorTest/1",
+            mountpoint = mountpoint,
+            credentials = credentials,
+            userAgent = userAgent,
+            protocolVersion = protocolVersion,
         )
 
     private class FakeUploadConnector(private val socket: NtripSocket) : NtripSocketConnector {

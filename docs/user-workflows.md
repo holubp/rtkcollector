@@ -575,6 +575,16 @@ When caster upload is configured and enabled, the upload monitor shows live uplo
 state, last error/safety stop, retry mode/delay/failure count, upload bytes,
 bitrate, total RTCM upload Hz and per-message RTCM rates.
 
+For private or BKG-style NTRIP v1 source upload, choose the NTRIP v1 source
+upload protocol. Enter the caster source password in Source password; this is
+the BKG `encoder_password` or an authorised source-user password. The username
+field is not used for classic v1 source upload. The app waits for `ICY 200 OK`
+from the caster before sending base RTCM.
+
+For NTRIP v2 source upload, the app uses HTTP `POST` source upload with chunked
+transfer. In this mode the username and source password are used as HTTP Basic
+credentials.
+
 Only valid RTCM3 frames are uploaded. OBSVM/OBSVMCMPB/BESTSAT/NMEA lines are
 not uploaded.
 

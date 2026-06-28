@@ -190,7 +190,7 @@ Persist redacted upload lifecycle events to session events or quality logs:
 - upload configured;
 - connect attempt;
 - connected/authenticated;
-- rejected SOURCE request;
+- rejected source upload request;
 - authentication or authorisation stop;
 - retry scheduled with delay and failure count;
 - retry limit reached;

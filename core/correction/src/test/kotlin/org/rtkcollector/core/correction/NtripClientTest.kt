@@ -87,6 +87,25 @@ class NtripClientTest {
     }
 
     @Test
+    fun `rover correction download remains a get client request`() {
+        val request = NtripRequest(
+            host = "caster.example",
+            port = 2101,
+            mountpoint = "MOUNT",
+            credentials = NtripCredentials(username = "rover", password = "secret"),
+            userAgent = "RtkCollectorTest/1",
+            protocolVersion = NtripProtocolVersion.NTRIP_V1,
+        )
+
+        val rendered = request.render()
+
+        assertTrue(rendered.startsWith("GET /MOUNT HTTP/1.0\r\n"))
+        assertTrue(rendered.contains("Authorization: Basic cm92ZXI6c2VjcmV0\r\n"))
+        assertFalse(rendered.startsWith("SOURCE "))
+        assertFalse(rendered.contains("Source-Agent:"))
+    }
+
+    @Test
     fun `sourcetable request renders caster root without mountpoint`() {
         val request = NtripSourcetableRequest(
             host = "caster.example",

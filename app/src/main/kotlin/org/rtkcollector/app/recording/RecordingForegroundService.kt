@@ -1389,8 +1389,8 @@ class RecordingForegroundService : Service() {
                 ).coerceAtLeast(1) * 1024L * 1024L,
             ),
         )
-        return NtripCasterUploadRuntimeConfig(
-            request = NtripCasterUploadRequest(
+        val uploadRequest = runCatching {
+            NtripCasterUploadRequest(
                 host = host,
                 port = validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
                 mountpoint = mountpoint,
@@ -1398,7 +1398,18 @@ class RecordingForegroundService : Service() {
                 protocolVersion = uploadProtocolVersion(
                     intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY),
                 ),
-            ),
+            )
+        }.getOrElse {
+            state = state.copy(
+                lastError = it.message ?: "NTRIP caster upload request is invalid.",
+                errorCategory = RecordingErrorCategory.NTRIP,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return null
+        }
+        return NtripCasterUploadRuntimeConfig(
+            request = uploadRequest,
             policy = policy,
         )
     }

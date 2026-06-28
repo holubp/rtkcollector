@@ -3395,13 +3395,23 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("host", "Host", profile.host),
                     EditableProfileField("port", "Port", profile.port.toString()),
                     EditableProfileField("mountpoint", "Mountpoint", profile.mountpoint),
-                    EditableProfileField("username", "Username", profile.username),
-                    EditableProfileField("password", "Password", storedPassword, secret = true),
+                    EditableProfileField(
+                        "username",
+                        "Username",
+                        profile.username,
+                        sourceUploadUsername = true,
+                    ),
+                    EditableProfileField(
+                        "password",
+                        "Source password",
+                        storedPassword,
+                        secret = true,
+                    ),
                     EditableProfileField(
                         key = "protocolPolicy",
-                        label = "Protocol policy",
+                        label = "Source upload protocol",
                         value = profile.protocolPolicy,
-                        optionItems = NTRIP_PROTOCOL_POLICY_OPTIONS,
+                        optionItems = NTRIP_SOURCE_UPLOAD_PROTOCOL_OPTIONS,
                     ),
                     EditableProfileField(
                         key = "retryMode",
@@ -3450,6 +3460,7 @@ private fun ProfileStores.profileEditorData(
                         value = profile.effectiveSafetyRulesEnabled.toString(),
                         boolean = true,
                         readOnly = profile.isRtk2goHost,
+                        casterUploadSafety = true,
                     ),
                     EditableProfileField(
                         "safetyMaxBitrateKbps",
@@ -4294,6 +4305,12 @@ private val NTRIP_PROTOCOL_POLICY_OPTIONS = listOf(
     EditableProfileOption("NTRIP_V2_PREFERRED_WITH_COMPATIBILITY", "NTRIP v2 preferred, v1 fallback"),
     EditableProfileOption("NTRIP_V2_ONLY", "NTRIP v2 only"),
     EditableProfileOption("NTRIP_V1_ONLY", "NTRIP v1 only"),
+)
+
+private val NTRIP_SOURCE_UPLOAD_PROTOCOL_OPTIONS = listOf(
+    EditableProfileOption("NTRIP_V1_ONLY", "NTRIP v1 source upload (classic)"),
+    EditableProfileOption("NTRIP_V2_ONLY", "NTRIP v2 source upload (POST)"),
+    EditableProfileOption("NTRIP_V2_PREFERRED_WITH_COMPATIBILITY", "Legacy v2 preferred setting"),
 )
 
 private const val ACTION_USB_PERMISSION = "org.rtkcollector.app.USB_PERMISSION"

@@ -62,25 +62,95 @@ data class EditableProfileField(
     val readOnly: Boolean = false,
     val readOnlyList: List<String> = emptyList(),
     val errorText: String? = null,
+    val helperText: String? = null,
+    val sourceUploadUsername: Boolean = false,
+    val casterUploadSafety: Boolean = false,
 ) {
     val hasError: Boolean get() = !errorText.isNullOrBlank()
+    val hasHelper: Boolean get() = !helperText.isNullOrBlank()
 }
 
 fun EditableProfileField.withRuntimeProfileValidation(values: Map<String, String>): EditableProfileField {
-    if (key != "mountpoint") return this
-    val selectedCasterId = values["casterProfileId"].orEmpty()
-    val currentMountpoint = values[key].orEmpty()
-    val runtimeOptions = optionGroups[selectedCasterId] ?: optionItems
-    val knownMountpoints = runtimeOptions.map { it.value }.filter(String::isNotBlank)
-    val runtimeError = currentMountpoint
-        .takeIf(String::isNotBlank)
-        ?.takeIf { knownMountpoints.isNotEmpty() && it !in knownMountpoints }
-        ?.let { "Mountpoint is not in the selected caster sourcetable." }
-    return copy(optionItems = runtimeOptions, errorText = runtimeError)
+    val currentValue = values[key] ?: value
+    return when (key) {
+        "mountpoint" -> withRuntimeMountpointValidation(values, currentValue)
+        "username" -> if (sourceUploadUsername) {
+            withRuntimeSourceUploadUsernameState(values, currentValue)
+        } else {
+            copy(value = currentValue)
+        }
+        "safetyRulesEnabled" -> if (casterUploadSafety) {
+            withRuntimeCasterUploadSafetyState(values, currentValue)
+        } else {
+            copy(value = currentValue)
+        }
+        else -> copy(value = currentValue)
+    }
 }
 
 fun canSaveProfileEditor(fields: List<EditableProfileField>): Boolean =
     fields.none { it.hasError }
+
+private fun EditableProfileField.withRuntimeMountpointValidation(
+    values: Map<String, String>,
+    currentValue: String,
+): EditableProfileField {
+    val selectedCasterId = values["casterProfileId"].orEmpty()
+    val runtimeOptions = optionGroups[selectedCasterId] ?: optionItems
+    val knownMountpoints = runtimeOptions.map { it.value }.filter(String::isNotBlank)
+    val runtimeError = currentValue
+        .takeIf(String::isNotBlank)
+        ?.takeIf { knownMountpoints.isNotEmpty() && it !in knownMountpoints }
+        ?.let { "Mountpoint is not in the selected caster sourcetable." }
+    return copy(value = currentValue, optionItems = runtimeOptions, errorText = runtimeError)
+}
+
+private fun EditableProfileField.withRuntimeSourceUploadUsernameState(
+    values: Map<String, String>,
+    currentValue: String,
+): EditableProfileField {
+    val protocolPolicy = values["protocolPolicy"].orEmpty()
+    return if (protocolPolicy == "NTRIP_V1_ONLY") {
+        copy(
+            label = "Username (not used for NTRIP v1 source upload)",
+            value = currentValue,
+            readOnly = true,
+            helperText = "Kept for switching back to v2; not sent in the v1 SOURCE request.",
+        )
+    } else {
+        copy(
+            label = "Username",
+            value = currentValue,
+            readOnly = false,
+            helperText = null,
+        )
+    }
+}
+
+private fun EditableProfileField.withRuntimeCasterUploadSafetyState(
+    values: Map<String, String>,
+    currentValue: String,
+): EditableProfileField {
+    val host = values["host"].orEmpty()
+    return if (host.isRtk2goUploadHost()) {
+        copy(
+            label = "RTK2go safety rules (required for RTK2go)",
+            value = "true",
+            readOnly = true,
+            helperText = "Safety rules are enforced for RTK2go hosts.",
+        )
+    } else {
+        copy(
+            label = "RTK2go safety rules",
+            value = currentValue,
+            readOnly = false,
+            helperText = null,
+        )
+    }
+}
+
+private fun String.isRtk2goUploadHost(): Boolean =
+    trim().lowercase() in setOf("rtk2go.com", "www.rtk2go.com")
 
 data class ProfileEditorData(
     val title: String,

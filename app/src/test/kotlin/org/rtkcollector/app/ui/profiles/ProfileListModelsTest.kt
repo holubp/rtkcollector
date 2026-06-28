@@ -164,6 +164,75 @@ class ProfileListModelsTest {
     }
 
     @Test
+    fun `ntrip source upload username is preserved but disabled for v1`() {
+        val field = EditableProfileField(
+            key = "username",
+            label = "Username",
+            value = "base01",
+            sourceUploadUsername = true,
+        )
+
+        val v1 = field.withRuntimeProfileValidation(
+            mapOf("protocolPolicy" to "NTRIP_V1_ONLY", "username" to "base01"),
+        )
+        val v2 = field.withRuntimeProfileValidation(
+            mapOf("protocolPolicy" to "NTRIP_V2_ONLY", "username" to "base01"),
+        )
+
+        assertEquals("base01", v1.value)
+        assertTrue(v1.readOnly)
+        assertTrue(v1.label.contains("not used", ignoreCase = true))
+        assertTrue(v1.helperText.orEmpty().contains("not sent", ignoreCase = true))
+        assertEquals("base01", v2.value)
+        assertFalse(v2.readOnly)
+        assertEquals("Username", v2.label)
+    }
+
+    @Test
+    fun `ntrip correction download username remains editable for v1`() {
+        val field = EditableProfileField(
+            key = "username",
+            label = "Username",
+            value = "rover",
+        )
+
+        val rendered = field.withRuntimeProfileValidation(
+            mapOf("protocolPolicy" to "NTRIP_V1_ONLY", "username" to "rover"),
+        )
+
+        assertEquals("rover", rendered.value)
+        assertFalse(rendered.readOnly)
+        assertEquals("Username", rendered.label)
+        assertEquals(null, rendered.helperText)
+    }
+
+    @Test
+    fun `rtk2go safety state follows unsaved host value`() {
+        val field = EditableProfileField(
+            key = "safetyRulesEnabled",
+            label = "RTK2go safety rules",
+            value = "false",
+            boolean = true,
+            casterUploadSafety = true,
+        )
+
+        val forced = field.withRuntimeProfileValidation(
+            mapOf("host" to "rtk2go.com", "safetyRulesEnabled" to "false"),
+        )
+        val manual = field.withRuntimeProfileValidation(
+            mapOf("host" to "private.example.org", "safetyRulesEnabled" to "false"),
+        )
+
+        assertEquals("true", forced.value)
+        assertTrue(forced.readOnly)
+        assertTrue(forced.label.contains("required", ignoreCase = true))
+        assertTrue(forced.helperText.orEmpty().contains("enforced", ignoreCase = true))
+        assertEquals("false", manual.value)
+        assertFalse(manual.readOnly)
+        assertEquals("RTK2go safety rules", manual.label)
+    }
+
+    @Test
     fun `profile list row can expose warning state`() {
         val row = ProfileListRow(
             id = "mount",

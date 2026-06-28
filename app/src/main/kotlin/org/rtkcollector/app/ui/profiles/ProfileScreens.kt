@@ -770,7 +770,7 @@ fun ProfileEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Checkbox(
-                            checked = values[field.key].equals("true", ignoreCase = true),
+                            checked = field.value.equals("true", ignoreCase = true),
                             onCheckedChange = { checked ->
                                 values = values + (field.key to checked.toString())
                             },
@@ -792,16 +792,18 @@ fun ProfileEditorScreen(
                     }
                 } else if (field.editorOptions().isNotEmpty()) {
                     val optionItems = field.editorOptions()
-                    val expanded = field.key in expandedOptions
-                    val selectedLabel = optionItems.firstOrNull { it.value == values[field.key] }?.label
-                        ?: values[field.key].orEmpty()
+                    val expanded = field.key in expandedOptions && !field.readOnly
+                    val selectedLabel = optionItems.firstOrNull { it.value == field.value }?.label
+                        ?: field.value
                     ExposedDropdownMenuBox(
                         expanded = expanded,
                         onExpandedChange = {
-                            expandedOptions = if (expanded) {
-                                expandedOptions - field.key
-                            } else {
-                                expandedOptions + field.key
+                            if (!field.readOnly) {
+                                expandedOptions = if (expanded) {
+                                    expandedOptions - field.key
+                                } else {
+                                    expandedOptions + field.key
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -811,7 +813,7 @@ fun ProfileEditorScreen(
                             onValueChange = {},
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = !field.readOnly),
                             label = { Text(field.label) },
                             readOnly = true,
                             singleLine = true,
@@ -841,7 +843,7 @@ fun ProfileEditorScreen(
                         Text(field.label, style = MaterialTheme.typography.labelLarge)
                         if (field.multiline) {
                             ScriptTextField(
-                                value = values[field.key].orEmpty(),
+                                value = field.value,
                                 onValueChange = { value ->
                                     values = values + (field.key to value)
                                 },
@@ -850,7 +852,7 @@ fun ProfileEditorScreen(
                             )
                         } else {
                             OutlinedTextField(
-                                value = values[field.key].orEmpty(),
+                                value = field.value,
                                 onValueChange = { value ->
                                     values = values + (field.key to value)
                                 },
@@ -1008,6 +1010,12 @@ private fun ProfileFieldError(field: EditableProfileField) {
         Text(
             text = "! ${field.errorText}",
             color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.labelSmall,
+        )
+    } else if (field.hasHelper) {
+        Text(
+            text = field.helperText.orEmpty(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
         )
     }

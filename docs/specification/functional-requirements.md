@@ -153,6 +153,51 @@ Verification:
 - Automated: session metadata/event redaction tests where available.
 - Manual: confirm session metadata and events omit plaintext credentials.
 
+### CORR-UPLOAD-008: Classic V1 Source Upload Uses NtripServer Syntax
+
+Status: Normative
+
+When a caster upload profile selects NTRIP v1 source upload, the app MUST send
+classic NtripServer syntax exactly as a source/upload role, not an NTRIP client
+download request. The request MUST start with `SOURCE <source-password>
+/<mountpoint>` using CRLF line endings, MUST send a `Source-Agent` header, and
+MUST NOT include `GET`, `POST`, an `HTTP/1.x` suffix, `Authorization`, or the
+username in the source line. The upload MUST require an `ICY 200 OK` response
+before streaming RTCM bytes.
+
+The mountpoint MUST be normalised to one leading slash and no trailing slash.
+Mountpoints containing whitespace, CR/LF, tabs, `HTTP/` syntax, or embedded
+slashes beyond the leading slash MUST be rejected before connecting.
+
+Verification:
+- Automated: `NtripCasterUploadClientTest` classic v1 source request, mountpoint
+  normalisation/rejection, fake caster success and negative-response coverage.
+- Manual: BKG Professional NtripCaster accepts `/UM980BASE` source upload and
+  logs an accepted source, not an NTRIP client/listener request.
+
+### CORR-UPLOAD-009: V2 Source Upload Uses HTTP POST Syntax
+
+Status: Normative
+
+When a caster upload profile selects NTRIP v2 source upload, the app MUST send
+an HTTP-style source/upload request, not classic NTRIP v1 `SOURCE` syntax and
+not an NTRIP client download request. The request MUST start with `POST
+/<mountpoint> HTTP/1.1`, include `Host`, `User-Agent`, `Ntrip-Version:
+Ntrip/2.0`, `Content-Type: gnss/data`, `Connection: close`,
+`Transfer-Encoding: chunked`, and Basic `Authorization` when credentials are
+configured. After an HTTP 200 response, the app MUST stream the RTCM source body
+using HTTP chunked transfer framing.
+
+The mountpoint safety rules from `CORR-UPLOAD-008` also apply to v2 source
+upload.
+
+Verification:
+- Automated: `NtripCasterUploadClientTest` v2 request rendering, mountpoint
+  normalisation/rejection, fake caster success, chunked streaming and negative
+  response coverage.
+- Manual: NTRIP v2-capable caster logs an accepted source for the requested
+  mountpoint.
+
 ## Product Boundaries
 
 ### PRODUCT-NONGOAL-001: No GIS Application Scope

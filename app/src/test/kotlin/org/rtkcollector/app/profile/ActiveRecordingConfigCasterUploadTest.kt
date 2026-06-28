@@ -102,6 +102,46 @@ class ActiveRecordingConfigCasterUploadTest {
     }
 
     @Test
+    fun `v1 source upload requires source password before start`() {
+        val config = activeConfig(
+            workflowId = "fixed-base",
+            hasAcceptedBaseCoordinate = true,
+            uploadProfile = NtripCasterUploadProfile(
+                id = "upload",
+                name = "Upload",
+                host = "caster.example.org",
+                mountpoint = "BASEOUT",
+                protocolPolicy = "NTRIP_V1_ONLY",
+            ),
+            passwordLookup = { "" },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertEquals("NTRIP v1 source upload requires a source password.", error.message)
+    }
+
+    @Test
+    fun `v2 source upload rejects malformed mountpoint before start`() {
+        val config = activeConfig(
+            workflowId = "fixed-base",
+            hasAcceptedBaseCoordinate = true,
+            uploadProfile = NtripCasterUploadProfile(
+                id = "upload",
+                name = "Upload",
+                host = "caster.example.org",
+                mountpoint = "BASE HTTP/1.1",
+                protocolPolicy = "NTRIP_V2_ONLY",
+            ),
+            passwordLookup = { "secret" },
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+
+        assertEquals("NTRIP source upload mountpoint must not contain HTTP syntax.", error.message)
+    }
+
+    @Test
     fun `disabled upload is ignored for rover workflow`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
@@ -137,6 +177,7 @@ class ActiveRecordingConfigCasterUploadTest {
             username = "user",
         ),
         runtimeScript: String = BASE_RTCM_SCRIPT,
+        passwordLookup: (String) -> String? = { "password" },
     ): ActiveRecordingConfig =
         ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
@@ -156,7 +197,7 @@ class ActiveRecordingConfigCasterUploadTest {
             workflowName = "Fixed base",
             workflowUsesNtrip = false,
             hasAcceptedBaseCoordinate = hasAcceptedBaseCoordinate,
-            passwordLookup = { "password" },
+            passwordLookup = passwordLookup,
         )
 
     private companion object {

@@ -162,6 +162,7 @@ class NtripCasterUploadControllerTest {
         val eventKinds = Collections.synchronizedList(mutableListOf<String>())
         val clock = AtomicLong(0L)
         val enteredStreaming = CountDownLatch(1)
+        val workerReadClock = CountDownLatch(1)
         val controller = NtripCasterUploadController(
             uploadOnce = { _, onState, writeRtcmBytes ->
                 attempts.incrementAndGet()
@@ -171,7 +172,12 @@ class NtripCasterUploadControllerTest {
                 NtripCasterUploadResult.Completed(0)
             },
             delay = {},
-            clockMillis = { clock.get() },
+            clockMillis = {
+                if (Thread.currentThread().name == "rtkcollector-caster-upload") {
+                    workerReadClock.countDown()
+                }
+                clock.get()
+            },
             eventSink = { eventKinds += it.kind },
         )
 
@@ -188,6 +194,7 @@ class NtripCasterUploadControllerTest {
             ),
         )
         assertTrue(enteredStreaming.await(2, TimeUnit.SECONDS))
+        assertTrue(workerReadClock.await(2, TimeUnit.SECONDS))
         clock.set(12_001L)
         waitUntil { controller.snapshot().state == "STOPPED" }
 
@@ -387,7 +394,7 @@ class NtripCasterUploadControllerTest {
         )
 
     private fun waitUntil(predicate: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 2_000
+        val deadline = System.currentTimeMillis() + 5_000
         while (System.currentTimeMillis() < deadline) {
             if (predicate()) return
             Thread.sleep(10)

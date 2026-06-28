@@ -20,9 +20,33 @@ class DashboardUploadSelectorTest {
             selectedSettingsSet = selected,
         )
 
-        assertEquals("off", rows.first().id)
+        assertEquals(UploadSelectorOffProfileId, rows.first().id)
         assertEquals("Off", rows.first().name)
         assertTrue(rows.any { it.id == "upload" && it.isSelected })
+    }
+
+    @Test
+    fun `upload selector shows off when profile has enabled by default but selector is explicitly off`() {
+        val selected = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterUploadProfileRef = ProfileReference("upload", "Upload"),
+            baseCasterUploadEnabled = false,
+        )
+
+        val rows = dashboardUploadSelectorRows(
+            profiles = listOf(
+                NtripCasterUploadProfile(
+                    id = "upload",
+                    name = "Upload",
+                    enabledByDefault = true,
+                ),
+            ),
+            selectedSettingsSet = selected,
+        )
+
+        assertEquals(UploadSelectorOffProfileId, rows.first { it.id == UploadSelectorOffProfileId }.id)
+        assertTrue(rows.first { it.id == UploadSelectorOffProfileId }.isSelected)
+        assertEquals("Enabled by default", rows.first { it.id == "upload" }.summary)
+        assertEquals(false, rows.first { it.id == "upload" }.isSelected)
     }
 
     @Test
@@ -47,6 +71,6 @@ class DashboardUploadSelectorTest {
             selectedSettingsSet = RecordingSettingsSet.builtInRoverNtrip(),
         )
 
-        assertTrue(rows.first { it.id == "off" }.isSelected)
+        assertTrue(rows.first { it.id == UploadSelectorOffProfileId }.isSelected)
     }
 }

@@ -144,6 +144,7 @@ import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.MockGpsDashboardState
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardUploadSelectorRows
+import org.rtkcollector.app.ui.dashboard.UploadSelectorOffProfileId
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
 import org.rtkcollector.app.ui.dashboard.formatBytes
 import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
@@ -2357,7 +2358,7 @@ fun RtkCollectorApp(
                             }
                             DashboardSelector.UPLOAD -> {
                                 settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                                    if (id == "off") {
+                                    if (id == UploadSelectorOffProfileId) {
                                         set.copy(baseCasterUploadEnabled = false)
                                     } else {
                                         profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == id }?.let { profile ->
@@ -5300,7 +5301,7 @@ private fun RecordingSettingsSet?.selectedUploadLabel(
 ): String {
     val profile = this?.ntripCasterUploadProfileRef?.id
         ?.let { id -> uploadProfiles.firstOrNull { it.id == id } }
-    val enabled = profile != null && (baseCasterUploadEnabled || profile.enabledByDefault)
+    val enabled = this != null && profile != null && this.baseCasterUploadEnabled
     return if (enabled) profile.name else "Off"
 }
 
@@ -5330,8 +5331,7 @@ private fun ProfileStores.plannedDashboardState(
     val casterUploadProfile = selected?.ntripCasterUploadProfileRef?.id?.let { id ->
         uploadProfiles.firstOrNull { it.id == id }
     }
-    val casterUploadEnabled = casterUploadProfile != null &&
-        (selected.baseCasterUploadEnabled || casterUploadProfile.enabledByDefault)
+    val casterUploadEnabled = selected?.baseCasterUploadEnabled == true && casterUploadProfile != null
     val mockEnabled = selected?.overrides?.recordingOutput?.enableMockLocation
         ?: recordingPolicyProfile?.enableMockLocation
         ?: false

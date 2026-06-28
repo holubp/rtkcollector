@@ -145,6 +145,7 @@ data class DashboardStatus(
 )
 
 internal const val CompactDashboardTwoColumnMinWidthDp = 340
+internal const val UploadSelectorOffProfileId = "__rtkcollector_upload_off__"
 internal const val DefaultUm980ReceiverFrequency =
     "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
 internal const val DefaultUbloxReceiverFrequency =
@@ -193,12 +194,14 @@ internal fun dashboardUploadSelectorRows(
 ): List<ProfileListRow> {
     val selectedProfileId = selectedSettingsSet?.ntripCasterUploadProfileRef?.id
     val selectedProfile = selectedProfileId?.let { id -> profiles.firstOrNull { it.id == id } }
-    val uploadEnabled = selectedProfile != null &&
-        (selectedSettingsSet.baseCasterUploadEnabled || selectedProfile.enabledByDefault)
+    val uploadEnabled = selectedSettingsSet
+        ?.let { settingsSet ->
+            selectedProfileId == settingsSet.ntripCasterUploadProfileRef?.id && settingsSet.baseCasterUploadEnabled
+        } ?: false
     return buildList {
         add(
             ProfileListRow(
-                id = "off",
+                id = UploadSelectorOffProfileId,
                 name = "Off",
                 isProtected = false,
                 hasLocalOverrides = false,

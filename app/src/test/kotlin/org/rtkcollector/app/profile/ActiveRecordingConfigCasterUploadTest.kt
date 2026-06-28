@@ -89,6 +89,26 @@ class ActiveRecordingConfigCasterUploadTest {
     }
 
     @Test
+    fun `default-enabled upload profile remains disabled when baseCasterUploadEnabled is false`() {
+        val config = activeConfig(
+            workflowId = "fixed-base",
+            hasAcceptedBaseCoordinate = true,
+            baseCasterUploadEnabled = false,
+            uploadProfile = NtripCasterUploadProfile(
+                id = "upload",
+                name = "Upload",
+                host = "caster.example.org",
+                mountpoint = "BASEOUT",
+                enabledByDefault = true,
+            ),
+        )
+
+        assertEquals(false, config.casterUpload.enabled)
+        assertEquals(false, config.expectedSessionArtifactNames.contains("BASE_CASTER_UPLOAD_RTCM3"))
+        config.validateForStart()
+    }
+
+    @Test
     fun `upload rejects command profile without base rtcm output`() {
         val config = activeConfig(
             workflowId = "fixed-base",
@@ -169,6 +189,7 @@ class ActiveRecordingConfigCasterUploadTest {
     private fun activeConfig(
         workflowId: String,
         hasAcceptedBaseCoordinate: Boolean,
+        baseCasterUploadEnabled: Boolean = true,
         uploadProfile: NtripCasterUploadProfile = NtripCasterUploadProfile(
             id = "upload",
             name = "Upload",
@@ -185,7 +206,7 @@ class ActiveRecordingConfigCasterUploadTest {
                 ntripCasterProfileRef = null,
                 ntripMountpointProfileRef = null,
                 ntripCasterUploadProfileRef = ProfileReference("upload", "Upload"),
-                baseCasterUploadEnabled = true,
+                baseCasterUploadEnabled = baseCasterUploadEnabled,
             ),
             commandProfile = CommandProfile("commands", "Commands", runtimeScript = runtimeScript),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),

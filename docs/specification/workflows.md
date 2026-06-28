@@ -96,6 +96,22 @@ Verification:
 - Review: generated fixed-base command injection cannot be followed by
   `MODE ROVER`.
 
+### WF-FIXEDBASE-003: Fixed Base Profile Must Match Accepted UM980 Coordinate
+
+Status: Normative
+
+Fixed-base command-profile materialisation and fixed-base start preflight MUST
+only use UM980/Unicore command profiles. The selected command profile MUST
+contain a visible `MODE BASE <lat> <lon> <msl-altitude>` line whose latitude,
+longitude and MSL altitude match the selected accepted base coordinate within
+tight command-format tolerances. Survey-style `MODE BASE TIME ...` does NOT
+satisfy this requirement.
+
+Verification:
+- Automated: fixed-base command validator tests.
+- Review: fixed-base start preflight rejects non-UM980 profiles, `MODE BASE
+  TIME`, and accepted-coordinate drift from the visible command profile.
+
 ## Future In-Phone Solution
 
 ### WF-SOLUTION-001: Device And RTKLIB Solutions Stay Separately Selectable

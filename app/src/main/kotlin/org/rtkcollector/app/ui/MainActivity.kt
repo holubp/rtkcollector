@@ -73,6 +73,7 @@ import org.rtkcollector.app.base.AcceptedBaseCoordinate
 import org.rtkcollector.app.base.AcceptedBaseCoordinateStore
 import org.rtkcollector.app.base.BaseCoordinateForm
 import org.rtkcollector.app.base.BasePositionJsonCodec
+import org.rtkcollector.app.base.FixedBaseCommandValidator
 import org.rtkcollector.app.base.FixedBaseProfileMaterializer
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
@@ -444,6 +445,12 @@ fun RtkCollectorApp(
     }
     fun overwriteSelectedCommandProfileForFixedBase(coordinate: AcceptedBaseCoordinate) {
         val selectedProfile = selectedCommandProfileOrToast() ?: return
+        runCatching {
+            FixedBaseCommandValidator.requireSupportedReceiverFamily(selectedProfile.receiverFamily)
+        }.getOrElse { error ->
+            Toast.makeText(context, error.message ?: "Cannot materialize MODE BASE.", Toast.LENGTH_LONG).show()
+            return
+        }
         if (selectedProfile.isProtected) {
             Toast.makeText(
                 context,
@@ -475,6 +482,12 @@ fun RtkCollectorApp(
     }
     fun createFixedBaseCommandProfile(coordinate: AcceptedBaseCoordinate) {
         val sourceProfile = selectedCommandProfileOrToast() ?: return
+        runCatching {
+            FixedBaseCommandValidator.requireSupportedReceiverFamily(sourceProfile.receiverFamily)
+        }.getOrElse { error ->
+            Toast.makeText(context, error.message ?: "Cannot create fixed-base profile.", Toast.LENGTH_LONG).show()
+            return
+        }
         val newProfile = runCatching {
             val modeBaseCommand = coordinate.toFixedBaseModeCommand()
             val result = FixedBaseProfileMaterializer.materialize(sourceProfile.runtimeScript, modeBaseCommand)
@@ -4632,9 +4645,18 @@ private fun buildDashboardStartIntent(
         showCannotStart(context, "fixed base requires an accepted base coordinate.")
         return null
     }
-    if (workflowId == WORKFLOW_FIXED_BASE && !resolvedProfiles.commandProfile.runtimeScript.containsModeBaseLine()) {
-        showCannotStart(context, "fixed base command profile must contain MODE BASE from an accepted coordinate.")
-        return null
+    if (workflowId == WORKFLOW_FIXED_BASE) {
+        val fixedBaseCoordinate = checkNotNull(selectedBaseCoordinate)
+        val fixedBaseStartError = runCatching {
+            FixedBaseCommandValidator.validateSelectedCoordinateMatchesProfile(
+                commandProfile = resolvedProfiles.commandProfile,
+                selectedBaseCoordinate = fixedBaseCoordinate,
+            )
+        }.exceptionOrNull()
+        if (fixedBaseStartError != null) {
+            showCannotStart(context, fixedBaseStartError.message ?: fixedBaseStartError.javaClass.simpleName)
+            return null
+        }
     }
     val workflowUsesNtrip = workflowId.workflowUsesNtrip()
     val activeConfig = try {
@@ -5589,11 +5611,6 @@ private fun usbDeviceOptionItems(
         connectedChoices.map { EditableProfileOption(it.toProfileValue(), it.label) } +
         listOfNotNull(remembered)
 }
-
-private fun String.containsModeBaseLine(): Boolean =
-    lineSequence().any { line ->
-        line.trimStart().startsWith("MODE BASE ", ignoreCase = true)
-    }
 
 internal fun String.workflowUsesNtrip(): Boolean =
     this == WORKFLOW_ROVER_NTRIP ||

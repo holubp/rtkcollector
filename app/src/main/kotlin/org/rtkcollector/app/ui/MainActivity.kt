@@ -73,6 +73,7 @@ import org.rtkcollector.app.base.AcceptedBaseCoordinate
 import org.rtkcollector.app.base.AcceptedBaseCoordinateStore
 import org.rtkcollector.app.base.BaseCoordinateForm
 import org.rtkcollector.app.base.BasePositionJsonCodec
+import org.rtkcollector.app.base.FixedBaseProfileMaterializer
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.NtripCasterUploadProfile
@@ -317,6 +318,7 @@ fun RtkCollectorApp(
     var state by remember { mutableStateOf(plannedState) }
     var startInProgress by rememberSaveable { mutableStateOf(false) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
+    var pendingFixedBaseCoordinate by remember { mutableStateOf<AcceptedBaseCoordinate?>(null) }
     LaunchedEffect(externalIntent) {
         if (externalIntent != null) {
             settingsImportUriFromIntent(externalIntent)?.let { uri ->
@@ -417,6 +419,81 @@ fun RtkCollectorApp(
         plannedState = planned
         state = state.withPlannedConfiguration(planned)
         profileRevision++
+    }
+    fun selectedCommandProfileOrToast(): CommandProfile? {
+        val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+        if (selectedSet == null) {
+            Toast.makeText(context, "Selected settings set was not found.", Toast.LENGTH_LONG).show()
+            return null
+        }
+        val profile = profileStore.commandProfiles().firstOrNull { it.id == selectedSet.commandProfileRef.id }
+        if (profile == null) {
+            Toast.makeText(context, "Selected command profile was not found.", Toast.LENGTH_LONG).show()
+        }
+        return profile
+    }
+    fun activateFixedBaseWithCommandProfile(commandProfile: CommandProfile) {
+        manualBaseCoordinate = null
+        selectedWorkflowId = WORKFLOW_FIXED_BASE
+        profileStore.saveSelectedWorkflowId(WORKFLOW_FIXED_BASE)
+        val updatedSettingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+            set.copy(commandProfileRef = ProfileReference(commandProfile.id, commandProfile.name))
+        }
+        profileStore.saveSettingsSets(updatedSettingsSets)
+        refreshProfileUi(updatedSettingsSets)
+    }
+    fun overwriteSelectedCommandProfileForFixedBase(coordinate: AcceptedBaseCoordinate) {
+        val selectedProfile = selectedCommandProfileOrToast() ?: return
+        if (selectedProfile.isProtected) {
+            Toast.makeText(
+                context,
+                "Copy the built-in command profile before overwriting MODE BASE.",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        val materializedProfile = runCatching {
+            val modeBaseCommand = coordinate.toFixedBaseModeCommand()
+            val result = FixedBaseProfileMaterializer.materialize(selectedProfile.runtimeScript, modeBaseCommand)
+            selectedProfile.copy(runtimeScript = result.runtimeScript)
+        }.getOrElse { error ->
+            Toast.makeText(context, error.message ?: "Cannot materialize MODE BASE.", Toast.LENGTH_LONG).show()
+            return
+        }
+        profileStore.saveCommandProfiles(
+            profileStore.commandProfiles().map { profile ->
+                if (profile.id == materializedProfile.id) materializedProfile else profile
+            },
+        )
+        activateFixedBaseWithCommandProfile(materializedProfile)
+        pendingFixedBaseCoordinate = null
+        Toast.makeText(
+            context,
+            "Updated ${materializedProfile.name} and selected fixed-base workflow.",
+            Toast.LENGTH_LONG,
+        ).show()
+    }
+    fun createFixedBaseCommandProfile(coordinate: AcceptedBaseCoordinate) {
+        val sourceProfile = selectedCommandProfileOrToast() ?: return
+        val newProfile = runCatching {
+            val modeBaseCommand = coordinate.toFixedBaseModeCommand()
+            val result = FixedBaseProfileMaterializer.materialize(sourceProfile.runtimeScript, modeBaseCommand)
+            sourceProfile.copyProfile(
+                id = profileStore.duplicateId("commands"),
+                name = "Fixed base ${coordinate.name}",
+            ).copy(runtimeScript = result.runtimeScript)
+        }.getOrElse { error ->
+            Toast.makeText(context, error.message ?: "Cannot create fixed-base profile.", Toast.LENGTH_LONG).show()
+            return
+        }
+        profileStore.saveCommandProfiles(profileStore.commandProfiles() + newProfile)
+        activateFixedBaseWithCommandProfile(newProfile)
+        pendingFixedBaseCoordinate = null
+        Toast.makeText(
+            context,
+            "Created ${newProfile.name} and selected fixed-base workflow.",
+            Toast.LENGTH_LONG,
+        ).show()
     }
     fun updateMockGpsSelection(enabled: Boolean, rateHz: Int) {
         val updated = settingsSets.updateSelected(selectedSettingsSetId) { set ->
@@ -973,23 +1050,7 @@ fun RtkCollectorApp(
                         baseCoordinateStore.upsert(acceptedCoordinate)
                         baseCoordinateStore.saveSelectedCoordinateId(acceptedCoordinate.id)
                         manualBaseCoordinate = candidate
-                        selectedWorkflowId = WORKFLOW_FIXED_BASE
-                        profileStore.saveSelectedWorkflowId(WORKFLOW_FIXED_BASE)
-                        settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                            val baseProfile = profileStore.commandProfiles().preferredBaseCommandProfile()
-                            if (baseProfile != null) {
-                                set.copy(commandProfileRef = ProfileReference(baseProfile.id, baseProfile.name))
-                            } else {
-                                set
-                            }
-                        }
-                        profileStore.saveSettingsSets(settingsSets)
-                        refreshProfileUi(settingsSets)
-                        Toast.makeText(
-                            context,
-                            "Fixed-base workflow selected with base coordinate ${acceptedCoordinate.displayLabel()}.",
-                            Toast.LENGTH_LONG,
-                        ).show()
+                        pendingFixedBaseCoordinate = acceptedCoordinate
                     },
                     onSatelliteMonitorDetails = { screen = AppScreen.SATELLITE_MONITOR },
                     onCasterUploadDetails = { screen = AppScreen.CASTER_UPLOAD_MONITOR },
@@ -2387,6 +2448,32 @@ fun RtkCollectorApp(
                         dashboardSelector = null
                     },
                     onDismiss = { dashboardSelector = null },
+                )
+            }
+            pendingFixedBaseCoordinate?.let { coordinate ->
+                AlertDialog(
+                    onDismissRequest = { pendingFixedBaseCoordinate = null },
+                    title = { Text("Use coordinate for fixed base") },
+                    text = {
+                        Text(
+                            "Choose where the MODE BASE line should be written. Recording start will use the selected command profile as-is.",
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { overwriteSelectedCommandProfileForFixedBase(coordinate) }) {
+                            Text("Overwrite selected")
+                        }
+                    },
+                    dismissButton = {
+                        Row {
+                            TextButton(onClick = { createFixedBaseCommandProfile(coordinate) }) {
+                                Text("Create new profile")
+                            }
+                            TextButton(onClick = { pendingFixedBaseCoordinate = null }) {
+                                Text("Cancel")
+                            }
+                        }
+                    },
                 )
             }
             if (showMockGpsDialog) {
@@ -4545,18 +4632,8 @@ private fun buildDashboardStartIntent(
         showCannotStart(context, "fixed base requires an accepted base coordinate.")
         return null
     }
-    val fixedBaseModeCommand = if (workflowId == WORKFLOW_FIXED_BASE) {
-        try {
-            selectedBaseCoordinate?.toFixedBaseModeCommand()
-        } catch (error: IllegalArgumentException) {
-            showCannotStart(context, error.message ?: "fixed base coordinate needs MSL altitude.")
-            return null
-        }
-    } else {
-        null
-    }
-    if (workflowId == WORKFLOW_FIXED_BASE && fixedBaseModeCommand == null) {
-        showCannotStart(context, "fixed base coordinate needs MSL altitude.")
+    if (workflowId == WORKFLOW_FIXED_BASE && !resolvedProfiles.commandProfile.runtimeScript.containsModeBaseLine()) {
+        showCannotStart(context, "fixed base command profile must contain MODE BASE from an accepted coordinate.")
         return null
     }
     val workflowUsesNtrip = workflowId.workflowUsesNtrip()
@@ -4631,7 +4708,7 @@ private fun buildDashboardStartIntent(
         putStringArrayListExtra(RecordingForegroundService.EXTRA_BAUD_SWITCH_COMMANDS, ArrayList(activeConfig.baudSwitchCommands))
         putStringArrayListExtra(
             RecordingForegroundService.EXTRA_MODE_COMMANDS,
-            ArrayList(activeConfig.modeCommands.withFixedBaseModeCommand(fixedBaseModeCommand)),
+            ArrayList(activeConfig.modeCommands),
         )
         putStringArrayListExtra(RecordingForegroundService.EXTRA_SHUTDOWN_COMMANDS, ArrayList(activeConfig.shutdownCommands))
         putExtra(RecordingForegroundService.EXTRA_NTRIP_ENABLED, activeConfig.ntrip.enabled)
@@ -5513,28 +5590,10 @@ private fun usbDeviceOptionItems(
         listOfNotNull(remembered)
 }
 
-private fun List<CommandProfile>.preferredBaseCommandProfile(): CommandProfile? =
-    firstOrNull { it.id == ProfileStores.UM980_BASE_CONFIG_PROFILE_ID }
-        ?: firstOrNull { profile ->
-            profile.receiverFamily.equals("um980-n4", ignoreCase = true) &&
-                profile.runtimeScript
-                    .lineSequence()
-                    .any { it.trimStart().startsWith("MODE BASE", ignoreCase = true) }
-        }
-
-private fun List<String>.withFixedBaseModeCommand(command: String?): List<String> {
-    if (command.isNullOrBlank()) return this
-    var replaced = false
-    val updated = map { line ->
-        if (line.trimStart().startsWith("MODE BASE", ignoreCase = true)) {
-            replaced = true
-            command
-        } else {
-            line
-        }
+private fun String.containsModeBaseLine(): Boolean =
+    lineSequence().any { line ->
+        line.trimStart().startsWith("MODE BASE ", ignoreCase = true)
     }
-    return if (replaced) updated else listOf(command) + this
-}
 
 internal fun String.workflowUsesNtrip(): Boolean =
     this == WORKFLOW_ROVER_NTRIP ||

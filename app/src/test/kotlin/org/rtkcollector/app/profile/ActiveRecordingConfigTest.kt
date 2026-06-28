@@ -771,4 +771,35 @@ class ActiveRecordingConfigTest {
 
         assertEquals("Fixed base workflow cannot start with a command profile that sets MODE ROVER.", error.message)
     }
+
+    @Test
+    fun `fixed base mode commands are not mutated by start config`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "fixed-base"),
+            commandProfile = CommandProfile(
+                id = "fixed",
+                name = "Fixed",
+                runtimeScript = "UNLOG COM1\nMODE BASE 49.4637593130 15.4512544790 707.8000\nGNGGA 1",
+            ),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            ntripCasterUploadProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile("storage", "Storage"),
+            workflowName = "Fixed base",
+            workflowUsesNtrip = false,
+            hasAcceptedBaseCoordinate = true,
+            passwordLookup = { null },
+        )
+
+        assertEquals(
+            listOf(
+                "UNLOG COM1",
+                "MODE BASE 49.4637593130 15.4512544790 707.8000",
+                "GNGGA 1",
+            ),
+            config.modeCommands,
+        )
+    }
 }

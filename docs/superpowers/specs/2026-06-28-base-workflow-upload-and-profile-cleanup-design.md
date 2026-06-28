@@ -51,6 +51,8 @@ height into UM980 `MODE BASE`; it must track the height semantics explicitly.
 - Simplify built-in settings/profile labels around practical scenarios.
 - Make all settings/profile/base-coordinate text fields use consistent editing
   behaviour.
+- Update user-facing documentation for rover, temporary-base and fixed-base
+  workflows.
 - Preserve byte-exact recording and existing receiver/NTRIP functionality.
 
 ## Non-Goals
@@ -153,6 +155,15 @@ Temporary-base workflows may collect data and produce an accepted coordinate,
 but publishing starts only after the user accepts the coordinate and switches to
 explicit fixed-base operation.
 
+Coordinate averaging must not stop merely because the user changes NTRIP caster
+or mountpoint during a temporary-base recording. This is an intentional
+workflow: the operator may average the same stationary receiver position using
+RTK solutions from multiple upstream bases. Averaging still stops when the
+coordinate source becomes invalid for averaging, such as loss of required
+position/height fields, fix-type degradation below the selected threshold, USB
+recording stop, workflow change away from the active base-calibration context,
+or user stop.
+
 RTK2go safety rules remain forced for RTK2go hosts. Other upload profiles keep
 the safety rules switch user-settable; when disabled, the app warns but does
 not force stopping solely because the host is not RTK2go.
@@ -210,6 +221,30 @@ labels and remaining one-line editable profile dialogs.
 Device console input is outside this cleanup unless it is later found to share
 the same broken settings/profile editing behaviour.
 
+## User Documentation
+
+Update user-facing documentation, separately from formal requirements, so the
+main workflows are understandable without reading the implementation specs.
+
+The documentation must explain:
+
+- plain rover recording;
+- rover with NTRIP corrections;
+- temporary-base coordinate determination;
+- fixed-base operation with an accepted coordinate;
+- temporary-base to fixed-base transition;
+- when NTRIP source upload is appropriate;
+- why upload is disabled while the base coordinate is still temporary or
+  converging;
+- how averaging can intentionally span multiple NTRIP mountpoints while the
+  physical receiver remains stationary;
+- that UM980 and M8T are the primary supported devices, while M8P/F9P-like
+  modes may be available but precise positioning is not tested by the author.
+
+The wording should be approachable and operator-oriented. It must avoid
+presenting temporary-base averaging as equivalent to a surveyed control point,
+PPP/static result or accepted fixed-base coordinate.
+
 ## Deferred Satellite-Monitor Work
 
 The following questions are deferred:
@@ -236,6 +271,8 @@ Focused tests should cover:
 - legacy `heightM` import remains backward compatible;
 - dashboard setup state shows Upload `Off` or selected profile correctly;
 - rover/default settings do not enable source upload;
+- coordinate averaging continues across NTRIP caster/mountpoint changes when
+  the receiver remains in an averaging-capable workflow;
 - text-field editor model preserves arrow-key and Tab semantics where it is
   reusable/testable.
 
@@ -243,6 +280,7 @@ Manual checks should cover:
 
 - temporary-base to fixed-base create-new-profile flow;
 - temporary-base to fixed-base overwrite-editable-profile flow;
+- temporary-base averaging across at least two NTRIP mountpoints;
 - main-screen upload Off/Profile selection;
 - start preflight warning when upload is selected for the wrong workflow;
 - UM980 field smoke test confirming `tx-to-receiver.raw` contains the previewed

@@ -57,6 +57,8 @@ class AcceptedBaseCoordinateStoreTest {
             latDeg = 50.0,
             lonDeg = 14.0,
             ellipsoidalHeightM = 300.0,
+            mslAltitudeM = 300.0,
+            geoidSeparationM = null,
             frame = "ETRS89",
             epoch = null,
             method = "MANUAL_KNOWN_POINT",

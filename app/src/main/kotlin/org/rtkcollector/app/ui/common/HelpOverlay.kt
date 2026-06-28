@@ -25,7 +25,7 @@ enum class HelpTopic(
     ),
     COORDINATE_ACTIONS(
         title = "Position actions",
-        body = "Tap the coordinate to copy it as geo:lat,lon, lat,lon, lat or lon. In base workflows, Base selects fixed-base operation using the current or averaged coordinate plus ellipsoidal height. Avg averages coordinate and ellipsoidal height, and stops automatically if the fix type changes or required height disappears.",
+        body = "Tap the coordinate to copy it as geo:lat,lon, lat,lon, lat or lon. In base workflows, Avg averages coordinate and ellipsoidal height and can continue while switching NTRIP mountpoints in the same recording. Base accepts the current or averaged coordinate as a fixed-base candidate; UM980 fixed-base commands require MSL altitude before start.",
     ),
     TX_TO_RECEIVER(
         title = "TX to receiver",

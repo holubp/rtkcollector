@@ -230,11 +230,6 @@ data class BaseCoordinateCandidate(
             "}"
     }
 
-    fun toUm980FixedBaseModeCommandOrNull(): String? {
-        val lat = coordinates.latDouble ?: return null
-        val lon = coordinates.lonDouble ?: return null
-        return "MODE BASE %.10f %.10f %.4f".format(java.util.Locale.US, lat, lon, ellipsoidalHeightM)
-    }
 }
 
 enum class CoordinateCopyFormat(

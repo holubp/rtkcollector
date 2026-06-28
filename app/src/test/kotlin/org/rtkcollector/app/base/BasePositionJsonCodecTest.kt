@@ -11,9 +11,11 @@ class BasePositionJsonCodecTest {
         val coordinate = AcceptedBaseCoordinate(
             id = "base-1",
             name = "Tripod base",
-            latDeg = 50.1,
-            lonDeg = 14.2,
-            ellipsoidalHeightM = 300.3,
+            latDeg = 49.463759313,
+            lonDeg = 15.451254479,
+            ellipsoidalHeightM = 752.9215,
+            mslAltitudeM = 707.8,
+            geoidSeparationM = 45.1215,
             frame = "ETRS89",
             epoch = "2026.46",
             method = "STATIC_RTK",
@@ -58,10 +60,54 @@ class BasePositionJsonCodecTest {
         assertEquals(49.9, decoded.latDeg)
         assertEquals(15.1, decoded.lonDeg)
         assertEquals(280.5, decoded.ellipsoidalHeightM)
+        assertNull(decoded.mslAltitudeM)
         assertEquals("UNKNOWN", decoded.frame)
         assertEquals("MANUAL_KNOWN_POINT", decoded.method)
         assertEquals("TEMPORARY_BASE_AVERAGE", decoded.sourceDescription)
         assertEquals(42, decoded.durationSeconds)
         assertNull(decoded.epoch)
+    }
+
+    @Test
+    fun importsAltitudeAliasAsMslAltitude() {
+        val json = JSONObject()
+            .put("latDeg", 49.463759313)
+            .put("lonDeg", 15.451254479)
+            .put("altitudeM", 707.8)
+            .put("frame", "UNKNOWN")
+            .put("method", "MANUAL_KNOWN_POINT")
+            .toString()
+
+        val decoded = BasePositionJsonCodec.decode(
+            json,
+            fallbackId = "fallback-id",
+            fallbackName = "Fallback",
+        )
+
+        assertNull(decoded.ellipsoidalHeightM)
+        assertEquals(707.8, decoded.mslAltitudeM)
+        assertNull(decoded.geoidSeparationM)
+    }
+
+    @Test
+    fun decodesHeightAndGeoidSeparationIntoMslAltitude() {
+        val json = JSONObject()
+            .put("latDeg", 49.463759313)
+            .put("lonDeg", 15.451254479)
+            .put("heightM", 752.9215)
+            .put("geoidSeparationM", 45.1215)
+            .put("frame", "UNKNOWN")
+            .put("method", "MANUAL_KNOWN_POINT")
+            .toString()
+
+        val decoded = BasePositionJsonCodec.decode(
+            json,
+            fallbackId = "fallback-id",
+            fallbackName = "Fallback",
+        )
+
+        assertEquals(752.9215, decoded.ellipsoidalHeightM)
+        assertEquals(707.8, decoded.mslAltitudeM)
+        assertEquals(45.1215, decoded.geoidSeparationM)
     }
 }

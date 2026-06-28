@@ -241,10 +241,6 @@ class DashboardStateTest {
 
         assertEquals("50.087451234, 14.421253456, h 321.456 m", candidate?.displayLabel())
         assertEquals(
-            "MODE BASE 50.0874512340 14.4212534560 321.4560",
-            candidate?.toUm980FixedBaseModeCommandOrNull(),
-        )
-        assertEquals(
             "{" +
                 "\"latDeg\":50.087451234," +
                 "\"lonDeg\":14.421253456," +

@@ -7,7 +7,9 @@ data class AcceptedBaseCoordinate(
     val name: String,
     val latDeg: Double,
     val lonDeg: Double,
-    val ellipsoidalHeightM: Double,
+    val ellipsoidalHeightM: Double?,
+    val mslAltitudeM: Double?,
+    val geoidSeparationM: Double?,
     val frame: String,
     val epoch: String?,
     val method: String,
@@ -28,7 +30,10 @@ data class AcceptedBaseCoordinate(
         require(lonDeg.isFinite() && lonDeg in -180.0..180.0) {
             "Accepted base longitude must be finite and within -180..180 degrees."
         }
-        require(ellipsoidalHeightM.isFinite()) { "Accepted base ellipsoidal height must be finite." }
+        requireFiniteIfPresent("ellipsoidal height", ellipsoidalHeightM)
+        requireFiniteIfPresent("MSL altitude", mslAltitudeM)
+        requireFiniteIfPresent("geoid separation", geoidSeparationM)
+        requireAtLeastOneFiniteHeight(mslAltitudeM, ellipsoidalHeightM)
         require(frame.isNotBlank()) { "Accepted base coordinate frame must not be blank." }
         require(method.isNotBlank()) { "Accepted base coordinate method must not be blank." }
         require(durationSeconds == null || durationSeconds >= 0) {
@@ -43,7 +48,23 @@ data class AcceptedBaseCoordinate(
     fun toFixedBaseModeCommand(comPort: String = "COM1"): String {
         require(comPort.isNotBlank()) { "UM980 COM port must not be blank." }
         validate()
-        return "MODE BASE %.10f %.10f %.4f".format(Locale.US, latDeg, lonDeg, ellipsoidalHeightM)
+        return toUm980FixedBaseModeCommand()
+    }
+
+    fun toUm980FixedBaseModeCommand(): String {
+        validate()
+        val altitude = mslAltitudeM ?: throw IllegalArgumentException("UM980 fixed base requires MSL altitude.")
+        return "MODE BASE %.10f %.10f %.4f".format(Locale.US, latDeg, lonDeg, altitude)
+    }
+}
+
+private fun requireFiniteIfPresent(label: String, value: Double?) {
+    require(value == null || value.isFinite()) { "Accepted base $label must be finite." }
+}
+
+private fun requireAtLeastOneFiniteHeight(mslAltitudeM: Double?, ellipsoidalHeightM: Double?) {
+    require(mslAltitudeM != null || ellipsoidalHeightM != null) {
+        "Accepted base coordinate requires at least one of mslAltitudeM or ellipsoidalHeightM to be finite."
     }
 }
 

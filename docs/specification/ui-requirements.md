@@ -154,7 +154,9 @@ Status: Normative
 
 Dashboard base-coordinate actions MUST keep coordinate copy, averaging and
 fixed-base acceptance compact while making the selected coordinate source and
-height semantics explicit.
+height semantics explicit. A temporary-base average MUST NOT be stopped merely
+because the user changes NTRIP caster or mountpoint profiles within the same
+recording.
 
 Verification:
 - Automated: dashboard state tests for base candidate generation.

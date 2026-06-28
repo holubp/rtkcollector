@@ -10,7 +10,9 @@ object BasePositionJsonCodec {
             .put("name", coordinate.name)
             .put("latDeg", coordinate.latDeg)
             .put("lonDeg", coordinate.lonDeg)
-            .put("heightM", coordinate.ellipsoidalHeightM)
+            .putNullable("mslAltitudeM", coordinate.mslAltitudeM)
+            .putNullable("ellipsoidalHeightM", coordinate.ellipsoidalHeightM)
+            .putNullable("geoidSeparationM", coordinate.geoidSeparationM)
             .put("frame", coordinate.frame)
             .putNullable("epoch", coordinate.epoch)
             .put("method", coordinate.method)
@@ -35,7 +37,15 @@ object BasePositionJsonCodec {
             name = parsed.optString("name", fallbackName).takeIf(String::isNotBlank) ?: fallbackName,
             latDeg = parsed.getDouble("latDeg"),
             lonDeg = parsed.getDouble("lonDeg"),
-            ellipsoidalHeightM = parsed.getDouble("heightM"),
+            ellipsoidalHeightM = parsed.optNullableDouble("ellipsoidalHeightM") ?: parsed.optNullableDouble("heightM"),
+            mslAltitudeM = parsed.optNullableDouble("mslAltitudeM")
+                ?: parsed.optNullableDouble("altitudeM")
+                ?: deriveMslAltitude(
+                    ellipsoidalHeightM = parsed.optNullableDouble("ellipsoidalHeightM")
+                        ?: parsed.optNullableDouble("heightM"),
+                    geoidSeparationM = parsed.optNullableDouble("geoidSeparationM"),
+                ),
+            geoidSeparationM = parsed.optNullableDouble("geoidSeparationM"),
             frame = parsed.optString("frame", "UNKNOWN").takeIf(String::isNotBlank) ?: "UNKNOWN",
             epoch = parsed.optNullableString("epoch"),
             method = parsed.optString("method", "UNKNOWN").takeIf(String::isNotBlank) ?: "UNKNOWN",
@@ -69,3 +79,11 @@ private fun JSONObject.optNullableDouble(name: String): Double? =
 
 private fun JSONObject.optNullableLong(name: String): Long? =
     if (has(name) && !isNull(name)) optLong(name) else null
+
+private fun deriveMslAltitude(ellipsoidalHeightM: Double?, geoidSeparationM: Double?): Double? {
+    return if (ellipsoidalHeightM != null && geoidSeparationM != null) {
+        ellipsoidalHeightM - geoidSeparationM
+    } else {
+        null
+    }
+}

@@ -955,7 +955,7 @@ fun RtkCollectorApp(
                         if (acceptedCoordinate == null) {
                             Toast.makeText(
                                 context,
-                                "Fixed base requires latitude, longitude and ellipsoidal height.",
+                                "Base candidate requires a valid latitude and longitude.",
                                 Toast.LENGTH_LONG,
                             ).show()
                             return@HomeDashboard
@@ -1479,7 +1479,9 @@ fun RtkCollectorApp(
                             name = "New base coordinate",
                             latDeg = 0.0,
                             lonDeg = 0.0,
-                            ellipsoidalHeightM = 0.0,
+                            ellipsoidalHeightM = null,
+                            mslAltitudeM = null,
+                            geoidSeparationM = null,
                             frame = "UNKNOWN",
                             epoch = null,
                             method = "MANUAL_KNOWN_POINT",
@@ -3201,7 +3203,21 @@ private fun BaseCoordinateEditorScreen(
             EditableProfileField("name", "Name", coordinate.name),
             EditableProfileField("latDeg", "Latitude degrees", coordinate.latDeg.toString()),
             EditableProfileField("lonDeg", "Longitude degrees", coordinate.lonDeg.toString()),
-            EditableProfileField("ellipsoidalHeightM", "Ellipsoidal height meters", coordinate.ellipsoidalHeightM.toString()),
+            EditableProfileField(
+                "ellipsoidalHeightM",
+                "Ellipsoidal height meters",
+                coordinate.ellipsoidalHeightM?.toString().orEmpty(),
+            ),
+            EditableProfileField(
+                "mslAltitudeM",
+                "MSL altitude meters",
+                coordinate.mslAltitudeM?.toString().orEmpty(),
+            ),
+            EditableProfileField(
+                "geoidSeparationM",
+                "Geoid separation meters",
+                coordinate.geoidSeparationM?.toString().orEmpty(),
+            ),
             EditableProfileField("frame", "Frame/datum", coordinate.frame),
             EditableProfileField("epoch", "Epoch", coordinate.epoch.orEmpty()),
             EditableProfileField(
@@ -3237,6 +3253,8 @@ private fun BaseCoordinateEditorScreen(
                 latDeg = values["latDeg"].orEmpty(),
                 lonDeg = values["lonDeg"].orEmpty(),
                 ellipsoidalHeightM = values["ellipsoidalHeightM"].orEmpty(),
+                mslAltitudeM = values["mslAltitudeM"].orEmpty(),
+                geoidSeparationM = values["geoidSeparationM"].orEmpty(),
                 frame = values["frame"].orEmpty(),
                 epoch = values["epoch"].orEmpty(),
                 method = values["method"].orEmpty(),
@@ -4500,12 +4518,17 @@ private fun buildDashboardStartIntent(
         return null
     }
     val fixedBaseModeCommand = if (workflowId == WORKFLOW_FIXED_BASE) {
-        selectedBaseCoordinate?.toFixedBaseModeCommand()
+        try {
+            selectedBaseCoordinate?.toFixedBaseModeCommand()
+        } catch (error: IllegalArgumentException) {
+            showCannotStart(context, error.message ?: "fixed base coordinate needs MSL altitude.")
+            return null
+        }
     } else {
         null
     }
     if (workflowId == WORKFLOW_FIXED_BASE && fixedBaseModeCommand == null) {
-        showCannotStart(context, "fixed base coordinate needs ellipsoidal height.")
+        showCannotStart(context, "fixed base coordinate needs MSL altitude.")
         return null
     }
     val workflowUsesNtrip = workflowId.workflowUsesNtrip()
@@ -5609,7 +5632,7 @@ private fun AcceptedBaseCoordinate.profileRow(isSelected: Boolean = false): Prof
             java.util.Locale.US,
             latDeg,
             lonDeg,
-            ellipsoidalHeightM,
+            heightForDisplayMeters(),
             method,
         ),
     )
@@ -5619,8 +5642,11 @@ private fun AcceptedBaseCoordinate.displayLabel(): String =
         java.util.Locale.US,
         latDeg,
         lonDeg,
-        ellipsoidalHeightM,
+        heightForDisplayMeters(),
     )
+
+private fun AcceptedBaseCoordinate.heightForDisplayMeters(): Double =
+    mslAltitudeM ?: ellipsoidalHeightM ?: 0.0
 
 private fun BaseCoordinateCandidate.toAcceptedBaseCoordinate(
     id: String,
@@ -5635,6 +5661,8 @@ private fun BaseCoordinateCandidate.toAcceptedBaseCoordinate(
         latDeg = lat,
         lonDeg = lon,
         ellipsoidalHeightM = ellipsoidalHeightM,
+        mslAltitudeM = null,
+        geoidSeparationM = null,
         frame = "UNKNOWN",
         epoch = null,
         method = if (source == "AVERAGE") "LONG_AVERAGE" else "UNKNOWN",

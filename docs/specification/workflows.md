@@ -58,17 +58,19 @@ Verification:
 - Manual: temporary-base session can accept an averaged/current coordinate and
   transition toward fixed-base use.
 
-### WF-TEMPBASE-HEIGHT-001: Temporary Base Candidate Uses Ellipsoidal Height
+### WF-TEMPBASE-HEIGHT-001: Temporary Base Candidate Preserves Height Semantics
 
 Status: Normative
 
 Temporary-base coordinate actions that prepare fixed-base operation MUST carry
-ellipsoidal height. Orthometric altitude or MSL height MUST NOT be substituted
-for receiver fixed-base commands.
+the available height semantics explicitly. Ellipsoidal height MUST remain
+available for dashboard and mock-location use when reported by the receiver.
+UM980/N4 fixed-base command generation MUST use accepted MSL altitude and MUST
+NOT silently substitute ellipsoidal height for the `MODE BASE` altitude field.
 
 Verification:
 - Automated: dashboard base-coordinate candidate tests.
-- Review: UM980 `MODE BASE` generation uses ellipsoidal height only.
+- Review: UM980 `MODE BASE` generation uses MSL altitude only.
 
 ### WF-FIXEDBASE-001: Fixed Base Requires Accepted Coordinate
 

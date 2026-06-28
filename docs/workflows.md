@@ -123,11 +123,15 @@ Dashboard coordinate actions are helpers around this workflow model, not new
 modes. The displayed coordinate may be copied as `geo:lat,lon`, `lat,lon`,
 `lat` or `lon`. In temporary-base workflows, a compact live average may be
 started only while the receiver is stationary and the fix type remains stable;
-the average must stop if the interpreted fix type changes. A UI action may
-switch the next session toward fixed-base operation using the current coordinate,
-but it must not invent receiver fixed-base commands. It may select an existing
-`MODE BASE` command profile only through explicit user selection; otherwise it
-must make the missing command profile visible to the user.
+the average must stop if the interpreted fix type changes, the active recording
+session changes, recording stops, or required height data disappears. It must
+not stop merely because the user switches NTRIP caster or mountpoint profiles
+within the same recording. A UI action may switch the next session toward
+fixed-base operation using the current coordinate, but it must not invent or
+silently overwrite receiver fixed-base commands. It may create a new fixed-base
+profile or overwrite an existing editable `MODE BASE` line only through
+explicit user selection; otherwise it must make the missing command profile
+visible to the user.
 
 Base-position candidates are generated from the recording, not by switching to a
 separate app mode. Candidate methods are ranked as:
@@ -160,6 +164,10 @@ Required properties:
   uploaded to an external NTRIP caster;
 - caster upload requires a command profile that emits minimum RTCM base output
   and must remain advisory to raw recording.
+- UM980/N4 `MODE BASE` command materialisation must use an accepted MSL
+  altitude. Ellipsoidal height and geoid separation may be stored with the
+  accepted coordinate, but ellipsoidal height must not be silently substituted
+  for UM980 fixed-base altitude.
 
 Fixed-base operation must not start directly from a temporary-base preparation
 session. A base-position candidate must first be accepted as an explicit

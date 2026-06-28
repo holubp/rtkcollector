@@ -138,15 +138,23 @@ It also provides the experimental real-recording controls:
 
 The Position card is also an action surface. Tapping the displayed coordinate
 opens copy choices for `geo:lat,lon`, `lat,lon`, `lat` and `lon`. In base
-workflows, compact `Base` and `Avg` controls may appear next to the coordinate:
-`Base` switches the next-session setup toward fixed-base operation using the
-current coordinate and ellipsoidal height; the user must still choose or create
-a matching `MODE BASE` command profile before starting. `Avg` starts a live
-coordinate and ellipsoidal-height average. Averaging is valid only while the
-interpreted fix type remains unchanged and the receiver continues reporting
-ellipsoidal height. If the fix changes or required height disappears, averaging
-stops and the app reports the reason. This live average is field guidance, not a
-replacement for PPP/static RTK or an accepted `base-position.json`.
+workflows, compact `Base` and `Avg` controls may appear next to the coordinate.
+`Avg` starts a live coordinate and ellipsoidal-height average for the current
+stationary receiver. The average may continue while you switch between NTRIP
+caster or mountpoint profiles, so the same temporary base can be compared
+against several external bases. Averaging is valid only while the interpreted
+fix type remains unchanged and the receiver continues reporting ellipsoidal
+height. If the fix changes, the session changes, recording stops, or required
+height disappears, averaging stops and the app reports the reason. This live
+average is field guidance, not a replacement for PPP/static RTK or an accepted
+`base-position.json`.
+
+`Base` accepts the current or averaged coordinate as the next fixed-base
+candidate. It does not silently rewrite receiver commands. Before fixed-base
+operation starts, choose an editable fixed-base command profile to update or
+create a new one. For UM980/N4, the generated `MODE BASE` command uses MSL
+altitude. Ellipsoidal height and geoid separation remain recorded metadata for
+review, dashboard display and mock-location semantics.
 
 The Files card shows the active session location and recorded byte counts. The
 Sessions menu lists recordings in the configured app-private storage with latest
@@ -348,13 +356,14 @@ GPSIONB ONCHANGED
 ```
 
 Additional built-ins include `UM980 1 Hz ASCII RTK+PPP` and `UM980 base config`.
-They are also read-only and copyable. Fixed-base start from the Position card
-replaces the base template's survey-style `MODE BASE TIME ...` line with an
-explicit `MODE BASE <lat> <lon> <ellipsoidal-height>` command from the accepted
-current or averaged coordinate. The height is ellipsoidal height, matching the
-UM980 fixed-base command model and the local UM980 RTKLIB pipeline; orthometric
-altitude/MSL height must not be substituted. User changes to copied command
-scripts should remain conservative and source-backed.
+They are also read-only and copyable. Fixed-base setup from the Position card
+does not silently change built-ins. It offers a clear choice: create a new
+fixed-base profile or overwrite the `MODE BASE` line in a selected editable
+copy. The generated UM980 command is
+`MODE BASE <lat> <lon> <msl-altitude>`. Ellipsoidal height is not substituted
+for the UM980 altitude field unless the coordinate source explicitly provides a
+safe conversion. User changes to copied command scripts should remain
+conservative and source-backed.
 
 The normal recording start path sends runtime UM980 commands only. It does not
 write receiver non-volatile memory. Persistent writes are explicit warned
@@ -544,10 +553,12 @@ methods are unavailable.
 
 The temporary-base dashboard can help capture an accepted coordinate in the
 field. Use `Avg` only while the receiver is stationary and the fix type is
-stable. Use `Base` only after deciding the shown or averaged coordinate is good
-enough for the intended work; if no `MODE BASE` command profile exists, create
-or select one in Menu > Init/shutdown scripts before starting fixed-base
-operation.
+stable. You may keep averaging while changing NTRIP caster or mountpoint
+profiles, for example to average or compare the same stationary receiver
+against several nearby bases. Use `Base` only after deciding the shown or
+averaged coordinate is good enough for the intended work; then create a new
+fixed-base profile or overwrite the `MODE BASE` line in a selected editable
+profile before starting fixed-base operation.
 
 The app performs a start-time sanity check: a rover workflow must not run a
 receiver command profile that sends `MODE BASE`. Temporary-base and other
@@ -566,10 +577,19 @@ User flow:
 2. Enter the accepted coordinate manually or paste an imported
    `base-position.json`.
 3. Verify frame/datum, epoch, antenna height and antenna reference point.
-4. Start fixed-base operation.
-5. Optionally select an NTRIP caster-upload profile if downstream publication
+4. Choose whether to create a new fixed-base command profile or overwrite the
+   `MODE BASE` line in a selected editable profile.
+5. Start fixed-base operation.
+6. Optionally select an NTRIP caster-upload profile if downstream publication
    is needed.
-6. Record base status and RTCM output/extracted RTCM where supported.
+7. Record base status and RTCM output/extracted RTCM where supported.
+
+For UM980/N4 fixed-base commands, latitude and longitude are geodetic degrees
+and the third `MODE BASE` value is MSL altitude in metres. Do not paste an
+ellipsoidal height into that field unless you have intentionally converted it
+to the receiver's expected altitude reference. A `base-position.json` may carry
+MSL altitude, ellipsoidal height and geoid separation separately so this choice
+is reviewable later.
 
 When caster upload is configured and enabled, the upload monitor shows live upload
 state, last error/safety stop, retry mode/delay/failure count, upload bytes,

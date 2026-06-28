@@ -30,9 +30,10 @@ RtkCollector is meant to cover three basic field patterns:
 2. Rover with NTRIP: let Android connect to an NTRIP caster, record the
    correction stream, and forward RTCM corrections to the receiver while
    continuing to record the receiver stream.
-3. Base setup: record data for a temporary base, accept or import a base
-   coordinate, then run a fixed base that can publish RTCM corrections through a
-   caster such as rtk2go for a rover to consume.
+3. Base setup: record data for a stationary temporary base, optionally compare
+   or average positions while switching between several NTRIP mountpoints,
+   accept or import a base coordinate, then run a fixed base that can publish
+   RTCM corrections through a caster such as rtk2go for a rover to consume.
 
 Start with [User Workflows](docs/user-workflows.md) for a practical guide.
 Receiver status is summarised in

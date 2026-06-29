@@ -226,6 +226,49 @@ Verification:
 - Automated: active setup resolver tests.
 - Manual: activate settings set, override dashboard selectors and restart app.
 
+### UI-SETUP-003: Dashboard Setup Strip Has Explicit Upload Selection
+
+Status: Normative
+
+The dashboard setup strip MUST expose Workflow, Mountpoint, Receiver, Upload and
+Storage selectors. The Upload selector MUST list an explicit `Off` row first
+and MUST apply `Off` as a real disabled state for NTRIP source upload. Selecting
+or disabling source upload from this strip MUST NOT silently rewrite unrelated
+settings-set profile fields.
+
+Verification:
+- Automated: dashboard upload selector and dashboard layout tests.
+- Manual: dashboard selector review with no upload profile and with a configured
+  upload profile.
+
+### UI-SETUP-004: NTRIP Source Upload Credentials Are Role-Specific
+
+Status: Normative
+
+NTRIP source-upload v1 UI MUST make clear that the username is not used by the
+classic `SOURCE <password> /mountpoint` request. Switching between source-upload
+v1 and v2 MUST NOT delete the username field value, so users can return to v2
+without retyping it.
+
+Verification:
+- Automated: caster upload profile/editor tests where practical.
+- Manual: source-upload profile editor review.
+
+### UI-KEYBOARD-002: Editable One-Line Profile Fields Use Shared Native Editor
+
+Status: Normative
+
+Editable one-line profile and settings text fields SHOULD use the shared native
+Android-backed text-field behaviour. Hardware-keyboard arrows MUST stay inside
+the active text field; Tab and Shift+Tab MAY be used for cross-field traversal.
+Read-only display fields and dropdown anchors MAY continue to use Compose
+read-only text fields.
+
+Verification:
+- Automated: compile-time coverage through profile screens.
+- Manual: profile rename, settings edit, mountpoint edit and base-coordinate
+  rename keyboard smoke test.
+
 ### UI-PROFILE-002: Profile Activation Is Separate From Editing
 
 Status: Normative

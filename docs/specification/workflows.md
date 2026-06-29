@@ -58,6 +58,20 @@ Verification:
 - Manual: temporary-base session can accept an averaged/current coordinate and
   transition toward fixed-base use.
 
+### WF-TEMPBASE-002: Temporary Base Averaging Survives NTRIP Source Changes
+
+Status: Normative
+
+Temporary-base coordinate averaging MUST NOT stop solely because the upstream
+NTRIP caster or mountpoint changes. Averaging remains tied to the stationary
+local receiver, selected solution and required fix class; if those conditions
+remain valid, changing the correction source is an advisory event only.
+
+Verification:
+- Automated: coordinate averaging controller tests.
+- Manual: temporary-base session can continue averaging after switching between
+  two NTRIP mountpoints.
+
 ### WF-TEMPBASE-HEIGHT-001: Temporary Base Candidate Preserves Height Semantics
 
 Status: Normative
@@ -111,6 +125,35 @@ Verification:
 - Automated: fixed-base command validator tests.
 - Review: fixed-base start preflight rejects non-UM980 profiles, `MODE BASE
   TIME`, and accepted-coordinate drift from the visible command profile.
+
+### WF-FIXEDBASE-004: Fixed Base Command Materialisation Is Explicit
+
+Status: Normative
+
+Fixed-base coordinate acceptance MUST NOT silently replace or inject `MODE BASE`
+commands at recording start. The user MUST explicitly create a new command
+profile or explicitly overwrite the `MODE BASE` line in the selected editable
+command profile before fixed-base operation uses the accepted coordinate.
+Protected built-in profiles and command profiles referenced by other settings
+sets MUST NOT be silently mutated.
+
+Verification:
+- Automated: fixed-base profile materialiser and command validator tests.
+- Review: dashboard Base action opens an explicit materialisation choice and
+  start preflight uses the selected command profile as-is.
+
+### WF-BUILTIN-SETTINGS-001: Built-In Settings Do Not Enable Source Upload
+
+Status: Normative
+
+Built-in rover and base settings sets MUST NOT enable NTRIP source upload by
+default. A settings set MAY reference an NTRIP correction-download caster where
+the workflow uses corrections, but source upload MUST remain off until the user
+selects an upload profile or explicitly enables upload for the active setup.
+
+Verification:
+- Automated: built-in settings set tests.
+- Manual: first launch and built-in settings inspection show Upload as `Off`.
 
 ## Future In-Phone Solution
 

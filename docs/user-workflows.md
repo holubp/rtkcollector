@@ -31,7 +31,8 @@ RtkCollector is easiest to understand as three workflows.
 ### 1. Plain Rover
 
 Use plain rover recording when you only want to capture what the receiver
-outputs.
+outputs. It records the receiver stream without an upstream correction source
+and does not open an NTRIP download or upload connection.
 
 1. Connect the receiver by USB.
 2. Select a receiver command profile.
@@ -45,7 +46,10 @@ recording while USB and storage still work.
 
 ### 2. Rover With NTRIP
 
-Use rover with NTRIP when Android should act as the NTRIP client.
+Use rover with NTRIP when Android should act as the NTRIP client. This
+downloads corrections from a caster and sends those correction bytes to the
+receiver. It is separate from NTRIP source upload, which is only for base RTCM
+publication.
 
 1. Select a rover workflow and receiver profile.
 2. Select or create an NTRIP caster profile.
@@ -65,12 +69,18 @@ Use base workflows when you want a local base near the rover.
 For a **temporary base**, place a stationary receiver in a good open-sky
 location and record enough data to determine its coordinate later. That
 coordinate may come from RTK against another base, PPP/static processing,
-receiver PPP where available, or lower-grade fallback averaging.
+receiver PPP where available, or lower-grade fallback averaging. If you average
+the temporary-base position in the app, you may continue averaging after
+changing upstream NTRIP caster or mountpoint, provided the local receiver has
+not moved and the fix type remains valid.
 
 For a **fixed base**, start only after you have accepted or imported a known
 coordinate. The fixed-base command profile configures the receiver with that
-coordinate and can publish receiver-created RTCM corrections through an NTRIP
-caster profile. A common field pattern is:
+coordinate. For UM980/N4, the generated `MODE BASE` command uses MSL altitude,
+not ellipsoidal height. A fixed base can publish receiver-created RTCM
+corrections through an NTRIP source-upload profile. Upload failure must be shown
+in monitoring, but it must not stop local receiver recording. A common field
+pattern is:
 
 1. Determine or import the base coordinate.
 2. Start the fixed-base workflow with RTCM output enabled.
@@ -81,6 +91,11 @@ caster profile. A common field pattern is:
 Base coordinates matter. A wrong base coordinate can produce a precise-looking
 but wrong rover position, so record method, uncertainty, antenna height,
 reference point, datum/frame and source session whenever possible.
+
+The app ships with focused protected UM980 settings sets: plain rover, rover
+with NTRIP, temporary base and fixed base. NTRIP source upload is off by
+default. The Home dashboard `Upload` selector has an explicit `Off` row; choose
+a source-upload profile only for base workflows that should publish RTCM.
 
 ## Screenshots To Capture
 
@@ -112,7 +127,8 @@ from Menu.
 The dashboard configuration tiles are intentionally lean selectors: Workflow
 selects the active workflow, Settings selects the active settings set,
 Mountpoint selects or overrides the active NTRIP mountpoint, Receiver selects a
-receiver command profile and Storage selects a storage location profile. Full
+receiver command profile, Upload selects `Off` or a configured NTRIP
+source-upload profile, and Storage selects a storage location profile. Full
 profile creation and editing belongs in Menu.
 It also provides the experimental real-recording controls:
 
@@ -151,10 +167,12 @@ average is field guidance, not a replacement for PPP/static RTK or an accepted
 
 `Base` accepts the current or averaged coordinate as the next fixed-base
 candidate. It does not silently rewrite receiver commands. Before fixed-base
-operation starts, choose an editable fixed-base command profile to update or
-create a new one. For UM980/N4, the generated `MODE BASE` command uses MSL
-altitude. Ellipsoidal height and geoid separation remain recorded metadata for
-review, dashboard display and mock-location semantics.
+operation starts, explicitly create a new fixed-base command profile or
+explicitly overwrite the `MODE BASE` line in the selected editable command
+profile. Built-in and shared command profiles are protected from silent
+mutation. For UM980/N4, the generated `MODE BASE` command uses MSL altitude.
+Ellipsoidal height and geoid separation remain recorded metadata for review,
+dashboard display and mock-location semantics.
 
 The Files card shows the active session location and recorded byte counts. The
 Sessions menu lists recordings in the configured app-private storage with latest
@@ -239,12 +257,18 @@ Built-in init/shutdown command profiles open in view-only mode. Copy a built-in
 profile before editing it. Multiline command fields use a native Android text
 editor so hardware-keyboard arrows and modifier combinations navigate inside the
 field; Tab and Shift+Tab move between fields and restore each field's cursor
-position where possible.
+position where possible. Editable one-line profile and settings fields use the
+same native-editor behaviour for hardware arrow keys and Tab traversal.
 Command profiles also declare whether they provide satellite telemetry for the
 monitoring card. Use telemetry-capable built-ins, such as the UM980 and M8T
 profiles, when satellite monitoring is required; copied user profiles should
 keep the same telemetry setting only when their commands still enable the
 documented receiver messages.
+
+The current satellite-frequency monitor shows visible and used counts from the
+available receiver, RTCM and RTKLIB telemetry. Investigation of why some
+reported GLONASS L3, Galileo L6 and BeiDou L5/L7 signals remain visible but
+not used is postponed until matching base and rover recordings are available.
 
 While a real session is active, the foreground service owns capture. The
 Activity only sends start/stop requests and observes service state.

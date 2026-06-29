@@ -3340,9 +3340,7 @@ class RecordingForegroundService : Service() {
     }
 
     private fun RecordingSessionWriters.appendCasterUploadEvent(event: NtripCasterUploadEvent) {
-        appendEventJson(
-            """{"type":"base-caster-upload","kind":"${event.kind.jsonEscape()}","message":"${event.message.jsonEscape()}","timestampMillis":${event.timestampMillis}}""",
-        )
+        appendEventJson(casterUploadEventJson(event))
     }
 
     private fun String?.jsonStringOrNull(): String =

@@ -1448,6 +1448,10 @@ class RecordingForegroundService : Service() {
             return
         }
         activeNtripRuntimeConfig = config
+        coordinateAveragingController.onNtripSourceChanged(
+            casterLabel = config.request.host,
+            mountpointLabel = config.request.mountpoint,
+        )
         val recorder = activeRecorder ?: return
         val updatedUrl = ntripDisplayUrl(config)
         val mountpointChanged = updatedUrl != state.ntripUrl

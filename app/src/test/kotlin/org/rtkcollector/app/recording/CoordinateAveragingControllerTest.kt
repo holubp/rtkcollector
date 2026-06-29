@@ -35,6 +35,20 @@ class CoordinateAveragingControllerTest {
         assertNotNull(controller.lastStopReason)
     }
 
+    @Test
+    fun `ntrip source changes do not stop active averaging`() {
+        val controller = CoordinateAveragingController()
+        controller.start(requiredFixClass = FixClass.RTK_FIXED)
+        assertTrue(controller.onSelectedSolution(candidate(50.0, 14.0, 302.0, FixClass.RTK_FIXED)).accepted)
+
+        controller.onNtripSourceChanged("caster-a", "MOUNT-A")
+        controller.onNtripSourceChanged("caster-b", "MOUNT-B")
+
+        assertTrue(controller.active)
+        assertEquals(null, controller.lastStopReason)
+        assertEquals(1, controller.summary()?.sampleCount)
+    }
+
     private fun candidate(
         lat: Double,
         lon: Double,

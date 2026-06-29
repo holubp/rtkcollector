@@ -29,6 +29,17 @@ internal class CoordinateAveragingController {
 
     fun summary(): CoordinateAverageSummary? = averager?.summary()
 
+    fun onNtripSourceChanged(
+        casterLabel: String?,
+        mountpointLabel: String?,
+    ) {
+        // Averaging is tied to the stationary local receiver and selected
+        // solution fix class. Changing the upstream correction source is not
+        // a stop condition.
+        casterLabel.hashCode()
+        mountpointLabel.hashCode()
+    }
+
     fun onSelectedSolution(candidate: SolutionCandidate): CoordinateAverageAddResult {
         if (!active) return CoordinateAverageAddResult(false, "Averaging is not active.")
         val lat = candidate.latDeg

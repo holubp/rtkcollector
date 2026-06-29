@@ -52,11 +52,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import org.rtkcollector.app.ui.common.ProfileSingleLineTextField
 
 private val ActiveProfileBackground = Color(0xFFE8F5E9)
 private val ActiveProfileText = Color(0xFF145A18)
@@ -359,12 +358,11 @@ private fun ProfileRenameDialog(
         onDismissRequest = onDiscard,
         title = { Text("Rename profile") },
         text = {
-            OutlinedTextField(
+            ProfileSingleLineTextField(
                 value = value,
                 onValueChange = onValueChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Profile name") },
-                singleLine = true,
+                label = "Profile name",
             )
         },
         confirmButton = {
@@ -851,40 +849,29 @@ fun ProfileEditorScreen(
                                 isError = field.hasError,
                             )
                         } else {
-                            OutlinedTextField(
+                            ProfileSingleLineTextField(
                                 value = field.value,
                                 onValueChange = { value ->
                                     values = values + (field.key to value)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                minLines = 1,
                                 readOnly = field.readOnly,
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyMedium,
                                 isError = field.hasError,
-                                visualTransformation = if (field.secret && field.key !in visibleSecrets) {
-                                    PasswordVisualTransformation()
-                                } else {
-                                    VisualTransformation.None
-                                },
-                                trailingIcon = if (field.secret) {
-                                    {
-                                        TextButton(
-                                            onClick = {
-                                                visibleSecrets = if (field.key in visibleSecrets) {
-                                                    visibleSecrets - field.key
-                                                } else {
-                                                    visibleSecrets + field.key
-                                                }
-                                            },
-                                        ) {
-                                            Text(if (field.key in visibleSecrets) "Hide" else "Show")
-                                        }
-                                    }
-                                } else {
-                                    null
-                                },
+                                secretHidden = field.secret && field.key !in visibleSecrets,
                             )
+                            if (field.secret) {
+                                TextButton(
+                                    onClick = {
+                                        visibleSecrets = if (field.key in visibleSecrets) {
+                                            visibleSecrets - field.key
+                                        } else {
+                                            visibleSecrets + field.key
+                                        }
+                                    },
+                                ) {
+                                    Text(if (field.key in visibleSecrets) "Hide" else "Show")
+                                }
+                            }
                         }
                         ProfileFieldError(field)
                     }
@@ -1057,12 +1044,11 @@ fun NtripMountpointScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            OutlinedTextField(
+            ProfileSingleLineTextField(
                 value = state.mountpointText,
                 onValueChange = { state = state.copy(mountpointText = it) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Mountpoint") },
-                singleLine = true,
+                label = "Mountpoint",
             )
             Button(
                 onClick = { onSave(state.mountpointText.trim()) },

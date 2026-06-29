@@ -38,7 +38,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -154,6 +153,7 @@ import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
 import org.rtkcollector.app.ui.dashboard.serviceCoordinateAveragingState
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
+import org.rtkcollector.app.ui.common.ProfileSingleLineTextField
 import org.rtkcollector.app.ui.diagnostics.AppDiagnosticsScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListState
@@ -3198,12 +3198,11 @@ private fun BaseCoordinatesScreen(
             },
             title = { Text("Rename base coordinate") },
             text = {
-                OutlinedTextField(
+                ProfileSingleLineTextField(
                     value = renameText,
                     onValueChange = { renameText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Name") },
-                    singleLine = true,
+                    label = "Name",
                 )
             },
             confirmButton = {

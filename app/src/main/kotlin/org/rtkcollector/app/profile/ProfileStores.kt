@@ -366,7 +366,7 @@ class ProfileStores(context: Context) {
         )
 
     private fun defaultSettingsSets(): List<RecordingSettingsSet> =
-        listOf(RecordingSettingsSet.builtInRoverNtrip())
+        RecordingSettingsSet.builtInDefaults()
 
         const val OLD_UM980_COMMAND_PROFILE_ID = "um980-default-commands"
         const val UM980_BINARY_MULTI_HZ_PROFILE_ID = "um980-binary-multihz"

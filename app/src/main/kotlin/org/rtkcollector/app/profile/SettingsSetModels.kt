@@ -214,19 +214,71 @@ data class RecordingSettingsSet(
     }
 
     companion object {
+        fun builtInDefaults(): List<RecordingSettingsSet> =
+            listOf(
+                builtInPlainRover(),
+                builtInRoverNtrip(),
+                builtInTemporaryBase(),
+                builtInFixedBase(),
+            )
+
+        fun builtInPlainRover(): RecordingSettingsSet =
+            builtInUm980SettingsSet(
+                id = "um980-plain-rover",
+                name = "UM980 plain rover",
+                workflowId = "plain-rover",
+                ntripCasterProfileRef = null,
+            )
+
         fun fromJson(json: JSONObject): RecordingSettingsSet =
             SettingsSetJson.fromJson(json).also(RecordingSettingsSet::validate)
 
         fun builtInRoverNtrip(): RecordingSettingsSet =
-            RecordingSettingsSet(
+            builtInUm980SettingsSet(
                 id = "um980-rover-ntrip",
                 name = "UM980 rover + NTRIP",
                 workflowId = "rover-ntrip",
-                receiverProfileId = "um980-n4",
-                commandProfileRef = ProfileReference("um980-binary-multihz", "UM980 multi-Hz binary RTK+PPP"),
-                usbBaudProfileRef = ProfileReference("um980-230400", "UM980 230400"),
                 ntripCasterProfileRef = ProfileReference("ntrip-caster-default", "NTRIP caster"),
+            )
+
+        fun builtInTemporaryBase(): RecordingSettingsSet =
+            builtInUm980SettingsSet(
+                id = "um980-temporary-base",
+                name = "UM980 temporary base",
+                workflowId = "base-calibration",
+                ntripCasterProfileRef = ProfileReference("ntrip-caster-default", "NTRIP caster"),
+            )
+
+        fun builtInFixedBase(): RecordingSettingsSet =
+            builtInUm980SettingsSet(
+                id = "um980-fixed-base",
+                name = "UM980 fixed base",
+                workflowId = "fixed-base",
+                commandProfileRef = ProfileReference("um980-base-config", "UM980 base config"),
+                ntripCasterProfileRef = null,
+            )
+
+        private fun builtInUm980SettingsSet(
+            id: String,
+            name: String,
+            workflowId: String,
+            commandProfileRef: ProfileReference = ProfileReference(
+                "um980-binary-multihz",
+                "UM980 multi-Hz binary RTK+PPP",
+            ),
+            ntripCasterProfileRef: ProfileReference?,
+        ): RecordingSettingsSet =
+            RecordingSettingsSet(
+                id = id,
+                name = name,
+                workflowId = workflowId,
+                receiverProfileId = "um980-n4",
+                commandProfileRef = commandProfileRef,
+                usbBaudProfileRef = ProfileReference("um980-230400", "UM980 230400"),
+                ntripCasterProfileRef = ntripCasterProfileRef,
                 ntripMountpointProfileRef = null,
+                ntripCasterUploadProfileRef = null,
+                baseCasterUploadEnabled = false,
                 recordingOutputProfileRef = ProfileReference(
                     "default-record-everything",
                     "Default V1 recording outputs",

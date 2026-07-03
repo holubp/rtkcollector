@@ -15,20 +15,29 @@ class CoordinateAveragingControllerTest {
         val controller = CoordinateAveragingController()
         controller.start(requiredFixClass = FixClass.RTK_FIXED)
 
-        val result = controller.onSelectedSolution(candidate(50.0, 14.0, 302.0, FixClass.RTK_FIXED))
+        val result = controller.onSelectedSolution(
+            candidate(
+                lat = 50.0,
+                lon = 14.0,
+                height = 302.0,
+                mslAltitude = 257.0,
+                fixClass = FixClass.RTK_FIXED,
+            ),
+        )
 
         assertTrue(result.accepted)
         assertEquals(1, controller.summary()?.sampleCount)
         assertEquals(302.0, controller.summary()?.heightMeanM, 1e-12)
+        assertEquals(257.0, controller.summary()?.mslAltitudeMeanM, 1e-12)
     }
 
     @Test
     fun `stops and reports reason when fix class changes`() {
         val controller = CoordinateAveragingController()
         controller.start(requiredFixClass = FixClass.RTK_FIXED)
-        assertTrue(controller.onSelectedSolution(candidate(50.0, 14.0, 302.0, FixClass.RTK_FIXED)).accepted)
+        assertTrue(controller.onSelectedSolution(candidate(50.0, 14.0, 302.0, fixClass = FixClass.RTK_FIXED)).accepted)
 
-        val result = controller.onSelectedSolution(candidate(50.1, 14.1, 303.0, FixClass.RTK_FLOAT))
+        val result = controller.onSelectedSolution(candidate(50.1, 14.1, 303.0, fixClass = FixClass.RTK_FLOAT))
 
         assertFalse(result.accepted)
         assertFalse(controller.active)
@@ -39,7 +48,7 @@ class CoordinateAveragingControllerTest {
     fun `ntrip source changes do not stop active averaging`() {
         val controller = CoordinateAveragingController()
         controller.start(requiredFixClass = FixClass.RTK_FIXED)
-        assertTrue(controller.onSelectedSolution(candidate(50.0, 14.0, 302.0, FixClass.RTK_FIXED)).accepted)
+        assertTrue(controller.onSelectedSolution(candidate(50.0, 14.0, 302.0, fixClass = FixClass.RTK_FIXED)).accepted)
 
         controller.onNtripSourceChanged("caster-a", "MOUNT-A")
         controller.onNtripSourceChanged("caster-b", "MOUNT-B")
@@ -53,6 +62,7 @@ class CoordinateAveragingControllerTest {
         lat: Double,
         lon: Double,
         height: Double,
+        mslAltitude: Double? = null,
         fixClass: FixClass,
     ): SolutionCandidate =
         SolutionCandidate(
@@ -64,5 +74,6 @@ class CoordinateAveragingControllerTest {
             latDeg = lat,
             lonDeg = lon,
             ellipsoidalHeightM = height,
+            mslAltitudeM = mslAltitude,
         )
 }

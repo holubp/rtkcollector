@@ -2412,6 +2412,10 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_LAT_LON, state.latLon)
                 putExtra(EXTRA_STATE_ELLIPSOIDAL_HEIGHT, state.ellipsoidalHeight)
                 putExtra(EXTRA_STATE_ALTITUDE, state.altitude)
+                putExtra(EXTRA_STATE_BASE_CANDIDATE_LAT, state.baseCandidateLatDeg ?: Double.NaN)
+                putExtra(EXTRA_STATE_BASE_CANDIDATE_LON, state.baseCandidateLonDeg ?: Double.NaN)
+                putExtra(EXTRA_STATE_BASE_CANDIDATE_ELLIPSOIDAL_HEIGHT, state.baseCandidateEllipsoidalHeightM ?: Double.NaN)
+                putExtra(EXTRA_STATE_BASE_CANDIDATE_MSL_ALTITUDE, state.baseCandidateMslAltitudeM ?: Double.NaN)
                 putExtra(EXTRA_STATE_UTC_TIME, state.utcTime)
                 putExtra(EXTRA_STATE_SATELLITES, state.satellites)
                 putExtra(EXTRA_STATE_PDOP, state.pdop)
@@ -2440,6 +2444,7 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_BASE_AVERAGE_LAT, state.baseAverageLatDeg ?: Double.NaN)
                 putExtra(EXTRA_STATE_BASE_AVERAGE_LON, state.baseAverageLonDeg ?: Double.NaN)
                 putExtra(EXTRA_STATE_BASE_AVERAGE_HEIGHT, state.baseAverageHeightM ?: Double.NaN)
+                putExtra(EXTRA_STATE_BASE_AVERAGE_MSL_ALTITUDE, state.baseAverageMslAltitudeM ?: Double.NaN)
                 putExtra(EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT, state.baseAverageSampleCount)
                 putExtra(EXTRA_STATE_MOCK_LOCATION_STATE, state.mockLocationState)
                 putExtra(EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS, state.mockLocationLastIntervalMs ?: -1L)
@@ -2778,13 +2783,15 @@ class RecordingForegroundService : Service() {
             baseAverageLatDeg = summary?.latMeanDeg,
             baseAverageLonDeg = summary?.lonMeanDeg,
             baseAverageHeightM = summary?.heightMeanM,
+            baseAverageMslAltitudeM = summary?.mslAltitudeMeanM,
             baseAverageSampleCount = summary?.sampleCount ?: 0,
         )
     }
 
     private fun CoordinateAverageSummary.toDisplayText(): String =
         "Avg ${latMeanDeg.formatFixed(9)}, ${lonMeanDeg.formatFixed(9)}, " +
-            "h=${heightMeanM.formatFixed(3)} m, n=$sampleCount"
+            "h=${heightMeanM.formatFixed(3)} m, " +
+            "alt=${mslAltitudeMeanM?.formatFixed(3) ?: "n/a"} m, n=$sampleCount"
 
     private fun Double.formatFixed(decimals: Int): String =
         "%.${decimals}f".format(java.util.Locale.US, this)
@@ -3638,6 +3645,10 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_LAT_LON = "latLon"
         const val EXTRA_STATE_ELLIPSOIDAL_HEIGHT = "ellipsoidalHeight"
         const val EXTRA_STATE_ALTITUDE = "altitude"
+        const val EXTRA_STATE_BASE_CANDIDATE_LAT = "baseCandidateLatDeg"
+        const val EXTRA_STATE_BASE_CANDIDATE_LON = "baseCandidateLonDeg"
+        const val EXTRA_STATE_BASE_CANDIDATE_ELLIPSOIDAL_HEIGHT = "baseCandidateEllipsoidalHeightM"
+        const val EXTRA_STATE_BASE_CANDIDATE_MSL_ALTITUDE = "baseCandidateMslAltitudeM"
         const val EXTRA_STATE_UTC_TIME = "utcTime"
         const val EXTRA_STATE_SATELLITES = "satellites"
         const val EXTRA_STATE_PDOP = "pdop"
@@ -3666,6 +3677,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_BASE_AVERAGE_LAT = "baseAverageLatDeg"
         const val EXTRA_STATE_BASE_AVERAGE_LON = "baseAverageLonDeg"
         const val EXTRA_STATE_BASE_AVERAGE_HEIGHT = "baseAverageHeightM"
+        const val EXTRA_STATE_BASE_AVERAGE_MSL_ALTITUDE = "baseAverageMslAltitudeM"
         const val EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT = "baseAverageSampleCount"
         const val EXTRA_STATE_MOCK_LOCATION_STATE = "mockLocationState"
         const val EXTRA_STATE_MOCK_LOCATION_INTERVAL_MS = "mockLocationIntervalMs"

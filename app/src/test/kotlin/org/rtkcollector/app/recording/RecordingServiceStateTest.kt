@@ -16,6 +16,10 @@ class RecordingServiceStateTest {
             latLon = "50.000000000, 14.000000000",
             ellipsoidalHeight = "300.000 m",
             altitude = "250.000 m",
+            baseCandidateLatDeg = 50.0,
+            baseCandidateLonDeg = 14.0,
+            baseCandidateEllipsoidalHeightM = 300.0,
+            baseCandidateMslAltitudeM = 250.0,
             horizontalAccuracy = "1.200 m",
             verticalAccuracy = "2.400 m",
             satellites = "12 / 18",
@@ -36,6 +40,10 @@ class RecordingServiceStateTest {
         assertEquals("n/a", cleared.latLon)
         assertEquals("n/a", cleared.ellipsoidalHeight)
         assertEquals("n/a", cleared.altitude)
+        assertNull(cleared.baseCandidateLatDeg)
+        assertNull(cleared.baseCandidateLonDeg)
+        assertNull(cleared.baseCandidateEllipsoidalHeightM)
+        assertNull(cleared.baseCandidateMslAltitudeM)
         assertEquals("n/a", cleared.horizontalAccuracy)
         assertEquals("n/a", cleared.verticalAccuracy)
         assertEquals("n/a", cleared.satellites)
@@ -102,6 +110,55 @@ class RecordingServiceStateTest {
     }
 
     @Test
+    fun `best solution tick clears base candidate MSL when selected solution lacks MSL`() {
+        val previous = RecordingServiceState(
+            latDeg = 50.0,
+            lonDeg = 14.0,
+            latLon = "50.000000000, 14.000000000",
+            ellipsoidalHeight = "300.000 m",
+            altitude = "250.000 m",
+            baseCandidateLatDeg = 50.0,
+            baseCandidateLonDeg = 14.0,
+            baseCandidateEllipsoidalHeightM = 300.0,
+            baseCandidateMslAltitudeM = 250.0,
+        )
+
+        val updated = previous.applyBestSolutionDisplayDelta(
+            delta = BestSolutionStateDelta(
+                bestSolutionSource = "UM980-BESTNAV",
+                bestSolutionFix = "RTK_FIXED",
+                bestSolutionAgeMs = 20L,
+                latDeg = 50.1,
+                lonDeg = 14.1,
+                ellipsoidalHeightM = 301.0,
+                mslAltitudeM = null,
+                horizontalAccuracyM = null,
+                verticalAccuracyM = null,
+                satellitesUsed = null,
+                satellitesInView = null,
+                mockResult = org.rtkcollector.app.mocklocation.MockLocationPublishResult.DISABLED,
+            ),
+            ubloxFrequency = previous.ubloxFrequency,
+            formatLatLon = { lat, lon -> "%.1f, %.1f".format(java.util.Locale.US, lat, lon) },
+            formatMeters = { "%.3f m".format(java.util.Locale.US, it) },
+            formatSatellites = { used, inView ->
+                when {
+                    used == null && inView == null -> "n/a"
+                    inView == null -> used.toString()
+                    used == null -> "n/a / $inView"
+                    else -> "$used / $inView"
+                }
+            },
+        )
+
+        assertEquals("250.000 m", updated.altitude)
+        assertEquals(50.1, updated.baseCandidateLatDeg)
+        assertEquals(14.1, updated.baseCandidateLonDeg)
+        assertEquals(301.0, updated.baseCandidateEllipsoidalHeightM)
+        assertNull(updated.baseCandidateMslAltitudeM)
+    }
+
+    @Test
     fun `best solution tick without candidate preserves live telemetry fields`() {
         val previous = RecordingServiceState(
             latDeg = 50.0,
@@ -155,6 +212,10 @@ class RecordingServiceStateTest {
         assertEquals("50.000000000, 14.000000000", updated.latLon)
         assertEquals("300.000 m", updated.ellipsoidalHeight)
         assertEquals("250.000 m", updated.altitude)
+        assertNull(updated.baseCandidateLatDeg)
+        assertNull(updated.baseCandidateLonDeg)
+        assertNull(updated.baseCandidateEllipsoidalHeightM)
+        assertNull(updated.baseCandidateMslAltitudeM)
         assertEquals("0.012 m", updated.horizontalAccuracy)
         assertEquals("0.030 m", updated.verticalAccuracy)
         assertEquals(4, updated.satellitesUsed)
@@ -218,6 +279,10 @@ class RecordingServiceStateTest {
         assertEquals("UM980-BESTNAV", updated.bestSolutionSource)
         assertEquals("RTK_FIXED", updated.bestSolutionFix)
         assertEquals(250L, updated.bestSolutionAgeMs)
+        assertEquals(50.1, updated.baseCandidateLatDeg)
+        assertEquals(14.1, updated.baseCandidateLonDeg)
+        assertNull(updated.baseCandidateEllipsoidalHeightM)
+        assertNull(updated.baseCandidateMslAltitudeM)
         assertEquals("50.000000000, 14.000000000", updated.latLon)
         assertEquals("0.012 m", updated.horizontalAccuracy)
         assertEquals("19 / 32", updated.satellites)

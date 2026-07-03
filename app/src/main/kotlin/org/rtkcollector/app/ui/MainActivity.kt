@@ -433,7 +433,12 @@ fun RtkCollectorApp(
         }
         return profile
     }
+    fun saveAcceptedBaseCoordinate(coordinate: AcceptedBaseCoordinate) {
+        baseCoordinateStore.upsert(coordinate)
+        baseCoordinateStore.saveSelectedCoordinateId(coordinate.id)
+    }
     fun activateFixedBaseWithCommandProfile(commandProfile: CommandProfile) {
+        val shouldStopRecording = state.isRecording
         manualBaseCoordinate = null
         selectedWorkflowId = WORKFLOW_FIXED_BASE
         profileStore.saveSelectedWorkflowId(WORKFLOW_FIXED_BASE)
@@ -442,6 +447,9 @@ fun RtkCollectorApp(
         }
         profileStore.saveSettingsSets(updatedSettingsSets)
         refreshProfileUi(updatedSettingsSets)
+        if (shouldStopRecording) {
+            context.startService(RecordingForegroundService.stopIntent(context))
+        }
     }
     fun overwriteSelectedCommandProfileForFixedBase(coordinate: AcceptedBaseCoordinate) {
         val selectedProfile = selectedCommandProfileOrToast() ?: return
@@ -486,6 +494,7 @@ fun RtkCollectorApp(
                 if (profile.id == materializedProfile.id) materializedProfile else profile
             },
         )
+        saveAcceptedBaseCoordinate(coordinate)
         activateFixedBaseWithCommandProfile(materializedProfile)
         pendingFixedBaseCoordinate = null
         Toast.makeText(
@@ -514,6 +523,7 @@ fun RtkCollectorApp(
             return
         }
         profileStore.saveCommandProfiles(profileStore.commandProfiles() + newProfile)
+        saveAcceptedBaseCoordinate(coordinate)
         activateFixedBaseWithCommandProfile(newProfile)
         pendingFixedBaseCoordinate = null
         Toast.makeText(
@@ -1074,16 +1084,6 @@ fun RtkCollectorApp(
                             ).show()
                             return@HomeDashboard
                         }
-                        if (acceptedCoordinate.mslAltitudeM == null) {
-                            Toast.makeText(
-                                context,
-                                "Fixed-base MODE BASE requires MSL altitude; use an averaged or imported base coordinate with altitude.",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                            return@HomeDashboard
-                        }
-                        baseCoordinateStore.upsert(acceptedCoordinate)
-                        baseCoordinateStore.saveSelectedCoordinateId(acceptedCoordinate.id)
                         manualBaseCoordinate = candidate
                         pendingFixedBaseCoordinate = acceptedCoordinate
                     },
@@ -5796,8 +5796,8 @@ private fun BaseCoordinateCandidate.toAcceptedBaseCoordinate(
         latDeg = lat,
         lonDeg = lon,
         ellipsoidalHeightM = ellipsoidalHeightM,
-        mslAltitudeM = null,
-        geoidSeparationM = null,
+        mslAltitudeM = mslAltitudeM,
+        geoidSeparationM = geoidSeparationM,
         frame = "UNKNOWN",
         epoch = null,
         method = if (source == "AVERAGE") "LONG_AVERAGE" else "UNKNOWN",

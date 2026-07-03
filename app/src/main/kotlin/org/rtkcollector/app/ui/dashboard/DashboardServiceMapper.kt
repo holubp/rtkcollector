@@ -26,6 +26,16 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         latLon = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_LON) ?: "n/a",
         ellipsoidalHeight = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ELLIPSOIDAL_HEIGHT) ?: "n/a",
         altitude = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ALTITUDE) ?: "n/a",
+        baseCandidateLatDeg = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_CANDIDATE_LAT),
+        baseCandidateLonDeg = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_CANDIDATE_LON),
+        baseCandidateEllipsoidalHeightM = finiteDoubleExtra(
+            intent,
+            RecordingForegroundService.EXTRA_STATE_BASE_CANDIDATE_ELLIPSOIDAL_HEIGHT,
+        ),
+        baseCandidateMslAltitudeM = finiteDoubleExtra(
+            intent,
+            RecordingForegroundService.EXTRA_STATE_BASE_CANDIDATE_MSL_ALTITUDE,
+        ),
         utcTime = displayUtcTime(intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UTC_TIME)),
         latError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_ERROR) ?: "n/a",
         lonError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LON_ERROR) ?: "n/a",
@@ -35,6 +45,10 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         baseAverageLatDeg = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_LAT),
         baseAverageLonDeg = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_LON),
         baseAverageHeightM = finiteDoubleExtra(intent, RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_HEIGHT),
+        baseAverageMslAltitudeM = finiteDoubleExtra(
+            intent,
+            RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_MSL_ALTITUDE,
+        ),
         baseAverageSampleCount = intent.getIntExtra(
             RecordingForegroundService.EXTRA_STATE_BASE_AVERAGE_SAMPLE_COUNT,
             0,

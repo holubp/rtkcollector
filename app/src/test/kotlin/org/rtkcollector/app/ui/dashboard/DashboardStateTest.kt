@@ -2,6 +2,7 @@ package org.rtkcollector.app.ui.dashboard
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -122,6 +123,76 @@ class DashboardStateTest {
         )
 
         assertEquals("Off", state.status.upload)
+    }
+
+    @Test
+    fun `current position base candidate preserves MSL altitude and geoid separation`() {
+        val state = PositionCardState(
+            latLon = "49.463759313, 15.451254479",
+            ellipsoidalHeight = "752.922 m",
+            altitude = "707.800 m",
+        )
+
+        val candidate = state.baseCoordinateCandidateOrNull()
+
+        assertEquals(752.922, candidate?.ellipsoidalHeightM, 1e-12)
+        assertEquals(707.800, candidate?.mslAltitudeM, 1e-12)
+        assertEquals(45.122, candidate?.geoidSeparationM, 1e-12)
+    }
+
+    @Test
+    fun `numeric base candidate does not reuse stale displayed altitude when MSL is absent`() {
+        val state = PositionCardState(
+            latLon = "49.000000000, 15.000000000",
+            ellipsoidalHeight = "700.000 m",
+            altitude = "655.000 m",
+            baseCandidateLatDeg = 49.463759313,
+            baseCandidateLonDeg = 15.451254479,
+            baseCandidateEllipsoidalHeightM = 752.922,
+            baseCandidateMslAltitudeM = null,
+        )
+
+        val candidate = state.baseCoordinateCandidateOrNull()
+
+        assertEquals("49.4637593130", candidate?.coordinates?.lat)
+        assertEquals("15.4512544790", candidate?.coordinates?.lon)
+        assertEquals(752.922, candidate?.ellipsoidalHeightM, 1e-12)
+        assertNull(candidate?.mslAltitudeM)
+        assertNull(candidate?.geoidSeparationM)
+    }
+
+    @Test
+    fun `incomplete numeric base candidate does not reuse stale displayed height`() {
+        val state = PositionCardState(
+            latLon = "49.000000000, 15.000000000",
+            ellipsoidalHeight = "700.000 m",
+            altitude = "655.000 m",
+            baseCandidateLatDeg = 49.463759313,
+            baseCandidateLonDeg = 15.451254479,
+            baseCandidateEllipsoidalHeightM = null,
+            baseCandidateMslAltitudeM = null,
+        )
+
+        assertNull(state.baseCoordinateCandidateOrNull())
+    }
+
+    @Test
+    fun `service average base candidate preserves averaged MSL altitude`() {
+        val state = PositionCardState(
+            baseAverageActive = false,
+            baseAverageLatDeg = 49.463759313,
+            baseAverageLonDeg = 15.451254479,
+            baseAverageHeightM = 752.922,
+            baseAverageMslAltitudeM = 707.800,
+            baseAverageSampleCount = 12,
+        )
+
+        val candidate = state.serviceCoordinateAveragingState().averageBaseCandidateOrNull()
+
+        assertEquals(752.922, candidate?.ellipsoidalHeightM, 1e-12)
+        assertEquals(707.800, candidate?.mslAltitudeM, 1e-12)
+        assertEquals(45.122, candidate?.geoidSeparationM, 1e-12)
+        assertEquals("AVERAGE", candidate?.source)
     }
 
     @Test

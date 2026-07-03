@@ -25,6 +25,19 @@ class OnlineCoordinateAveragerTest {
     }
 
     @Test
+    fun `accumulates optional MSL altitude independently of ellipsoidal height`() {
+        val averager = OnlineCoordinateAverager(requiredFixClass = FixClass.RTK_FIXED)
+
+        assertTrue(averager.add(sample(50.0, 14.0, 350.0, mslAltitude = 304.0)).accepted)
+        assertTrue(averager.add(sample(50.1, 14.1, 352.0, mslAltitude = 306.0)).accepted)
+
+        val summary = averager.summary()
+        assertEquals(351.0, summary.heightMeanM, 1e-12)
+        assertEquals(305.0, summary.mslAltitudeMeanM!!, 1e-12)
+        assertEquals(1.4142135623730951, summary.mslAltitudeStandardDeviationM!!, 1e-12)
+    }
+
+    @Test
     fun `rejects fix class change`() {
         val averager = OnlineCoordinateAverager(requiredFixClass = FixClass.RTK_FIXED)
 
@@ -36,11 +49,13 @@ class OnlineCoordinateAveragerTest {
         lon: Double,
         height: Double,
         fix: FixClass = FixClass.RTK_FIXED,
+        mslAltitude: Double? = null,
     ): CoordinateAverageSample =
         CoordinateAverageSample(
             latDeg = lat,
             lonDeg = lon,
             ellipsoidalHeightM = height,
+            mslAltitudeM = mslAltitude,
             fixClass = fix,
             timestampMillis = 1_000L,
         )

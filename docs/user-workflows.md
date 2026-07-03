@@ -156,14 +156,15 @@ The Position card is also an action surface. Tapping the displayed coordinate
 opens copy choices for `geo:lat,lon`, `lat,lon`, `lat` and `lon`. In base
 workflows, compact `Base` and `Avg` controls may appear next to the coordinate.
 `Avg` starts a live coordinate and ellipsoidal-height average for the current
-stationary receiver. The average may continue while you switch between NTRIP
+stationary receiver, and also preserves MSL altitude when the receiver reports
+it. The average may continue while you switch between NTRIP
 caster or mountpoint profiles, so the same temporary base can be compared
 against several external bases. Averaging is valid only while the interpreted
 fix type remains unchanged and the receiver continues reporting ellipsoidal
 height. If the fix changes, the session changes, recording stops, or required
-height disappears, averaging stops and the app reports the reason. This live
-average is field guidance, not a replacement for PPP/static RTK or an accepted
-`base-position.json`.
+ellipsoidal height disappears, averaging stops and the app reports the reason.
+This live average is field guidance, not a replacement for PPP/static RTK or an
+accepted `base-position.json`.
 
 `Base` accepts the current or averaged coordinate as the next fixed-base
 candidate. It does not silently rewrite receiver commands. Before fixed-base

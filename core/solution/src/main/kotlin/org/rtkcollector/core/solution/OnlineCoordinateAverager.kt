@@ -6,6 +6,7 @@ data class CoordinateAverageSample(
     val latDeg: Double,
     val lonDeg: Double,
     val ellipsoidalHeightM: Double,
+    val mslAltitudeM: Double? = null,
     val fixClass: FixClass,
     val timestampMillis: Long,
 )
@@ -20,9 +21,11 @@ data class CoordinateAverageSummary(
     val latMeanDeg: Double,
     val lonMeanDeg: Double,
     val heightMeanM: Double,
+    val mslAltitudeMeanM: Double?,
     val latStandardDeviationDeg: Double?,
     val lonStandardDeviationDeg: Double?,
     val heightStandardDeviationM: Double?,
+    val mslAltitudeStandardDeviationM: Double?,
 )
 
 /**
@@ -39,9 +42,12 @@ class OnlineCoordinateAverager(
     private var latMean = 0.0
     private var lonMean = 0.0
     private var heightMean = 0.0
+    private var mslCount = 0
+    private var mslAltitudeMean = 0.0
     private var latM2 = 0.0
     private var lonM2 = 0.0
     private var heightM2 = 0.0
+    private var mslAltitudeM2 = 0.0
 
     fun add(sample: CoordinateAverageSample): CoordinateAverageAddResult {
         if (sample.fixClass != requiredFixClass) {
@@ -60,6 +66,13 @@ class OnlineCoordinateAverager(
         heightM2 += (sample.ellipsoidalHeightM - heightMean) * (sample.ellipsoidalHeightM - nextHeightMean)
         heightMean = nextHeightMean
 
+        sample.mslAltitudeM?.let { mslAltitude ->
+            mslCount += 1
+            val nextMslAltitudeMean = updateMean(mslAltitude, mslAltitudeMean, mslCount)
+            mslAltitudeM2 += (mslAltitude - mslAltitudeMean) * (mslAltitude - nextMslAltitudeMean)
+            mslAltitudeMean = nextMslAltitudeMean
+        }
+
         return CoordinateAverageAddResult(true)
     }
 
@@ -69,9 +82,11 @@ class OnlineCoordinateAverager(
             latMeanDeg = latMean,
             lonMeanDeg = lonMean,
             heightMeanM = heightMean,
+            mslAltitudeMeanM = mslAltitudeMean.takeIf { mslCount > 0 },
             latStandardDeviationDeg = sampleStandardDeviation(latM2),
             lonStandardDeviationDeg = sampleStandardDeviation(lonM2),
             heightStandardDeviationM = sampleStandardDeviation(heightM2),
+            mslAltitudeStandardDeviationM = sampleStandardDeviation(mslAltitudeM2, mslCount),
         )
 
     fun retainedSampleCountForTest(): Int = 0
@@ -79,6 +94,6 @@ class OnlineCoordinateAverager(
     private fun updateMean(value: Double, mean: Double, count: Int): Double =
         mean + (value - mean) / count
 
-    private fun sampleStandardDeviation(m2: Double): Double? =
-        if (count < 2) null else sqrt(m2 / (count - 1))
+    private fun sampleStandardDeviation(m2: Double, sampleCount: Int = count): Double? =
+        if (sampleCount < 2) null else sqrt(m2 / (sampleCount - 1))
 }

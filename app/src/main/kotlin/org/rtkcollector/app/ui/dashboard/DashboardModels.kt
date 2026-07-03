@@ -231,6 +231,10 @@ data class PositionCardState(
     val latLon: String = "n/a",
     val ellipsoidalHeight: String = "n/a",
     val altitude: String = "n/a",
+    val baseCandidateLatDeg: Double? = null,
+    val baseCandidateLonDeg: Double? = null,
+    val baseCandidateEllipsoidalHeightM: Double? = null,
+    val baseCandidateMslAltitudeM: Double? = null,
     val utcTime: String = "n/a",
     val latError: String = "n/a",
     val lonError: String = "n/a",
@@ -240,6 +244,7 @@ data class PositionCardState(
     val baseAverageLatDeg: Double? = null,
     val baseAverageLonDeg: Double? = null,
     val baseAverageHeightM: Double? = null,
+    val baseAverageMslAltitudeM: Double? = null,
     val baseAverageSampleCount: Int = 0,
 )
 
@@ -259,6 +264,8 @@ data class CoordinatePair(
 data class BaseCoordinateCandidate(
     val coordinates: CoordinatePair,
     val ellipsoidalHeightM: Double,
+    val mslAltitudeM: Double? = null,
+    val geoidSeparationM: Double? = null,
     val source: String = "MANUAL",
     val sampleCount: Int = 0,
 ) {
@@ -272,6 +279,8 @@ data class BaseCoordinateCandidate(
             "\"latDeg\":$lat," +
             "\"lonDeg\":$lon," +
             "\"heightM\":$ellipsoidalHeightM," +
+            "\"mslAltitudeM\":${mslAltitudeM ?: "null"}," +
+            "\"geoidSeparationM\":${geoidSeparationM ?: "null"}," +
             "\"frame\":\"UNKNOWN\"," +
             "\"method\":\"MANUAL_KNOWN_POINT\"," +
             "\"source\":\"$source\"," +
@@ -319,11 +328,31 @@ fun PositionCardState.baseCoordinateCandidateOrNull(
     sampleCount: Int = 0,
     ellipsoidalHeightOverrideM: Double? = null,
 ): BaseCoordinateCandidate? {
-    val coordinates = coordinateOverride ?: coordinatePairOrNull() ?: return null
-    val ellipsoidalHeightM = ellipsoidalHeightOverrideM ?: ellipsoidalHeightMetersOrNull() ?: return null
+    val hasBaseCandidateSnapshot =
+        baseCandidateLatDeg != null ||
+            baseCandidateLonDeg != null ||
+            baseCandidateEllipsoidalHeightM != null ||
+            baseCandidateMslAltitudeM != null
+    val coordinates = coordinateOverride ?: if (hasBaseCandidateSnapshot) {
+        baseCandidateCoordinatePairOrNull() ?: return null
+    } else {
+        coordinatePairOrNull() ?: return null
+    }
+    val ellipsoidalHeightM = ellipsoidalHeightOverrideM ?: if (hasBaseCandidateSnapshot) {
+        baseCandidateEllipsoidalHeightM ?: return null
+    } else {
+        ellipsoidalHeightMetersOrNull() ?: return null
+    }
+    val mslAltitudeM = if (hasBaseCandidateSnapshot) {
+        baseCandidateMslAltitudeM
+    } else {
+        altitudeMetersOrNull()
+    }
     return BaseCoordinateCandidate(
         coordinates = coordinates,
         ellipsoidalHeightM = ellipsoidalHeightM,
+        mslAltitudeM = mslAltitudeM,
+        geoidSeparationM = mslAltitudeM?.let { ellipsoidalHeightM - it },
         source = source,
         sampleCount = sampleCount,
     )
@@ -331,6 +360,15 @@ fun PositionCardState.baseCoordinateCandidateOrNull(
 
 fun PositionCardState.ellipsoidalHeightMetersOrNull(): Double? =
     ellipsoidalHeight.measurementMetersOrNull()
+
+fun PositionCardState.altitudeMetersOrNull(): Double? =
+    altitude.measurementMetersOrNull()
+
+private fun PositionCardState.baseCandidateCoordinatePairOrNull(): CoordinatePair? {
+    val lat = baseCandidateLatDeg ?: return null
+    val lon = baseCandidateLonDeg ?: return null
+    return coordinatePairOf(lat, lon)
+}
 
 private fun String.measurementMetersOrNull(): Double? =
     trim()
@@ -355,6 +393,7 @@ data class CoordinateAveragingState(
     val meanLat: Double? = null,
     val meanLon: Double? = null,
     val meanEllipsoidalHeightM: Double? = null,
+    val meanMslAltitudeM: Double? = null,
     val stoppedReason: String? = null,
 ) {
     fun averageCoordinateOrNull(): CoordinatePair? {
@@ -369,6 +408,8 @@ data class CoordinateAveragingState(
         return BaseCoordinateCandidate(
             coordinates = coordinates,
             ellipsoidalHeightM = height,
+            mslAltitudeM = meanMslAltitudeM,
+            geoidSeparationM = meanMslAltitudeM?.let { height - it },
             source = "AVERAGE",
             sampleCount = sampleCount,
         )
@@ -392,6 +433,7 @@ fun PositionCardState.serviceCoordinateAveragingState(): CoordinateAveragingStat
         meanLat = baseAverageLatDeg,
         meanLon = baseAverageLonDeg,
         meanEllipsoidalHeightM = baseAverageHeightM,
+        meanMslAltitudeM = baseAverageMslAltitudeM,
         stoppedReason = baseAverageWarning,
     )
 

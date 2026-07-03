@@ -51,6 +51,7 @@ internal class CoordinateAveragingController {
                 latDeg = lat,
                 lonDeg = lon,
                 ellipsoidalHeightM = height,
+                mslAltitudeM = candidate.mslAltitudeM,
                 fixClass = candidate.fixClass,
                 timestampMillis = candidate.updatedAtMillis,
             ),

@@ -131,14 +131,20 @@ Verification:
 Status: Normative
 
 Fixed-base coordinate acceptance MUST NOT silently replace or inject `MODE BASE`
-commands at recording start. The user MUST explicitly create a new command
-profile or explicitly overwrite the `MODE BASE` line in the selected editable
-command profile before fixed-base operation uses the accepted coordinate.
-Protected built-in profiles and command profiles referenced by other settings
-sets MUST NOT be silently mutated.
+commands at recording start. The user MUST explicitly choose an existing
+command profile whose runtime script already contains `MODE BASE`, then either
+create a new command profile derived from that chosen profile or explicitly
+overwrite the `MODE BASE` line in that chosen editable command profile before
+fixed-base operation uses the accepted coordinate. `MODE BASE TIME ...` and
+other survey/convergence base commands MAY be selected as templates or editable
+targets, but only the `MODE BASE` line is replaced with
+`MODE BASE <lat> <lon> <msl-altitude>`; all other command lines, including RTCM
+output lines, MUST remain unchanged. Protected built-in profiles and command
+profiles referenced by other settings sets MUST NOT be silently mutated.
 
 Verification:
-- Automated: fixed-base profile materialiser and command validator tests.
+- Automated: fixed-base profile selection, materialiser and command validator
+  tests.
 - Review: dashboard Base action opens an explicit materialisation choice and
   start preflight uses the selected command profile as-is.
 

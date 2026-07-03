@@ -73,6 +73,7 @@ import org.rtkcollector.app.base.AcceptedBaseCoordinateStore
 import org.rtkcollector.app.base.BaseCoordinateForm
 import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.base.FixedBaseCommandValidator
+import org.rtkcollector.app.base.FixedBaseCommandProfileSelection
 import org.rtkcollector.app.base.FixedBaseProfileMaterializer
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
@@ -320,6 +321,7 @@ fun RtkCollectorApp(
     var startInProgress by rememberSaveable { mutableStateOf(false) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
     var pendingFixedBaseCoordinate by remember { mutableStateOf<AcceptedBaseCoordinate?>(null) }
+    var fixedBaseProfileSelectionMode by remember { mutableStateOf<FixedBaseProfileSelectionMode?>(null) }
     LaunchedEffect(externalIntent) {
         if (externalIntent != null) {
             settingsImportUriFromIntent(externalIntent)?.let { uri ->
@@ -451,8 +453,10 @@ fun RtkCollectorApp(
             context.startService(RecordingForegroundService.stopIntent(context))
         }
     }
-    fun overwriteSelectedCommandProfileForFixedBase(coordinate: AcceptedBaseCoordinate) {
-        val selectedProfile = selectedCommandProfileOrToast() ?: return
+    fun overwriteCommandProfileForFixedBase(
+        coordinate: AcceptedBaseCoordinate,
+        selectedProfile: CommandProfile,
+    ) {
         runCatching {
             FixedBaseCommandValidator.requireSupportedReceiverFamily(selectedProfile.receiverFamily)
         }.getOrElse { error ->
@@ -497,14 +501,17 @@ fun RtkCollectorApp(
         saveAcceptedBaseCoordinate(coordinate)
         activateFixedBaseWithCommandProfile(materializedProfile)
         pendingFixedBaseCoordinate = null
+        fixedBaseProfileSelectionMode = null
         Toast.makeText(
             context,
             "Updated ${materializedProfile.name} and selected fixed-base workflow.",
             Toast.LENGTH_LONG,
         ).show()
     }
-    fun createFixedBaseCommandProfile(coordinate: AcceptedBaseCoordinate) {
-        val sourceProfile = selectedCommandProfileOrToast() ?: return
+    fun createFixedBaseCommandProfile(
+        coordinate: AcceptedBaseCoordinate,
+        sourceProfile: CommandProfile,
+    ) {
         runCatching {
             FixedBaseCommandValidator.requireSupportedReceiverFamily(sourceProfile.receiverFamily)
         }.getOrElse { error ->
@@ -526,6 +533,7 @@ fun RtkCollectorApp(
         saveAcceptedBaseCoordinate(coordinate)
         activateFixedBaseWithCommandProfile(newProfile)
         pendingFixedBaseCoordinate = null
+        fixedBaseProfileSelectionMode = null
         Toast.makeText(
             context,
             "Created ${newProfile.name} and selected fixed-base workflow.",
@@ -2486,30 +2494,72 @@ fun RtkCollectorApp(
                 )
             }
             pendingFixedBaseCoordinate?.let { coordinate ->
-                AlertDialog(
-                    onDismissRequest = { pendingFixedBaseCoordinate = null },
-                    title = { Text("Use coordinate for fixed base") },
-                    text = {
-                        Text(
-                            "Choose where the MODE BASE line should be written. Recording start will use the selected command profile as-is.",
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { createFixedBaseCommandProfile(coordinate) }) {
-                            Text("Create new profile")
-                        }
-                    },
-                    dismissButton = {
-                        Row {
-                            TextButton(onClick = { overwriteSelectedCommandProfileForFixedBase(coordinate) }) {
-                                Text("Overwrite selected")
-                            }
-                            TextButton(onClick = { pendingFixedBaseCoordinate = null }) {
-                                Text("Cancel")
-                            }
-                        }
-                    },
+                val commandProfiles = profileStore.commandProfiles()
+                val baseTemplateProfiles = FixedBaseCommandProfileSelection.templateProfiles(commandProfiles)
+                val baseOverwriteProfiles = FixedBaseCommandProfileSelection.overwriteProfiles(
+                    commandProfiles = commandProfiles,
+                    settingsSets = settingsSets,
+                    selectedSettingsSetId = selectedSettingsSetId,
                 )
+                when (fixedBaseProfileSelectionMode) {
+                    null -> AlertDialog(
+                        onDismissRequest = { pendingFixedBaseCoordinate = null },
+                        title = { Text("Use coordinate for fixed base") },
+                        text = {
+                            Text(
+                                "Choose a MODE BASE command profile. Create derives a new profile from the selected base profile; overwrite updates the selected editable base profile. Other receiver commands remain unchanged.",
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = { fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.CREATE_FROM_TEMPLATE },
+                                enabled = baseTemplateProfiles.isNotEmpty(),
+                            ) {
+                                Text("Create from profile")
+                            }
+                        },
+                        dismissButton = {
+                            Row {
+                                TextButton(
+                                    onClick = { fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.OVERWRITE_PROFILE },
+                                    enabled = baseOverwriteProfiles.isNotEmpty(),
+                                ) {
+                                    Text("Overwrite profile")
+                                }
+                                TextButton(
+                                    onClick = {
+                                        pendingFixedBaseCoordinate = null
+                                        fixedBaseProfileSelectionMode = null
+                                    },
+                                ) {
+                                    Text("Cancel")
+                                }
+                            }
+                        },
+                    )
+                    FixedBaseProfileSelectionMode.CREATE_FROM_TEMPLATE ->
+                        ProfileSelectorDialog(
+                            title = "Derive from MODE BASE profile",
+                            rows = baseTemplateProfiles.map { profile -> profile.profileRow() },
+                            onSelect = { id ->
+                                baseTemplateProfiles.firstOrNull { it.id == id }?.let { profile ->
+                                    createFixedBaseCommandProfile(coordinate, profile)
+                                }
+                            },
+                            onDismiss = { fixedBaseProfileSelectionMode = null },
+                        )
+                    FixedBaseProfileSelectionMode.OVERWRITE_PROFILE ->
+                        ProfileSelectorDialog(
+                            title = "Overwrite MODE BASE profile",
+                            rows = baseOverwriteProfiles.map { profile -> profile.profileRow() },
+                            onSelect = { id ->
+                                baseOverwriteProfiles.firstOrNull { it.id == id }?.let { profile ->
+                                    overwriteCommandProfileForFixedBase(coordinate, profile)
+                                }
+                            },
+                            onDismiss = { fixedBaseProfileSelectionMode = null },
+                        )
+                }
             }
             if (showMockGpsDialog) {
                 MockGpsSelectorDialog(
@@ -4521,6 +4571,11 @@ private enum class DashboardSelector(val title: String) {
     RECEIVER("Select receiver command profile"),
     UPLOAD("Select NTRIP upload"),
     STORAGE("Select storage profile"),
+}
+
+private enum class FixedBaseProfileSelectionMode {
+    CREATE_FROM_TEMPLATE,
+    OVERWRITE_PROFILE,
 }
 
 private val DashboardSelectorSaver: Saver<DashboardSelector?, String> = Saver(

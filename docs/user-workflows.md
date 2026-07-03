@@ -168,12 +168,14 @@ accepted `base-position.json`.
 
 `Base` accepts the current or averaged coordinate as the next fixed-base
 candidate. It does not silently rewrite receiver commands. Before fixed-base
-operation starts, explicitly create a new fixed-base command profile or
-explicitly overwrite the `MODE BASE` line in the selected editable command
-profile. Built-in and shared command profiles are protected from silent
-mutation. For UM980/N4, the generated `MODE BASE` command uses MSL altitude.
-Ellipsoidal height and geoid separation remain recorded metadata for review,
-dashboard display and mock-location semantics.
+operation starts, choose an existing command profile that already contains
+`MODE BASE`, then either create a new profile derived from that chosen base
+profile or overwrite the `MODE BASE` line in a chosen editable base profile.
+This is normally a base/RTCM-output profile, not the temporary-base RTK profile
+that was used to determine the coordinate. Built-in and shared command profiles
+are protected from silent mutation. For UM980/N4, the generated `MODE BASE`
+command uses MSL altitude. Ellipsoidal height and geoid separation remain
+recorded metadata for review, dashboard display and mock-location semantics.
 
 The Files card shows the active session location and recorded byte counts. The
 Sessions menu lists recordings in the configured app-private storage with latest
@@ -382,9 +384,11 @@ GPSIONB ONCHANGED
 
 Additional built-ins include `UM980 1 Hz ASCII RTK+PPP` and `UM980 base config`.
 They are also read-only and copyable. Fixed-base setup from the Position card
-does not silently change built-ins. It offers a clear choice: create a new
-fixed-base profile or overwrite the `MODE BASE` line in a selected editable
-copy. The generated UM980 command is
+does not silently change built-ins. It offers a clear choice: choose a
+`MODE BASE` profile to derive a new fixed-base profile from, or choose an
+editable `MODE BASE` profile whose `MODE BASE` line should be overwritten.
+Other lines in the chosen profile, including RTCM output messages, are left
+unchanged. The generated UM980 command is
 `MODE BASE <lat> <lon> <msl-altitude>`. Ellipsoidal height is not substituted
 for the UM980 altitude field unless the coordinate source explicitly provides a
 safe conversion. User changes to copied command scripts should remain
@@ -581,9 +585,9 @@ field. Use `Avg` only while the receiver is stationary and the fix type is
 stable. You may keep averaging while changing NTRIP caster or mountpoint
 profiles, for example to average or compare the same stationary receiver
 against several nearby bases. Use `Base` only after deciding the shown or
-averaged coordinate is good enough for the intended work; then create a new
-fixed-base profile or overwrite the `MODE BASE` line in a selected editable
-profile before starting fixed-base operation.
+averaged coordinate is good enough for the intended work; then choose a
+`MODE BASE` profile to derive from or choose an editable `MODE BASE` profile
+to update before starting fixed-base operation.
 
 The app performs a start-time sanity check: a rover workflow must not run a
 receiver command profile that sends `MODE BASE`. Temporary-base and other
@@ -602,8 +606,9 @@ User flow:
 2. Enter the accepted coordinate manually or paste an imported
    `base-position.json`.
 3. Verify frame/datum, epoch, antenna height and antenna reference point.
-4. Choose whether to create a new fixed-base command profile or overwrite the
-   `MODE BASE` line in a selected editable profile.
+4. Choose which existing `MODE BASE` command profile should be used as the
+   template for a new profile, or which editable `MODE BASE` profile should
+   have only its `MODE BASE` line overwritten.
 5. Start fixed-base operation.
 6. Optionally select an NTRIP caster-upload profile if downstream publication
    is needed.

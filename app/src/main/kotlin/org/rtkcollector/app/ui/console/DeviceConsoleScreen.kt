@@ -44,6 +44,7 @@ data class DeviceConsoleOption(
 fun DeviceConsoleScreen(
     state: DeviceConsoleState,
     recordingActive: Boolean,
+    deviceFilterLabel: String,
     usbProfiles: List<DeviceConsoleOption>,
     commandProfiles: List<DeviceConsoleOption>,
     selectedUsbProfileId: String?,
@@ -108,7 +109,7 @@ fun DeviceConsoleScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 ConsoleDropdown(
-                    label = "Init script",
+                    label = "Init profile ($deviceFilterLabel)",
                     value = commandProfiles.firstOrNull { it.id == selectedCommandProfileId }?.label ?: "n/a",
                     options = commandProfiles,
                     onSelect = onCommandProfileSelected,

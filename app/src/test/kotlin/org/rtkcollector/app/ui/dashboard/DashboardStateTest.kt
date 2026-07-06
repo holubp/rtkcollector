@@ -8,9 +8,25 @@ import org.junit.jupiter.api.Test
 
 class DashboardStateTest {
     @Test
+    fun `dashboard setup items include compact device selector`() {
+        assertEquals(
+            listOf(
+                DashboardSetupItem.SETTINGS,
+                DashboardSetupItem.WORKFLOW,
+                DashboardSetupItem.DEVICE,
+                DashboardSetupItem.RECEIVER,
+                DashboardSetupItem.UPLOAD,
+                DashboardSetupItem.STORAGE,
+            ),
+            defaultDashboardSetupItems,
+        )
+    }
+
+    @Test
     fun `planned session shows start as primary action`() {
         val state = DashboardState.planned(
             workflow = "Rover + NTRIP",
+            device = "UM980",
             mountpoint = "TUBO00CZE0",
             receiver = "UM980",
             upload = "Off",
@@ -22,6 +38,7 @@ class DashboardStateTest {
         assertEquals(DashboardActionKind.START, state.primaryAction.kind)
         assertEquals(listOf(DashboardAction("USB access", DashboardActionKind.USB_PERMISSION)), state.secondaryActions)
         assertEquals("Rover + NTRIP", state.status.workflow)
+        assertEquals("UM980", state.status.device)
         assertEquals("TUBO00CZE0", state.status.mountpoint)
         assertEquals("Off", state.status.upload)
     }
@@ -123,6 +140,20 @@ class DashboardStateTest {
         )
 
         assertEquals("Off", state.status.upload)
+    }
+
+    @Test
+    fun `planned dashboard can mark upload unavailable for rover workflows`() {
+        val state = DashboardState.planned(
+            workflow = "Plain rover",
+            mountpoint = "n/a",
+            receiver = "UM980",
+            upload = "Off",
+            uploadAvailable = false,
+            storage = "App-private external storage",
+        )
+
+        assertFalse(state.status.uploadAvailable)
     }
 
     @Test

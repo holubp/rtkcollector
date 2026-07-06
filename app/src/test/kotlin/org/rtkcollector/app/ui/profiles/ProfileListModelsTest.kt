@@ -27,6 +27,8 @@ class ProfileListModelsTest {
         assertFalse(row.isSelected)
         assertEquals("Built-in", row.displayName)
         assertEquals("", row.summary)
+        assertEquals("", row.displaySummary)
+        assertEquals(ProfileRowTone.DEFAULT, row.tone)
     }
 
     @Test
@@ -56,11 +58,40 @@ class ProfileListModelsTest {
             selectedId = "um980-rover-ntrip",
         )
 
-        assertEquals("UM980 rover + NTRIP + local changes", state.rows.single().displayName)
+        assertEquals("UM980 rover + NTRIP +", state.rows.single().displayName)
         assertTrue(state.rows.single().summary.contains("rover-ntrip"))
         assertTrue(state.rows.single().summary.contains("TUBO00CZE0"))
         assertTrue(state.rows.single().isSelected)
         assertTrue(state.rows.single().canDelete)
+        assertEquals(ProfileRowTone.MODIFIED, state.rows.single().tone)
+    }
+
+    @Test
+    fun `clean selected settings set uses applied tone`() {
+        val row = ProfileListRow(
+            id = "settings",
+            name = "Fixed base",
+            isProtected = false,
+            hasLocalOverrides = false,
+            isSelected = true,
+        )
+
+        assertEquals("Fixed base", row.displayName)
+        assertEquals(ProfileRowTone.APPLIED, row.tone)
+    }
+
+    @Test
+    fun `outside filter subtitle is visible`() {
+        val row = ProfileListRow(
+            id = "active",
+            name = "u-blox M8T raw",
+            isProtected = false,
+            hasLocalOverrides = false,
+            isSelected = true,
+            outsideFilter = true,
+        )
+
+        assertEquals("Outside filter", row.displaySummary)
     }
 
     @Test

@@ -125,11 +125,15 @@ Files. When a caster-upload profile is enabled for the active workflow, a
 compact `Caster upload` card is also shown. Detailed profile editing is reached
 from Menu.
 The dashboard configuration tiles are intentionally lean selectors: Workflow
-selects the active workflow, Settings selects the active settings set,
-Mountpoint selects or overrides the active NTRIP mountpoint, Receiver selects a
-receiver command profile, Upload selects `Off` or a configured NTRIP
-source-upload profile, and Storage selects a storage location profile. Full
-profile creation and editing belongs in Menu.
+selects the active workflow, Settings selects the active settings set, Device
+filters profile selectors to `Any`, `UM980` or `u-blox M8T`, Mountpoint selects
+or overrides the active NTRIP mountpoint, Receiver selects a receiver command
+profile, Upload selects `Off` or a configured NTRIP source-upload profile for
+base workflows, and Storage selects a storage location profile. For rover
+workflows, Upload is shown as not needed and is not a warning. Full profile
+creation and editing belongs in Menu. If a settings set name is followed by `+`,
+the active setup has local changes; use Re-apply in Menu to reset it to the
+saved settings set.
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;
@@ -166,16 +170,24 @@ ellipsoidal height disappears, averaging stops and the app reports the reason.
 This live average is field guidance, not a replacement for PPP/static RTK or an
 accepted `base-position.json`.
 
-`Base` accepts the current or averaged coordinate as the next fixed-base
-candidate. It does not silently rewrite receiver commands. Before fixed-base
-operation starts, choose an existing command profile that already contains
-`MODE BASE`, then either create a new profile derived from that chosen base
-profile or overwrite the `MODE BASE` line in a chosen editable base profile.
-This is normally a base/RTCM-output profile, not the temporary-base RTK profile
-that was used to determine the coordinate. Built-in and shared command profiles
-are protected from silent mutation. For UM980/N4, the generated `MODE BASE`
-command uses MSL altitude. Ellipsoidal height and geoid separation remain
-recorded metadata for review, dashboard display and mock-location semantics.
+`Base` starts the handoff from temporary-base coordinate determination to
+fixed-base operation. If both an averaged coordinate and a current coordinate
+are available, the app first asks which one to use. It then asks which
+fixed-base settings set should be used as the target or template; only
+fixed-base settings sets whose receiver command profile already contains
+`MODE BASE` are offered. The selected settings set is normally a base/RTCM
+output set, not the temporary-base RTK set that was used to determine the
+coordinate. Built-in or otherwise immutable settings sets are derived into a
+new timestamped settings set; editable settings sets can be updated in place.
+The final confirmation shows exactly what will happen. Pressing Cancel before
+the final confirmation leaves existing settings sets and command profiles
+unchanged. Pressing OK stores the accepted coordinate, writes the selected MSL
+altitude into the `MODE BASE` line, stops any active recording, switches to
+Fixed base and leaves the app ready for Start. Upload is not enabled
+automatically; choose it explicitly if this base should publish RTCM. For
+UM980/N4, the generated `MODE BASE` command uses MSL altitude. Ellipsoidal
+height and geoid separation remain recorded metadata for review, dashboard
+display and mock-location semantics.
 
 The Files card shows the active session location and recorded byte counts. The
 Sessions menu lists recordings in the configured app-private storage with latest

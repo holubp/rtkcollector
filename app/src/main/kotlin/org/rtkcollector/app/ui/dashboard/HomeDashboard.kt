@@ -101,6 +101,7 @@ fun HomeDashboard(
     onMockGps: () -> Unit,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
+    onDevice: () -> Unit,
     onReceiver: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
@@ -207,6 +208,7 @@ fun HomeDashboard(
                         satelliteMonitorThemePreference = satelliteMonitorThemePreference,
                         onWorkflow = onWorkflow,
                         onSettingsSet = onSettingsSet,
+                        onDevice = onDevice,
                         onMountpoint = onNtrip,
                         onReceiver = onReceiver,
                         onUpload = onUpload,
@@ -231,6 +233,7 @@ fun HomeDashboard(
                         availableHeightDp = maxHeight.value.toInt(),
                         onWorkflow = onWorkflow,
                         onSettingsSet = onSettingsSet,
+                        onDevice = onDevice,
                         onMountpoint = onNtrip,
                         onReceiver = onReceiver,
                         onUpload = onUpload,
@@ -418,6 +421,7 @@ private fun CompactDashboard(
     availableHeightDp: Int,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
+    onDevice: () -> Unit,
     onMountpoint: () -> Unit,
     onReceiver: () -> Unit,
     onUpload: () -> Unit,
@@ -441,7 +445,9 @@ private fun CompactDashboard(
     ) {
         SetupStrip(
             status = status,
+            onSettingsSet = onSettingsSet,
             onWorkflow = onWorkflow,
+            onDevice = onDevice,
             onMountpoint = onMountpoint,
             onReceiver = onReceiver,
             onUpload = onUpload,
@@ -474,6 +480,7 @@ private fun RailDashboard(
     satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
+    onDevice: () -> Unit,
     onMountpoint: () -> Unit,
     onReceiver: () -> Unit,
     onUpload: () -> Unit,
@@ -520,14 +527,17 @@ private fun RailDashboard(
                 )
                 ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
                 defaultDashboardSetupItems.forEach { item ->
+                    val enabled = item != DashboardSetupItem.UPLOAD || status.uploadAvailable
                     SetupRailItem(
                         label = item.label,
                         value = status.valueFor(item),
                         active = item == DashboardSetupItem.WORKFLOW,
+                        enabled = enabled,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = when (item) {
                             DashboardSetupItem.WORKFLOW -> onWorkflow
-                            DashboardSetupItem.MOUNTPOINT -> onMountpoint
+                            DashboardSetupItem.SETTINGS -> onSettingsSet
+                            DashboardSetupItem.DEVICE -> onDevice
                             DashboardSetupItem.RECEIVER -> onReceiver
                             DashboardSetupItem.UPLOAD -> onUpload
                             DashboardSetupItem.STORAGE -> onStorage
@@ -581,7 +591,9 @@ private fun ErrorStrip(
 @Composable
 private fun SetupStrip(
     status: DashboardStatus,
+    onSettingsSet: () -> Unit,
     onWorkflow: () -> Unit,
+    onDevice: () -> Unit,
     onMountpoint: () -> Unit,
     onReceiver: () -> Unit,
     onUpload: () -> Unit,
@@ -596,13 +608,16 @@ private fun SetupStrip(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     rowItems.forEach { item ->
+                        val enabled = item != DashboardSetupItem.UPLOAD || status.uploadAvailable
                         SetupTile(
                             label = item.label,
                             value = status.valueFor(item),
+                            enabled = enabled,
                             modifier = Modifier.weight(1f),
                             onClick = when (item) {
+                                DashboardSetupItem.SETTINGS -> onSettingsSet
                                 DashboardSetupItem.WORKFLOW -> onWorkflow
-                                DashboardSetupItem.MOUNTPOINT -> onMountpoint
+                                DashboardSetupItem.DEVICE -> onDevice
                                 DashboardSetupItem.RECEIVER -> onReceiver
                                 DashboardSetupItem.UPLOAD -> onUpload
                                 DashboardSetupItem.STORAGE -> onStorage
@@ -617,10 +632,11 @@ private fun SetupStrip(
 
 private fun DashboardStatus.valueFor(item: DashboardSetupItem): String =
     when (item) {
+        DashboardSetupItem.SETTINGS -> settingsSet
         DashboardSetupItem.WORKFLOW -> workflow
-        DashboardSetupItem.MOUNTPOINT -> mountpoint
+        DashboardSetupItem.DEVICE -> device
         DashboardSetupItem.RECEIVER -> receiver
-        DashboardSetupItem.UPLOAD -> upload
+        DashboardSetupItem.UPLOAD -> if (uploadAvailable) upload else "Not needed"
         DashboardSetupItem.STORAGE -> storage
     }
 
@@ -629,12 +645,21 @@ private fun SetupTile(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val missing = value.isMissingDashboardValue()
-    val background = if (missing) TidyColors.MissingBackground else MaterialTheme.colorScheme.surfaceContainerLow
-    val foreground = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.onSurface
-    val border = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.outlineVariant
+    val background = when {
+        !enabled -> MaterialTheme.colorScheme.surfaceContainerLowest
+        missing -> TidyColors.MissingBackground
+        else -> MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val foreground = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        missing -> TidyColors.MissingText
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val border = if (missing && enabled) TidyColors.MissingText else MaterialTheme.colorScheme.outlineVariant
     Surface(
         modifier = modifier
             .height(CompactSetupTileHeight)
@@ -642,7 +667,7 @@ private fun SetupTile(
                 role = Role.Button
                 contentDescription = "$label: $value"
             }
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         shape = MaterialTheme.shapes.small,
         color = background,
         border = BorderStroke(1.dp, border),
@@ -654,7 +679,7 @@ private fun SetupTile(
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (missing && enabled) TidyColors.MissingText else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -676,12 +701,21 @@ private fun SetupRailItem(
     value: String,
     active: Boolean,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val missing = value.isMissingDashboardValue()
-    val background = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow
-    val foreground = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.onSurface
-    val border = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val background = when {
+        !enabled -> MaterialTheme.colorScheme.surfaceContainerLowest
+        active -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val foreground = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        missing -> TidyColors.MissingText
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val border = if (active && enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     Surface(
         modifier = modifier
             .height(RailSetupItemHeight)
@@ -689,7 +723,7 @@ private fun SetupRailItem(
                 role = Role.Button
                 contentDescription = "$label: $value"
             }
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         shape = MaterialTheme.shapes.small,
         color = background,
         border = BorderStroke(1.dp, border),
@@ -699,7 +733,7 @@ private fun SetupRailItem(
                 modifier = Modifier
                     .width(3.dp)
                     .fillMaxHeight()
-                    .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    .background(if (active && enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
             )
             Column(
                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
@@ -708,7 +742,7 @@ private fun SetupRailItem(
                 Text(
                     text = label.uppercase(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (missing) TidyColors.MissingText else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (missing && enabled) TidyColors.MissingText else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1809,6 +1843,7 @@ private fun HomeDashboardPortraitPreview() {
             onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
+            onDevice = {},
             onReceiver = {},
             onUpload = {},
             onStorage = {},
@@ -1829,6 +1864,7 @@ private fun HomeDashboardReadyMissingPreview() {
             onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
+            onDevice = {},
             onReceiver = {},
             onUpload = {},
             onStorage = {},
@@ -1849,6 +1885,7 @@ private fun HomeDashboardLandscapePreview() {
             onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
+            onDevice = {},
             onReceiver = {},
             onUpload = {},
             onStorage = {},
@@ -1870,6 +1907,7 @@ private fun HomeDashboardRailPreview() {
             onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
+            onDevice = {},
             onReceiver = {},
             onUpload = {},
             onStorage = {},
@@ -1891,6 +1929,7 @@ private fun HomeDashboardSatelliteDarkPreview() {
             onMockGps = {},
             onWorkflow = {},
             onSettingsSet = {},
+            onDevice = {},
             onReceiver = {},
             onUpload = {},
             onStorage = {},

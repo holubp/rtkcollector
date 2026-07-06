@@ -132,6 +132,14 @@ data class StorageProfileOverride(
 }
 
 data class SettingsSetOverrides(
+    val commandProfileRef: ProfileReference? = null,
+    val usbBaudProfileRef: ProfileReference? = null,
+    val ntripCasterProfileRef: ProfileReference? = null,
+    val ntripMountpointProfileRef: ProfileReference? = null,
+    val ntripCasterUploadProfileRef: ProfileReference? = null,
+    val recordingOutputProfileRef: ProfileReference? = null,
+    val storageProfileRef: ProfileReference? = null,
+    val baseCasterUploadEnabled: Boolean? = null,
     val command: CommandProfileOverride? = null,
     val usbBaud: UsbBaudProfileOverride? = null,
     val ntripCaster: NtripCasterOverride? = null,
@@ -141,6 +149,13 @@ data class SettingsSetOverrides(
     val storage: StorageProfileOverride? = null,
 ) {
     fun validate() {
+        commandProfileRef?.validate()
+        usbBaudProfileRef?.validate()
+        ntripCasterProfileRef?.validate()
+        ntripMountpointProfileRef?.validate()
+        ntripCasterUploadProfileRef?.validate()
+        recordingOutputProfileRef?.validate()
+        storageProfileRef?.validate()
         usbBaud?.validate()
         ntripCaster?.validate()
         ntripCasterUpload?.validate()
@@ -149,7 +164,15 @@ data class SettingsSetOverrides(
     }
 
     val hasChanges: Boolean
-        get() = command?.hasChanges() == true ||
+        get() = commandProfileRef != null ||
+            usbBaudProfileRef != null ||
+            ntripCasterProfileRef != null ||
+            ntripMountpointProfileRef != null ||
+            ntripCasterUploadProfileRef != null ||
+            recordingOutputProfileRef != null ||
+            storageProfileRef != null ||
+            baseCasterUploadEnabled != null ||
+            command?.hasChanges() == true ||
             usbBaud != null ||
             ntripCaster != null ||
             ntripMountpoint != null ||
@@ -203,7 +226,7 @@ data class RecordingSettingsSet(
     }
 
     fun displayNameWithOverrides(): String =
-        if (hasLocalOverrides) "$name + local changes" else name
+        if (hasLocalOverrides) "$name +" else name
 
     fun copySet(id: String, name: String): RecordingSettingsSet =
         copy(id = id, name = name, isProtected = false).also(RecordingSettingsSet::validate)
@@ -288,6 +311,33 @@ data class RecordingSettingsSet(
             )
     }
 }
+
+fun RecordingSettingsSet.effectiveCommandProfileRef(): ProfileReference =
+    overrides.commandProfileRef ?: commandProfileRef
+
+fun RecordingSettingsSet.effectiveUsbBaudProfileRef(): ProfileReference =
+    overrides.usbBaudProfileRef ?: usbBaudProfileRef
+
+fun RecordingSettingsSet.effectiveNtripCasterProfileRef(): ProfileReference? =
+    overrides.ntripCasterProfileRef ?: ntripCasterProfileRef
+
+fun RecordingSettingsSet.effectiveNtripMountpointProfileRef(): ProfileReference? =
+    overrides.ntripMountpointProfileRef ?: ntripMountpointProfileRef
+
+fun RecordingSettingsSet.effectiveNtripCasterUploadProfileRef(): ProfileReference? =
+    overrides.ntripCasterUploadProfileRef ?: ntripCasterUploadProfileRef
+
+fun RecordingSettingsSet.effectiveBaseCasterUploadEnabled(): Boolean =
+    overrides.baseCasterUploadEnabled ?: baseCasterUploadEnabled
+
+fun RecordingSettingsSet.effectiveRecordingOutputProfileRef(): ProfileReference =
+    overrides.recordingOutputProfileRef ?: recordingOutputProfileRef
+
+fun RecordingSettingsSet.effectiveStorageProfileRef(): ProfileReference =
+    overrides.storageProfileRef ?: storageProfileRef
+
+fun RecordingSettingsSet.reapplied(): RecordingSettingsSet =
+    copy(overrides = SettingsSetOverrides())
 
 object SettingsSetJson {
     private const val KEY_COMMAND = "commandProfile"
@@ -375,6 +425,14 @@ private fun SettingsSetOptionPolicies.Companion.fromJson(json: JSONObject): Sett
 
 private fun SettingsSetOverrides.toJson(): JSONObject {
     val json = JSONObject()
+    commandProfileRef?.let { json.put("commandProfileRef", it.toJson()) }
+    usbBaudProfileRef?.let { json.put("usbBaudProfileRef", it.toJson()) }
+    ntripCasterProfileRef?.let { json.put("ntripCasterProfileRef", it.toJson()) }
+    ntripMountpointProfileRef?.let { json.put("ntripMountpointProfileRef", it.toJson()) }
+    ntripCasterUploadProfileRef?.let { json.put("ntripCasterUploadProfileRef", it.toJson()) }
+    recordingOutputProfileRef?.let { json.put("recordingOutputProfileRef", it.toJson()) }
+    storageProfileRef?.let { json.put("storageProfileRef", it.toJson()) }
+    baseCasterUploadEnabled?.let { json.put("baseCasterUploadEnabled", it) }
     command?.let {
         json.put(
             "command",
@@ -453,6 +511,14 @@ private fun SettingsSetOverrides.toJson(): JSONObject {
 
 private object SettingsSetOverridesJson {
     fun fromJson(json: JSONObject): SettingsSetOverrides = SettingsSetOverrides(
+        commandProfileRef = json.optJSONObject("commandProfileRef")?.let(ProfileReference::fromJson),
+        usbBaudProfileRef = json.optJSONObject("usbBaudProfileRef")?.let(ProfileReference::fromJson),
+        ntripCasterProfileRef = json.optJSONObject("ntripCasterProfileRef")?.let(ProfileReference::fromJson),
+        ntripMountpointProfileRef = json.optJSONObject("ntripMountpointProfileRef")?.let(ProfileReference::fromJson),
+        ntripCasterUploadProfileRef = json.optJSONObject("ntripCasterUploadProfileRef")?.let(ProfileReference::fromJson),
+        recordingOutputProfileRef = json.optJSONObject("recordingOutputProfileRef")?.let(ProfileReference::fromJson),
+        storageProfileRef = json.optJSONObject("storageProfileRef")?.let(ProfileReference::fromJson),
+        baseCasterUploadEnabled = json.optBooleanOrNull("baseCasterUploadEnabled"),
         command = if (!json.has("command") && !json.has("commandProfile") && !json.has("commandOverrides")) {
             null
         } else {

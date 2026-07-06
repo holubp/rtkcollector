@@ -1,6 +1,15 @@
 package org.rtkcollector.app.ui.profiles
 
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.effectiveCommandProfileRef
+import org.rtkcollector.app.profile.effectiveNtripMountpointProfileRef
+import org.rtkcollector.app.profile.effectiveStorageProfileRef
+
+enum class ProfileRowTone {
+    DEFAULT,
+    APPLIED,
+    MODIFIED,
+}
 
 data class ProfileListRow(
     val id: String,
@@ -10,8 +19,20 @@ data class ProfileListRow(
     val isSelected: Boolean = false,
     val summary: String = "",
     val warningText: String? = null,
+    val outsideFilter: Boolean = false,
 ) {
-    val displayName: String = if (hasLocalOverrides) "$name + local changes" else name
+    val displayName: String = if (hasLocalOverrides) "$name +" else name
+    val tone: ProfileRowTone
+        get() = when {
+            hasLocalOverrides -> ProfileRowTone.MODIFIED
+            isSelected -> ProfileRowTone.APPLIED
+            else -> ProfileRowTone.DEFAULT
+        }
+    val displaySummary: String = if (outsideFilter) {
+        listOf("Outside filter", summary).filter(String::isNotBlank).joinToString(" · ")
+    } else {
+        summary
+    }
     val canEdit: Boolean = !isProtected
     val canViewDetails: Boolean = true
     val editActionLabel: String = if (isProtected) "View" else "Edit"
@@ -44,9 +65,9 @@ data class SettingsSetListState(
 private fun settingsSetSummary(set: RecordingSettingsSet): String =
     listOf(
         set.workflowId,
-        set.commandProfileRef.name,
-        set.ntripMountpointProfileRef?.name ?: "No NTRIP mountpoint",
-        set.storageProfileRef.name,
+        set.effectiveCommandProfileRef().name,
+        set.effectiveNtripMountpointProfileRef()?.name ?: "No NTRIP mountpoint",
+        set.effectiveStorageProfileRef().name,
     ).joinToString(" · ")
 
 data class EditableProfileField(

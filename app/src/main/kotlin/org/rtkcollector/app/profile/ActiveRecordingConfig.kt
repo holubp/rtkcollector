@@ -191,7 +191,7 @@ data class ActiveRecordingConfig(
                 ?.let { ntripCasterUploadSecretId(it.id) }
                 .orEmpty()
             val legacyUploadSecretRef = ntripCasterUploadProfile?.secretId.orEmpty()
-            val casterUploadEnabled = settingsSet.baseCasterUploadEnabled && ntripCasterUploadProfile != null
+            val casterUploadEnabled = settingsSet.effectiveBaseCasterUploadEnabled() && ntripCasterUploadProfile != null
             val casterUploadSecretRef = if (casterUploadEnabled) {
                 casterUploadOverride?.secretId ?: profileOwnedUploadSecretRef
             } else {

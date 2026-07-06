@@ -22,6 +22,9 @@ class SettingsSetModelsTest {
             recordingOutputProfileRef = ProfileReference("default-record-everything", "Default V1 recording outputs"),
             storageProfileRef = ProfileReference("app-private", "App-private external storage"),
             overrides = SettingsSetOverrides(
+                commandProfileRef = ProfileReference("custom-command", "Custom command"),
+                storageProfileRef = ProfileReference("custom-storage", "Custom storage"),
+                baseCasterUploadEnabled = true,
                 command = CommandProfileOverride(initScript = "UNLOG COM1", shutdownScript = "UNLOG COM1"),
                 ntripMountpoint = NtripMountpointOverride(mountpoint = "TUBO00CZE0"),
             ),
@@ -33,8 +36,39 @@ class SettingsSetModelsTest {
         assertEquals("rover-ntrip", decoded.workflowId)
         assertEquals("um980-binary-multihz", decoded.commandProfileRef.id)
         assertEquals("rtklib-rover", decoded.rtklibProfileRef?.id)
+        assertEquals("custom-command", decoded.overrides.commandProfileRef?.id)
+        assertEquals("custom-storage", decoded.overrides.storageProfileRef?.id)
+        assertEquals(true, decoded.overrides.baseCasterUploadEnabled)
         assertEquals("UNLOG COM1", decoded.overrides.command?.initScript)
         assertTrue(decoded.hasLocalOverrides)
+    }
+
+    @Test
+    fun `settings set effective references use local profile overrides`() {
+        val set = RecordingSettingsSet.builtInRoverNtrip().copy(
+            overrides = SettingsSetOverrides(
+                commandProfileRef = ProfileReference("custom-command", "Custom command"),
+            ),
+        )
+
+        assertTrue(set.hasLocalOverrides)
+        assertEquals("custom-command", set.effectiveCommandProfileRef().id)
+    }
+
+    @Test
+    fun `reapply clears local reference overrides`() {
+        val set = RecordingSettingsSet.builtInRoverNtrip().copy(
+            commandProfileRef = ProfileReference("stored-command", "Stored command"),
+            overrides = SettingsSetOverrides(
+                commandProfileRef = ProfileReference("custom-command", "Custom command"),
+                storageProfileRef = ProfileReference("custom-storage", "Custom storage"),
+            ),
+        )
+
+        val reapplied = set.reapplied()
+
+        assertFalse(reapplied.hasLocalOverrides)
+        assertEquals("stored-command", reapplied.effectiveCommandProfileRef().id)
     }
 
     @Test
@@ -115,7 +149,7 @@ class SettingsSetModelsTest {
             overrides = SettingsSetOverrides(recordingOutput = RecordingOutputOverride(exportGpx = true)),
         )
 
-        assertEquals("UM980 rover + NTRIP + local changes", set.displayNameWithOverrides())
+        assertEquals("UM980 rover + NTRIP +", set.displayNameWithOverrides())
     }
 
     @Test

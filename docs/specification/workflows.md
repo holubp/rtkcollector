@@ -131,22 +131,54 @@ Verification:
 Status: Normative
 
 Fixed-base coordinate acceptance MUST NOT silently replace or inject `MODE BASE`
-commands at recording start. The user MUST explicitly choose an existing
-command profile whose runtime script already contains `MODE BASE`, then either
-create a new command profile derived from that chosen profile or explicitly
-overwrite the `MODE BASE` line in that chosen editable command profile before
-fixed-base operation uses the accepted coordinate. `MODE BASE TIME ...` and
-other survey/convergence base commands MAY be selected as templates or editable
-targets, but only the `MODE BASE` line is replaced with
-`MODE BASE <lat> <lon> <msl-altitude>`; all other command lines, including RTCM
-output lines, MUST remain unchanged. Protected built-in profiles and command
-profiles referenced by other settings sets MUST NOT be silently mutated.
+commands at recording start. The user MUST first choose whether to use the
+current coordinate or an available averaged coordinate, then choose a fixed-base
+settings set whose effective command profile already contains `MODE BASE`.
+The chosen settings set is the target or template for fixed-base operation; the
+temporary-base settings set used to determine the coordinate MUST NOT be assumed
+as the fixed-base output profile. If the chosen settings set or its command
+profile is immutable, the app MUST derive a new timestamped settings set and,
+where needed, a new command profile. If both are editable, the app MAY update
+the selected settings set in place. In all cases, only the `MODE BASE` line is
+replaced with `MODE BASE <lat> <lon> <msl-altitude>`; all other command lines,
+including RTCM output lines, MUST remain unchanged. The final confirmation MUST
+describe whether the app will derive a new set or update in place. Cancel before
+final confirmation MUST leave settings sets and command profiles unchanged.
 
 Verification:
-- Automated: fixed-base profile selection, materialiser and command validator
-  tests.
-- Review: dashboard Base action opens an explicit materialisation choice and
-  start preflight uses the selected command profile as-is.
+- Automated: fixed-base profile selection, handoff planner, materialiser and
+  command validator tests.
+- Review: dashboard Base action opens coordinate choice, fixed-base settings
+  set choice and final confirmation; start preflight uses the selected command
+  profile as-is.
+
+### WF-PROFILE-FILTER-001: Device Filter Scopes Profile Selection
+
+Status: Normative
+
+The app MUST provide a persistent profile device filter with at least `Any`,
+`UM980` and `u-blox M8T`. The filter MUST apply to settings-set selectors,
+init/shutdown profile selectors and device-console init-profile selection.
+The selected active profile MAY remain visible outside the filter so users can
+understand the current state. `Any` MUST preserve broad power-user behaviour.
+
+Verification:
+- Automated: profile device filter and profile-list row tests.
+- Review: Home and Menu Device selector changes visible profile choices without
+  deleting current selections.
+
+### WF-UPLOAD-UI-001: Upload Selector Is Base-Workflow Scoped
+
+Status: Normative
+
+The main dashboard Upload selector MUST be available for workflows that can act
+as a base and publish RTCM. Rover-only workflows MUST NOT show missing upload as
+an error state; the Upload tile SHOULD be disabled or marked not needed.
+
+Verification:
+- Automated: dashboard status tests.
+- Review: plain-rover and rover-with-NTRIP dashboard show upload as not needed,
+  while fixed-base and temporary-base workflows allow explicit upload selection.
 
 ### WF-BUILTIN-SETTINGS-001: Built-In Settings Do Not Enable Source Upload
 

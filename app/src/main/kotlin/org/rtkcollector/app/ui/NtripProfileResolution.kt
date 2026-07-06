@@ -4,6 +4,8 @@ import org.rtkcollector.app.profile.NtripCasterProfile
 import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.effectiveNtripCasterProfileRef
+import org.rtkcollector.app.profile.effectiveNtripMountpointProfileRef
 
 internal data class ResolvedNtripProfiles(
     val caster: NtripCasterProfile?,
@@ -15,9 +17,9 @@ internal fun RecordingSettingsSet.resolveNtripProfiles(
     casterProfiles: List<NtripCasterProfile>,
     mountpointProfiles: List<NtripMountpointProfile>,
 ): ResolvedNtripProfiles {
-    val mountpoint = ntripMountpointProfileRef?.id
+    val mountpoint = effectiveNtripMountpointProfileRef()?.id
         ?.let { id -> mountpointProfiles.firstOrNull { it.id == id } }
-    val settingsCaster = ntripCasterProfileRef?.id
+    val settingsCaster = effectiveNtripCasterProfileRef()?.id
         ?.let { id -> casterProfiles.firstOrNull { it.id == id } }
     val casterFromMountpoint = mountpoint?.casterProfileId
         ?.let { casterId -> casterProfiles.firstOrNull { it.id == casterId } }
@@ -36,9 +38,14 @@ internal fun RecordingSettingsSet.resolveNtripProfiles(
             ?: casterFromMountpoint
         val syncedSettingsSet = if (
             resolvedCaster != null &&
-            ntripCasterProfileRef?.id != resolvedCaster.id
+            effectiveNtripCasterProfileRef()?.id != resolvedCaster.id
         ) {
-            copy(ntripCasterProfileRef = ProfileReference(resolvedCaster.id, resolvedCaster.name))
+            val casterRef = ProfileReference(resolvedCaster.id, resolvedCaster.name)
+            if (overrides.ntripMountpointProfileRef != null || overrides.ntripCasterProfileRef != null) {
+                copy(overrides = overrides.copy(ntripCasterProfileRef = casterRef))
+            } else {
+                copy(ntripCasterProfileRef = casterRef)
+            }
         } else {
             this
         }

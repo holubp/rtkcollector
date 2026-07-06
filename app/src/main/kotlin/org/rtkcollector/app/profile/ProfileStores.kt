@@ -147,6 +147,28 @@ class ProfileStores(context: Context) {
         preferences.edit().putString("selectedSettingsSetId", id).apply()
     }
 
+    fun selectedDeviceFilter(): ProfileDeviceFilter =
+        ProfileDeviceFilter.fromStorageValue(preferences.getString("selectedDeviceFilter", null))
+
+    fun saveSelectedDeviceFilter(filter: ProfileDeviceFilter) {
+        preferences.edit().putString("selectedDeviceFilter", filter.storageValue).apply()
+    }
+
+    fun lastFixedBaseSettingsSetId(filter: ProfileDeviceFilter): String? =
+        preferences.getString("lastFixedBaseSettingsSetId.${filter.storageValue}", null)
+            ?.takeIf(String::isNotBlank)
+
+    fun saveLastFixedBaseSettingsSetId(filter: ProfileDeviceFilter, id: String?) {
+        preferences.edit().apply {
+            val key = "lastFixedBaseSettingsSetId.${filter.storageValue}"
+            if (id.isNullOrBlank()) {
+                remove(key)
+            } else {
+                putString(key, id)
+            }
+        }.apply()
+    }
+
     fun selectedWorkflowId(): String? =
         preferences.getString("selectedWorkflowId", null)?.takeIf(String::isNotBlank)
 

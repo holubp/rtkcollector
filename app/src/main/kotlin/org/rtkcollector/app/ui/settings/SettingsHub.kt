@@ -45,7 +45,11 @@ import org.rtkcollector.app.ui.common.TidyColors
 fun SettingsHub(
     activeSettingsSetLabel: String,
     activeWorkflowLabel: String,
+    deviceFilterLabel: String = "Any",
     onActiveSettingsSet: () -> Unit,
+    onDeviceFilter: () -> Unit = {},
+    canReapplySettingsSet: Boolean = false,
+    onReapplySettingsSet: () -> Unit = {},
     onSettingsSets: () -> Unit,
     onWorkflowSelection: () -> Unit,
     onBaseCoordinates: () -> Unit,
@@ -79,6 +83,9 @@ fun SettingsHub(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onDeviceFilter) {
+                        Text(deviceFilterLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                     TextButton(onClick = { helpTopic = HelpTopic.SETTINGS_GROUPS }) {
                         Text("?")
                     }
@@ -101,6 +108,15 @@ fun SettingsHub(
                         onClick = onActiveSettingsSet,
                         subtitle = "Workflow: $activeWorkflowLabel",
                     )
+                    if (canReapplySettingsSet) {
+                        SettingsDivider()
+                        SettingsRow(
+                            icon = "+",
+                            label = "Re-apply settings set",
+                            onClick = onReapplySettingsSet,
+                            subtitle = "Discard local changes and restore the stored set",
+                        )
+                    }
                 }
 
                 SettingsSection("Session setup") {
@@ -124,7 +140,7 @@ fun SettingsHub(
                 SettingsSection("Receiver and USB") {
                     SettingsRow("USB", "USB device and baud", onUsbBaud)
                     SettingsDivider()
-                    SettingsRow("⌁", "Init/shutdown scripts", onCommands)
+                    SettingsRow("⌁", "Init/shutdown profiles", onCommands)
                     SettingsDivider()
                     SettingsRow("RX", "Receiver family/profile", onReceiverProfile)
                 }
@@ -260,7 +276,11 @@ private fun SettingsHubPreview() {
         SettingsHub(
             activeSettingsSetLabel = "UM980 rover + NTRIP",
             activeWorkflowLabel = "Rover + NTRIP",
+            deviceFilterLabel = "Any",
             onActiveSettingsSet = {},
+            onDeviceFilter = {},
+            canReapplySettingsSet = true,
+            onReapplySettingsSet = {},
             onSettingsSets = {},
             onWorkflowSelection = {},
             onBaseCoordinates = {},

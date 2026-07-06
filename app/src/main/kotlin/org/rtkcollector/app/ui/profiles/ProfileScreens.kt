@@ -257,9 +257,9 @@ private fun ProfileListItem(
             val showCopy = showManagementActions && row.canCopy
             val showRename = showManagementActions && row.canRename
             val showDelete = showManagementActions && row.canDelete
-            if (row.summary.isNotBlank()) {
+            if (row.displaySummary.isNotBlank()) {
                 Text(
-                    text = row.summary,
+                    text = row.displaySummary,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -459,6 +459,8 @@ fun ProfileSelectorDialog(
     rows: List<ProfileListRow>,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
+    subtitle: String = "",
+    emptyText: String = "No selectable profiles.",
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -469,15 +471,24 @@ fun ProfileSelectorDialog(
         },
         title = { Text(title) },
         text = {
-            if (rows.isEmpty()) {
-                Text("No selectable profiles.")
-            } else {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 420.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(rows, key = { it.id }) { row ->
-                        ProfileSelectorRow(row = row, onSelect = onSelect)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (rows.isEmpty()) {
+                    Text(emptyText)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 420.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(rows, key = { it.id }) { row ->
+                            ProfileSelectorRow(row = row, onSelect = onSelect)
+                        }
                     }
                 }
             }

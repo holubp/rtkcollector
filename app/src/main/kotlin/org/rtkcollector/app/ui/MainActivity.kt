@@ -74,6 +74,9 @@ import org.rtkcollector.app.base.BaseCoordinateForm
 import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.base.FixedBaseCommandValidator
 import org.rtkcollector.app.base.FixedBaseCommandProfileSelection
+import org.rtkcollector.app.base.FixedBaseHandoffPlanner
+import org.rtkcollector.app.base.FixedBaseSettingsSetAction
+import org.rtkcollector.app.base.FixedBaseSettingsSetCandidate
 import org.rtkcollector.app.base.FixedBaseProfileMaterializer
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
@@ -82,6 +85,7 @@ import org.rtkcollector.app.profile.NtripCasterUploadRetryMode
 import org.rtkcollector.app.profile.NtripCasterProfile
 import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.NtripMountpointOverride
+import org.rtkcollector.app.profile.ProfileDeviceFilter
 import org.rtkcollector.app.profile.ProfileStores
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingPolicyProfile
@@ -97,11 +101,20 @@ import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
 import org.rtkcollector.app.profile.WorkflowActivationMode
 import org.rtkcollector.app.profile.displayMountpoint
+import org.rtkcollector.app.profile.effectiveBaseCasterUploadEnabled
+import org.rtkcollector.app.profile.effectiveCommandProfileRef
+import org.rtkcollector.app.profile.effectiveNtripCasterProfileRef
+import org.rtkcollector.app.profile.effectiveNtripCasterUploadProfileRef
+import org.rtkcollector.app.profile.effectiveNtripMountpointProfileRef
+import org.rtkcollector.app.profile.effectiveRecordingOutputProfileRef
+import org.rtkcollector.app.profile.effectiveStorageProfileRef
+import org.rtkcollector.app.profile.effectiveUsbBaudProfileRef
 import org.rtkcollector.app.profile.ntripCasterUploadSecretId
 import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.requireProfileReference
+import org.rtkcollector.app.profile.reapplied
 import org.rtkcollector.app.profile.validateSettingsImportJson
 import org.rtkcollector.app.profile.withWorkflowActivationMode
 import org.rtkcollector.app.profile.workflowActivationMode
@@ -144,6 +157,7 @@ import org.rtkcollector.app.ui.dashboard.ProfilesCardState
 import org.rtkcollector.app.ui.dashboard.RtklibCardState
 import org.rtkcollector.app.ui.dashboard.HomeDashboard
 import org.rtkcollector.app.ui.dashboard.MockGpsDashboardState
+import org.rtkcollector.app.ui.dashboard.baseCoordinateCandidateOrNull
 import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardUploadSelectorRows
 import org.rtkcollector.app.ui.dashboard.UploadSelectorOffProfileId
@@ -314,14 +328,20 @@ fun RtkCollectorApp(
         profileStore.saveSelectedWorkflowId(initialWorkflowId)
         mutableStateOf(initialWorkflowId)
     }
+    var selectedDeviceFilter by rememberSaveable {
+        mutableStateOf(profileStore.selectedDeviceFilter())
+    }
     var plannedState by remember {
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
     }
     var state by remember { mutableStateOf(plannedState) }
     var startInProgress by rememberSaveable { mutableStateOf(false) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
+    var pendingFixedBaseCoordinateChoices by remember { mutableStateOf<FixedBaseCoordinateChoices?>(null) }
     var pendingFixedBaseCoordinate by remember { mutableStateOf<AcceptedBaseCoordinate?>(null) }
+    var pendingFixedBaseSettingsSetId by rememberSaveable { mutableStateOf<String?>(null) }
     var fixedBaseProfileSelectionMode by remember { mutableStateOf<FixedBaseProfileSelectionMode?>(null) }
+    var showReapplySettingsDialog by remember { mutableStateOf(false) }
     LaunchedEffect(externalIntent) {
         if (externalIntent != null) {
             settingsImportUriFromIntent(externalIntent)?.let { uri ->
@@ -423,17 +443,160 @@ fun RtkCollectorApp(
         state = state.withPlannedConfiguration(planned)
         profileRevision++
     }
+    fun reapplySelectedSettingsSet() {
+        val updated = settingsSets.updateSelected(selectedSettingsSetId) { set ->
+            set.reapplied()
+        }
+        settingsSets = updated
+        profileStore.saveSettingsSets(updated)
+        manualBaseCoordinate = null
+        refreshProfileUi(updated)
+    }
     fun selectedCommandProfileOrToast(): CommandProfile? {
         val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
         if (selectedSet == null) {
             Toast.makeText(context, "Selected settings set was not found.", Toast.LENGTH_LONG).show()
             return null
         }
-        val profile = profileStore.commandProfiles().firstOrNull { it.id == selectedSet.commandProfileRef.id }
+        val profile = profileStore.commandProfiles().firstOrNull { it.id == selectedSet.effectiveCommandProfileRef().id }
         if (profile == null) {
             Toast.makeText(context, "Selected command profile was not found.", Toast.LENGTH_LONG).show()
         }
         return profile
+    }
+    fun resetFixedBaseHandoff() {
+        pendingFixedBaseCoordinateChoices = null
+        pendingFixedBaseCoordinate = null
+        pendingFixedBaseSettingsSetId = null
+        fixedBaseProfileSelectionMode = null
+    }
+    fun fixedBaseCandidates(): List<FixedBaseSettingsSetCandidate> =
+        FixedBaseHandoffPlanner.eligibleSettingsSets(
+            settingsSets = settingsSets,
+            commandProfiles = profileStore.commandProfiles(),
+            filter = selectedDeviceFilter,
+        )
+    fun beginFixedBaseHandoff(candidate: BaseCoordinateCandidate) {
+        val acceptedCoordinate = candidate.toAcceptedBaseCoordinate(
+            id = profileStore.duplicateId("base"),
+            name = if (candidate.source == "AVERAGE") {
+                "Temporary base average"
+            } else {
+                "Temporary base instant"
+            },
+        )
+        if (acceptedCoordinate == null) {
+            Toast.makeText(
+                context,
+                "Base candidate requires a valid latitude, longitude and MSL altitude.",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        val candidates = fixedBaseCandidates()
+        if (candidates.isEmpty()) {
+            Toast.makeText(
+                context,
+                "No fixed-base settings set with a MODE BASE profile is available for ${selectedDeviceFilter.displayName}.",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        manualBaseCoordinate = candidate
+        pendingFixedBaseCoordinate = acceptedCoordinate
+        pendingFixedBaseSettingsSetId = FixedBaseHandoffPlanner.preferredSettingsSetId(
+            candidates = candidates,
+            lastSettingsSetId = profileStore.lastFixedBaseSettingsSetId(selectedDeviceFilter),
+        )
+        fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.SETTINGS_SET
+    }
+    fun commitFixedBaseHandoff(coordinate: AcceptedBaseCoordinate) {
+        val settingsSetId = pendingFixedBaseSettingsSetId
+        val sourceSet = settingsSets.firstOrNull { it.id == settingsSetId }
+        if (sourceSet == null) {
+            Toast.makeText(context, "Selected fixed-base settings set was not found.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val sourceCommand = profileStore.commandProfiles().firstOrNull {
+            it.id == sourceSet.effectiveCommandProfileRef().id
+        }
+        if (sourceCommand == null) {
+            Toast.makeText(context, "Selected fixed-base command profile was not found.", Toast.LENGTH_LONG).show()
+            return
+        }
+        runCatching {
+            FixedBaseCommandValidator.requireSupportedReceiverFamily(sourceCommand.receiverFamily)
+            val materialized = FixedBaseProfileMaterializer.materialize(
+                runtimeScript = sourceCommand.runtimeScript,
+                modeBaseCommand = coordinate.toFixedBaseModeCommand(),
+            )
+            val deriveNewSet = sourceSet.isProtected || sourceCommand.isProtected
+            val deriveNewCommand = deriveNewSet || sourceCommand.isProtected
+            val updatedCommand = if (deriveNewCommand) {
+                sourceCommand.copyProfile(
+                    id = profileStore.duplicateId("commands"),
+                    name = FixedBaseHandoffPlanner.derivedName(sourceCommand.name),
+                ).copy(runtimeScript = materialized.runtimeScript)
+            } else {
+                sourceCommand.copy(runtimeScript = materialized.runtimeScript)
+            }
+            val commandProfiles = profileStore.commandProfiles()
+            if (deriveNewCommand) {
+                profileStore.saveCommandProfiles(commandProfiles + updatedCommand)
+            } else {
+                profileStore.saveCommandProfiles(
+                    commandProfiles.map { if (it.id == sourceCommand.id) updatedCommand else it },
+                )
+            }
+            val commandRef = ProfileReference(updatedCommand.id, updatedCommand.name)
+            val targetSet = if (deriveNewSet) {
+                sourceSet
+                    .reapplied()
+                    .copySet(
+                        id = profileStore.duplicateId("settings"),
+                        name = FixedBaseHandoffPlanner.derivedName(sourceSet.name),
+                    )
+                    .copy(
+                        workflowId = WORKFLOW_FIXED_BASE,
+                        workflowApplicationPolicy = WorkflowApplicationPolicy.SET_SPECIFIC,
+                        commandProfileRef = commandRef,
+                    )
+                    .also(RecordingSettingsSet::validate)
+            } else {
+                sourceSet.copy(
+                    workflowId = WORKFLOW_FIXED_BASE,
+                    workflowApplicationPolicy = WorkflowApplicationPolicy.SET_SPECIFIC,
+                    commandProfileRef = commandRef,
+                    overrides = sourceSet.overrides.copy(commandProfileRef = null),
+                ).also(RecordingSettingsSet::validate)
+            }
+            val updatedSettingsSets = if (deriveNewSet) {
+                settingsSets + targetSet
+            } else {
+                settingsSets.map { if (it.id == sourceSet.id) targetSet else it }
+            }
+            baseCoordinateStore.upsert(coordinate)
+            baseCoordinateStore.saveSelectedCoordinateId(coordinate.id)
+            profileStore.saveSettingsSets(updatedSettingsSets)
+            profileStore.saveSelectedSettingsSetId(targetSet.id)
+            profileStore.saveSelectedWorkflowId(WORKFLOW_FIXED_BASE)
+            profileStore.saveLastFixedBaseSettingsSetId(selectedDeviceFilter, targetSet.id)
+            selectedSettingsSetId = targetSet.id
+            selectedWorkflowId = WORKFLOW_FIXED_BASE
+            manualBaseCoordinate = null
+            refreshProfileUi(updatedSettingsSets)
+            if (state.isRecording) {
+                context.startService(RecordingForegroundService.stopIntent(context))
+            }
+            resetFixedBaseHandoff()
+            Toast.makeText(
+                context,
+                "Fixed-base settings selected. Choose Upload if needed, then press Start.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }.onFailure { error ->
+            Toast.makeText(context, error.message ?: "Cannot prepare fixed-base profile.", Toast.LENGTH_LONG).show()
+        }
     }
     fun saveAcceptedBaseCoordinate(coordinate: AcceptedBaseCoordinate) {
         baseCoordinateStore.upsert(coordinate)
@@ -1037,6 +1200,13 @@ fun RtkCollectorApp(
                             dashboardSelector = DashboardSelector.WORKFLOW
                         }
                     },
+                    onDevice = {
+                        if (state.isRecording) {
+                            Toast.makeText(context, "Stop recording before changing device filter.", Toast.LENGTH_LONG).show()
+                        } else {
+                            dashboardSelector = DashboardSelector.DEVICE
+                        }
+                    },
                     onReceiver = {
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
@@ -1076,24 +1246,17 @@ fun RtkCollectorApp(
                         )
                     },
                     onUseCurrentCoordinateAsManualBase = { candidate ->
-                        val acceptedCoordinate = candidate.toAcceptedBaseCoordinate(
-                            id = profileStore.duplicateId("base"),
-                            name = if (candidate.source == "AVERAGE") {
-                                "Temporary base average"
-                            } else {
-                                "Temporary base instant"
-                            },
-                        )
-                        if (acceptedCoordinate == null) {
-                            Toast.makeText(
-                                context,
-                                "Base candidate requires a valid latitude and longitude.",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                            return@HomeDashboard
+                        val averageCandidate = state.position.serviceCoordinateAveragingState()
+                            .averageBaseCandidateOrNull()
+                        val instantCandidate = state.position.baseCoordinateCandidateOrNull()
+                        if (averageCandidate != null && instantCandidate != null) {
+                            pendingFixedBaseCoordinateChoices = FixedBaseCoordinateChoices(
+                                average = averageCandidate,
+                                instant = instantCandidate,
+                            )
+                        } else {
+                            beginFixedBaseHandoff(averageCandidate ?: instantCandidate ?: candidate)
                         }
-                        manualBaseCoordinate = candidate
-                        pendingFixedBaseCoordinate = acceptedCoordinate
                     },
                     onSatelliteMonitorDetails = { screen = AppScreen.SATELLITE_MONITOR },
                     onCasterUploadDetails = { screen = AppScreen.CASTER_UPLOAD_MONITOR },
@@ -1111,6 +1274,8 @@ fun RtkCollectorApp(
                         activeSettingsSetLabel = settingsSets.firstOrNull { it.id == selectedSettingsSetId }?.displayNameWithOverrides()
                             ?: "n/a",
                         activeWorkflowLabel = (selectedWorkflowId ?: profileStore.selectedWorkflowId()).workflowLabel(),
+                        deviceFilterLabel = selectedDeviceFilter.displayName,
+                        canReapplySettingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }?.hasLocalOverrides == true,
                         onActiveSettingsSet = {
                             if (state.isRecording) {
                                 Toast.makeText(context, "Stop recording before loading a different settings set.", Toast.LENGTH_LONG).show()
@@ -1118,6 +1283,15 @@ fun RtkCollectorApp(
                                 screen = AppScreen.SETTINGS_SET_SELECTOR
                             }
                         },
+                        onDeviceFilter = {
+                            if (state.isRecording) {
+                                Toast.makeText(context, "Stop recording before changing device filter.", Toast.LENGTH_LONG).show()
+                            } else {
+                                dashboardSelector = DashboardSelector.DEVICE
+                                screen = AppScreen.HOME
+                            }
+                        },
+                        onReapplySettingsSet = { showReapplySettingsDialog = true },
                         onSettingsSets = { screen = AppScreen.SETTINGS_SETS },
                         onWorkflowSelection = {
                             if (state.isRecording) {
@@ -1195,7 +1369,9 @@ fun RtkCollectorApp(
                 )
                 AppScreen.SETTINGS_SETS -> SettingsSetListScreen(
                     title = "Settings sets",
-                    state = SettingsSetListState.from(settingsSets, selectedSettingsSetId),
+                    state = SettingsSetListState(
+                        rows = filteredSettingsSetRows(settingsSets, selectedSettingsSetId, selectedDeviceFilter),
+                    ),
                     onSelect = { id ->
                         selectedSettingsSetId = id
                         manualBaseCoordinate = null
@@ -1289,8 +1465,10 @@ fun RtkCollectorApp(
                             val updated = settingsSets.map { set ->
                                 if (set.id == selectedSettingsSetId) {
                                     set.copy(
-                                        ntripCasterUploadProfileRef = ProfileReference(profile.id, profile.name),
-                                        baseCasterUploadEnabled = true,
+                                        overrides = set.overrides.copy(
+                                            ntripCasterUploadProfileRef = ProfileReference(profile.id, profile.name),
+                                            baseCasterUploadEnabled = true,
+                                        ),
                                     )
                                 } else {
                                     set
@@ -1374,8 +1552,15 @@ fun RtkCollectorApp(
                     supportsSelection = false,
                 )
                 AppScreen.COMMANDS -> ProfileListScreen(
-                    title = "Init/shutdown scripts",
-                    rows = profileStore.commandProfiles().map { it.profileRow() },
+                    title = "Init/shutdown profiles",
+                    rows = filteredCommandProfileRows(
+                        profiles = profileStore.commandProfiles(),
+                        selectedCommandProfileId = settingsSets
+                            .firstOrNull { it.id == selectedSettingsSetId }
+                            ?.effectiveCommandProfileRef()
+                            ?.id,
+                        filter = selectedDeviceFilter,
+                    ),
                     onSelect = {},
                     onEdit = { id ->
                         profileEditorTarget = ProfileEditorTarget(ProfileKind.COMMANDS, id)
@@ -1671,7 +1856,7 @@ fun RtkCollectorApp(
                 }
                 AppScreen.SETTINGS_SET_SELECTOR -> ProfileListScreen(
                     title = "Select workflow/settings",
-                    rows = SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows,
+                    rows = filteredSettingsSetRows(settingsSets, selectedSettingsSetId, selectedDeviceFilter),
                     onSelect = { id ->
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
@@ -1702,7 +1887,7 @@ fun RtkCollectorApp(
                     rows = profileStore.ntripMountpointProfiles().map {
                         it.profileRow(
                             casters = profileStore.ntripCasterProfiles(),
-                            isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.ntripMountpointProfileRef?.id,
+                            isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.effectiveNtripMountpointProfileRef()?.id,
                         )
                     },
                     onSelect = { id ->
@@ -1713,9 +1898,11 @@ fun RtkCollectorApp(
                             }
                             settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                 set.copy(
-                                    ntripCasterProfileRef = casterProfileRef,
-                                    ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
-                                    overrides = set.overrides.copy(ntripMountpoint = null),
+                                    overrides = set.overrides.copy(
+                                        ntripCasterProfileRef = casterProfileRef,
+                                        ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
+                                        ntripMountpoint = null,
+                                    ),
                                 )
                             }
                             profileStore.saveSettingsSets(settingsSets)
@@ -1739,9 +1926,13 @@ fun RtkCollectorApp(
                 )
                 AppScreen.COMMAND_SELECTOR -> ProfileListScreen(
                     title = "Select receiver command profile",
-                    rows = profileStore.commandProfiles().map {
-                        it.profileRow(isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.commandProfileRef?.id)
-                    },
+                    rows = filteredCommandProfileRows(
+                        profiles = profileStore.commandProfiles(),
+                        selectedCommandProfileId = settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }
+                            ?.effectiveCommandProfileRef()
+                            ?.id,
+                        filter = selectedDeviceFilter,
+                    ),
                     onSelect = { id ->
                         if (state.isRecording) {
                             Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
@@ -1750,7 +1941,11 @@ fun RtkCollectorApp(
                             profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
                                 manualBaseCoordinate = null
                                 settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                                    set.copy(commandProfileRef = ProfileReference(profile.id, profile.name))
+                                    set.copy(
+                                        overrides = set.overrides.copy(
+                                            commandProfileRef = ProfileReference(profile.id, profile.name),
+                                        ),
+                                    )
                                 }
                                 profileStore.saveSettingsSets(settingsSets)
                                 refreshProfileUi(settingsSets)
@@ -1770,7 +1965,7 @@ fun RtkCollectorApp(
                 AppScreen.STORAGE_SELECTOR -> ProfileListScreen(
                     title = "Select storage profile",
                     rows = profileStore.storageProfiles().map {
-                        it.profileRow(isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.storageProfileRef?.id)
+                        it.profileRow(isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.effectiveStorageProfileRef()?.id)
                     },
                     onSelect = { id ->
                         if (state.isRecording) {
@@ -1779,7 +1974,11 @@ fun RtkCollectorApp(
                         } else {
                             profileStore.storageProfiles().firstOrNull { it.id == id }?.let { profile ->
                                 settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                                    set.copy(storageProfileRef = ProfileReference(profile.id, profile.name))
+                                    set.copy(
+                                        overrides = set.overrides.copy(
+                                            storageProfileRef = ProfileReference(profile.id, profile.name),
+                                        ),
+                                    )
                                 }
                                 profileStore.saveSettingsSets(settingsSets)
                                 refreshProfileUi(settingsSets)
@@ -2158,10 +2357,19 @@ fun RtkCollectorApp(
                 AppScreen.DEVICE_CONSOLE -> {
                     val usbProfiles = profileStore.usbBaudProfiles()
                     val commandProfiles = profileStore.commandProfiles()
+                    val filteredCommandProfiles = commandProfiles
+                        .filter { selectedDeviceFilter.matchesCommandProfile(it) }
+                        .let { filtered ->
+                            val selectedOutsideFilter = commandProfiles.firstOrNull {
+                                it.id == selectedConsoleCommandProfileId && filtered.none { profile -> profile.id == it.id }
+                            }
+                            if (selectedOutsideFilter == null) filtered else listOf(selectedOutsideFilter) + filtered
+                        }
                     val selectedUsbProfile =
                         usbProfiles.firstOrNull { it.id == selectedConsoleUsbProfileId } ?: usbProfiles.firstOrNull()
                     val selectedCommandProfile =
-                        commandProfiles.firstOrNull { it.id == selectedConsoleCommandProfileId } ?: commandProfiles.firstOrNull()
+                        filteredCommandProfiles.firstOrNull { it.id == selectedConsoleCommandProfileId }
+                            ?: filteredCommandProfiles.firstOrNull()
 
                     DisposableEffect(screen) {
                         onDispose {
@@ -2177,8 +2385,9 @@ fun RtkCollectorApp(
                             selectedCommandProfileId = selectedCommandProfile?.id,
                         ),
                         recordingActive = state.isRecording,
+                        deviceFilterLabel = selectedDeviceFilter.displayName,
                         usbProfiles = usbProfiles.map { DeviceConsoleOption(it.id, it.name) },
-                        commandProfiles = commandProfiles.map { DeviceConsoleOption(it.id, it.name) },
+                        commandProfiles = filteredCommandProfiles.map { DeviceConsoleOption(it.id, it.name) },
                         selectedUsbProfileId = selectedUsbProfile?.id,
                         selectedCommandProfileId = selectedCommandProfile?.id,
                         inputText = consoleInput,
@@ -2409,15 +2618,27 @@ fun RtkCollectorApp(
                 }
             }
             dashboardSelector?.let { selector ->
+                val filteredProfileSelector = selector == DashboardSelector.SETTINGS_SET || selector == DashboardSelector.RECEIVER
                 ProfileSelectorDialog(
                     title = selector.title,
-                    rows = dashboardSelectorRows(selector, profileStore, settingsSets, selectedSettingsSetId),
+                    rows = dashboardSelectorRows(
+                        selector = selector,
+                        profileStore = profileStore,
+                        settingsSets = settingsSets,
+                        selectedSettingsSetId = selectedSettingsSetId,
+                        deviceFilter = selectedDeviceFilter,
+                    ),
                     onSelect = { id ->
                         when (selector) {
                             DashboardSelector.WORKFLOW -> {
                                 selectedWorkflowId = id
                                 manualBaseCoordinate = null
                                 profileStore.saveSelectedWorkflowId(id)
+                                refreshProfileUi(settingsSets)
+                            }
+                            DashboardSelector.DEVICE -> {
+                                selectedDeviceFilter = ProfileDeviceFilter.fromStorageValue(id)
+                                profileStore.saveSelectedDeviceFilter(selectedDeviceFilter)
                                 refreshProfileUi(settingsSets)
                             }
                             DashboardSelector.SETTINGS_SET -> {
@@ -2438,9 +2659,11 @@ fun RtkCollectorApp(
                                     }
                                     settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                         set.copy(
-                                            ntripCasterProfileRef = casterProfileRef,
-                                            ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
-                                            overrides = set.overrides.copy(ntripMountpoint = null),
+                                            overrides = set.overrides.copy(
+                                                ntripCasterProfileRef = casterProfileRef,
+                                                ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
+                                                ntripMountpoint = null,
+                                            ),
                                         )
                                     }
                                     profileStore.saveSettingsSets(settingsSets)
@@ -2456,7 +2679,11 @@ fun RtkCollectorApp(
                                 profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
                                     manualBaseCoordinate = null
                                     settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                                        set.copy(commandProfileRef = ProfileReference(profile.id, profile.name))
+                                        set.copy(
+                                            overrides = set.overrides.copy(
+                                                commandProfileRef = ProfileReference(profile.id, profile.name),
+                                            ),
+                                        )
                                     }
                                     profileStore.saveSettingsSets(settingsSets)
                                     refreshProfileUi(settingsSets)
@@ -2465,12 +2692,18 @@ fun RtkCollectorApp(
                             DashboardSelector.UPLOAD -> {
                                 settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
                                     if (id == UploadSelectorOffProfileId) {
-                                        set.copy(baseCasterUploadEnabled = false)
+                                        set.copy(
+                                            overrides = set.overrides.copy(
+                                                baseCasterUploadEnabled = false,
+                                            ),
+                                        )
                                     } else {
                                         profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == id }?.let { profile ->
                                             set.copy(
-                                                ntripCasterUploadProfileRef = ProfileReference(profile.id, profile.name),
-                                                baseCasterUploadEnabled = true,
+                                                overrides = set.overrides.copy(
+                                                    ntripCasterUploadProfileRef = ProfileReference(profile.id, profile.name),
+                                                    baseCasterUploadEnabled = true,
+                                                ),
                                             )
                                         } ?: set
                                     }
@@ -2481,7 +2714,11 @@ fun RtkCollectorApp(
                             DashboardSelector.STORAGE -> {
                                 profileStore.storageProfiles().firstOrNull { it.id == id }?.let { profile ->
                                     settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                                        set.copy(storageProfileRef = ProfileReference(profile.id, profile.name))
+                                        set.copy(
+                                            overrides = set.overrides.copy(
+                                                storageProfileRef = ProfileReference(profile.id, profile.name),
+                                            ),
+                                        )
                                     }
                                     profileStore.saveSettingsSets(settingsSets)
                                     refreshProfileUi(settingsSets)
@@ -2491,74 +2728,124 @@ fun RtkCollectorApp(
                         dashboardSelector = null
                     },
                     onDismiss = { dashboardSelector = null },
+                    subtitle = if (filteredProfileSelector) {
+                        "Device filter: ${selectedDeviceFilter.displayName}"
+                    } else {
+                        ""
+                    },
+                    emptyText = if (filteredProfileSelector) {
+                        "No ${selectedDeviceFilter.displayName} profiles. Switch Device to Any or create/copy a matching profile."
+                    } else {
+                        "No selectable profiles."
+                    },
+                )
+            }
+            pendingFixedBaseCoordinateChoices?.let { choices ->
+                AlertDialog(
+                    onDismissRequest = { pendingFixedBaseCoordinateChoices = null },
+                    title = { Text("Use which base coordinate?") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Choose the coordinate to write into the fixed-base MODE BASE profile.")
+                            Text("Average: ${choices.average.displayLabel()}")
+                            Text("Current: ${choices.instant.displayLabel()}")
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                pendingFixedBaseCoordinateChoices = null
+                                beginFixedBaseHandoff(choices.average)
+                            },
+                        ) {
+                            Text("Use average")
+                        }
+                    },
+                    dismissButton = {
+                        Row {
+                            TextButton(
+                                onClick = {
+                                    pendingFixedBaseCoordinateChoices = null
+                                    beginFixedBaseHandoff(choices.instant)
+                                },
+                            ) {
+                                Text("Use current")
+                            }
+                            TextButton(onClick = { pendingFixedBaseCoordinateChoices = null }) {
+                                Text("Cancel")
+                            }
+                        }
+                    },
                 )
             }
             pendingFixedBaseCoordinate?.let { coordinate ->
-                val commandProfiles = profileStore.commandProfiles()
-                val baseTemplateProfiles = FixedBaseCommandProfileSelection.templateProfiles(commandProfiles)
-                val baseOverwriteProfiles = FixedBaseCommandProfileSelection.overwriteProfiles(
-                    commandProfiles = commandProfiles,
-                    settingsSets = settingsSets,
-                    selectedSettingsSetId = selectedSettingsSetId,
-                )
+                val baseSettingsSetCandidates = fixedBaseCandidates()
+                val selectedCandidate = baseSettingsSetCandidates.firstOrNull {
+                    it.settingsSet.id == pendingFixedBaseSettingsSetId
+                }
                 when (fixedBaseProfileSelectionMode) {
-                    null -> AlertDialog(
-                        onDismissRequest = { pendingFixedBaseCoordinate = null },
-                        title = { Text("Use coordinate for fixed base") },
-                        text = {
-                            Text(
-                                "Choose a MODE BASE command profile. Create derives a new profile from the selected base profile; overwrite updates the selected editable base profile. Other receiver commands remain unchanged.",
-                            )
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = { fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.CREATE_FROM_TEMPLATE },
-                                enabled = baseTemplateProfiles.isNotEmpty(),
-                            ) {
-                                Text("Create from profile")
-                            }
-                        },
-                        dismissButton = {
-                            Row {
-                                TextButton(
-                                    onClick = { fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.OVERWRITE_PROFILE },
-                                    enabled = baseOverwriteProfiles.isNotEmpty(),
-                                ) {
-                                    Text("Overwrite profile")
-                                }
-                                TextButton(
-                                    onClick = {
-                                        pendingFixedBaseCoordinate = null
-                                        fixedBaseProfileSelectionMode = null
-                                    },
-                                ) {
-                                    Text("Cancel")
-                                }
-                            }
-                        },
-                    )
-                    FixedBaseProfileSelectionMode.CREATE_FROM_TEMPLATE ->
+                    FixedBaseProfileSelectionMode.SETTINGS_SET ->
                         ProfileSelectorDialog(
-                            title = "Derive from MODE BASE profile",
-                            rows = baseTemplateProfiles.map { profile -> profile.profileRow() },
+                            title = "Select fixed-base settings set",
+                            rows = baseSettingsSetCandidates.map { candidate ->
+                                candidate.profileRow(isSelected = candidate.settingsSet.id == pendingFixedBaseSettingsSetId)
+                            },
                             onSelect = { id ->
-                                baseTemplateProfiles.firstOrNull { it.id == id }?.let { profile ->
-                                    createFixedBaseCommandProfile(coordinate, profile)
+                                pendingFixedBaseSettingsSetId = id
+                                fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.CONFIRM
+                            },
+                            onDismiss = { resetFixedBaseHandoff() },
+                            subtitle = "Device filter: ${selectedDeviceFilter.displayName}",
+                            emptyText = "No fixed-base settings set with a MODE BASE profile. Switch Device to Any or create/copy a fixed-base set.",
+                        )
+                    FixedBaseProfileSelectionMode.CONFIRM -> {
+                        val candidate = selectedCandidate
+                        AlertDialog(
+                            onDismissRequest = { fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.SETTINGS_SET },
+                            title = { Text("Switch to fixed base?") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Coordinate: ${coordinate.displayLabel()}")
+                                    if (candidate != null) {
+                                        val actionText = if (candidate.defaultAction == FixedBaseSettingsSetAction.DERIVE_NEW) {
+                                            "Derive a new settings set and MODE BASE profile from ${candidate.settingsSet.name}."
+                                        } else {
+                                            "Update ${candidate.settingsSet.name} and its MODE BASE profile."
+                                        }
+                                        Text("Switching to base settings set with ${candidate.commandProfile?.name.orEmpty()} profile.")
+                                        Text(actionText)
+                                        Text(candidate.reason)
+                                    } else {
+                                        Text("Selected fixed-base settings set is no longer available.")
+                                    }
+                                    Text("Recording will stop. The app will be ready for Start; Upload is not started automatically.")
                                 }
                             },
-                            onDismiss = { fixedBaseProfileSelectionMode = null },
-                        )
-                    FixedBaseProfileSelectionMode.OVERWRITE_PROFILE ->
-                        ProfileSelectorDialog(
-                            title = "Overwrite MODE BASE profile",
-                            rows = baseOverwriteProfiles.map { profile -> profile.profileRow() },
-                            onSelect = { id ->
-                                baseOverwriteProfiles.firstOrNull { it.id == id }?.let { profile ->
-                                    overwriteCommandProfileForFixedBase(coordinate, profile)
+                            confirmButton = {
+                                TextButton(
+                                    onClick = { commitFixedBaseHandoff(coordinate) },
+                                    enabled = candidate != null,
+                                ) {
+                                    Text("OK")
                                 }
                             },
-                            onDismiss = { fixedBaseProfileSelectionMode = null },
+                            dismissButton = {
+                                Row {
+                                    TextButton(
+                                        onClick = { fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.SETTINGS_SET },
+                                    ) {
+                                        Text("Back")
+                                    }
+                                    TextButton(onClick = { resetFixedBaseHandoff() }) {
+                                        Text("Cancel")
+                                    }
+                                }
+                            },
                         )
+                    }
+                    null -> {
+                        fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.SETTINGS_SET
+                    }
                 }
             }
             if (showMockGpsDialog) {
@@ -2587,6 +2874,30 @@ fun RtkCollectorApp(
                         satelliteMonitorCardTheme = theme
                     },
                     onDismiss = { showDashboardLayoutDialog = false },
+                )
+            }
+            if (showReapplySettingsDialog) {
+                AlertDialog(
+                    onDismissRequest = { showReapplySettingsDialog = false },
+                    title = { Text("Re-apply settings set?") },
+                    text = {
+                        Text("This discards local changes and restores the selected settings set definition.")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                reapplySelectedSettingsSet()
+                                showReapplySettingsDialog = false
+                            },
+                        ) {
+                            Text("Re-apply")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showReapplySettingsDialog = false }) {
+                            Text("Cancel")
+                        }
+                    },
                 )
             }
             if (showSettingsExportDialog) {
@@ -2740,7 +3051,7 @@ private fun buildSessionBrowserState(
 ): SessionBrowserState {
     val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
     val storageProfile = selectedSet
-        ?.storageProfileRef
+        ?.effectiveStorageProfileRef()
         ?.id
         ?.let { id -> profileStore.storageProfiles().firstOrNull { it.id == id } }
     val sessionLocation = dashboardState.files.sessionLocation.takeUnless { it == "n/a" }
@@ -2774,7 +3085,7 @@ private fun currentPppNmeaGgaQuality(
     val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
         ?: profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
     val profileQuality = selectedSet
-        ?.recordingOutputProfileRef
+        ?.effectiveRecordingOutputProfileRef()
         ?.id
         ?.let { id -> profileStore.recordingPolicyProfiles().firstOrNull { it.id == id } }
         ?.pppNmeaGgaQuality
@@ -2797,7 +3108,7 @@ private fun selectedSafTreeUri(
     val selectedSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
         ?: profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
     return selectedSet
-        ?.storageProfileRef
+        ?.effectiveStorageProfileRef()
         ?.id
         ?.let { id -> profileStore.storageProfiles().firstOrNull { it.id == id } }
         ?.takeIf { it.kind == "SAF_TREE" }
@@ -3364,7 +3675,7 @@ private fun BaseCoordinateRow(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(row.displayName, style = MaterialTheme.typography.titleSmall)
-            Text(row.summary, style = MaterialTheme.typography.labelSmall)
+            Text(row.displaySummary, style = MaterialTheme.typography.labelSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (!row.isSelected) {
                     Button(onClick = onSelect) {
@@ -4126,10 +4437,18 @@ private fun ProfileStores.saveProfileEditorData(
                 },
             )
             val synchronizedSettings = settingsSets.map { set ->
-                if (set.ntripMountpointProfileRef?.id == target.id) {
-                    set.copy(ntripCasterProfileRef = casterProfileRef)
-                } else {
-                    set
+                when {
+                    set.overrides.ntripMountpointProfileRef?.id == target.id -> {
+                        set.copy(
+                            overrides = set.overrides.copy(
+                                ntripCasterProfileRef = casterProfileRef,
+                            ),
+                        )
+                    }
+                    set.ntripMountpointProfileRef?.id == target.id -> {
+                        set.copy(ntripCasterProfileRef = casterProfileRef)
+                    }
+                    else -> set
                 }
             }
             return updateSettingsSetReferenceNames(synchronizedSettings, target.kind, target.id, newName)
@@ -4368,17 +4687,42 @@ private fun ProfileStores.updateSettingsSetReferenceNames(
 ): List<RecordingSettingsSet> {
     val updated = settingsSets.map { set ->
         when (kind) {
-            ProfileKind.COMMANDS -> set.copy(commandProfileRef = set.commandProfileRef.renameIfId(id, name))
-            ProfileKind.USB_BAUD -> set.copy(usbBaudProfileRef = set.usbBaudProfileRef.renameIfId(id, name))
-            ProfileKind.NTRIP_CASTER -> set.copy(ntripCasterProfileRef = set.ntripCasterProfileRef.renameNullableIfId(id, name))
+            ProfileKind.COMMANDS -> set.copy(
+                commandProfileRef = set.commandProfileRef.renameIfId(id, name),
+                overrides = set.overrides.copy(commandProfileRef = set.overrides.commandProfileRef.renameNullableIfId(id, name)),
+            )
+            ProfileKind.USB_BAUD -> set.copy(
+                usbBaudProfileRef = set.usbBaudProfileRef.renameIfId(id, name),
+                overrides = set.overrides.copy(usbBaudProfileRef = set.overrides.usbBaudProfileRef.renameNullableIfId(id, name)),
+            )
+            ProfileKind.NTRIP_CASTER -> set.copy(
+                ntripCasterProfileRef = set.ntripCasterProfileRef.renameNullableIfId(id, name),
+                overrides = set.overrides.copy(ntripCasterProfileRef = set.overrides.ntripCasterProfileRef.renameNullableIfId(id, name)),
+            )
             ProfileKind.NTRIP_CASTER_UPLOAD -> set.copy(
                 ntripCasterUploadProfileRef = set.ntripCasterUploadProfileRef.renameNullableIfId(id, name),
+                overrides = set.overrides.copy(
+                    ntripCasterUploadProfileRef = set.overrides.ntripCasterUploadProfileRef.renameNullableIfId(id, name),
+                ),
             )
-            ProfileKind.NTRIP_MOUNTPOINT -> set.copy(ntripMountpointProfileRef = set.ntripMountpointProfileRef.renameNullableIfId(id, name))
-            ProfileKind.RECORDING_OUTPUTS -> set.copy(recordingOutputProfileRef = set.recordingOutputProfileRef.renameIfId(id, name))
+            ProfileKind.NTRIP_MOUNTPOINT -> set.copy(
+                ntripMountpointProfileRef = set.ntripMountpointProfileRef.renameNullableIfId(id, name),
+                overrides = set.overrides.copy(
+                    ntripMountpointProfileRef = set.overrides.ntripMountpointProfileRef.renameNullableIfId(id, name),
+                ),
+            )
+            ProfileKind.RECORDING_OUTPUTS -> set.copy(
+                recordingOutputProfileRef = set.recordingOutputProfileRef.renameIfId(id, name),
+                overrides = set.overrides.copy(
+                    recordingOutputProfileRef = set.overrides.recordingOutputProfileRef.renameNullableIfId(id, name),
+                ),
+            )
             ProfileKind.RTKLIB -> set.copy(rtklibProfileRef = set.rtklibProfileRef.renameNullableIfId(id, name))
             ProfileKind.SOLUTION_POLICY -> set.copy(solutionPolicyProfileRef = set.solutionPolicyProfileRef.renameNullableIfId(id, name))
-            ProfileKind.STORAGE -> set.copy(storageProfileRef = set.storageProfileRef.renameIfId(id, name))
+            ProfileKind.STORAGE -> set.copy(
+                storageProfileRef = set.storageProfileRef.renameIfId(id, name),
+                overrides = set.overrides.copy(storageProfileRef = set.overrides.storageProfileRef.renameNullableIfId(id, name)),
+            )
             ProfileKind.SETTINGS_SET -> set
         }.also(RecordingSettingsSet::validate)
     }
@@ -4396,14 +4740,21 @@ private fun List<RecordingSettingsSet>.referenceProfile(kind: ProfileKind, id: S
     any { set ->
         when (kind) {
             ProfileKind.COMMANDS -> set.commandProfileRef.id == id
+                || set.overrides.commandProfileRef?.id == id
             ProfileKind.USB_BAUD -> set.usbBaudProfileRef.id == id
+                || set.overrides.usbBaudProfileRef?.id == id
             ProfileKind.NTRIP_CASTER -> set.ntripCasterProfileRef?.id == id
+                || set.overrides.ntripCasterProfileRef?.id == id
             ProfileKind.NTRIP_CASTER_UPLOAD -> set.ntripCasterUploadProfileRef?.id == id
+                || set.overrides.ntripCasterUploadProfileRef?.id == id
             ProfileKind.NTRIP_MOUNTPOINT -> set.ntripMountpointProfileRef?.id == id
+                || set.overrides.ntripMountpointProfileRef?.id == id
             ProfileKind.RECORDING_OUTPUTS -> set.recordingOutputProfileRef.id == id
+                || set.overrides.recordingOutputProfileRef?.id == id
             ProfileKind.RTKLIB -> set.rtklibProfileRef?.id == id
             ProfileKind.SOLUTION_POLICY -> set.solutionPolicyProfileRef?.id == id
             ProfileKind.STORAGE -> set.storageProfileRef.id == id
+                || set.overrides.storageProfileRef?.id == id
             ProfileKind.SETTINGS_SET -> false
         }
     }
@@ -4567,6 +4918,7 @@ private val ProfileEditorTargetSaver: Saver<ProfileEditorTarget?, String> = Save
 private enum class DashboardSelector(val title: String) {
     SETTINGS_SET("Load settings set"),
     WORKFLOW("Select workflow"),
+    DEVICE("Select device filter"),
     MOUNTPOINT("Select NTRIP mountpoint"),
     RECEIVER("Select receiver command profile"),
     UPLOAD("Select NTRIP upload"),
@@ -4574,9 +4926,14 @@ private enum class DashboardSelector(val title: String) {
 }
 
 private enum class FixedBaseProfileSelectionMode {
-    CREATE_FROM_TEMPLATE,
-    OVERWRITE_PROFILE,
+    SETTINGS_SET,
+    CONFIRM,
 }
+
+private data class FixedBaseCoordinateChoices(
+    val average: BaseCoordinateCandidate,
+    val instant: BaseCoordinateCandidate,
+)
 
 private val DashboardSelectorSaver: Saver<DashboardSelector?, String> = Saver(
     save = { it?.name ?: "" },
@@ -4662,11 +5019,11 @@ private fun buildDashboardStartIntent(
     val settingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId } ?: profileStore.selectedSettingsSet()
     val resolvedProfiles = try {
         val commandProfile = profileStore.commandProfiles().requireProfileReference(
-            id = settingsSet.commandProfileRef.id,
+            id = settingsSet.effectiveCommandProfileRef().id,
             label = "command profile",
         )
         val usbProfile = profileStore.usbBaudProfiles().requireProfileReference(
-            id = settingsSet.usbBaudProfileRef.id,
+            id = settingsSet.effectiveUsbBaudProfileRef().id,
             label = "USB/baud profile",
         )
         val ntripResolution = settingsSet.resolveNtripProfiles(
@@ -4675,11 +5032,11 @@ private fun buildDashboardStartIntent(
         )
         val resolvedSettingsSet = ntripResolution.settingsSet
         val recordingPolicy = profileStore.recordingPolicyProfiles().requireProfileReference(
-            id = settingsSet.recordingOutputProfileRef.id,
+            id = settingsSet.effectiveRecordingOutputProfileRef().id,
             label = "recording policy profile",
         )
         val storageProfile = profileStore.storageProfiles().requireProfileReference(
-            id = settingsSet.storageProfileRef.id,
+            id = settingsSet.effectiveStorageProfileRef().id,
             label = "storage location profile",
         )
         val rtklibProfile = resolvedSettingsSet.rtklibProfileRef?.id?.let {
@@ -4700,7 +5057,7 @@ private fun buildDashboardStartIntent(
             usbProfile = usbProfile,
             ntripCaster = ntripResolution.caster,
             ntripMountpoint = ntripResolution.mountpoint,
-            ntripCasterUploadProfile = resolvedSettingsSet.ntripCasterUploadProfileRef?.id?.let { uploadProfileId ->
+            ntripCasterUploadProfile = resolvedSettingsSet.effectiveNtripCasterUploadProfileRef()?.id?.let { uploadProfileId ->
                 profileStore.ntripCasterUploadProfiles().firstOrNull { it.id == uploadProfileId }
             },
             recordingPolicy = recordingPolicy,
@@ -4965,21 +5322,21 @@ private fun buildNtripUpdateIntent(
         ActiveRecordingConfig.resolve(
             settingsSet = resolvedSettingsSet.copy(workflowId = workflowId ?: resolvedSettingsSet.workflowId),
             commandProfile = profileStore.commandProfiles().requireProfileReference(
-                id = settingsSet.commandProfileRef.id,
+                id = settingsSet.effectiveCommandProfileRef().id,
                 label = "command profile",
             ),
             usbBaudProfile = profileStore.usbBaudProfiles().requireProfileReference(
-                id = settingsSet.usbBaudProfileRef.id,
+                id = settingsSet.effectiveUsbBaudProfileRef().id,
                 label = "USB/baud profile",
             ),
             ntripCasterProfile = ntripCaster,
             ntripMountpointProfile = ntripMountpoint,
             recordingPolicyProfile = profileStore.recordingPolicyProfiles().requireProfileReference(
-                id = settingsSet.recordingOutputProfileRef.id,
+                id = settingsSet.effectiveRecordingOutputProfileRef().id,
                 label = "recording policy profile",
             ),
             storageProfile = profileStore.storageProfiles().requireProfileReference(
-                id = settingsSet.storageProfileRef.id,
+                id = settingsSet.effectiveStorageProfileRef().id,
                 label = "storage location profile",
             ),
             solutionPolicyProfile = resolvedSettingsSet.solutionPolicyProfileRef?.id?.let {
@@ -5060,7 +5417,7 @@ private fun persistentReceiverServiceIntent(
 private fun requestSelectedUsbPermission(context: Context, selectedSettingsSetId: String) {
     val profileStore = ProfileStores(context)
     val settingsSet = profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
-    requestUsbPermissionForProfile(context, settingsSet?.usbBaudProfileRef?.id)
+    requestUsbPermissionForProfile(context, settingsSet?.effectiveUsbBaudProfileRef()?.id)
 }
 
 private fun requestUsbPermissionForProfile(context: Context, usbProfileId: String?) {
@@ -5183,7 +5540,7 @@ private fun writeCommandProfilePersistentlyToDevice(
         Toast.makeText(context, "No settings set is selected.", Toast.LENGTH_LONG).show()
         return
     }
-    val usbProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == settingsSet.usbBaudProfileRef.id }
+    val usbProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == settingsSet.effectiveUsbBaudProfileRef().id }
     if (usbProfile == null) {
         Toast.makeText(context, "USB/baud profile is not available.", Toast.LENGTH_LONG).show()
         return
@@ -5424,7 +5781,7 @@ private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {
 private fun ProfileStores.selectedMountpointLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
     settingsSet.overrides.ntripMountpoint?.mountpoint?.takeIf { it.isNotBlank() }?.let { return it }
-    val profile = settingsSet.ntripMountpointProfileRef?.id?.let { id ->
+    val profile = settingsSet.effectiveNtripMountpointProfileRef()?.id?.let { id ->
         ntripMountpointProfiles().firstOrNull { it.id == id }
     } ?: return "n/a"
     return profile.displayMountpoint()
@@ -5432,18 +5789,21 @@ private fun ProfileStores.selectedMountpointLabel(selectedSettingsSetId: String)
 
 private fun ProfileStores.selectedStorageLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    return storageProfiles().firstOrNull { it.id == settingsSet.storageProfileRef.id }?.name ?: settingsSet.storageProfileRef.name
+    val ref = settingsSet.effectiveStorageProfileRef()
+    return storageProfiles().firstOrNull { it.id == ref.id }?.name ?: ref.name
 }
 
 private fun ProfileStores.selectedReceiverLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    return commandProfiles().firstOrNull { it.id == settingsSet.commandProfileRef.id }?.name ?: settingsSet.commandProfileRef.name
+    val ref = settingsSet.effectiveCommandProfileRef()
+    return commandProfiles().firstOrNull { it.id == ref.id }?.name ?: ref.name
 }
 
 private fun ProfileStores.selectedBaudProfileLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    val profile = usbBaudProfiles().firstOrNull { it.id == settingsSet.usbBaudProfileRef.id }
-        ?: return settingsSet.usbBaudProfileRef.name
+    val ref = settingsSet.effectiveUsbBaudProfileRef()
+    val profile = usbBaudProfiles().firstOrNull { it.id == ref.id }
+        ?: return ref.name
     val targetBaud = settingsSet.overrides.usbBaud?.serialBaud ?: profile.serialBaud
     return dashboardBaudLabel(profile.name, targetBaud)
 }
@@ -5464,21 +5824,21 @@ private fun ProfileStores.resolveSelectedNtripProfiles(selectedSettingsSetId: St
 
 private fun ProfileStores.selectedNtripCasterProfileLabel(selectedSettingsSetId: String): String {
     val resolution = resolveSelectedNtripProfiles(selectedSettingsSetId) ?: return "n/a"
-    return resolution.caster?.name ?: resolution.settingsSet.ntripCasterProfileRef?.name ?: "n/a"
+    return resolution.caster?.name ?: resolution.settingsSet.effectiveNtripCasterProfileRef()?.name ?: "n/a"
 }
 
 private fun ProfileStores.selectedRecordingOutputProfileLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    return recordingPolicyProfiles().firstOrNull { it.id == settingsSet.recordingOutputProfileRef.id }?.name
-        ?: settingsSet.recordingOutputProfileRef.name
+    val ref = settingsSet.effectiveRecordingOutputProfileRef()
+    return recordingPolicyProfiles().firstOrNull { it.id == ref.id }?.name ?: ref.name
 }
 
 private fun RecordingSettingsSet?.selectedUploadLabel(
     uploadProfiles: List<NtripCasterUploadProfile>,
 ): String {
-    val profile = this?.ntripCasterUploadProfileRef?.id
+    val profile = this?.effectiveNtripCasterUploadProfileRef()?.id
         ?.let { id -> uploadProfiles.firstOrNull { it.id == id } }
-    val enabled = this != null && profile != null && this.baseCasterUploadEnabled
+    val enabled = this != null && profile != null && this.effectiveBaseCasterUploadEnabled()
     return if (enabled) profile.name else "Off"
 }
 
@@ -5495,20 +5855,20 @@ private fun ProfileStores.plannedDashboardState(
     val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
     val mountpointProfiles = ntripMountpointProfiles()
     val mountpoint = selected.selectedMountpointLabel(mountpointProfiles)
-    val selectedCommandProfile = selected?.commandProfileRef?.id?.let { id ->
+    val selectedCommandProfile = selected?.effectiveCommandProfileRef()?.id?.let { id ->
         commandProfiles().firstOrNull { it.id == id }
     }
-    val recordingPolicyProfile = selected?.recordingOutputProfileRef?.id?.let { id ->
+    val recordingPolicyProfile = selected?.effectiveRecordingOutputProfileRef()?.id?.let { id ->
         recordingPolicyProfiles().firstOrNull { it.id == id }
     }
     val rtklibProfile = selected?.rtklibProfileRef?.id?.let { id ->
         rtklibProfiles().firstOrNull { it.id == id }
     }
     val uploadProfiles = ntripCasterUploadProfiles()
-    val casterUploadProfile = selected?.ntripCasterUploadProfileRef?.id?.let { id ->
+    val casterUploadProfile = selected?.effectiveNtripCasterUploadProfileRef()?.id?.let { id ->
         uploadProfiles.firstOrNull { it.id == id }
     }
-    val casterUploadEnabled = selected?.baseCasterUploadEnabled == true && casterUploadProfile != null
+    val casterUploadEnabled = selected?.effectiveBaseCasterUploadEnabled() == true && casterUploadProfile != null
     val mockEnabled = selected?.overrides?.recordingOutput?.enableMockLocation
         ?: recordingPolicyProfile?.enableMockLocation
         ?: false
@@ -5517,9 +5877,11 @@ private fun ProfileStores.plannedDashboardState(
         ?: RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
     return DashboardState.planned(
         workflow = selectedWorkflowId.workflowLabel(),
+        device = selectedDeviceFilter().displayName,
         mountpoint = mountpoint,
         receiver = selectedReceiverLabel(selectedSettingsSetId),
         upload = selected.selectedUploadLabel(uploadProfiles),
+        uploadAvailable = selectedWorkflowId == WORKFLOW_FIXED_BASE || selectedWorkflowId == WORKFLOW_BASE_CALIBRATION,
         storage = selectedStorageLabel(selectedSettingsSetId),
         fix = FixCardState(
             receiverFrequency = receiverFrequencyForFamily(selectedCommandProfile?.receiverFamily),
@@ -5593,7 +5955,7 @@ internal fun List<RecordingSettingsSet>.withRememberedMountpointProfile(
     if (rememberedProfile == null) return this
     return map { settingsSet ->
         if (settingsSet.id != selectedSettingsSetId ||
-            settingsSet.ntripMountpointProfileRef != null ||
+            settingsSet.effectiveNtripMountpointProfileRef() != null ||
             settingsSet.overrides.ntripMountpoint != null
         ) {
             settingsSet
@@ -5610,7 +5972,7 @@ internal fun RecordingSettingsSet?.selectedMountpointLabel(
 ): String {
     val settingsSet = this ?: return "n/a"
     settingsSet.overrides.ntripMountpoint?.mountpoint?.takeIf { it.isNotBlank() }?.let { return it }
-    val profile = settingsSet.ntripMountpointProfileRef?.id?.let { id ->
+    val profile = settingsSet.effectiveNtripMountpointProfileRef()?.id?.let { id ->
         mountpointProfiles.firstOrNull { it.id == id }
     } ?: return "n/a"
     return profile.displayMountpoint()
@@ -5749,6 +6111,21 @@ private fun CommandProfile.profileRow(isSelected: Boolean = false): ProfileListR
             receiverFamily.takeIf(String::isNotBlank),
             satelliteTelemetry.displayName,
             "command scripts",
+        ).joinToString(" · "),
+    )
+
+private fun FixedBaseSettingsSetCandidate.profileRow(isSelected: Boolean = false): ProfileListRow =
+    ProfileListRow(
+        id = settingsSet.id,
+        name = settingsSet.name,
+        isProtected = settingsSet.isProtected,
+        hasLocalOverrides = settingsSet.hasLocalOverrides,
+        isSelected = isSelected,
+        summary = listOf(
+            "fixed base",
+            commandProfile?.name ?: settingsSet.effectiveCommandProfileRef().name,
+            if (requiresDerivedSettingsSet) "derive new" else "update in place",
+            reason,
         ).joinToString(" · "),
     )
 
@@ -5922,15 +6299,56 @@ private fun StorageProfile.profileRow(isSelected: Boolean = false): ProfileListR
         summary = if (kind == "SAF") "SAF folder" else "App-private storage",
     )
 
+private fun filteredSettingsSetRows(
+    settingsSets: List<RecordingSettingsSet>,
+    selectedSettingsSetId: String,
+    filter: ProfileDeviceFilter,
+): List<ProfileListRow> {
+    val visible = settingsSets.filter { filter.matchesSettingsSet(it) }
+    val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+    val withSelected = if (selected != null && visible.none { it.id == selected.id }) {
+        visible + selected
+    } else {
+        visible
+    }
+    return SettingsSetListState.from(withSelected, selectedSettingsSetId).rows.map { row ->
+        if (selected != null && row.id == selected.id && !filter.matchesSettingsSet(selected)) {
+            row.copy(outsideFilter = true)
+        } else {
+            row
+        }
+    }
+}
+
+private fun filteredCommandProfileRows(
+    profiles: List<CommandProfile>,
+    selectedCommandProfileId: String?,
+    filter: ProfileDeviceFilter,
+): List<ProfileListRow> {
+    val visible = profiles.filter { filter.matchesCommandProfile(it) }
+    val selected = profiles.firstOrNull { it.id == selectedCommandProfileId }
+    val withSelected = if (selected != null && visible.none { it.id == selected.id }) {
+        visible + selected
+    } else {
+        visible
+    }
+    return withSelected.map { profile ->
+        profile.profileRow(
+            isSelected = profile.id == selectedCommandProfileId,
+        ).copy(outsideFilter = selected?.id == profile.id && !filter.matchesCommandProfile(profile))
+    }
+}
+
 private fun dashboardSelectorRows(
     selector: DashboardSelector,
     profileStore: ProfileStores,
     settingsSets: List<RecordingSettingsSet>,
     selectedSettingsSetId: String,
+    deviceFilter: ProfileDeviceFilter,
 ): List<ProfileListRow> {
     val selectedSettingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
     return when (selector) {
-        DashboardSelector.SETTINGS_SET -> SettingsSetListState.from(settingsSets, selectedSettingsSetId).rows
+        DashboardSelector.SETTINGS_SET -> filteredSettingsSetRows(settingsSets, selectedSettingsSetId, deviceFilter)
         DashboardSelector.WORKFLOW -> WORKFLOW_MODE_OPTIONS.map { option ->
             ProfileListRow(
                 id = option.value,
@@ -5940,21 +6358,32 @@ private fun dashboardSelectorRows(
                 isSelected = option.value == profileStore.selectedWorkflowId(),
             )
         }
+        DashboardSelector.DEVICE -> ProfileDeviceFilter.entries.map { filter ->
+            ProfileListRow(
+                id = filter.storageValue,
+                name = filter.displayName,
+                isProtected = false,
+                hasLocalOverrides = false,
+                isSelected = filter == deviceFilter,
+            )
+        }
         DashboardSelector.MOUNTPOINT -> profileStore.ntripMountpointProfiles().map { profile ->
             profile.profileRow(
                 casters = profileStore.ntripCasterProfiles(),
-                isSelected = profile.id == selectedSettingsSet?.ntripMountpointProfileRef?.id,
+                isSelected = profile.id == selectedSettingsSet?.effectiveNtripMountpointProfileRef()?.id,
             )
         }
-        DashboardSelector.RECEIVER -> profileStore.commandProfiles().map { profile ->
-            profile.profileRow(isSelected = profile.id == selectedSettingsSet?.commandProfileRef?.id)
-        }
+        DashboardSelector.RECEIVER -> filteredCommandProfileRows(
+            profiles = profileStore.commandProfiles(),
+            selectedCommandProfileId = selectedSettingsSet?.effectiveCommandProfileRef()?.id,
+            filter = deviceFilter,
+        )
         DashboardSelector.UPLOAD -> dashboardUploadSelectorRows(
             profiles = profileStore.ntripCasterUploadProfiles(),
             selectedSettingsSet = selectedSettingsSet,
         )
         DashboardSelector.STORAGE -> profileStore.storageProfiles().map { profile ->
-            profile.profileRow(isSelected = profile.id == selectedSettingsSet?.storageProfileRef?.id)
+            profile.profileRow(isSelected = profile.id == selectedSettingsSet?.effectiveStorageProfileRef()?.id)
         }
     }
 }

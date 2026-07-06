@@ -2,6 +2,8 @@ package org.rtkcollector.app.ui.dashboard
 
 import org.rtkcollector.app.profile.NtripCasterUploadProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.effectiveBaseCasterUploadEnabled
+import org.rtkcollector.app.profile.effectiveNtripCasterUploadProfileRef
 import org.rtkcollector.app.ui.profiles.ProfileListRow
 
 data class DashboardState(
@@ -40,9 +42,11 @@ data class DashboardState(
     companion object {
         fun planned(
             workflow: String,
+            device: String = "Any",
             mountpoint: String,
             receiver: String,
             upload: String = "Off",
+            uploadAvailable: Boolean = true,
             storage: String,
             position: PositionCardState = PositionCardState(),
             fix: FixCardState = FixCardState(),
@@ -63,9 +67,11 @@ data class DashboardState(
                 isRecording = false,
                 status = DashboardStatus(
                     workflow = workflow,
+                    device = device,
                     mountpoint = mountpoint,
                     receiver = receiver,
                     upload = upload,
+                    uploadAvailable = uploadAvailable,
                     storage = storage,
                     settingsSet = profiles.settingsSet,
                 ),
@@ -138,9 +144,11 @@ private fun String.isMissingOrBogusMountpoint(): Boolean {
 data class DashboardStatus(
     val settingsSet: String = "n/a",
     val workflow: String = "n/a",
+    val device: String = "Any",
     val mountpoint: String = "n/a",
     val receiver: String = "n/a",
     val upload: String = "Off",
+    val uploadAvailable: Boolean = true,
     val storage: String = "n/a",
 )
 
@@ -173,16 +181,18 @@ internal fun shouldUseRailDashboard(
         availableWidthDp > availableHeightDp
 
 internal enum class DashboardSetupItem(val label: String) {
+    SETTINGS("Settings"),
     WORKFLOW("Workflow"),
-    MOUNTPOINT("Mountpoint"),
+    DEVICE("Device"),
     RECEIVER("Receiver"),
     UPLOAD("Upload"),
     STORAGE("Storage"),
 }
 
 internal val defaultDashboardSetupItems: List<DashboardSetupItem> = listOf(
+    DashboardSetupItem.SETTINGS,
     DashboardSetupItem.WORKFLOW,
-    DashboardSetupItem.MOUNTPOINT,
+    DashboardSetupItem.DEVICE,
     DashboardSetupItem.RECEIVER,
     DashboardSetupItem.UPLOAD,
     DashboardSetupItem.STORAGE,
@@ -192,8 +202,8 @@ internal fun dashboardUploadSelectorRows(
     profiles: List<NtripCasterUploadProfile>,
     selectedSettingsSet: RecordingSettingsSet?,
 ): List<ProfileListRow> {
-    val selectedProfileId = selectedSettingsSet?.ntripCasterUploadProfileRef?.id
-    val uploadEnabled = selectedSettingsSet?.baseCasterUploadEnabled == true &&
+    val selectedProfileId = selectedSettingsSet?.effectiveNtripCasterUploadProfileRef()?.id
+    val uploadEnabled = selectedSettingsSet?.effectiveBaseCasterUploadEnabled() == true &&
         profiles.any { profile -> isNtripCasterUploadProfileSelected(selectedSettingsSet, profile) }
     return buildList {
         add(
@@ -224,8 +234,8 @@ internal fun isNtripCasterUploadProfileSelected(
     settingsSet: RecordingSettingsSet?,
     profile: NtripCasterUploadProfile,
 ): Boolean =
-    settingsSet?.baseCasterUploadEnabled == true &&
-        settingsSet.ntripCasterUploadProfileRef?.id == profile.id
+    settingsSet?.effectiveBaseCasterUploadEnabled() == true &&
+        settingsSet.effectiveNtripCasterUploadProfileRef()?.id == profile.id
 
 data class PositionCardState(
     val latLon: String = "n/a",

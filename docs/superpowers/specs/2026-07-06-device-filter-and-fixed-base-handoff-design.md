@@ -35,7 +35,7 @@ Filtering applies to:
 - Temporary-base to fixed-base init/shutdown profile selector.
 - Temporary-base to fixed-base fixed-base settings-set selector.
 
-Filtering does not apply in the first pass to USB baud profiles, NTRIP
+Filtering does not apply to USB baud profiles, NTRIP
 caster/mountpoint/upload profiles, recording outputs, storage, dashboard
 layout, solution/mock policy or RTKLIB profiles. Those lists are either not
 receiver-family lists, or their compatibility is already checked elsewhere.
@@ -81,6 +81,10 @@ The upload control must be warning-coloured only when upload is relevant:
 - If the selected command profile cannot emit RTCM/base-output messages, the
   upload control may be muted or disabled with a short explanation such as
   `No RTCM output`.
+
+Design must be compact and effectively use limited screen space in landscape
+and particularly (more difficult) in portrait mode, without making the
+monitoring cards disappear somewhere deep below.
 
 ## Settings Set Modified State And Re-apply
 
@@ -184,6 +188,27 @@ On `OK`:
 - keep recording stopped so the user can choose/check Upload and then press
   Start.
 
+On `Cancel`, the app must not leave the setup half-transitioned. Preferably,
+the handoff is transactional: derived profiles, derived settings sets and
+overwrites are prepared in memory and are not persisted until `OK`. If an
+implementation step has already persisted a derived profile, derived settings
+set or overwrite before the final confirmation, `Cancel` opens a cleanup
+confirmation that lists what would be reverted or removed:
+
+`Discard prepared fixed-base changes?`
+
+The cleanup confirmation should offer:
+
+- remove newly derived init/shutdown profiles;
+- remove newly derived settings sets;
+- revert edits to existing init/shutdown profiles;
+- revert edits to existing settings sets.
+
+The default action should discard/revert those prepared changes. A secondary
+action may keep the prepared profiles/settings for later manual use, but it
+must still leave the current recording, selected settings set, selected
+workflow and selected init/shutdown profile unchanged.
+
 ## Error Handling
 
 If no suitable fixed-base settings set exists for the selected device, the flow
@@ -215,4 +240,6 @@ Add focused tests for:
   `Immutable settings set: derive a new set`;
 - final fixed-base transition selecting the fixed-base workflow/settings/profile
   without starting recording.
-
+- final fixed-base transition `Cancel` discarding or explicitly preserving
+  prepared derived profiles/settings sets and reverting prepared overwrites
+  without changing the active recording setup.

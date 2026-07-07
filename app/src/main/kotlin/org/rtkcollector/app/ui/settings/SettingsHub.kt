@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,6 +47,8 @@ fun SettingsHub(
     activeSettingsSetLabel: String,
     activeWorkflowLabel: String,
     deviceFilterLabel: String = "Any",
+    activeSettingsSetOutsideDeviceFilter: Boolean = false,
+    initProfileOutsideDeviceFilter: Boolean = false,
     onActiveSettingsSet: () -> Unit,
     onDeviceFilter: () -> Unit = {},
     canReapplySettingsSet: Boolean = false,
@@ -83,8 +86,15 @@ fun SettingsHub(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onDeviceFilter) {
-                        Text(deviceFilterLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    OutlinedButton(
+                        onClick = onDeviceFilter,
+                        modifier = Modifier.padding(end = 4.dp),
+                    ) {
+                        Text(
+                            "Device: $deviceFilterLabel",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                     TextButton(onClick = { helpTopic = HelpTopic.SETTINGS_GROUPS }) {
                         Text("?")
@@ -106,7 +116,13 @@ fun SettingsHub(
                         icon = "◎",
                         label = activeSettingsSetLabel,
                         onClick = onActiveSettingsSet,
-                        subtitle = "Workflow: $activeWorkflowLabel",
+                        subtitle = buildList {
+                            add("Workflow: $activeWorkflowLabel")
+                            if (activeSettingsSetOutsideDeviceFilter) {
+                                add("Outside Device filter")
+                            }
+                        }.joinToString(" · "),
+                        warning = activeSettingsSetOutsideDeviceFilter,
                     )
                     if (canReapplySettingsSet) {
                         SettingsDivider()
@@ -140,9 +156,15 @@ fun SettingsHub(
                 SettingsSection("Receiver and USB") {
                     SettingsRow("USB", "USB device and baud", onUsbBaud)
                     SettingsDivider()
-                    SettingsRow("⌁", "Init/shutdown profiles", onCommands)
+                    SettingsRow(
+                        "⌁",
+                        "Init/shutdown profiles",
+                        onCommands,
+                        subtitle = "Outside Device filter".takeIf { initProfileOutsideDeviceFilter },
+                        warning = initProfileOutsideDeviceFilter,
+                    )
                     SettingsDivider()
-                    SettingsRow("RX", "Receiver family/profile", onReceiverProfile)
+                    SettingsRow("SEL", "Active init/shutdown profile", onReceiverProfile)
                 }
 
                 SettingsSection("Corrections") {
@@ -209,8 +231,13 @@ private fun SettingsRow(
     label: String,
     onClick: () -> Unit,
     subtitle: String? = null,
+    warning: Boolean = false,
 ) {
     val description = if (subtitle.isNullOrBlank()) label else "$label: $subtitle"
+    val iconContainer = if (warning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant
+    val iconContent = if (warning) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val primaryText = if (warning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val secondaryText = if (warning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -229,13 +256,13 @@ private fun SettingsRow(
         ) {
             Surface(
                 shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = iconContainer,
             ) {
                 Text(
                     text = icon,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = iconContent,
                     maxLines = 1,
                 )
             }
@@ -245,6 +272,7 @@ private fun SettingsRow(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
+                color = primaryText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -252,7 +280,7 @@ private fun SettingsRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = secondaryText,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

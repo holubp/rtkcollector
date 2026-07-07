@@ -9,6 +9,7 @@ enum class ProfileRowTone {
     DEFAULT,
     APPLIED,
     MODIFIED,
+    WARNING,
 }
 
 data class ProfileListRow(
@@ -24,6 +25,7 @@ data class ProfileListRow(
     val displayName: String = if (hasLocalOverrides) "$name +" else name
     val tone: ProfileRowTone
         get() = when {
+            outsideFilter -> ProfileRowTone.WARNING
             hasLocalOverrides -> ProfileRowTone.MODIFIED
             isSelected -> ProfileRowTone.APPLIED
             else -> ProfileRowTone.DEFAULT
@@ -39,7 +41,7 @@ data class ProfileListRow(
     val canRename: Boolean = !isProtected
     val canCopy: Boolean = true
     val canDelete: Boolean = !isProtected || hasLocalOverrides
-    val hasWarning: Boolean get() = !warningText.isNullOrBlank()
+    val hasWarning: Boolean get() = outsideFilter || !warningText.isNullOrBlank()
 }
 
 data class SettingsSetListState(

@@ -230,11 +230,12 @@ Verification:
 
 Status: Normative
 
-The dashboard setup strip MUST expose Workflow, Mountpoint, Receiver, Upload and
-Storage selectors. The Upload selector MUST list an explicit `Off` row first
-and MUST apply `Off` as a real disabled state for NTRIP source upload. Selecting
-or disabling source upload from this strip MUST NOT silently rewrite unrelated
-settings-set profile fields.
+The dashboard setup strip MUST expose Device, Settings, Workflow, Profiles,
+Upload and Storage selectors, with Device first because it filters compatible
+profile choices. `Profiles` selects the active init/shutdown profile. The Upload
+selector MUST list an explicit `Off` row first and MUST apply `Off` as a real
+disabled state for NTRIP source upload. Selecting or disabling source upload
+from this strip MUST NOT silently rewrite unrelated settings-set profile fields.
 
 Verification:
 - Automated: dashboard upload selector and dashboard layout tests.

@@ -102,7 +102,7 @@ fun HomeDashboard(
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onDevice: () -> Unit,
-    onReceiver: () -> Unit,
+    onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
     coordinateAveraging: CoordinateAveragingState = CoordinateAveragingState(),
@@ -210,7 +210,7 @@ fun HomeDashboard(
                         onSettingsSet = onSettingsSet,
                         onDevice = onDevice,
                         onMountpoint = onNtrip,
-                        onReceiver = onReceiver,
+                        onInitProfiles = onInitProfiles,
                         onUpload = onUpload,
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
@@ -235,7 +235,7 @@ fun HomeDashboard(
                         onSettingsSet = onSettingsSet,
                         onDevice = onDevice,
                         onMountpoint = onNtrip,
-                        onReceiver = onReceiver,
+                        onInitProfiles = onInitProfiles,
                         onUpload = onUpload,
                         onStorage = onStorage,
                         onHelp = { helpTopic = it },
@@ -277,7 +277,7 @@ private fun DashboardTitle(state: DashboardState) {
 }
 
 private fun dashboardContextLine(status: DashboardStatus): String =
-    listOf(status.workflow, status.receiver)
+    listOf(status.workflow, status.initProfile)
         .filterNot { it.isMissingDashboardValue() }
         .joinToString(" · ")
         .ifBlank { "Setup required" }
@@ -423,7 +423,7 @@ private fun CompactDashboard(
     onSettingsSet: () -> Unit,
     onDevice: () -> Unit,
     onMountpoint: () -> Unit,
-    onReceiver: () -> Unit,
+    onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
@@ -449,7 +449,7 @@ private fun CompactDashboard(
             onWorkflow = onWorkflow,
             onDevice = onDevice,
             onMountpoint = onMountpoint,
-            onReceiver = onReceiver,
+            onInitProfiles = onInitProfiles,
             onUpload = onUpload,
             onStorage = onStorage,
         )
@@ -482,7 +482,7 @@ private fun RailDashboard(
     onSettingsSet: () -> Unit,
     onDevice: () -> Unit,
     onMountpoint: () -> Unit,
-    onReceiver: () -> Unit,
+    onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
@@ -533,12 +533,13 @@ private fun RailDashboard(
                         value = status.valueFor(item),
                         active = item == DashboardSetupItem.WORKFLOW,
                         enabled = enabled,
+                        warning = status.warningFor(item),
                         modifier = Modifier.fillMaxWidth(),
                         onClick = when (item) {
                             DashboardSetupItem.WORKFLOW -> onWorkflow
                             DashboardSetupItem.SETTINGS -> onSettingsSet
                             DashboardSetupItem.DEVICE -> onDevice
-                            DashboardSetupItem.RECEIVER -> onReceiver
+                            DashboardSetupItem.INIT_PROFILES -> onInitProfiles
                             DashboardSetupItem.UPLOAD -> onUpload
                             DashboardSetupItem.STORAGE -> onStorage
                         },
@@ -595,7 +596,7 @@ private fun SetupStrip(
     onWorkflow: () -> Unit,
     onDevice: () -> Unit,
     onMountpoint: () -> Unit,
-    onReceiver: () -> Unit,
+    onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
 ) {
@@ -613,12 +614,13 @@ private fun SetupStrip(
                             label = item.label,
                             value = status.valueFor(item),
                             enabled = enabled,
+                            warning = status.warningFor(item),
                             modifier = Modifier.weight(1f),
                             onClick = when (item) {
                                 DashboardSetupItem.SETTINGS -> onSettingsSet
                                 DashboardSetupItem.WORKFLOW -> onWorkflow
                                 DashboardSetupItem.DEVICE -> onDevice
-                                DashboardSetupItem.RECEIVER -> onReceiver
+                                DashboardSetupItem.INIT_PROFILES -> onInitProfiles
                                 DashboardSetupItem.UPLOAD -> onUpload
                                 DashboardSetupItem.STORAGE -> onStorage
                             },
@@ -635,9 +637,16 @@ private fun DashboardStatus.valueFor(item: DashboardSetupItem): String =
         DashboardSetupItem.SETTINGS -> settingsSet
         DashboardSetupItem.WORKFLOW -> workflow
         DashboardSetupItem.DEVICE -> device
-        DashboardSetupItem.RECEIVER -> receiver
+        DashboardSetupItem.INIT_PROFILES -> initProfile
         DashboardSetupItem.UPLOAD -> if (uploadAvailable) upload else "Not needed"
         DashboardSetupItem.STORAGE -> storage
+    }
+
+private fun DashboardStatus.warningFor(item: DashboardSetupItem): Boolean =
+    when (item) {
+        DashboardSetupItem.SETTINGS -> settingsSetOutsideDeviceFilter
+        DashboardSetupItem.INIT_PROFILES -> initProfileOutsideDeviceFilter
+        else -> false
     }
 
 @Composable
@@ -646,26 +655,37 @@ private fun SetupTile(
     value: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    warning: Boolean = false,
     onClick: () -> Unit,
 ) {
     val missing = value.isMissingDashboardValue()
     val background = when {
         !enabled -> MaterialTheme.colorScheme.surfaceContainerLowest
+        warning -> MaterialTheme.colorScheme.errorContainer
         missing -> TidyColors.MissingBackground
         else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
     val foreground = when {
         !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        warning -> MaterialTheme.colorScheme.onErrorContainer
         missing -> TidyColors.MissingText
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val border = if (missing && enabled) TidyColors.MissingText else MaterialTheme.colorScheme.outlineVariant
+    val border = when {
+        warning && enabled -> MaterialTheme.colorScheme.error
+        missing && enabled -> TidyColors.MissingText
+        else -> MaterialTheme.colorScheme.outlineVariant
+    }
     Surface(
         modifier = modifier
             .height(CompactSetupTileHeight)
             .semantics {
                 role = Role.Button
-                contentDescription = "$label: $value"
+                contentDescription = if (warning) {
+                    "$label: $value; outside active device filter"
+                } else {
+                    "$label: $value"
+                }
             }
             .clickable(enabled = enabled, onClick = onClick),
         shape = MaterialTheme.shapes.small,
@@ -679,7 +699,11 @@ private fun SetupTile(
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = if (missing && enabled) TidyColors.MissingText else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = when {
+                    warning && enabled -> MaterialTheme.colorScheme.onErrorContainer
+                    missing && enabled -> TidyColors.MissingText
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -702,26 +726,37 @@ private fun SetupRailItem(
     active: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    warning: Boolean = false,
     onClick: () -> Unit,
 ) {
     val missing = value.isMissingDashboardValue()
     val background = when {
         !enabled -> MaterialTheme.colorScheme.surfaceContainerLowest
+        warning -> MaterialTheme.colorScheme.errorContainer
         active -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainerLow
     }
     val foreground = when {
         !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        warning -> MaterialTheme.colorScheme.onErrorContainer
         missing -> TidyColors.MissingText
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val border = if (active && enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val border = when {
+        warning && enabled -> MaterialTheme.colorScheme.error
+        active && enabled -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.outlineVariant
+    }
     Surface(
         modifier = modifier
             .height(RailSetupItemHeight)
             .semantics {
                 role = Role.Button
-                contentDescription = "$label: $value"
+                contentDescription = if (warning) {
+                    "$label: $value; outside active device filter"
+                } else {
+                    "$label: $value"
+                }
             }
             .clickable(enabled = enabled, onClick = onClick),
         shape = MaterialTheme.shapes.small,
@@ -733,7 +768,13 @@ private fun SetupRailItem(
                 modifier = Modifier
                     .width(3.dp)
                     .fillMaxHeight()
-                    .background(if (active && enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    .background(
+                        when {
+                            warning && enabled -> MaterialTheme.colorScheme.error
+                            active && enabled -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.outlineVariant
+                        },
+                    ),
             )
             Column(
                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
@@ -742,7 +783,11 @@ private fun SetupRailItem(
                 Text(
                     text = label.uppercase(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (missing && enabled) TidyColors.MissingText else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = when {
+                        warning && enabled -> MaterialTheme.colorScheme.onErrorContainer
+                        missing && enabled -> TidyColors.MissingText
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1844,7 +1889,7 @@ private fun HomeDashboardPortraitPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onDevice = {},
-            onReceiver = {},
+            onInitProfiles = {},
             onUpload = {},
             onStorage = {},
         )
@@ -1865,7 +1910,7 @@ private fun HomeDashboardReadyMissingPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onDevice = {},
-            onReceiver = {},
+            onInitProfiles = {},
             onUpload = {},
             onStorage = {},
         )
@@ -1886,7 +1931,7 @@ private fun HomeDashboardLandscapePreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onDevice = {},
-            onReceiver = {},
+            onInitProfiles = {},
             onUpload = {},
             onStorage = {},
         )
@@ -1908,7 +1953,7 @@ private fun HomeDashboardRailPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onDevice = {},
-            onReceiver = {},
+            onInitProfiles = {},
             onUpload = {},
             onStorage = {},
         )
@@ -1930,7 +1975,7 @@ private fun HomeDashboardSatelliteDarkPreview() {
             onWorkflow = {},
             onSettingsSet = {},
             onDevice = {},
-            onReceiver = {},
+            onInitProfiles = {},
             onUpload = {},
             onStorage = {},
         )
@@ -1942,7 +1987,7 @@ private fun previewRunningState(): DashboardState =
         status = DashboardStatus(
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
-            receiver = "UM980",
+            initProfile = "UM980",
             storage = "SAF folder",
         ),
         position = PositionCardState(
@@ -1989,7 +2034,7 @@ private fun previewReadyMissingState(): DashboardState =
     DashboardState.planned(
         workflow = "n/a",
         mountpoint = "n/a",
-        receiver = "n/a",
+        initProfile = "n/a",
         storage = "Storage location profile",
         position = PositionCardState(
             latLon = "n/a",

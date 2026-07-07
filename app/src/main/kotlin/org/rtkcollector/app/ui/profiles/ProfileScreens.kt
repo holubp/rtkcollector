@@ -224,10 +224,11 @@ private fun ProfileListItem(
 ) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = if (row.isSelected) {
-                ActiveProfileBackground
-            } else {
-                MaterialTheme.colorScheme.surface
+            containerColor = when (row.tone) {
+                ProfileRowTone.WARNING -> MaterialTheme.colorScheme.errorContainer
+                ProfileRowTone.APPLIED -> ActiveProfileBackground
+                ProfileRowTone.MODIFIED,
+                ProfileRowTone.DEFAULT -> MaterialTheme.colorScheme.surface
             },
         ),
     ) {
@@ -268,9 +269,9 @@ private fun ProfileListItem(
             }
             if (row.hasWarning) {
                 Text(
-                    text = "! ${row.warningText}",
+                    text = "! ${row.warningText ?: "Selection is outside the active device filter."}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = WarningOrange,
+                    color = if (row.outsideFilter) MaterialTheme.colorScheme.onErrorContainer else WarningOrange,
                 )
             }
 

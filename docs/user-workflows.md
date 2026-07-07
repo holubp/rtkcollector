@@ -101,13 +101,13 @@ a source-upload profile only for base workflows that should publish RTCM.
 
 The user guide and Play listing would benefit from these screenshots:
 
-1. Home screen before recording, showing Workflow, Settings, Receiver,
-   Mountpoint and Storage selectors.
+1. Home screen before recording, showing Device, Settings, Workflow, Profiles,
+   Upload and Storage selectors.
 2. USB permission/device selection flow.
 3. Plain rover recording in progress, with Position/Fix/Files cards visible.
 4. Rover with NTRIP recording in progress, with NTRIP state and correction byte
    counts visible.
-5. Receiver command profile selector showing built-in UM980 and M8T profiles.
+5. Init/shutdown profile selector showing built-in UM980 and M8T profiles.
 6. Command profile detail screen in read-only built-in mode.
 7. Satellite monitor card during recording with a telemetry-capable profile.
 8. Session list with completed recordings.
@@ -127,12 +127,12 @@ from Menu.
 The dashboard configuration tiles are intentionally lean selectors: Workflow
 selects the active workflow, Settings selects the active settings set, Device
 filters profile selectors to `Any`, `UM980` or `u-blox M8T`, Mountpoint selects
-or overrides the active NTRIP mountpoint, Receiver selects a receiver command
-profile, Upload selects `Off` or a configured NTRIP source-upload profile for
-base workflows, and Storage selects a storage location profile. For rover
-workflows, Upload is shown as not needed and is not a warning. Full profile
-creation and editing belongs in Menu. If a settings set name is followed by `+`,
-the active setup has local changes; use Re-apply in Menu to reset it to the
+or overrides the active NTRIP mountpoint, Profiles selects the active
+init/shutdown profile, Upload selects `Off` or a configured NTRIP source-upload
+profile for base workflows, and Storage selects a storage location profile. For
+rover workflows, Upload is shown as not needed and is not a warning. Full
+profile creation and editing belongs in Menu. If a settings set name is followed
+by `+`, the active setup has local changes; use Re-apply in Menu to reset it to the
 saved settings set.
 It also provides the experimental real-recording controls:
 

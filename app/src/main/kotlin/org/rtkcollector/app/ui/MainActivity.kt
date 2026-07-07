@@ -1207,11 +1207,11 @@ fun RtkCollectorApp(
                             dashboardSelector = DashboardSelector.DEVICE
                         }
                     },
-                    onReceiver = {
+                    onInitProfiles = {
                         if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Stop recording before changing init/shutdown profiles.", Toast.LENGTH_LONG).show()
                         } else {
-                            dashboardSelector = DashboardSelector.RECEIVER
+                            dashboardSelector = DashboardSelector.INIT_PROFILES
                         }
                     },
                     onUpload = {
@@ -1275,6 +1275,8 @@ fun RtkCollectorApp(
                             ?: "n/a",
                         activeWorkflowLabel = (selectedWorkflowId ?: profileStore.selectedWorkflowId()).workflowLabel(),
                         deviceFilterLabel = selectedDeviceFilter.displayName,
+                        activeSettingsSetOutsideDeviceFilter = state.status.settingsSetOutsideDeviceFilter,
+                        initProfileOutsideDeviceFilter = state.status.initProfileOutsideDeviceFilter,
                         canReapplySettingsSet = settingsSets.firstOrNull { it.id == selectedSettingsSetId }?.hasLocalOverrides == true,
                         onActiveSettingsSet = {
                             if (state.isRecording) {
@@ -1288,7 +1290,6 @@ fun RtkCollectorApp(
                                 Toast.makeText(context, "Stop recording before changing device filter.", Toast.LENGTH_LONG).show()
                             } else {
                                 dashboardSelector = DashboardSelector.DEVICE
-                                screen = AppScreen.HOME
                             }
                         },
                         onReapplySettingsSet = { showReapplySettingsDialog = true },
@@ -1311,9 +1312,9 @@ fun RtkCollectorApp(
                         onCommands = { screen = AppScreen.COMMANDS },
                         onReceiverProfile = {
                             if (state.isRecording) {
-                                Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Stop recording before changing init/shutdown profiles.", Toast.LENGTH_LONG).show()
                             } else {
-                                dashboardSelector = DashboardSelector.RECEIVER
+                                dashboardSelector = DashboardSelector.INIT_PROFILES
                                 screen = AppScreen.HOME
                             }
                         },
@@ -1925,7 +1926,7 @@ fun RtkCollectorApp(
                     showManagementActions = false,
                 )
                 AppScreen.COMMAND_SELECTOR -> ProfileListScreen(
-                    title = "Select receiver command profile",
+                    title = "Select init/shutdown profile",
                     rows = filteredCommandProfileRows(
                         profiles = profileStore.commandProfiles(),
                         selectedCommandProfileId = settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }
@@ -1935,7 +1936,7 @@ fun RtkCollectorApp(
                     ),
                     onSelect = { id ->
                         if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing receiver commands.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Stop recording before changing init/shutdown profiles.", Toast.LENGTH_LONG).show()
                             screen = AppScreen.HOME
                         } else {
                             profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
@@ -2618,7 +2619,7 @@ fun RtkCollectorApp(
                 }
             }
             dashboardSelector?.let { selector ->
-                val filteredProfileSelector = selector == DashboardSelector.SETTINGS_SET || selector == DashboardSelector.RECEIVER
+                val filteredProfileSelector = selector == DashboardSelector.SETTINGS_SET || selector == DashboardSelector.INIT_PROFILES
                 ProfileSelectorDialog(
                     title = selector.title,
                     rows = dashboardSelectorRows(
@@ -2675,7 +2676,7 @@ fun RtkCollectorApp(
                                     }
                                 }
                             }
-                            DashboardSelector.RECEIVER -> {
+                            DashboardSelector.INIT_PROFILES -> {
                                 profileStore.commandProfiles().firstOrNull { it.id == id }?.let { profile ->
                                     manualBaseCoordinate = null
                                     settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
@@ -4920,7 +4921,7 @@ private enum class DashboardSelector(val title: String) {
     WORKFLOW("Select workflow"),
     DEVICE("Select device filter"),
     MOUNTPOINT("Select NTRIP mountpoint"),
-    RECEIVER("Select receiver command profile"),
+    INIT_PROFILES("Select init/shutdown profile"),
     UPLOAD("Select NTRIP upload"),
     STORAGE("Select storage profile"),
 }
@@ -5853,6 +5854,7 @@ private fun ProfileStores.plannedDashboardState(
     selectedWorkflowId: String?,
 ): DashboardState {
     val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
+    val deviceFilter = selectedDeviceFilter()
     val mountpointProfiles = ntripMountpointProfiles()
     val mountpoint = selected.selectedMountpointLabel(mountpointProfiles)
     val selectedCommandProfile = selected?.effectiveCommandProfileRef()?.id?.let { id ->
@@ -5877,11 +5879,13 @@ private fun ProfileStores.plannedDashboardState(
         ?: RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
     return DashboardState.planned(
         workflow = selectedWorkflowId.workflowLabel(),
-        device = selectedDeviceFilter().displayName,
+        device = deviceFilter.displayName,
         mountpoint = mountpoint,
-        receiver = selectedReceiverLabel(selectedSettingsSetId),
+        initProfile = selectedReceiverLabel(selectedSettingsSetId),
         upload = selected.selectedUploadLabel(uploadProfiles),
         uploadAvailable = selectedWorkflowId == WORKFLOW_FIXED_BASE || selectedWorkflowId == WORKFLOW_BASE_CALIBRATION,
+        settingsSetOutsideDeviceFilter = selected != null && !deviceFilter.matchesSettingsSet(selected),
+        initProfileOutsideDeviceFilter = selectedCommandProfile != null && !deviceFilter.matchesCommandProfile(selectedCommandProfile),
         storage = selectedStorageLabel(selectedSettingsSetId),
         fix = FixCardState(
             receiverFrequency = receiverFrequencyForFamily(selectedCommandProfile?.receiverFamily),
@@ -6373,7 +6377,7 @@ private fun dashboardSelectorRows(
                 isSelected = profile.id == selectedSettingsSet?.effectiveNtripMountpointProfileRef()?.id,
             )
         }
-        DashboardSelector.RECEIVER -> filteredCommandProfileRows(
+        DashboardSelector.INIT_PROFILES -> filteredCommandProfileRows(
             profiles = profileStore.commandProfiles(),
             selectedCommandProfileId = selectedSettingsSet?.effectiveCommandProfileRef()?.id,
             filter = deviceFilter,

@@ -44,9 +44,11 @@ data class DashboardState(
             workflow: String,
             device: String = "Any",
             mountpoint: String,
-            receiver: String,
+            initProfile: String,
             upload: String = "Off",
             uploadAvailable: Boolean = true,
+            settingsSetOutsideDeviceFilter: Boolean = false,
+            initProfileOutsideDeviceFilter: Boolean = false,
             storage: String,
             position: PositionCardState = PositionCardState(),
             fix: FixCardState = FixCardState(),
@@ -69,9 +71,11 @@ data class DashboardState(
                     workflow = workflow,
                     device = device,
                     mountpoint = mountpoint,
-                    receiver = receiver,
+                    initProfile = initProfile,
                     upload = upload,
                     uploadAvailable = uploadAvailable,
+                    settingsSetOutsideDeviceFilter = settingsSetOutsideDeviceFilter,
+                    initProfileOutsideDeviceFilter = initProfileOutsideDeviceFilter,
                     storage = storage,
                     settingsSet = profiles.settingsSet,
                 ),
@@ -146,9 +150,11 @@ data class DashboardStatus(
     val workflow: String = "n/a",
     val device: String = "Any",
     val mountpoint: String = "n/a",
-    val receiver: String = "n/a",
+    val initProfile: String = "n/a",
     val upload: String = "Off",
     val uploadAvailable: Boolean = true,
+    val settingsSetOutsideDeviceFilter: Boolean = false,
+    val initProfileOutsideDeviceFilter: Boolean = false,
     val storage: String = "n/a",
 )
 
@@ -181,19 +187,19 @@ internal fun shouldUseRailDashboard(
         availableWidthDp > availableHeightDp
 
 internal enum class DashboardSetupItem(val label: String) {
+    DEVICE("Device"),
     SETTINGS("Settings"),
     WORKFLOW("Workflow"),
-    DEVICE("Device"),
-    RECEIVER("Receiver"),
+    INIT_PROFILES("Profiles"),
     UPLOAD("Upload"),
     STORAGE("Storage"),
 }
 
 internal val defaultDashboardSetupItems: List<DashboardSetupItem> = listOf(
+    DashboardSetupItem.DEVICE,
     DashboardSetupItem.SETTINGS,
     DashboardSetupItem.WORKFLOW,
-    DashboardSetupItem.DEVICE,
-    DashboardSetupItem.RECEIVER,
+    DashboardSetupItem.INIT_PROFILES,
     DashboardSetupItem.UPLOAD,
     DashboardSetupItem.STORAGE,
 )

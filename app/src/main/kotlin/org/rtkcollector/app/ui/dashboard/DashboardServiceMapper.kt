@@ -16,12 +16,12 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         settingsSet = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_SETTINGS_SET_LABEL) ?: "n/a",
         workflow = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_WORKFLOW_LABEL) ?: "n/a",
         mountpoint = mountpointFromUrl(intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL)),
-        receiver = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_LABEL) ?: "n/a",
+        initProfile = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_LABEL) ?: "n/a",
         upload = uploadLabel,
         storage = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_STORAGE_LABEL) ?: "n/a",
     )
     val receiverFamily = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_RECEIVER_FAMILY)
-        ?: status.receiver
+        ?: status.initProfile
     val position = PositionCardState(
         latLon = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LAT_LON) ?: "n/a",
         ellipsoidalHeight = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ELLIPSOIDAL_HEIGHT) ?: "n/a",
@@ -167,7 +167,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
         DashboardState.planned(
             workflow = status.workflow,
             mountpoint = status.mountpoint,
-            receiver = status.receiver,
+            initProfile = status.initProfile,
             upload = status.upload,
             storage = status.storage,
             position = position,

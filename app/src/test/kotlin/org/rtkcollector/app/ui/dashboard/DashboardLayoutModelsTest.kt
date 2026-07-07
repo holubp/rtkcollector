@@ -74,7 +74,7 @@ class DashboardLayoutModelsTest {
     @Test
     fun `default setup strip includes upload selector`() {
         assertEquals(
-            listOf("Workflow", "Mountpoint", "Receiver", "Upload", "Storage"),
+            listOf("Device", "Settings", "Workflow", "Profiles", "Upload", "Storage"),
             defaultDashboardSetupItems.map { it.label },
         )
     }

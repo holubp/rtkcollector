@@ -8,18 +8,19 @@ import org.junit.jupiter.api.Test
 
 class DashboardStateTest {
     @Test
-    fun `dashboard setup items include compact device selector`() {
+    fun `dashboard setup items put device filter first and use profile naming`() {
         assertEquals(
             listOf(
+                DashboardSetupItem.DEVICE,
                 DashboardSetupItem.SETTINGS,
                 DashboardSetupItem.WORKFLOW,
-                DashboardSetupItem.DEVICE,
-                DashboardSetupItem.RECEIVER,
+                DashboardSetupItem.INIT_PROFILES,
                 DashboardSetupItem.UPLOAD,
                 DashboardSetupItem.STORAGE,
             ),
             defaultDashboardSetupItems,
         )
+        assertEquals("Profiles", DashboardSetupItem.INIT_PROFILES.label)
     }
 
     @Test
@@ -28,7 +29,7 @@ class DashboardStateTest {
             workflow = "Rover + NTRIP",
             device = "UM980",
             mountpoint = "TUBO00CZE0",
-            receiver = "UM980",
+            initProfile = "UM980",
             upload = "Off",
             storage = "SAF folder",
         )
@@ -41,6 +42,8 @@ class DashboardStateTest {
         assertEquals("UM980", state.status.device)
         assertEquals("TUBO00CZE0", state.status.mountpoint)
         assertEquals("Off", state.status.upload)
+        assertFalse(state.status.settingsSetOutsideDeviceFilter)
+        assertFalse(state.status.initProfileOutsideDeviceFilter)
     }
 
     @Test
@@ -48,7 +51,7 @@ class DashboardStateTest {
         val state = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
-            receiver = "UM980",
+            initProfile = "UM980",
             upload = "Off",
             storage = "SAF folder",
             files = FilesCardState(
@@ -72,7 +75,7 @@ class DashboardStateTest {
             status = DashboardStatus(
                 workflow = "Rover + NTRIP",
                 mountpoint = "TUBO00CZE0",
-                receiver = "UM980",
+                initProfile = "UM980",
                 storage = "SAF folder",
             ),
             position = PositionCardState(latLon = "50.087451234, 14.421253456"),
@@ -103,7 +106,7 @@ class DashboardStateTest {
         val serviceState = DashboardState.planned(
             workflow = "n/a",
             mountpoint = "a",
-            receiver = "n/a",
+            initProfile = "n/a",
             upload = "Off",
             storage = "n/a",
             files = FilesCardState(sessionLocation = "content://session/current", receiverRxBytes = "123 B"),
@@ -111,7 +114,7 @@ class DashboardStateTest {
         val planned = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "n/a",
-            receiver = "UM980",
+            initProfile = "UM980",
             upload = "RTK2go BASE01",
             storage = "App-private external storage",
             profiles = ProfilesCardState(settingsSet = "UM980 rover + NTRIP"),
@@ -121,7 +124,7 @@ class DashboardStateTest {
 
         assertEquals("Rover + NTRIP", merged.status.workflow)
         assertEquals("n/a", merged.status.mountpoint)
-        assertEquals("UM980", merged.status.receiver)
+        assertEquals("UM980", merged.status.initProfile)
         assertEquals("RTK2go BASE01", merged.status.upload)
         assertEquals("App-private external storage", merged.status.storage)
         assertEquals(planned.mockGps, merged.mockGps)
@@ -134,7 +137,7 @@ class DashboardStateTest {
         val state = DashboardState.planned(
             workflow = "Fixed base",
             mountpoint = "n/a",
-            receiver = "UM980",
+            initProfile = "UM980",
             upload = "Off",
             storage = "App-private external storage",
         )
@@ -147,13 +150,30 @@ class DashboardStateTest {
         val state = DashboardState.planned(
             workflow = "Plain rover",
             mountpoint = "n/a",
-            receiver = "UM980",
+            initProfile = "UM980",
             upload = "Off",
             uploadAvailable = false,
             storage = "App-private external storage",
         )
 
         assertFalse(state.status.uploadAvailable)
+    }
+
+    @Test
+    fun `planned dashboard carries device filter incompatibility warnings`() {
+        val state = DashboardState.planned(
+            workflow = "Plain rover",
+            device = "UM980",
+            mountpoint = "n/a",
+            initProfile = "u-blox M8T",
+            upload = "Off",
+            settingsSetOutsideDeviceFilter = true,
+            initProfileOutsideDeviceFilter = true,
+            storage = "App-private external storage",
+        )
+
+        assertTrue(state.status.settingsSetOutsideDeviceFilter)
+        assertTrue(state.status.initProfileOutsideDeviceFilter)
     }
 
     @Test
@@ -231,14 +251,14 @@ class DashboardStateTest {
         val serviceState = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
-            receiver = "UM980",
+            initProfile = "UM980",
             storage = "SAF folder",
             files = FilesCardState(sessionLocation = "content://session/current", receiverRxBytes = "123 B"),
         )
         val planned = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "n/a",
-            receiver = "UM980",
+            initProfile = "UM980",
             storage = "SAF folder",
         )
 
@@ -252,7 +272,7 @@ class DashboardStateTest {
         val serviceState = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
-            receiver = "UM980",
+            initProfile = "UM980",
             storage = "SAF folder",
             position = PositionCardState(latLon = "50.087451234, 14.421253456"),
             fix = FixCardState(
@@ -263,7 +283,7 @@ class DashboardStateTest {
         val planned = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
-            receiver = "u-blox M8T",
+            initProfile = "u-blox M8T",
             storage = "SAF folder",
             fix = FixCardState(receiverFrequency = DefaultUbloxReceiverFrequency),
         )
@@ -281,7 +301,7 @@ class DashboardStateTest {
             status = DashboardStatus(
                 workflow = "Recording workflow",
                 mountpoint = "TUBO00CZE0",
-                receiver = "UM980 runtime",
+                initProfile = "UM980 runtime",
                 storage = "Session folder",
             ),
             position = PositionCardState(latLon = "50.087451234, 14.421253456"),
@@ -292,7 +312,7 @@ class DashboardStateTest {
         val planned = DashboardState.planned(
             workflow = "Planned workflow",
             mountpoint = "n/a",
-            receiver = "Planned receiver",
+            initProfile = "Planned init profile",
             storage = "Planned storage",
             fix = FixCardState(receiverFrequency = DefaultUbloxReceiverFrequency),
         )
@@ -301,7 +321,7 @@ class DashboardStateTest {
 
         assertEquals("Recording workflow", merged.status.workflow)
         assertEquals("TUBO00CZE0", merged.status.mountpoint)
-        assertEquals("UM980 runtime", merged.status.receiver)
+        assertEquals("UM980 runtime", merged.status.initProfile)
         assertEquals("50.087451234, 14.421253456", merged.position.latLon)
         assertEquals("RTK fixed", merged.fix.fixType)
         assertEquals("live 20 Hz", merged.fix.receiverFrequency)
@@ -493,7 +513,7 @@ class DashboardStateTest {
         val state = DashboardState.planned(
             workflow = "Rover + NTRIP",
             mountpoint = "TUBO00CZE0",
-            receiver = "UM980",
+            initProfile = "UM980",
             storage = "App-private",
             lastError = "No static method writeString(Ljava/nio/file/Path;Ljava/lang/CharSequence;)",
             errorCategory = "SERVICE_LIFECYCLE",
@@ -510,7 +530,7 @@ class DashboardStateTest {
         val state = DashboardState.planned(
             workflow = "Plain rover",
             mountpoint = "n/a",
-            receiver = "UM980",
+            initProfile = "UM980",
             storage = "App-private",
         )
 

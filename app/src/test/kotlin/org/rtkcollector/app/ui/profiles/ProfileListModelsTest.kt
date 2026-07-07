@@ -92,6 +92,8 @@ class ProfileListModelsTest {
         )
 
         assertEquals("Outside filter", row.displaySummary)
+        assertEquals(ProfileRowTone.WARNING, row.tone)
+        assertTrue(row.hasWarning)
     }
 
     @Test

@@ -38,6 +38,7 @@ __pycache__/
 .worktrees/
 .codex-tmp/
 .superpowers/
+.spec-skills-dev/
 
 # Local field-test/debug captures
 samples/

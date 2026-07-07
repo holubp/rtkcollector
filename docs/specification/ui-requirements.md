@@ -255,6 +255,50 @@ Verification:
 - Automated: caster upload profile/editor tests where practical.
 - Manual: source-upload profile editor review.
 
+### UI-SETUP-005: Device Filter Controls Are Visible And Context-Preserving
+
+Status: Normative
+
+The active Device filter MUST be exposed as a clearly clickable selector
+wherever it appears as a profile-filter control. The Home dashboard setup strip
+MUST place Device before Settings, Workflow, Profiles, Upload and Storage
+because the selected Device filter constrains the compatible options shown by
+other profile selectors. The Settings screen MUST also expose the active Device
+filter as a button-like control, not as plain status text.
+
+Opening the Device selector from Settings MUST keep the user in the Settings
+context after selection or dismissal. Selecting a Device filter from Settings
+MUST NOT unexpectedly return to the Home dashboard.
+
+Verification:
+- Automated: dashboard setup-item ordering tests.
+- Review: Settings hub uses a button-style Device control.
+- Manual: open Settings, select Device `Any`, `UM980` or `u-blox M8T`, and
+  confirm the app remains in Settings after the selector closes.
+
+### UI-SETUP-006: Out-Of-Filter Active Profiles Are Preserved And Warned
+
+Status: Normative
+
+Applying a Device filter MUST NOT silently clear, replace or hide the currently
+active settings set or init/shutdown profile when that active item is outside
+the filter. Instead, selectors MUST keep the active out-of-filter item visible
+and marked as outside the active Device filter until the user chooses a
+compatible replacement or switches Device back to `Any`.
+
+The Home dashboard MUST highlight the affected setup tile when the active
+settings set or init/shutdown profile is outside the selected Device filter.
+The Settings screen MUST show the same mismatch near the active settings set
+and init/shutdown profile controls. Once the user selects compatible items, the
+warning MUST clear without requiring app restart.
+
+Verification:
+- Automated: profile-row model tests for outside-filter warning tone and
+  dashboard status tests for incompatibility flags.
+- Manual: select a u-blox profile, switch Device to `UM980`, confirm the active
+  profile remains visible with a warning, then select a compatible UM980 profile
+  and confirm the warning clears.
+
 ### UI-KEYBOARD-002: Editable One-Line Profile Fields Use Shared Native Editor
 
 Status: Normative

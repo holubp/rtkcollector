@@ -6,9 +6,40 @@
 
 **Architecture:** Keep the raw GNSS capture architecture unchanged. This plan adds publication-facing documentation, tightens Android permissions and import surfaces, adds explicit runtime permission/security models, cleans sensitive backup files after sharing, and makes session/privacy documentation match V1 behaviour. All changes must preserve byte-exact `receiver-rx.raw`, separate TX/correction artifacts, service-owned recording, and no map/GIS/shapefile dependencies.
 
-**Tech Stack:** Android/Kotlin, Jetpack Compose, AndroidX Core/Activity, Android foreground services, Android Keystore, Java sockets/optional TLS sockets, JUnit 5, existing Gradle modules.
+**Tech Stack:** Android/Kotlin, Jetpack Compose, AndroidX Core/Activity, Android foreground services, Android Keystore, Java sockets, optional future TLS sockets, JUnit 5, existing Gradle modules.
 
 ---
+
+## 2026-07-08 Pre-Execution Review
+
+This plan remains the execution source for Google Play readiness, but it predates
+later NTRIP source-upload work, release-native-library Gradle checks and the
+formal specification tree. Execute it with the complementary design in
+`docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md`
+and the formal requirements in `docs/specification/publication-readiness.md`.
+
+Current-state corrections before assigning tasks:
+
+- `PRIVACY.md` and `docs/play-publication.md` are still missing and remain
+  required outputs.
+- `ACCESS_MOCK_LOCATION` is already debug-only; do not add it to the main
+  manifest.
+- The main manifest still lacks `POST_NOTIFICATIONS` for the target SDK 36
+  recording notification flow.
+- Release Gradle tasks already validate that Google Play release bundles do not
+  silently omit required RTKLIB native libraries; verify and preserve those
+  checks rather than duplicating them.
+- NTRIP source upload v1/v2 is now a separate implemented path. Do not regress
+  classic v1 `SOURCE <password> /mount` or v2 chunked `POST` source upload while
+  working on NTRIP correction-download transport disclosure or TLS options.
+- NTRIP TLS support is useful but not a strict internal/closed testing blocker
+  if Play Data safety explicitly does not claim universal encryption in transit.
+- Use current split profile/settings files when implementing model changes; do
+  not assume the old file layout in this historical plan is exact.
+- Full release AAB validation must run on Windows Android Studio, CI or another
+  host with working Android SDK/NDK native tools. Termux can still run
+  `git diff --check`, `sh gradlew :app:compileDebugKotlin` and Android Studio
+  task-selection dry runs.
 
 ## Scope And Source References
 
@@ -17,7 +48,9 @@ This plan addresses the review findings:
 - No Play-ready privacy policy or Data safety source.
 - Missing Android 13+ notification permission handling for target SDK 36.
 - Plaintext settings backups can remain in cache after sharing.
-- NTRIP uses plaintext TCP with Basic Auth by default.
+- NTRIP correction download and source upload can use plaintext TCP with Basic
+  Auth; Play disclosures must be truthful and must not claim universal
+  encryption in transit unless TLS support is actually shipped and selected.
 - `docs/session-format.md` describes planned fields as required V1 fields.
 - `docs/third-party-licenses.md` does not list current runtime dependencies.
 - JSON import manifest surface is broader than needed.
@@ -47,26 +80,108 @@ Modify:
 - `README.md` - link privacy/publishing docs and correct current transport wording.
 - `SECURITY.md` - link privacy doc and document plaintext backup / NTRIP cleartext risk.
 - `docs/android-background-operation.md` - align foreground service, notification permission and battery warning behaviour.
-- `docs/ntrip-and-corrections.md` - document cleartext/TLS NTRIP transport and GGA/Data safety implications.
+- `docs/ntrip-and-corrections.md` - document cleartext NTRIP transport, GGA/Data safety implications and the fact that TLS is not currently universal.
 - `docs/session-format.md` - split current V1 session fields from planned fields.
 - `docs/third-party-licenses.md` - list current runtime and test dependencies with licence families.
 - `docs/user-workflows.md` - document settings import/export security and cleanup behaviour.
 - `app/src/main/AndroidManifest.xml` - add notification/connected-device foreground service declarations and narrow JSON import surface.
 - `app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt` - request notification permission before recording, show battery warning, and schedule settings-backup cleanup.
-- `app/src/main/kotlin/org/rtkcollector/app/profile/ProfileModels.kt` - add NTRIP transport security choice.
-- `app/src/main/kotlin/org/rtkcollector/app/profile/SettingsBackupModels.kt` - keep backup format stable while preserving transport security.
-- `app/src/main/kotlin/org/rtkcollector/app/profile/SettingsImportModels.kt` - validate the new transport security field.
-- `core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripClient.kt` - add explicit cleartext/TLS transport selection.
+- `core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripClient.kt` - review correction-download transport behaviour and keep request syntax unchanged unless a separate TLS feature is explicitly chosen.
+- `core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClient.kt` - review source-upload transport behaviour and preserve v1/v2 source-upload protocol syntax.
 - Existing tests:
   - `app/src/test/kotlin/org/rtkcollector/app/ui/AndroidManifestJsonImportTest.kt`
   - `app/src/test/kotlin/org/rtkcollector/app/profile/SettingsBackupModelsTest.kt`
   - `app/src/test/kotlin/org/rtkcollector/app/profile/SettingsImportModelsTest.kt`
   - `core/correction/src/test/kotlin/org/rtkcollector/core/correction/NtripClientTest.kt`
+  - `core/correction/src/test/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClientTest.kt`
   - `core/session/src/test/kotlin/org/rtkcollector/core/session/SessionWritersTest.kt`
 
 Do not modify:
 
 - Raw capture, UM980 command sequencing, USB serial read/write loops, parser fanout, session writer byte paths, map/GIS dependencies.
+
+---
+
+### Task 0: Current-State Validation And Task Pruning
+
+**Files:**
+- Inspect: `app/src/main/AndroidManifest.xml`
+- Inspect: `app/src/debug/AndroidManifest.xml`
+- Inspect: `app/build.gradle.kts`
+- Inspect: `core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClient.kt`
+- Inspect: `docs/specification/publication-readiness.md`
+- Inspect: `docs/specification/verification-matrix.md`
+
+- [ ] **Step 1: Verify publication documents are still missing before creating them**
+
+Run:
+
+```bash
+test ! -f PRIVACY.md
+test ! -f docs/play-publication.md
+```
+
+Expected before Task 1: both commands exit successfully. If either file already
+exists, inspect it and update Task 1 rather than overwriting it blindly.
+
+- [ ] **Step 2: Verify mock-location permission stays debug-only**
+
+Run:
+
+```bash
+rg -n "ACCESS_MOCK_LOCATION" app/src/main app/src/debug
+```
+
+Expected:
+
+```text
+app/src/debug/AndroidManifest.xml:2:    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" />
+```
+
+No `ACCESS_MOCK_LOCATION` hit may appear under `app/src/main`.
+
+- [ ] **Step 3: Verify notification permission is still missing from the main manifest**
+
+Run:
+
+```bash
+rg -n "POST_NOTIFICATIONS" app/src/main/AndroidManifest.xml
+```
+
+Expected before Task 3: no output and exit status 1. Task 3 must add the release
+manifest declaration and runtime handling.
+
+- [ ] **Step 4: Verify release-native-library checks already exist**
+
+Run:
+
+```bash
+rg -n "validateGooglePlayReleaseBuildInputs|validateGooglePlayReleaseBundle|librtkcollector_rtklib.so|abiFilters" app/build.gradle.kts
+```
+
+Expected: hits for release input validation, release bundle validation,
+`librtkcollector_rtklib.so`, and `armeabi-v7a` plus `arm64-v8a` ABI filters.
+Do not duplicate this Gradle logic; preserve it and exercise it in Task 9 on a
+release-capable host.
+
+- [ ] **Step 5: Verify NTRIP source upload remains separate from rover correction download**
+
+Run:
+
+```bash
+rg -n "NtripCasterUploadRequest|NtripSourceUploadRequest|SOURCE |POST /|GET /" core/correction/src/main/kotlin/org/rtkcollector/core/correction
+```
+
+Expected: source upload request construction lives in
+`NtripCasterUploadClient.kt`; rover correction download request construction
+uses `NtripClient.kt`. Do not merge those roles while executing this plan.
+
+- [ ] **Step 6: Record the current gate status**
+
+Update only the notes for existing `PLAY-*` rows in
+`docs/specification/verification-matrix.md` if Task 0 evidence differs from the
+expected state above. Do not mark any `PLAY-*` row `Done` until the relevant
+code/docs and manual release-host validation are complete.
 
 ---
 
@@ -125,8 +240,10 @@ mountpoint. The app sends NTRIP credentials to that caster when credentials are
 configured. If GGA upload is enabled, the app may send the receiver-derived
 rover position to the selected caster for NTRIP/VRS operation.
 
-Many NTRIP casters use ordinary TCP. In that mode credentials and GGA data are
-not protected by TLS. Use TLS-capable caster settings when available.
+Many NTRIP casters use ordinary TCP. In that mode credentials, source-upload
+authentication and optional GGA data are not protected by TLS. Do not treat
+NTRIP data as encrypted in transit unless a future release explicitly implements
+and uses TLS transport for the selected caster endpoint.
 
 RtkCollector does not operate an app backend service for sessions, credentials
 or telemetry.
@@ -276,11 +393,11 @@ In `docs/ntrip-and-corrections.md`, add a "Transport security" section:
 ## Transport Security
 
 NTRIP Basic authentication over ordinary TCP exposes credentials to the caster
-path in cleartext. RtkCollector must label cleartext caster profiles clearly and
-must not claim encrypted transit in Play Data safety disclosures unless the
-selected caster profile uses TLS. GGA upload, when enabled, sends receiver-derived
-position to the configured caster and must be disclosed as optional location
-collection/transmission.
+path in cleartext. RtkCollector must label cleartext NTRIP behaviour clearly and
+must not claim encrypted transit in Play Data safety disclosures while cleartext
+NTRIP correction download or source upload is supported. GGA upload, when
+enabled, sends receiver-derived position to the configured caster and must be
+disclosed as optional location transmission.
 ```
 
 In `docs/user-workflows.md`, add a "Settings backup import/export" section:
@@ -802,292 +919,159 @@ git commit -m "fix: clean temporary settings backup shares"
 
 ---
 
-### Task 5: Explicit NTRIP Transport Security Model
+### Task 5: NTRIP Transport Disclosure And Source-Upload Regression Guard
 
 **Files:**
 - Modify: `core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripClient.kt`
 - Modify: `core/correction/src/test/kotlin/org/rtkcollector/core/correction/NtripClientTest.kt`
-- Modify: `app/src/main/kotlin/org/rtkcollector/app/profile/ProfileModels.kt`
-- Modify: `app/src/main/kotlin/org/rtkcollector/app/profile/SettingsBackupModels.kt`
-- Modify: `app/src/main/kotlin/org/rtkcollector/app/profile/SettingsImportModels.kt`
-- Modify: `app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt`
+- Modify: `core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClient.kt`
+- Modify: `core/correction/src/test/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClientTest.kt`
+- Modify: `app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileScreens.kt`
 - Modify: `docs/ntrip-and-corrections.md`
 - Modify: `docs/play-publication.md`
 
-- [ ] **Step 1: Write failing tests for NTRIP security metadata**
+- [ ] **Step 1: Audit current NTRIP transport and source-upload syntax**
 
-Add to `core/correction/src/test/kotlin/org/rtkcollector/core/correction/NtripClientTest.kt`:
+Run:
+
+```bash
+rg -n "Socket\\(|SSLSocket|NtripTransportSecurity|SOURCE |POST /|GET /|Authorization|Transfer-Encoding" core/correction/src/main/kotlin core/correction/src/test/kotlin docs/ntrip-and-corrections.md
+```
+
+Expected:
+
+- correction download uses NTRIP client `GET` requests over ordinary Java
+  sockets unless a later task explicitly adds TLS;
+- classic source upload uses `SOURCE <password> /<mountpoint>` without `GET`,
+  `POST`, `Authorization` or an `HTTP/1.x` suffix;
+- NTRIP v2 source upload uses HTTP `POST` with chunked transfer;
+- no source-upload test has been weakened.
+
+- [ ] **Step 2: Keep source-upload regression tests in scope**
+
+If the current `NtripCasterUploadClientTest` does not already assert these
+conditions, add or preserve tests equivalent to:
 
 ```kotlin
 @Test
-fun redactedMetadataIncludesTransportSecurity() {
-    val request = NtripRequest(
+fun v1SourceUploadRequestDoesNotContainHttpOrAuthorizationSyntax() {
+    val request = NtripCasterUploadRequest(
         host = "caster.example",
         port = 2101,
-        mountpoint = "MOUNT",
-        credentials = NtripCredentials("user", "secret"),
-        transportSecurity = NtripTransportSecurity.CLEAR_TEXT,
+        mountpoint = "UM980BASE",
+        credentials = NtripCredentials("base01", "pass123"),
+        protocolVersion = NtripProtocolVersion.NTRIP_V1,
     )
 
-    assertEquals("CLEAR_TEXT", request.toRedactedMetadata().transportSecurity)
+    val rendered = request.render()
+
+    assertTrue(rendered.startsWith("SOURCE pass123 /UM980BASE\r\n"))
+    assertFalse(rendered.contains("GET "))
+    assertFalse(rendered.contains("POST "))
+    assertFalse(rendered.contains("HTTP/"))
+    assertFalse(rendered.contains("Authorization:", ignoreCase = true))
 }
 
 @Test
-fun tlsRequestKeepsHttpHeaderSyntaxForNtripOverTls() {
-    val request = NtripRequest(
+fun v2SourceUploadRequestUsesChunkedPostAndBasicAuth() {
+    val request = NtripCasterUploadRequest(
         host = "caster.example",
-        port = 443,
-        mountpoint = "MOUNT",
-        transportSecurity = NtripTransportSecurity.TLS,
+        port = 2101,
+        mountpoint = "UM980BASE",
+        credentials = NtripCredentials("base01", "pass123"),
+        protocolVersion = NtripProtocolVersion.NTRIP_V2,
     )
 
-    assertTrue(request.render().startsWith("GET /MOUNT HTTP/1.1\r\n"))
-    assertEquals(NtripTransportSecurity.TLS, request.transportSecurity)
+    val rendered = request.render()
+
+    assertTrue(rendered.startsWith("POST /UM980BASE HTTP/1.1\r\n"))
+    assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
+    assertTrue(rendered.contains("Transfer-Encoding: chunked\r\n"))
+    assertTrue(rendered.contains("Authorization: Basic "))
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [ ] **Step 3: Run source-upload and correction-client tests before edits**
 
 Run:
 
 ```bash
 ./gradlew :core:correction:test --tests 'org.rtkcollector.core.correction.NtripClientTest'
+./gradlew :core:correction:test --tests 'org.rtkcollector.core.correction.NtripCasterUploadClientTest'
 ```
 
-Expected: FAIL because `NtripTransportSecurity` and metadata field do not exist.
+Expected on desktop/CI: both pass before any disclosure edits. In Termux, if
+Gradle unit tests are not reliable, inspect the tests and continue with
+`sh gradlew :app:compileDebugKotlin` during final verification.
 
-- [ ] **Step 3: Add transport security enum and metadata**
+- [ ] **Step 4: Add cleartext transport disclosure to user-facing docs**
 
-In `NtripClient.kt`, add:
+In `docs/ntrip-and-corrections.md`, document:
 
-```kotlin
-enum class NtripTransportSecurity {
-    CLEAR_TEXT,
-    TLS,
-}
+```markdown
+NTRIP correction download and NTRIP source upload may use ordinary cleartext TCP
+depending on the selected caster endpoint. In cleartext mode, NTRIP credentials,
+optional GGA upload and source-upload authentication are not protected by TLS.
+
+RtkCollector must not claim universal encryption in transit for Google Play
+while cleartext NTRIP profiles are supported. A future TLS transport option must
+be implemented and tested before the Play Data safety answer can distinguish TLS
+profiles as encrypted in transit.
 ```
 
-Update `NtripRequest`:
+In `docs/play-publication.md`, update "Encryption in transit" with the same rule.
 
-```kotlin
-data class NtripRequest(
-    val host: String,
-    val port: Int,
-    val mountpoint: String,
-    val credentials: NtripCredentials? = null,
-    val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
-    val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
-    val transportSecurity: NtripTransportSecurity = NtripTransportSecurity.CLEAR_TEXT,
-)
-```
+- [ ] **Step 5: Add a compact profile-editor warning if absent**
 
-Update `NtripRedactedMetadata`:
-
-```kotlin
-data class NtripRedactedMetadata(
-    val host: String,
-    val port: Int,
-    val mountpoint: String,
-    val username: String? = null,
-    val authentication: String,
-    val transportSecurity: String,
-)
-```
-
-Update `toRedactedMetadata()`:
-
-```kotlin
-fun toRedactedMetadata(): NtripRedactedMetadata = NtripRedactedMetadata(
-    host = host,
-    port = port,
-    mountpoint = mountpoint.trimStart('/'),
-    username = credentials?.username,
-    authentication = if (credentials == null) "none" else "basic:redacted",
-    transportSecurity = transportSecurity.name,
-)
-```
-
-- [ ] **Step 4: Add TLS socket connector support**
-
-In `NtripSocketConnector`, replace:
-
-```kotlin
-fun connect(host: String, port: Int): NtripSocket
-```
-
-with:
-
-```kotlin
-fun connect(host: String, port: Int, transportSecurity: NtripTransportSecurity = NtripTransportSecurity.CLEAR_TEXT): NtripSocket
-```
-
-In `JavaNtripSocketConnector`, implement:
-
-```kotlin
-override fun connect(host: String, port: Int, transportSecurity: NtripTransportSecurity): NtripSocket {
-    val socket = when (transportSecurity) {
-        NtripTransportSecurity.CLEAR_TEXT -> Socket()
-        NtripTransportSecurity.TLS -> javax.net.ssl.SSLSocketFactory.getDefault().createSocket() as Socket
-    }.apply {
-        connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
-        soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
-    }
-    return object : NtripSocket {
-        override val input: InputStream = socket.getInputStream()
-        override val output: OutputStream = socket.getOutputStream()
-
-        override fun close() {
-            socket.close()
-        }
-    }
-}
-```
-
-Update all connector calls:
-
-```kotlin
-connector.connect(activeRequest.host, activeRequest.port, activeRequest.transportSecurity)
-```
-
-and for sourcetable:
-
-```kotlin
-connector.connect(request.host, request.port, request.transportSecurity)
-```
-
-Add `transportSecurity` to `NtripSourcetableRequest` with the same default.
-
-- [ ] **Step 5: Update fake connectors in tests**
-
-For fake connector classes in `NtripClientTest.kt`, update method signatures:
-
-```kotlin
-override fun connect(
-    host: String,
-    port: Int,
-    transportSecurity: NtripTransportSecurity,
-): NtripSocket {
-    observedTransportSecurity += transportSecurity
-    return sockets.removeFirst()
-}
-```
-
-Use `mutableListOf<NtripTransportSecurity>()` for `observedTransportSecurity`.
-
-- [ ] **Step 6: Persist transport security in NTRIP caster profiles**
-
-In `NtripCasterProfile`, add:
-
-```kotlin
-val transportSecurity: String = "CLEAR_TEXT",
-```
-
-In `validate()` add:
-
-```kotlin
-require(transportSecurity in setOf("CLEAR_TEXT", "TLS")) {
-    "NTRIP transport security must be CLEAR_TEXT or TLS."
-}
-```
-
-In `toJson()` add:
-
-```kotlin
-.put("transportSecurity", transportSecurity)
-```
-
-In `fromJson()` add:
-
-```kotlin
-transportSecurity = json.optString("transportSecurity", "CLEAR_TEXT"),
-```
-
-- [ ] **Step 7: Wire profile value into recording service intent**
-
-Where `MainActivity.kt` builds `NtripRequest` or recording intent extras, add an extra:
-
-```kotlin
-putExtra(RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_SECURITY, casterProfile.transportSecurity)
-```
-
-In `RecordingForegroundService`, add:
-
-```kotlin
-const val EXTRA_NTRIP_TRANSPORT_SECURITY = "ntripTransportSecurity"
-```
-
-Build `NtripRequest` with:
-
-```kotlin
-transportSecurity = runCatching {
-    NtripTransportSecurity.valueOf(intent.getStringExtra(EXTRA_NTRIP_TRANSPORT_SECURITY) ?: "CLEAR_TEXT")
-}.getOrDefault(NtripTransportSecurity.CLEAR_TEXT)
-```
-
-Record redacted metadata with the selected transport security if `NtripSessionMetadata` supports it; otherwise add `transportSecurity: String` to that data class and export it.
-
-- [ ] **Step 8: Add UI selector and warning**
-
-In the NTRIP caster profile editor field list, add a selectable field:
-
-```kotlin
-EditableProfileField(
-    key = "transportSecurity",
-    label = "Transport security",
-    value = profile.transportSecurity,
-    options = listOf(
-        EditableProfileOption("CLEAR_TEXT", "Cleartext TCP"),
-        EditableProfileOption("TLS", "TLS"),
-    ),
-)
-```
-
-Show a compact warning when `transportSecurity == "CLEAR_TEXT"`:
+If the NTRIP correction or source-upload profile editor does not already warn
+about cleartext transport, add a small non-blocking warning near host/credential
+fields:
 
 ```kotlin
 Text(
-    "Cleartext NTRIP sends credentials without TLS. Use only with trusted caster/network paths.",
+    "NTRIP may use cleartext TCP; credentials and GGA/source data are not universally encrypted.",
     color = MaterialTheme.colorScheme.error,
     style = MaterialTheme.typography.bodySmall,
 )
 ```
 
-- [ ] **Step 9: Update docs**
+This warning is advisory. It must not delete saved usernames, passwords,
+mountpoints or source-upload protocol settings. Do not add a fake TLS selector
+unless TLS socket support is implemented in the same task.
 
-In `docs/ntrip-and-corrections.md`, document:
+- [ ] **Step 6: Preserve Play Data safety wording**
+
+In `docs/play-publication.md`, ensure the Data safety draft says:
 
 ```markdown
-Caster profiles have an explicit transport security setting:
-
-- `CLEAR_TEXT`: ordinary TCP NTRIP. Credentials and optional GGA upload are not
-  protected by TLS.
-- `TLS`: NTRIP over a TLS socket to a TLS-capable caster endpoint.
-
-The Data safety form must not claim universal encryption in transit while any
-selected profile uses `CLEAR_TEXT`.
+Encryption in transit: do not claim universal encryption while cleartext NTRIP
+TCP is supported. If a later release adds TLS profiles, claim encrypted transit
+only for data sent through selected TLS-capable profiles.
 ```
 
-In `docs/play-publication.md`, update "Encryption in transit" with the same rule.
-
-- [ ] **Step 10: Verify**
+- [ ] **Step 7: Verify**
 
 Run:
 
 ```bash
 ./gradlew :core:correction:test --tests 'org.rtkcollector.core.correction.NtripClientTest'
-./gradlew :app:testDebugUnitTest --tests 'org.rtkcollector.app.profile.SettingsBackupModelsTest'
-./gradlew :app:testDebugUnitTest --tests 'org.rtkcollector.app.profile.SettingsImportModelsTest'
+./gradlew :core:correction:test --tests 'org.rtkcollector.core.correction.NtripCasterUploadClientTest'
 sh gradlew :app:compileDebugKotlin
 ```
 
-Expected: correction tests pass; app tests pass on desktop/CI; Kotlin compile passes in Termux.
+Expected: correction tests pass on desktop/CI; Kotlin compile passes in Termux.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripClient.kt core/correction/src/test/kotlin/org/rtkcollector/core/correction/NtripClientTest.kt app/src/main/kotlin/org/rtkcollector/app/profile/ProfileModels.kt app/src/main/kotlin/org/rtkcollector/app/profile/SettingsBackupModels.kt app/src/main/kotlin/org/rtkcollector/app/profile/SettingsImportModels.kt app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt docs/ntrip-and-corrections.md docs/play-publication.md
-git commit -m "feat: model NTRIP transport security"
+git add core/correction/src/test/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClientTest.kt app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileScreens.kt docs/ntrip-and-corrections.md docs/play-publication.md
+git commit -m "docs: disclose NTRIP cleartext transport"
 ```
+
+TLS support is a separate feature. If a later release should support TLS NTRIP
+profiles, create a fresh plan that adds a real transport-security model,
+settings persistence, socket connector support and UI selection. Do not use a
+TLS label in the UI until the runtime actually opens TLS sockets.
 
 ---
 
@@ -1457,9 +1441,11 @@ Run in this Termux/aarch64 checkout:
 ```bash
 git diff --check
 sh gradlew :app:compileDebugKotlin
+sh gradlew :app:unitTestClasses :app:androidTestClasses --dry-run
 ```
 
-Expected: both pass. Do not keep retrying `assembleDebug` in Termux if the known x86-64 `aapt2` resource-processing failure appears.
+Expected: all three commands pass. Do not keep retrying `assembleDebug` in
+Termux if the known x86-64 `aapt2` resource-processing failure appears.
 
 - [ ] **Step 5: Run release-host validation**
 
@@ -1470,9 +1456,12 @@ Run on Windows Android Studio, x86-64 Linux CI, or another host with runnable An
 ./gradlew test
 ./gradlew assembleDebug
 ./gradlew bundleRelease
+./gradlew validateGooglePlayReleaseBundle
 ```
 
 Expected: all pass after signing configuration is supplied for `bundleRelease`.
+The release bundle must contain both `armeabi-v7a` and `arm64-v8a`
+`librtkcollector_rtklib.so` entries.
 
 - [ ] **Step 6: Manual device validation**
 
@@ -1519,10 +1508,11 @@ If no files changed, do not create an empty commit.
 
 Spec coverage:
 
+- Current-state validation and stale-task pruning: Task 0.
 - Privacy/Data safety source: Task 1.
 - Notification permission and foreground-service readiness: Task 3.
 - Plaintext settings backup cleanup: Task 4.
-- NTRIP cleartext/TLS security model and disclosure: Task 5.
+- NTRIP cleartext disclosure, source-upload regression guard and optional TLS deferral: Task 5.
 - Session metadata/doc consistency: Task 6.
 - Third-party licences: Task 2.
 - Import surface hardening: Task 7.
@@ -1536,7 +1526,8 @@ Placeholder scan:
 
 Type consistency:
 
-- `NtripTransportSecurity`, `runtimePermissionsRequiredBeforeRecording`, `batteryOptimisationWarning`, `settingsBackupFileName`, and `isSettingsBackupCacheFile` are introduced before later tasks reference them.
+- `runtimePermissionsRequiredBeforeRecording`, `batteryOptimisationWarning`, `settingsBackupFileName`, and `isSettingsBackupCacheFile` are introduced before later tasks reference them.
+- `NtripTransportSecurity` is intentionally not introduced by this plan unless a separate TLS feature is explicitly approved and implemented.
 - Manifest changes use Android permission names exactly as required by Android APIs.
 - Documentation names match repository paths.
 

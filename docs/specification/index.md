@@ -25,8 +25,9 @@ remain design history and traceability inputs.
 6. `android-runtime.md`
 7. `security-privacy.md`
 8. `ui-requirements.md`
-9. `verification-matrix.md`
-10. `traceability.md`
+9. `publication-readiness.md`
+10. `verification-matrix.md`
+11. `traceability.md`
 
 ## How To Change The App
 
@@ -34,4 +35,3 @@ Every non-trivial feature or fix should identify affected requirement IDs before
 implementation. If no requirement exists, update this specification first or in
 the same branch. Update `verification-matrix.md` and
 `docs/superpowers/plan-status.md` when implementation status changes.
-

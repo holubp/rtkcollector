@@ -64,6 +64,15 @@
 | `SEC-SETTINGS-001` | Automated + manual | Settings export tests; export UI review | Needs review | Plaintext passwords must be opt-in. |
 | `SEC-IMPORT-001` | Automated + manual | Settings import validation tests; Android JSON open flow | Needs review | Reject malformed or unsafe imports. |
 | `SEC-DIAGNOSTICS-001` | Automated + review | Diagnostics redaction and disabled-state tests | In progress | Diagnostics sharing uses app-private logs and scoped temporary ZIPs. |
+| `PLAY-DISCLOSURE-001` | Review + manual | Privacy policy source; Play publication checklist source; Play Console answer review | Open | Privacy policy and Play publication checklist are missing before execution. |
+| `PLAY-DATA-001` | Review + manual | NTRIP transport/source-upload code review; Data safety checklist | Open | Must not claim universal encryption while cleartext NTRIP profiles are shipped. |
+| `PLAY-PERM-001` | Automated + review | Manifest lint/tests; release manifest review | Open | Main manifest currently has no mock-location permission; permission rationale still needs Play docs and notification review. |
+| `PLAY-NOTIFICATION-001` | Automated + manual | Notification permission policy tests; Android 13+ denial/acceptance smoke test | Open | `POST_NOTIFICATIONS` is not yet declared in the main manifest. |
+| `PLAY-FGS-001` | Review + manual | Manifest service type review; Play foreground-service declaration | Open | Foreground service rationale needs the Play publication checklist and release review. |
+| `PLAY-SECRETS-001` | Automated + manual | Settings backup model/share-policy tests; cache inspection after share | Open | Plaintext password export exists conceptually, but share-cache cleanup policy still needs implementation evidence. |
+| `PLAY-IMPORT-001` | Automated + manual | Settings import validator/intent tests; Android Files/share smoke test | Needs review | Existing JSON import handling must be reviewed against explicit confirmation and validation requirements. |
+| `PLAY-BUILD-001` | Automated + manual | `validateGooglePlayReleaseBuildInputs`; `validateGooglePlayReleaseBundle`; release AAB build | Implemented, not field-tested | Gradle release checks exist; full release AAB build still needs Windows Android Studio or CI validation. |
+| `PLAY-LICENSE-001` | Review + manual | Gradle dependency report; `docs/third-party-licenses.md` | Open | Licence document is too sparse for release review. |
 | `UI-DASH-001` | Manual + review | Phone/tablet portrait/landscape screenshots | Needs review | Visual fidelity and nav-bar checks. |
 | `UI-DASH-002` | Manual + review | Live UM980 session screenshots/video | Needs review | No jumping cards. |
 | `UI-DASH-003` | Manual + review | Phone portrait dashboard screenshot | Needs review | Live-monitoring cards should switch to single column when needed. |

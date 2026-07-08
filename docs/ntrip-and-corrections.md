@@ -141,6 +141,15 @@ High-rate RTCM upload sessions can consume significant mobile data and can trigg
 public caster service limits; operators should consider this before enabling
 always-on upload from metered links.
 
+## Transport Security
+
+NTRIP Basic authentication over ordinary TCP exposes credentials to the caster
+path in cleartext. RtkCollector must label cleartext NTRIP behaviour clearly and
+must not claim encrypted transit in Play Data safety disclosures while cleartext
+NTRIP correction download or source upload is supported. GGA upload, when
+enabled, sends receiver-derived position to the configured caster and must be
+disclosed as optional location transmission.
+
 Upload state, uploaded bytes, dropped bytes, bitrate, RTCM frame rates (total and
 per-message type), and final status are exposed through the service state and
 redacted session metadata.

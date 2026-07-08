@@ -20,3 +20,9 @@ NTRIP passwords, caster credentials and private mountpoint credentials must not
 be committed to the repository or written into exported session metadata.
 Session files may contain precise locations and receiver identifiers; handle
 them as sensitive operational data.
+
+Privacy and publication disclosures are tracked in
+[PRIVACY.md](PRIVACY.md) and [docs/play-publication.md](docs/play-publication.md).
+Security-sensitive changes to NTRIP credentials, settings backup import/export,
+FileProvider sharing, foreground services or session metadata must update those
+documents in the same change.

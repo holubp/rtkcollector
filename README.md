@@ -62,6 +62,11 @@ lives in [docs/user-workflows.md](docs/user-workflows.md). Superpowers specs and
 plans are retained as design and implementation history under
 [docs/superpowers](docs/superpowers/plan-status.md).
 
+## Privacy And Publication Status
+
+RtkCollector privacy handling and Play publication declarations are tracked in
+[PRIVACY.md](PRIVACY.md) and [docs/play-publication.md](docs/play-publication.md).
+
 ## Branding Assets
 
 Source logo files live in `logos/`. Android launcher and compact badge assets

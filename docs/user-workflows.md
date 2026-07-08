@@ -670,17 +670,15 @@ Use replay/test sessions for deterministic parser, quality-monitor and workflow
 tests. Replay does not require Android foreground-service or wake-lock semantics
 because it is not live hardware recording.
 
-## Settings Backup
+## Settings Backup Import And Export
 
-RtkCollector can export a user-initiated settings backup for transferring
-profiles between phones. The backup contains receiver command profiles, USB/baud
-profiles, NTRIP caster and mountpoint profiles, recording outputs, storage
-profiles, settings sets and active selections.
-
-NTRIP passwords are excluded by default. The export dialog may include a
-separate checkbox to include plaintext passwords. That option is intended only
-for trusted phone-to-phone transfer and the resulting file must be handled as a
-secret.
+Settings backup export writes profiles, selected workflow/settings references
+and optional NTRIP passwords to a JSON file selected through Android sharing.
+Plaintext password export is off by default and requires explicit user selection.
+Temporary settings backup files are cache artifacts and are deleted on a
+best-effort basis after sharing. Imported JSON must be previewed and validated
+before it replaces existing profiles or writes NTRIP passwords to local secret
+storage.
 
 ## Live Stream Diagnostics
 

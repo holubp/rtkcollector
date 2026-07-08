@@ -20,8 +20,14 @@ flush and close are prioritised over derived sidecar finalisation.
 - Recording must survive the app being minimised.
 - Files must be written in a crash-recoverable way.
 - UI lifecycle and Compose must not own the capture path.
-- Users must receive visible warnings when battery optimisation may affect long
-  sessions.
+- Users receive an in-app warning when Android battery optimisation may affect
+  long recordings. V1 warns but does not request battery-optimisation exemption
+  automatically; users remain in control of vendor-specific battery settings.
+
+On Android 13 and newer, recording start must request notification permission
+before foreground recording begins when that permission is still missing. If the
+user denies it, recording does not start and the app explains that Android
+needs notification permission to show the foreground recording notification.
 
 Start failures must be reported before or at recording start with a specific
 category such as USB, storage or NTRIP. A failed USB open, missing Android USB

@@ -1,11 +1,13 @@
 package org.rtkcollector.app.ui
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.app.PendingIntent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
@@ -14,14 +16,17 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,6 +83,8 @@ import org.rtkcollector.app.base.FixedBaseHandoffPlanner
 import org.rtkcollector.app.base.FixedBaseSettingsSetAction
 import org.rtkcollector.app.base.FixedBaseSettingsSetCandidate
 import org.rtkcollector.app.base.FixedBaseProfileMaterializer
+import org.rtkcollector.app.permissions.batteryOptimisationWarning
+import org.rtkcollector.app.permissions.runtimePermissionsRequiredBeforeRecording
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.NtripCasterUploadProfile
@@ -336,6 +343,7 @@ fun RtkCollectorApp(
     }
     var state by remember { mutableStateOf(plannedState) }
     var startInProgress by rememberSaveable { mutableStateOf(false) }
+    var pendingStartAfterNotificationPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
     var pendingFixedBaseCoordinateChoices by remember { mutableStateOf<FixedBaseCoordinateChoices?>(null) }
     var pendingFixedBaseCoordinate by remember { mutableStateOf<AcceptedBaseCoordinate?>(null) }
@@ -729,6 +737,33 @@ fun RtkCollectorApp(
             )
         }
     }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val pending = pendingStartAfterNotificationPermission
+        pendingStartAfterNotificationPermission = null
+        if (granted) {
+            pending?.invoke()
+        } else {
+            Toast.makeText(
+                context,
+                "Recording needs notification permission so Android can show the foreground recording notification.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+    fun startAfterRuntimePermissionCheck(action: () -> Unit) {
+        val missingPermissions = runtimePermissionsRequiredBeforeRecording(Build.VERSION.SDK_INT)
+            .filter { permission ->
+                ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+            }
+        if (missingPermissions.contains(Manifest.permission.POST_NOTIFICATIONS)) {
+            pendingStartAfterNotificationPermission = action
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            action()
+        }
+    }
     val importSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching {
@@ -950,6 +985,10 @@ fun RtkCollectorApp(
             runCatching { context.unregisterReceiver(receiver) }
         }
     }
+    val powerManager = remember(context) { context.getSystemService(PowerManager::class.java) }
+    val batteryWarning = batteryOptimisationWarning(
+        isIgnoringBatteryOptimisations = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true,
+    )
 
     MaterialTheme {
         Surface(
@@ -1146,121 +1185,135 @@ fun RtkCollectorApp(
                 )
             }
             when (screen) {
-                AppScreen.HOME -> HomeDashboard(
-                    state = state,
-                    layoutPreference = dashboardLayout,
-                    distanceUnitPreference = dashboardDistanceUnits,
-                    satelliteMonitorThemePreference = satelliteMonitorCardTheme,
-                    startInProgress = startInProgress,
-                    onPrimaryAction = {
-                        if (state.isRecording) {
-                            startInProgress = false
-                            context.startService(RecordingForegroundService.stopIntent(context))
-                        } else if (persistentReceiverWriteInProgress.get()) {
-                            Toast.makeText(
-                                context,
-                                "Wait for persistent receiver configuration write to finish before recording.",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        } else {
-                            buildDashboardStartIntent(
-                                context = context,
-                                settingsSets = settingsSets,
-                                selectedSettingsSetId = selectedSettingsSetId,
-                                selectedWorkflowId = selectedWorkflowId,
-                                selectedBaseCoordinate = baseCoordinateStore.selectedCoordinate(),
-                            )?.let { intent ->
-                                startInProgress = true
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    context.startForegroundService(intent)
-                                } else {
-                                    context.startService(intent)
-                                }
-                            }
-                        }
-                    },
-                    onMenu = { screen = AppScreen.SETTINGS },
-                    onNtrip = { dashboardSelector = DashboardSelector.MOUNTPOINT },
-                    onUsbPermission = {
-                        requestSelectedUsbPermission(context, selectedSettingsSetId)
-                        profileRevision++
-                    },
-                    onMockGps = { showMockGpsDialog = true },
-                    onSettingsSet = {
-                        if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing settings set.", Toast.LENGTH_LONG).show()
-                        } else {
-                            dashboardSelector = DashboardSelector.SETTINGS_SET
-                        }
-                    },
-                    onWorkflow = {
-                        if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
-                        } else {
-                            dashboardSelector = DashboardSelector.WORKFLOW
-                        }
-                    },
-                    onDevice = {
-                        if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing device filter.", Toast.LENGTH_LONG).show()
-                        } else {
-                            dashboardSelector = DashboardSelector.DEVICE
-                        }
-                    },
-                    onInitProfiles = {
-                        if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing init/shutdown profiles.", Toast.LENGTH_LONG).show()
-                        } else {
-                            dashboardSelector = DashboardSelector.INIT_PROFILES
-                        }
-                    },
-                    onUpload = {
-                        if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing NTRIP upload.", Toast.LENGTH_LONG).show()
-                        } else {
-                            dashboardSelector = DashboardSelector.UPLOAD
-                        }
-                    },
-                    onStorage = {
-                        if (state.isRecording) {
-                            Toast.makeText(context, "Stop recording before changing storage.", Toast.LENGTH_LONG).show()
-                        } else {
-                            dashboardSelector = DashboardSelector.STORAGE
-                        }
-                    },
-                    coordinateAveraging = state.position.serviceCoordinateAveragingState(),
-                    onStartCoordinateAveraging = { _, _ ->
-                        if (!state.isRecording) {
-                            Toast.makeText(context, "Start recording before averaging.", Toast.LENGTH_SHORT).show()
-                        } else {
-                            context.startService(
-                                Intent(context, RecordingForegroundService::class.java)
-                                    .setAction(RecordingForegroundService.ACTION_START_COORDINATE_AVERAGING),
-                            )
-                        }
-                    },
-                    onStopCoordinateAveraging = {
-                        context.startService(
-                            Intent(context, RecordingForegroundService::class.java)
-                                .setAction(RecordingForegroundService.ACTION_STOP_COORDINATE_AVERAGING),
+                AppScreen.HOME -> Column(modifier = Modifier.fillMaxSize()) {
+                    if (!state.isRecording && batteryWarning.show) {
+                        BatteryOptimisationWarningRow(
+                            text = batteryWarning.message,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
-                    },
-                    onUseCurrentCoordinateAsManualBase = { candidate ->
-                        val averageCandidate = state.position.serviceCoordinateAveragingState()
-                            .averageBaseCandidateOrNull()
-                        val instantCandidate = state.position.baseCoordinateCandidateOrNull()
-                        if (averageCandidate != null && instantCandidate != null) {
-                            pendingFixedBaseCoordinateChoices = FixedBaseCoordinateChoices(
-                                average = averageCandidate,
-                                instant = instantCandidate,
-                            )
-                        } else {
-                            beginFixedBaseHandoff(averageCandidate ?: instantCandidate ?: candidate)
-                        }
-                    },
-                    onSatelliteMonitorDetails = { screen = AppScreen.SATELLITE_MONITOR },
-                    onCasterUploadDetails = { screen = AppScreen.CASTER_UPLOAD_MONITOR },
-                )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        HomeDashboard(
+                            state = state,
+                            layoutPreference = dashboardLayout,
+                            distanceUnitPreference = dashboardDistanceUnits,
+                            satelliteMonitorThemePreference = satelliteMonitorCardTheme,
+                            startInProgress = startInProgress,
+                            onPrimaryAction = {
+                                if (state.isRecording) {
+                                    startInProgress = false
+                                    context.startService(RecordingForegroundService.stopIntent(context))
+                                } else if (persistentReceiverWriteInProgress.get()) {
+                                    Toast.makeText(
+                                        context,
+                                        "Wait for persistent receiver configuration write to finish before recording.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                } else {
+                                    startAfterRuntimePermissionCheck {
+                                        buildDashboardStartIntent(
+                                            context = context,
+                                            settingsSets = settingsSets,
+                                            selectedSettingsSetId = selectedSettingsSetId,
+                                            selectedWorkflowId = selectedWorkflowId,
+                                            selectedBaseCoordinate = baseCoordinateStore.selectedCoordinate(),
+                                        )?.let { intent ->
+                                            startInProgress = true
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                context.startForegroundService(intent)
+                                            } else {
+                                                context.startService(intent)
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            onMenu = { screen = AppScreen.SETTINGS },
+                            onNtrip = { dashboardSelector = DashboardSelector.MOUNTPOINT },
+                            onUsbPermission = {
+                                requestSelectedUsbPermission(context, selectedSettingsSetId)
+                                profileRevision++
+                            },
+                            onMockGps = { showMockGpsDialog = true },
+                            onSettingsSet = {
+                                if (state.isRecording) {
+                                    Toast.makeText(context, "Stop recording before changing settings set.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    dashboardSelector = DashboardSelector.SETTINGS_SET
+                                }
+                            },
+                            onWorkflow = {
+                                if (state.isRecording) {
+                                    Toast.makeText(context, "Stop recording before changing workflow.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    dashboardSelector = DashboardSelector.WORKFLOW
+                                }
+                            },
+                            onDevice = {
+                                if (state.isRecording) {
+                                    Toast.makeText(context, "Stop recording before changing device filter.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    dashboardSelector = DashboardSelector.DEVICE
+                                }
+                            },
+                            onInitProfiles = {
+                                if (state.isRecording) {
+                                    Toast.makeText(context, "Stop recording before changing init/shutdown profiles.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    dashboardSelector = DashboardSelector.INIT_PROFILES
+                                }
+                            },
+                            onUpload = {
+                                if (state.isRecording) {
+                                    Toast.makeText(context, "Stop recording before changing NTRIP upload.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    dashboardSelector = DashboardSelector.UPLOAD
+                                }
+                            },
+                            onStorage = {
+                                if (state.isRecording) {
+                                    Toast.makeText(context, "Stop recording before changing storage.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    dashboardSelector = DashboardSelector.STORAGE
+                                }
+                            },
+                            coordinateAveraging = state.position.serviceCoordinateAveragingState(),
+                            onStartCoordinateAveraging = { _, _ ->
+                                if (!state.isRecording) {
+                                    Toast.makeText(context, "Start recording before averaging.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    context.startService(
+                                        Intent(context, RecordingForegroundService::class.java)
+                                            .setAction(RecordingForegroundService.ACTION_START_COORDINATE_AVERAGING),
+                                    )
+                                }
+                            },
+                            onStopCoordinateAveraging = {
+                                context.startService(
+                                    Intent(context, RecordingForegroundService::class.java)
+                                        .setAction(RecordingForegroundService.ACTION_STOP_COORDINATE_AVERAGING),
+                                )
+                            },
+                            onUseCurrentCoordinateAsManualBase = { candidate ->
+                                val averageCandidate = state.position.serviceCoordinateAveragingState()
+                                    .averageBaseCandidateOrNull()
+                                val instantCandidate = state.position.baseCoordinateCandidateOrNull()
+                                if (averageCandidate != null && instantCandidate != null) {
+                                    pendingFixedBaseCoordinateChoices = FixedBaseCoordinateChoices(
+                                        average = averageCandidate,
+                                        instant = instantCandidate,
+                                    )
+                                } else {
+                                    beginFixedBaseHandoff(averageCandidate ?: instantCandidate ?: candidate)
+                                }
+                            },
+                            onSatelliteMonitorDetails = { screen = AppScreen.SATELLITE_MONITOR },
+                            onCasterUploadDetails = { screen = AppScreen.CASTER_UPLOAD_MONITOR },
+                        )
+                    }
+                }
                 AppScreen.SATELLITE_MONITOR -> SatelliteMonitorScreen(
                     state = state.satelliteMonitor,
                     onBack = { screen = AppScreen.HOME },
@@ -6340,6 +6393,25 @@ private fun filteredCommandProfileRows(
         profile.profileRow(
             isSelected = profile.id == selectedCommandProfileId,
         ).copy(outsideFilter = selected?.id == profile.id && !filter.matchesCommandProfile(profile))
+    }
+}
+
+@Composable
+private fun BatteryOptimisationWarningRow(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 

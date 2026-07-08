@@ -41,11 +41,14 @@ The Play listing must link to the published version of
 ## Permission Rationale
 
 - `INTERNET`: connects to user-configured NTRIP casters.
-- `FOREGROUND_SERVICE` and foreground service type permissions: keeps user
-  started recording and correction routing active in the background.
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE` and
+  `FOREGROUND_SERVICE_DATA_SYNC`: keep user-started recording and correction
+  routing active in the background while the app talks to an attached GNSS
+  receiver and updates recording/session state.
 - `WAKE_LOCK`: keeps capture running while the screen is off.
-- `POST_NOTIFICATIONS`: required before Play upload for Android versions that
-  require runtime notification permission; implementation is planned in Task 3.
+- `POST_NOTIFICATIONS`: required on Android 13+ before starting recording when
+  notification permission is still missing, so Android can show the foreground
+  recording notification.
 - USB host feature: communicates with attached GNSS receivers after Android USB
   permission is granted.
 
@@ -53,8 +56,12 @@ The Play listing must link to the published version of
 
 The foreground service is user initiated by pressing Start. It records receiver
 data and may route NTRIP corrections to an attached receiver while the app is in
-the background. The notification must show recording state, receiver RX bytes and
-NTRIP correction bytes.
+the background. The release manifest uses `connectedDevice|dataSync` because the
+service maintains a live connection to the receiver and keeps recording/correction
+routing session state active. On Android 13+, the app requests notification
+permission before recording when needed and does not start recording after a
+denial. The notification must show recording state, receiver RX bytes and NTRIP
+correction bytes.
 
 ## Release Validation
 

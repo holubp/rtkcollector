@@ -773,6 +773,15 @@ fun ProfileEditorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            data.warningText?.takeIf(String::isNotBlank)?.let { warning ->
+                item(key = "profile-warning") {
+                    Text(
+                        text = warning,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
             items(runtimeFields, key = { it.key }) { field ->
                 if (field.boolean) {
                     Row(

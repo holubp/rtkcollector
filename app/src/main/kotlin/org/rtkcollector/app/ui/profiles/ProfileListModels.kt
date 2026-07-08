@@ -179,6 +179,7 @@ data class ProfileEditorData(
     val title: String,
     val fields: List<EditableProfileField>,
     val readOnly: Boolean = false,
+    val warningText: String? = null,
 )
 
 data class ProfileEditorAction(

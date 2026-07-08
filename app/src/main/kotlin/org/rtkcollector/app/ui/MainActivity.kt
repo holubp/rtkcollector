@@ -231,6 +231,8 @@ private const val SETTINGS_BACKUP_CACHE_TTL_MILLIS = 30L * 60L * 1000L
 private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
 private const val PERSISTENT_RECEIVER_SAVE_OK_TIMEOUT_MILLIS = 3_000L
 private const val DEVICE_CONSOLE_PERMISSION_REQUIRED = "USB permission is required before opening the device console."
+private const val NTRIP_CLEARTEXT_TRANSPORT_WARNING =
+    "NTRIP may use cleartext TCP; credentials and GGA/source data are not universally encrypted."
 private val persistentReceiverWriteInProgress = AtomicBoolean(false)
 
 class MainActivity : ComponentActivity() {
@@ -3992,6 +3994,7 @@ private fun ProfileStores.profileEditorData(
             val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
             ProfileEditorData(
                 title = "Edit NTRIP caster",
+                warningText = NTRIP_CLEARTEXT_TRANSPORT_WARNING,
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("host", "Host", profile.host),
@@ -4017,6 +4020,7 @@ private fun ProfileStores.profileEditorData(
             val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
             ProfileEditorData(
                 title = "Edit NTRIP caster upload",
+                warningText = NTRIP_CLEARTEXT_TRANSPORT_WARNING,
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("host", "Host", profile.host),
@@ -4126,6 +4130,7 @@ private fun ProfileStores.profileEditorData(
                 ?.let { "Mountpoint is not in the selected caster sourcetable." }
             ProfileEditorData(
                 title = "Edit NTRIP mountpoint",
+                warningText = NTRIP_CLEARTEXT_TRANSPORT_WARNING,
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField(

@@ -988,6 +988,7 @@ fun RtkCollectorApp(
     val powerManager = remember(context) { context.getSystemService(PowerManager::class.java) }
     val batteryWarning = batteryOptimisationWarning(
         isIgnoringBatteryOptimisations = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true,
+        isRecording = state.isRecording,
     )
 
     MaterialTheme {
@@ -1186,7 +1187,7 @@ fun RtkCollectorApp(
             }
             when (screen) {
                 AppScreen.HOME -> Column(modifier = Modifier.fillMaxSize()) {
-                    if (!state.isRecording && batteryWarning.show) {
+                    if (batteryWarning.show) {
                         BatteryOptimisationWarningRow(
                             text = batteryWarning.message,
                             modifier = Modifier

@@ -16,8 +16,11 @@ fun runtimePermissionsRequiredBeforeRecording(sdkInt: Int): List<String> =
         emptyList()
     }
 
-fun batteryOptimisationWarning(isIgnoringBatteryOptimisations: Boolean): BatteryOptimisationWarning =
-    if (isIgnoringBatteryOptimisations) {
+fun batteryOptimisationWarning(
+    isIgnoringBatteryOptimisations: Boolean,
+    isRecording: Boolean = false,
+): BatteryOptimisationWarning =
+    if (isIgnoringBatteryOptimisations || isRecording) {
         BatteryOptimisationWarning(show = false, message = "")
     } else {
         BatteryOptimisationWarning(

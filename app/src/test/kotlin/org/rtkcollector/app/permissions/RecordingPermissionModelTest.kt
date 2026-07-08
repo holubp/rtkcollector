@@ -38,4 +38,15 @@ class RecordingPermissionModelTest {
     fun batteryWarningIsHiddenWhenOptimisationIsAlreadyIgnored() {
         assertFalse(batteryOptimisationWarning(isIgnoringBatteryOptimisations = true).show)
     }
+
+    @Test
+    fun batteryWarningIsHiddenWhileRecording() {
+        val warning = batteryOptimisationWarning(
+            isIgnoringBatteryOptimisations = false,
+            isRecording = true,
+        )
+
+        assertFalse(warning.show)
+        assertEquals("", warning.message)
+    }
 }

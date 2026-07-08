@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -342,6 +343,7 @@ fun RtkCollectorApp(
         mutableStateOf(profileStore.plannedDashboardState(settingsSets, selectedSettingsSetId, selectedWorkflowId))
     }
     var state by remember { mutableStateOf(plannedState) }
+    val latestState = rememberUpdatedState(state)
     var startInProgress by rememberSaveable { mutableStateOf(false) }
     var pendingStartAfterNotificationPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualBaseCoordinate by remember { mutableStateOf<BaseCoordinateCandidate?>(null) }
@@ -758,7 +760,22 @@ fun RtkCollectorApp(
                 ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
             }
         if (missingPermissions.contains(Manifest.permission.POST_NOTIFICATIONS)) {
-            pendingStartAfterNotificationPermission = action
+            pendingStartAfterNotificationPermission = {
+                val currentState = latestState.value
+                when {
+                    currentState.isRecording -> {
+                        startInProgress = false
+                    }
+                    persistentReceiverWriteInProgress.get() -> {
+                        Toast.makeText(
+                            context,
+                            "Wait for persistent receiver configuration write to finish before recording.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    else -> action()
+                }
+            }
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             action()

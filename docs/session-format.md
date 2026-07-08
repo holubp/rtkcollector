@@ -30,17 +30,83 @@ session/
 
 ## `session.json`
 
-Required fields:
+### Current Experimental V1 Fields
+
+Current V1 writes these top-level `session.json` fields:
 
 - `appVersion`
 - `androidDeviceModel`
 - `androidVersion`
 - `receiverDriverId`
-- `receiverIdentification`
-- `workflowSpecVersion`
+- `usbVid`
+- `usbPid`
+- `baudRate`
+- `mode`: `ROVER`, `FIXED_BASE`, `TEMPORARY_BASE_PREPARATION` or
+  `REPLAY_TEST`
+- `startedAt`
+- `stoppedAt`
+- `sessionUuid`
+- `linkedBaseSessionUuid`
 - `workflowId`
 - `workflowName`
 - `receiverRole`
+- `um980ProfileId`
+- `commandProfileId`
+- `usbBaudProfileId`
+- `ntripCasterProfileId`
+- `ntripMountpointProfileId`
+- `recordingPolicyId`
+- `rtklibProfileId`
+- `rtklibEnabled`
+- `rtklibPreset`
+- `rtklibSnapshotId`
+- `rtklibRoutePlan`
+- `rtklibValidationSummary`
+- `rtklibOutputNmea`
+- `rtklibOutputPos`
+- `rtklibFrequencyCount`
+- `rtklibServerCycleMillis`
+- `rtklibServerBufferBytes`
+- `rtklibSolutionBufferBytes`
+- `solutionPolicyProfileId`
+- `solutionScreenPolicy`
+- `solutionMockPolicy`
+- `storageProfileId`
+- `storageKind`
+- `coordinateSource`
+- `baseCoordinateId`
+- `baseCoordinateName`
+- `baseCoordinateMethod`
+- `baseCasterUploadEnabled`
+- `baseCasterUploadHost`
+- `baseCasterUploadPort`
+- `baseCasterUploadMountpoint`
+- `baseCasterUploadUsernamePresent`
+- `baseCasterUploadSecretRef`
+- `baseCasterUploadFinalStatus`
+- `validationSummary`
+- `expectedArtifacts`
+- `ntrip`, when NTRIP correction download was configured
+
+The `ntrip` object stores redacted metadata only: caster host, caster port,
+mountpoint, username presence, GGA upload status, secret reference, protocol and
+final status. It must not contain passwords, tokens or raw credentials. NTRIP
+passwords, tokens and raw credentials must never appear in `session.json`; only
+secret references or redacted metadata are allowed. The raw stream must be
+stored only in `receiver-rx.raw`; app timestamps and markers belong in sidecar
+files.
+
+Workflow identifier fields mirror the validated `WorkflowSpec` described in
+[Workflows](workflows.md), but the complete workflow model is not yet serialized
+as a structured object.
+
+### Planned Workflow Metadata
+
+The workflow model also defines fields that should be added when the session
+metadata writer is upgraded:
+
+- `receiverIdentification`
+- `workflowSpecVersion`
 - `correctionSource`
 - `correctionTargets`
 - `solutionEngines`
@@ -49,45 +115,16 @@ Required fields:
 - `recordingExpectations`
 - `qualityMonitoringExpectations`
 - `workflowValidationAtStart`
-- `usbVid`
-- `usbPid`
-- `baudRate`
 - `serialParameters`
-- `mode`: `rover`, `fixed-base`, `temporary-base-preparation` or
-  `replay-test`
-- `startedAt`
-- `stoppedAt`
-- `ntrip`
-- `commandProfileId`
-- `usbBaudProfileId`
-- `ntripCasterProfileId`
-- `ntripMountpointProfileId`
-- `recordingPolicyId`
-- `storageProfileId`
-- `storageKind`
 - `antenna`
-- `sessionUuid`
-- `linkedBaseSessionUuid`
-- `baseCasterUploadEnabled`
-- `baseCasterUploadHost`
-- `baseCasterUploadPort`
-- `baseCasterUploadMountpoint`
-- `baseCasterUploadUsernamePresent`
-- `baseCasterUploadSecretRef`
-- `baseCasterUploadFinalStatus`
 
-Workflow fields mirror the validated `WorkflowSpec` described in
-[Workflows](workflows.md). `correctionSource` metadata must exclude secrets.
-NTRIP passwords, tokens and raw credentials must never appear in `session.json`;
-only secret references or redacted metadata are allowed. The raw stream must be
-stored only in `receiver-rx.raw`; app timestamps and markers belong in sidecar
-files.
-
-`solutionEngines` must distinguish the normal receiver in-device solution from
-receiver PPP solution and from future RTKLIB real-time solution. Temporary-base
-preparation sessions should record raw observations at `>= 1 Hz` where
-supported, record normal device solution and record receiver PPP solution where
-supported.
+Until those fields are emitted by the app, downstream tools must treat them as
+planned metadata and must not require them for V1 session parsing. Planned
+`solutionEngines` metadata should distinguish the normal receiver in-device
+solution from receiver PPP solution and from future RTKLIB real-time solution.
+Temporary-base preparation sessions should record raw observations at `>= 1 Hz`
+where supported, record normal device solution and record receiver PPP solution
+where supported.
 
 When RTKLIB-EX real-time processing is enabled in V2, session metadata must
 record whether RTKLIB was enabled, the selected RTKLIB profile id, preset,

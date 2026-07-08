@@ -188,6 +188,64 @@ class SessionWritersTest {
     }
 
     @Test
+    fun exportedSessionMetadataContainsCurrentV1FieldsAndNoPassword() {
+        val json = exportSessionMetadata(
+            SessionMetadata(
+                appVersion = "0.1.0",
+                androidDeviceModel = "test-device",
+                androidVersion = "36",
+                receiverDriverId = "unicore-n4",
+                receiverIdentification = null,
+                usbVid = 1027,
+                usbPid = 24597,
+                baudRate = 230400,
+                serialParameters = SerialParameters(),
+                mode = SessionMode.ROVER,
+                startedAt = "2026-06-14T00:00:00Z",
+                stoppedAt = null,
+                ntrip = NtripSessionMetadata(
+                    casterHost = "caster.example",
+                    casterPort = 2101,
+                    mountpoint = "MOUNT",
+                    usernamePresent = true,
+                    ggaUploadEnabled = false,
+                    secretRef = "ntrip:caster.example:caster:user",
+                    protocol = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+                    finalStatus = null,
+                ),
+                antenna = AntennaMetadata(),
+                sessionUuid = "session-1",
+                linkedBaseSessionUuid = null,
+                workflowId = "rover-ntrip",
+                workflowName = "Rover with NTRIP",
+                receiverRole = "ROVER",
+                um980ProfileId = "um980-binary",
+                commandProfileId = "cmd-1",
+                usbBaudProfileId = "usb-1",
+                ntripCasterProfileId = "caster-1",
+                ntripMountpointProfileId = "mount-1",
+                recordingPolicyId = "recording-1",
+                storageProfileId = "storage-1",
+                storageKind = "APP_PRIVATE",
+                coordinateSource = "receiver",
+                validationSummary = "valid",
+                expectedArtifacts = listOf("receiver-rx.raw", "correction-input.raw"),
+            ),
+        )
+
+        assertTrue(json.contains("\"appVersion\":\"0.1.0\""))
+        assertTrue(json.contains("\"workflowId\":\"rover-ntrip\""))
+        assertTrue(json.contains("\"workflowName\":\"Rover with NTRIP\""))
+        assertTrue(json.contains("\"receiverRole\":\"ROVER\""))
+        assertTrue(json.contains("\"um980ProfileId\":\"um980-binary\""))
+        assertTrue(json.contains("\"expectedArtifacts\":[\"receiver-rx.raw\",\"correction-input.raw\"]"))
+        assertTrue(json.contains("\"ntrip\":{"))
+        assertTrue(json.contains("\"secretRef\":\"ntrip:caster.example:caster:user\""))
+        assertFalse(json.contains("password", ignoreCase = true))
+        assertFalse(json.contains("token", ignoreCase = true))
+    }
+
+    @Test
     fun `nmea solution sidecar appends without truncating existing file`() {
         SessionWriters.openNew(tempDir).use { writers ->
             writers.appendReceiverSolutionNmea("\$GPGGA,1*00\r\n")

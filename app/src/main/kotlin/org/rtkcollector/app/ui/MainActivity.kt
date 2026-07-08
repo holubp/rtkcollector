@@ -212,6 +212,8 @@ import org.rtkcollector.core.correction.NtripSourcetableClient
 import org.rtkcollector.core.correction.NtripSourcetableRequest
 import org.rtkcollector.core.rtklib.RtklibNativeBridge
 import org.rtkcollector.core.rtklib.RtklibPostprocessMode
+import org.rtkcollector.app.share.isSettingsBackupCacheFile
+import org.rtkcollector.app.share.settingsBackupFileName
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -224,6 +226,8 @@ import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TEMP_SHARE_ZIP_CLEANUP_DELAY_MILLIS = 60L * 60L * 1000L
+private const val SETTINGS_BACKUP_SHARE_CLEANUP_DELAY_MILLIS = 5L * 60L * 1000L
+private const val SETTINGS_BACKUP_CACHE_TTL_MILLIS = 30L * 60L * 1000L
 private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
 private const val PERSISTENT_RECEIVER_SAVE_OK_TIMEOUT_MILLIS = 3_000L
 private const val DEVICE_CONSOLE_PERMISSION_REQUIRED = "USB permission is required before opening the device console."
@@ -3333,7 +3337,12 @@ private fun buildSettingsBackup(
 private fun shareSettingsBackup(context: Context, includePlaintextPasswords: Boolean) {
     val backup = buildSettingsBackup(context, includePlaintextPasswords)
     val directory = context.cacheDir.resolve("settings-backups").also { it.mkdirs() }
-    val file = directory.resolve("rtkcollector-settings-${System.currentTimeMillis()}.json")
+    val file = directory.resolve(
+        settingsBackupFileName(
+            epochMillis = System.currentTimeMillis(),
+            includesPlaintextPasswords = includePlaintextPasswords,
+        ),
+    )
     file.writeText(backup.toJson().toString(2), Charsets.UTF_8)
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     val intent = Intent(Intent.ACTION_SEND).apply {
@@ -3342,6 +3351,7 @@ private fun shareSettingsBackup(context: Context, includePlaintextPasswords: Boo
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Share RtkCollector settings"))
+    scheduleSettingsBackupCacheCleanup(directory, file)
 }
 
 private fun importSettingsBackup(context: Context, uri: Uri) {
@@ -3388,6 +3398,24 @@ private fun shareZip(context: Context, zipFile: File) {
     }
     context.startActivity(Intent.createChooser(intent, "Share recording ZIP"))
     scheduleTemporaryZipCleanup(listOf(zipFile))
+}
+
+private fun scheduleSettingsBackupCacheCleanup(cacheDirectory: File, justShared: File) {
+    Handler(Looper.getMainLooper()).postDelayed(
+        {
+            val now = System.currentTimeMillis()
+            runCatching {
+                cacheDirectory.listFiles { file ->
+                    file.isFile && isSettingsBackupCacheFile(file.name)
+                }?.forEach { file ->
+                    if (file == justShared || file.lastModified() < now - SETTINGS_BACKUP_CACHE_TTL_MILLIS) {
+                        runCatching { file.delete() }
+                    }
+                }
+            }
+        },
+        SETTINGS_BACKUP_SHARE_CLEANUP_DELAY_MILLIS,
+    )
 }
 
 private fun shareZipFiles(context: Context, zipFiles: List<File>) {

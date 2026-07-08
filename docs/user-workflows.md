@@ -675,8 +675,11 @@ because it is not live hardware recording.
 Settings backup export writes profiles, selected workflow/settings references
 and optional NTRIP passwords to a JSON file selected through Android sharing.
 Plaintext password export is off by default and requires explicit user selection.
-Temporary settings backup files are cache artifacts and are deleted on a
-best-effort basis after sharing. Imported JSON must be previewed and validated
+Settings backup share files are temporary cache artifacts and include redacted
+or plaintext-password JSON in the filename; plaintext-exported backups are
+marked with `-plaintext-passwords-<epoch>`. They are deleted on a best-effort
+basis after launching Android's share sheet. Imported JSON must be previewed and
+validated
 before it replaces existing profiles or writes NTRIP passwords to local secret
 storage.
 

@@ -52,10 +52,13 @@ Users may explicitly share session ZIPs, session files or settings backup JSON
 files through Android's share sheet. Settings backup export can optionally
 include plaintext NTRIP passwords. This option is off by default and should be
 used only when transferring settings to a trusted device.
+Plaintext-password backup filenames include `plaintext-passwords` in the name
+(`rtkcollector-settings-plaintext-passwords-<epoch>.json`).
 
-Temporary share files are written to app cache and should be removed by the app
-after sharing on a best-effort basis. Recipients selected in Android's share
-sheet are outside RtkCollector's control.
+Settings backup share files are temporary cache artifacts. RtkCollector writes
+them to app cache, marks plaintext-password backups in the filename, and then
+schedules best-effort cleanup after launching Android's share sheet.
+Recipients selected from that sheet remain outside RtkCollector's control.
 
 ## Deletion And Retention
 

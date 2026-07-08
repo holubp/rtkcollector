@@ -47,6 +47,14 @@ class SettingsImportIntentReaderTest {
     }
 
     @Test
+    fun `rejects file uri imports`() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("file:///sdcard/Download/settings.json"))
+            .setType("application/json")
+
+        assertNull(settingsImportUriFromIntent(intent))
+    }
+
+    @Test
     fun `ignores launcher intent`() {
         assertNull(settingsImportUriFromIntent(Intent(Intent.ACTION_MAIN)))
     }

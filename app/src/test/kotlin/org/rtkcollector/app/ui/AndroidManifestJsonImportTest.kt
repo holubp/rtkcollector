@@ -1,5 +1,6 @@
 package org.rtkcollector.app.ui
 
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -9,13 +10,27 @@ class AndroidManifestJsonImportTest {
     @Test
     fun `manifest registers json view and send import filters`() {
         val manifest = Files.readString(sourceFile("src/main/AndroidManifest.xml"))
+        val importFilter = settingsImportViewIntentFilter(manifest)
 
         assertTrue(manifest.contains("android.intent.action.VIEW"))
         assertTrue(manifest.contains("android.intent.action.SEND"))
-        assertTrue(manifest.contains("android:mimeType=\"application/json\""))
-        assertTrue(manifest.contains("android:mimeType=\"text/json\""))
+        assertTrue(importFilter.contains("android:mimeType=\"application/json\""))
+        assertTrue(importFilter.contains("android:mimeType=\"text/json\""))
         assertTrue(manifest.contains("android:mimeType=\"text/plain\""))
-        assertTrue(manifest.contains("android:scheme=\"content\""))
+        assertTrue(importFilter.contains("android:scheme=\"content\""))
+    }
+
+    @Test
+    fun `settings import view intent does not use browsable or file scheme`() {
+        val manifest = Files.readString(sourceFile("src/main/AndroidManifest.xml"))
+        val importFilter = settingsImportViewIntentFilter(manifest)
+
+        assertFalse(importFilter.contains("android.intent.category.BROWSABLE"))
+        assertFalse(importFilter.contains("android:scheme=\"file\""))
+        assertTrue(importFilter.contains("android.intent.category.DEFAULT"))
+        assertTrue(importFilter.contains("android:scheme=\"content\""))
+        assertTrue(importFilter.contains("android:mimeType=\"application/json\""))
+        assertTrue(importFilter.contains("android:mimeType=\"text/json\""))
     }
 
     private fun sourceFile(relative: String): Path {
@@ -23,4 +38,8 @@ class AndroidManifestJsonImportTest {
         return candidates.firstOrNull(Files::exists)
             ?: error("Cannot locate source file $relative from ${Path.of("").toAbsolutePath()}")
     }
+
+    private fun settingsImportViewIntentFilter(manifest: String): String =
+        manifest.substringAfter("<action android:name=\"android.intent.action.VIEW\" />")
+            .substringBefore("</intent-filter>")
 }

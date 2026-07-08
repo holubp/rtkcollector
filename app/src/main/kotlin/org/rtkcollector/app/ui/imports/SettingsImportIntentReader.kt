@@ -24,4 +24,4 @@ private fun clipDataUri(intent: Intent): Uri? {
 }
 
 private fun validImportUri(uri: Uri?): Uri? =
-    uri?.takeIf { it.scheme == "content" || it.scheme == "file" }
+    uri?.takeIf { it.scheme == "content" }

@@ -16,6 +16,11 @@ USB/Bluetooth/TCP/File transport
   -> UI
 ```
 
+Publication documentation must describe the shipped implementation, not only the
+long-term transport architecture. If Bluetooth, TCP or replay transports are
+documented as architectural seams but not implemented in the Android app, user
+and Play-facing documents must label them as future or non-current capabilities.
+
 ## Capture Rules
 
 - The capture path must not depend on Activity lifecycle.

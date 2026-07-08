@@ -56,6 +56,11 @@ Android Gradle Plugin invoking SDK native binaries such as `aapt2` that are not
 usable on this Termux/Android host; use `:app:compileDebugKotlin` to validate
 the Kotlin/UI code locally.
 
+Current Android V1 focuses on USB receiver capture plus NTRIP client correction
+intake/routing. The architecture keeps Bluetooth, TCP and file replay as
+receiver-agnostic transport boundaries, but those transports are not publication
+claims for the current Android app unless explicitly implemented and tested.
+
 Formal contributor-facing requirements live in
 [docs/specification](docs/specification/index.md). User workflow documentation
 lives in [docs/user-workflows.md](docs/user-workflows.md). Superpowers specs and
@@ -66,6 +71,10 @@ plans are retained as design and implementation history under
 
 RtkCollector privacy handling and Play publication declarations are tracked in
 [PRIVACY.md](PRIVACY.md) and [docs/play-publication.md](docs/play-publication.md).
+Before any Google Play upload, use
+[docs/play-publication.md](docs/play-publication.md) as the release checklist
+for signing, privacy, Data safety, foreground service declarations, licence
+inventory and manual field validation.
 
 ## Branding Assets
 
@@ -101,14 +110,18 @@ project management.
 
 ## High-Level Architecture
 
-The app is designed as a service-first receiver data pipeline:
+The app architecture is designed as a service-first receiver data pipeline:
 
-1. USB, Bluetooth, TCP or file replay transport receives bytes.
+1. A receiver transport receives bytes.
 2. A capture queue feeds an append-only raw recorder.
 3. Session metadata, transmitted receiver commands and quality events are
    written to sidecar files.
 4. Parsers and receiver drivers observe the stream only as advisory consumers.
 5. Quality monitoring and UI state derive from advisory parser output.
+
+Current Android V1 implements USB receiver capture plus NTRIP correction
+intake/routing. Bluetooth, TCP and file replay remain architecture boundaries,
+not current Android publication claims unless explicitly implemented and tested.
 
 The capture path must not depend on the Android Activity lifecycle, Compose,
 NTRIP availability or parser success.

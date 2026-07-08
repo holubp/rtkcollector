@@ -678,10 +678,12 @@ Plaintext password export is off by default and requires explicit user selection
 Settings backup share files are temporary cache artifacts and include redacted
 or plaintext-password JSON in the filename; plaintext-exported backups are
 marked with `-plaintext-passwords-<epoch>`. They are deleted on a best-effort
-basis after launching Android's share sheet. Imported JSON must be previewed and
-validated
-before it replaces existing profiles or writes NTRIP passwords to local secret
-storage.
+basis after launching Android's share sheet.
+
+Settings import is available through Android content/share intents. The app
+accepts JSON content, validates structure and references, shows a preview, and
+requires explicit confirmation before replacing profiles or importing plaintext
+passwords. Import is blocked while recording is active.
 
 ## Live Stream Diagnostics
 

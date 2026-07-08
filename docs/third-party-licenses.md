@@ -20,11 +20,11 @@ the Gradle dependency graph used for the released AAB/APK.
 | --- | --- | --- |
 | Gradle | Build tool | Apache-2.0 |
 | Kotlin Gradle plugin | Kotlin compilation | Apache-2.0 |
-| Android Gradle Plugin plugin | Android build integration | Apache-2.0 |
+| Android Gradle Plugin | Android build integration | Apache-2.0 |
 | AndroidX Compose BOM (`androidx.compose:compose-bom`) | Compose version alignment (implementation declarations) | Apache-2.0 |
 | JUnit BOM (`org.junit:junit-bom`) | JUnit test dependency alignment | Eclipse Public License 2.0 |
-| JUnit Jupiter API/Engine | Unit tests | Eclipse Public License 2.0 |
-| JUnit Jupiter aggregate (`org.junit.jupiter:junit-jupiter`) | Shared JUnit test API + test engine entry point | Eclipse Public License 2.0 |
+| JUnit Jupiter API/Engine | Unit tests (app module: API + engine split dependencies) | Eclipse Public License 2.0 |
+| JUnit Jupiter aggregate (`org.junit.jupiter:junit-jupiter`) | Convenience JUnit entry used by several JVM module test modules where declared | Eclipse Public License 2.0 |
 | JUnit Platform Launcher | Test runtime/discovery | Eclipse Public License 2.0 |
 | Kotlin test (`kotlin-test`) | Shared Kotlin unit-test API | Apache-2.0 |
 | Compose UI tooling | Debug-only UI inspection | Apache-2.0 |

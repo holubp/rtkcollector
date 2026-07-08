@@ -35,7 +35,8 @@ Security practice declarations:
 
 ## Privacy Policy
 
-The Play listing must link to the published version of `PRIVACY.md`.
+The Play listing must link to the published version of
+`../PRIVACY.md`.
 
 ## Permission Rationale
 
@@ -43,8 +44,8 @@ The Play listing must link to the published version of `PRIVACY.md`.
 - `FOREGROUND_SERVICE` and foreground service type permissions: keeps user
   started recording and correction routing active in the background.
 - `WAKE_LOCK`: keeps capture running while the screen is off.
-- `POST_NOTIFICATIONS`: displays the foreground recording notification on
-  Android versions that require runtime notification permission.
+- `POST_NOTIFICATIONS`: required before Play upload for Android versions that
+  require runtime notification permission; implementation is planned in Task 3.
 - USB host feature: communicates with attached GNSS receivers after Android USB
   permission is granted.
 
@@ -63,6 +64,8 @@ Before upload:
 2. Run `sh gradlew :app:compileDebugKotlin` in Termux or `./gradlew :app:compileDebugKotlin` on a desktop host.
 3. Run `./gradlew test` on a host where Android Gradle plugin native tools run.
 4. Build a signed release AAB on Windows Android Studio or CI.
-5. Install the release build on at least one Android 13+ device and verify notification permission flow.
+5. Install the release build on at least one Android 13+ device and verify
+   notification permission flow before Play upload.
 6. Verify a plain rover recording, rover + NTRIP recording, session ZIP share and settings backup import/export.
-7. Confirm `docs/third-party-licenses.md`, `PRIVACY.md`, `SECURITY.md` and Play Data safety answers match the shipped build.
+7. Confirm `third-party-licenses.md`, `../PRIVACY.md`, `../SECURITY.md` and
+   Play Data safety answers match the shipped build.

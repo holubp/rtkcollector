@@ -1263,14 +1263,6 @@ fun RtkCollectorApp(
             }
             when (screen) {
                 AppScreen.HOME -> Column(modifier = Modifier.fillMaxSize()) {
-                    if (batteryWarning.show) {
-                        BatteryOptimisationWarningRow(
-                            text = batteryWarning.message,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
-                    }
                     Box(modifier = Modifier.weight(1f)) {
                         HomeDashboard(
                             state = state,
@@ -1278,6 +1270,7 @@ fun RtkCollectorApp(
                             distanceUnitPreference = dashboardDistanceUnits,
                             satelliteMonitorThemePreference = satelliteMonitorCardTheme,
                             startInProgress = startInProgress,
+                            recordingReliabilityWarning = batteryWarning.message.takeIf { batteryWarning.show },
                             onPrimaryAction = {
                                 if (state.isRecording) {
                                     startInProgress = false
@@ -6519,25 +6512,6 @@ private fun filteredCommandProfileRows(
         profile.profileRow(
             isSelected = profile.id == selectedCommandProfileId,
         ).copy(outsideFilter = selected?.id == profile.id && !filter.matchesCommandProfile(profile))
-    }
-}
-
-@Composable
-private fun BatteryOptimisationWarningRow(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-        shape = MaterialTheme.shapes.small,
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodyMedium,
-        )
     }
 }
 

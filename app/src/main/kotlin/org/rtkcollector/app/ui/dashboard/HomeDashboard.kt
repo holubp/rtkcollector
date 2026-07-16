@@ -94,6 +94,7 @@ fun HomeDashboard(
     distanceUnitPreference: DashboardDistanceUnitPreference = DashboardDistanceUnitPreference.default,
     satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference = SatelliteMonitorCardThemePreference.default,
     startInProgress: Boolean = false,
+    recordingReliabilityWarning: String? = null,
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
@@ -216,6 +217,7 @@ fun HomeDashboard(
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
+                        recordingReliabilityWarning = recordingReliabilityWarning,
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -241,6 +243,7 @@ fun HomeDashboard(
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
+                        recordingReliabilityWarning = recordingReliabilityWarning,
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -429,6 +432,7 @@ private fun CompactDashboard(
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
+    recordingReliabilityWarning: String?,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -453,7 +457,11 @@ private fun CompactDashboard(
             onUpload = onUpload,
             onStorage = onStorage,
         )
-        ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
+        DashboardAlerts(
+            displayedError = displayedError,
+            recordingReliabilityWarning = recordingReliabilityWarning,
+            onCopyError = onCopyError,
+        )
         DashboardCards(
             state = state,
             distanceUnitPreference = distanceUnitPreference,
@@ -488,6 +496,7 @@ private fun RailDashboard(
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
+    recordingReliabilityWarning: String?,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -525,7 +534,6 @@ private fun RailDashboard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
                 defaultDashboardSetupItems.forEach { item ->
                     val enabled = item != DashboardSetupItem.UPLOAD || status.uploadAvailable
                     SetupRailItem(
@@ -547,19 +555,60 @@ private fun RailDashboard(
                 }
             }
         }
-        DashboardCards(
-            state = state,
-            distanceUnitPreference = distanceUnitPreference,
-            satelliteMonitorThemePreference = satelliteMonitorThemePreference,
-            onSettingsSet = onSettingsSet,
-            onHelp = onHelp,
+        Column(
             modifier = Modifier.weight(1f),
-            coordinateAveraging = coordinateAveraging,
-            onStartCoordinateAveraging = onStartCoordinateAveraging,
-            onStopCoordinateAveraging = onStopCoordinateAveraging,
-            onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
-            onSatelliteMonitorDetails = onSatelliteMonitorDetails,
-            onCasterUploadDetails = onCasterUploadDetails,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            DashboardAlerts(
+                displayedError = displayedError,
+                recordingReliabilityWarning = recordingReliabilityWarning,
+                onCopyError = onCopyError,
+            )
+            DashboardCards(
+                state = state,
+                distanceUnitPreference = distanceUnitPreference,
+                satelliteMonitorThemePreference = satelliteMonitorThemePreference,
+                onSettingsSet = onSettingsSet,
+                onHelp = onHelp,
+                modifier = Modifier.fillMaxWidth(),
+                coordinateAveraging = coordinateAveraging,
+                onStartCoordinateAveraging = onStartCoordinateAveraging,
+                onStopCoordinateAveraging = onStopCoordinateAveraging,
+                onUseCurrentCoordinateAsManualBase = onUseCurrentCoordinateAsManualBase,
+                onSatelliteMonitorDetails = onSatelliteMonitorDetails,
+                onCasterUploadDetails = onCasterUploadDetails,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashboardAlerts(
+    displayedError: DashboardErrorSnapshot?,
+    recordingReliabilityWarning: String?,
+    onCopyError: () -> Unit,
+) {
+    val warning = recordingReliabilityWarning?.takeIf { it.isNotBlank() }
+    if (displayedError == null && warning == null) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
+        warning?.let { RecordingReliabilityWarningStrip(text = it) }
+    }
+}
+
+@Composable
+private fun RecordingReliabilityWarningStrip(text: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }

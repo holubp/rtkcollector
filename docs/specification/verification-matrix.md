@@ -100,6 +100,7 @@
 | `UI-DASH-003` | Manual + review | Phone portrait dashboard screenshot | Needs review | Live-monitoring cards should switch to single column when needed. |
 | `UI-DASH-004` | Automated + manual | Dashboard state/action tests; dashboard chip smoke test | Needs review | Mock GPS chip is top-level; no placeholder Mark action. |
 | `UI-DASH-005` | Automated + manual | Dashboard formatter/layout tests; dashboard screenshot review | Needs review | Dashboard labels and dynamic/static distance units are consistent across cards. |
+| `UI-DASH-006` | Review + manual | `HomeDashboard` alert placement review; battery-optimisation recording smoke test | Implemented, not field-tested | Reliability warnings render after compact setup controls or above rail monitoring cards and no longer displace the app title. |
 | `UI-SATMON-001` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; `SatelliteMonitorControllerTest`; dashboard screenshot review | Implemented, not field-tested | Main card displays the selected main engine and has no main-card engine selector. |
 | `UI-SATMON-002` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; dashboard screenshot review | Implemented, not field-tested | Main card groups constellation first, then frequency. |
 | `UI-SATMON-003` | Automated + manual | `SatelliteMonitorDashboardModelsTest`; dashboard screenshot review | Implemented, not field-tested | Boxed bars encode used as saturated prefix inside visible total. |

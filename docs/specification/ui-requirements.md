@@ -70,6 +70,22 @@ Verification:
 - Automated: dashboard formatter and layout preference tests.
 - Manual: live dashboard review in portrait and landscape.
 
+### UI-DASH-006: Recording Reliability Warnings Stay In The Alert Area
+
+Status: Normative
+
+Battery-optimisation and similar recording-reliability warnings MUST be shown
+inside the Home dashboard content, after the setup controls and before the
+monitoring cards in compact layouts. In rail layouts they MUST share the alert
+area directly above the monitoring cards. Such warnings MUST NOT be rendered
+above or displace the app title and icon.
+
+Verification:
+- Review: `HomeDashboard` owns reliability-warning placement in both compact
+  and rail layouts.
+- Manual: enable battery optimisation, start recording and inspect phone
+  portrait and landscape layouts.
+
 ### UI-SATMON-001: Compact Satellite Card Uses Main Engine
 
 Status: Normative

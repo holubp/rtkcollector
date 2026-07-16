@@ -53,7 +53,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0-RC1"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -61,6 +61,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 

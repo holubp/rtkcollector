@@ -125,7 +125,7 @@ unchanged.
 - Treat `TX to receiver` as app transmit toward the receiver serial input. Do
   not describe this as "receiver TX", which means the opposite hardware line.
 - NTRIP stream and sourcetable requests must use an NTRIP-client-style
-  `User-Agent` such as `NTRIP RtkCollector/0.1`; some strict casters reject a
+  `User-Agent` such as `NTRIP RtkCollector/1.0-RC1`; some strict casters reject a
   generic app-style user agent with `403` even when credentials are valid.
 - Keep UM980, M8P, M8T and generic NMEA/RTCM capabilities distinct. M8T is a
   raw/timing/post-processing receiver, not an internal RTK float/fix rover like

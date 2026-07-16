@@ -19,7 +19,7 @@ external NTRIP caster, but the app still does not administer or host a caster.
 Some strict casters reject generic application-style `User-Agent` values even
 when credentials and mountpoint are correct. Default stream and sourcetable
 requests must identify RtkCollector as an NTRIP client, for example
-`User-Agent: NTRIP RtkCollector/0.1`, while still sending
+`User-Agent: NTRIP RtkCollector/1.0-RC1`, while still sending
 `Ntrip-Version: Ntrip/2.0` for V2 requests.
 
 ## Caster And Mountpoint Profiles

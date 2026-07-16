@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
+import org.rtkcollector.app.BuildConfig
 import org.rtkcollector.app.diagnostics.DiagnosticCategory
 import org.rtkcollector.app.diagnostics.DiagnosticsSettings
 import org.rtkcollector.app.diagnostics.DiagnosticsStore
@@ -396,7 +397,7 @@ class RecordingForegroundService : Service() {
             val startedAt = Instant.now().toString()
             val sessionUuid = UUID.randomUUID().toString()
             val metadata = SessionMetadata(
-                appVersion = "0.1.0",
+                appVersion = BuildConfig.VERSION_NAME,
                 androidDeviceModel = Build.MODEL ?: "unknown",
                 androidVersion = Build.VERSION.RELEASE ?: "unknown",
                 receiverDriverId = receiverDriverId,

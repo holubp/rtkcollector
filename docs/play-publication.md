@@ -5,7 +5,11 @@ It must be reviewed before every Play release.
 
 ## Current Intended Release Status
 
-RtkCollector is experimental GNSS field-recording software. Store listing text
+The current source candidate is `1.0-RC1`. Its GitHub source release may be
+published before APK/AAB artifacts are attached. It is not ready for Play upload
+until the signed release build and manual checks below have passed.
+
+RtkCollector remains experimental GNSS field-recording software. Store listing text
 must say that hardware support and receiver commands are experimental and that
 users must validate recordings before operational use.
 

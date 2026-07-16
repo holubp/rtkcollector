@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.NtripCasterProfile
@@ -441,6 +442,7 @@ class MainActivity : Activity() {
         val updated = selected.copy(
             kind = "SAF_TREE",
             treeUri = treeUri.toString(),
+            requiresTreeReselection = false,
             name = if (selected.kind == "APP_PRIVATE") "SAF recording folder" else selected.name,
         )
         storageProfiles = saveOrCopy(storageProfiles, selected, updated, copy = false) { it }
@@ -450,15 +452,18 @@ class MainActivity : Activity() {
     }
 
     private fun registerReceivers() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(usbPermissionReceiver, IntentFilter(ACTION_USB_PERMISSION), RECEIVER_NOT_EXPORTED)
-            registerReceiver(serviceStateReceiver, IntentFilter(RecordingForegroundService.ACTION_STATE), RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(usbPermissionReceiver, IntentFilter(ACTION_USB_PERMISSION))
-            @Suppress("DEPRECATION")
-            registerReceiver(serviceStateReceiver, IntentFilter(RecordingForegroundService.ACTION_STATE))
-        }
+        ContextCompat.registerReceiver(
+            this,
+            usbPermissionReceiver,
+            IntentFilter(ACTION_USB_PERMISSION),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        ContextCompat.registerReceiver(
+            this,
+            serviceStateReceiver,
+            IntentFilter(RecordingForegroundService.ACTION_STATE),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     private fun rebuildListener(): AdapterView.OnItemSelectedListener =

@@ -174,11 +174,12 @@ Traceability:
 
 Status: Normative
 
-External JSON intents MUST NOT auto-import settings. The app MUST accept
+No settings-import entry point may auto-import settings. The app MUST accept
 settings import through Android content/share intents, not broad browsable
-`file:` view intents. The app MUST validate the settings backup structure, show
-a confirmation summary and warn about plaintext passwords before writing
-profiles or secrets.
+`file:` view intents. Whether opened from the in-app picker or an external
+intent, the app MUST validate the settings backup structure, show a confirmation
+summary, warn about plaintext passwords and refuse writes while recording
+before writing profiles or secrets.
 
 Rationale:
 External files are untrusted input and can arrive from broad Android share

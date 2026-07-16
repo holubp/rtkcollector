@@ -2,6 +2,7 @@ package org.rtkcollector.app.sessions
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -39,6 +40,31 @@ class FilesystemSessionBrowserTest {
 
         assertFalse(Files.exists(session))
         assertFalse(Files.exists(archive))
+    }
+
+    @Test
+    fun `delete entry points reject active filesystem locations`() {
+        val session = sessionDir("session-active-delete")
+        ActiveRecordingSessionRegistry.activate(session.toString())
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FilesystemSessionBrowser.deleteRecording(session)
+            }
+            assertTrue(Files.exists(session.resolve("receiver-rx.raw")))
+        } finally {
+            ActiveRecordingSessionRegistry.deactivate(session.toString())
+        }
+
+        val archive = Files.write(tempDir.resolve("session-active-delete.zip"), byteArrayOf(1))
+        ActiveRecordingSessionRegistry.activate(archive.toString())
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FilesystemSessionBrowser.deleteArchive(archive)
+            }
+            assertTrue(Files.exists(archive))
+        } finally {
+            ActiveRecordingSessionRegistry.deactivate(archive.toString())
+        }
     }
 
     @Test

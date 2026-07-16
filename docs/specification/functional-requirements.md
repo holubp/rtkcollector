@@ -31,6 +31,41 @@ Verification:
 - Manual: run recording with malformed mixed stream and confirm raw file grows.
 - Review: capture loop does not wait on advisory consumers.
 
+### ARCH-RAW-003: Raw Storage Failure Is Fatal And Distinct From USB Failure
+
+Status: Normative
+
+If opening, appending or flushing `receiver-rx.raw` fails during recording
+startup, USB reconnect, or persistent receiver maintenance, the service MUST
+report `STORAGE/FATAL` and stop the recording through normal writer
+finalisation. It MUST NOT classify that failure as USB transport degradation or
+retry USB with the same failed writer. Already written session artifacts MUST
+be retained.
+
+Verification:
+- Automated: `RawRecordingDurabilityTest` failure-disposition tests.
+- Review: service startup, reconnect and persistent-maintenance failure paths.
+- Manual: storage-full or revoked-provider test reports storage failure and
+  preserves the partial session.
+
+### ARCH-RAW-004: Raw Writes Have A Bounded Flush Window
+
+Status: Normative
+
+During recording, `receiver-rx.raw` MUST be flushed independently after at
+most 256 KiB of unflushed receiver data or two seconds with unflushed receiver
+data, whichever occurs first, so abrupt process termination cannot leave the
+entire session tail only in an application buffer. A raw flush failure is
+governed by `ARCH-RAW-003`. Routine raw flushing MUST NOT require flushing
+advisory sidecars. Before recovery from a USB read failure starts, any buffered
+receiver RX bytes MUST receive an immediate raw-only flush attempt; recovery
+MUST stop as `STORAGE/FATAL` if that flush fails.
+
+Verification:
+- Automated: raw flush policy boundary tests and receiver-only flush tests.
+- Manual: process-termination smoke test confirms loss is bounded by the
+  documented flush policy.
+
 ### ARCH-TX-001: App TX Is Recorded Separately
 
 Status: Normative
@@ -54,6 +89,42 @@ NTRIP or other correction-source bytes received by the app SHOULD be recorded in
 Verification:
 - Automated: NTRIP runtime/session writer tests.
 - Manual: rover + NTRIP session contains usable RTCM3 correction stream.
+
+### ARCH-WRITER-001: Session Finalisation Is Failure-Isolated
+
+Status: Normative
+
+Normal and failed recording shutdown MUST attempt to flush and close every
+opened session artifact even when one stream fails. Receiver RX MUST be
+prioritised, each failure MUST identify the actual artifact, and a sidecar
+failure MUST NOT prevent later streams from being finalised.
+
+Verification:
+- Automated: injected stream-close failure test confirms all streams are
+  attempted and the report names the failing artifact.
+- Review: app-private and SAF writer implementations use equivalent failure
+  isolation semantics.
+
+### ARCH-WRITER-002: Finalisation Waits For Writer-Using Workers
+
+Status: Normative
+
+Before closing or releasing session writers, recording shutdown MUST stop or
+deactivate every capture, correction-callback, persistent receiver-command,
+advisory, RTKLIB and caster-upload worker that can access those writers. It MUST
+wait for confirmed termination when callback deactivation alone cannot exclude
+future writer access. A timeout or failed termination confirmation MUST be
+reported as a finalisation failure and MUST NOT be treated as proof that the
+writers are no longer in use. USB shutdown MUST cover both the published
+transport and any replacement transport being opened during reconnect, and the
+capture thread MUST remain part of the finalisation barrier until it has exited.
+A new recording MUST NOT start while finalisation of the previous session is
+still in progress.
+
+Verification:
+- Automated: `AdvisoryFanoutTest`, `NtripCasterUploadControllerTest`,
+  `RtklibWorkerTest` and existing writer close tests.
+- Review: service stop ordering and worker ownership.
 
 ### CORR-UPLOAD-001: Caster Upload Uses RTCM3 Frames Only
 

@@ -160,9 +160,8 @@ class NtripCasterUploadControllerTest {
     fun `connected upload with no RTCM for watchdog interval stops upload`() {
         val attempts = AtomicInteger()
         val eventKinds = Collections.synchronizedList(mutableListOf<String>())
-        val clock = AtomicLong(0L)
+        val clockStartedAtNanos = System.nanoTime()
         val enteredStreaming = CountDownLatch(1)
-        val workerReadClock = CountDownLatch(1)
         val controller = NtripCasterUploadController(
             uploadOnce = { _, onState, writeRtcmBytes ->
                 attempts.incrementAndGet()
@@ -173,10 +172,7 @@ class NtripCasterUploadControllerTest {
             },
             delay = {},
             clockMillis = {
-                if (Thread.currentThread().name == "rtkcollector-caster-upload") {
-                    workerReadClock.countDown()
-                }
-                clock.get()
+                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - clockStartedAtNanos) * 100L
             },
             eventSink = { eventKinds += it.kind },
         )
@@ -194,8 +190,6 @@ class NtripCasterUploadControllerTest {
             ),
         )
         assertTrue(enteredStreaming.await(2, TimeUnit.SECONDS))
-        assertTrue(workerReadClock.await(2, TimeUnit.SECONDS))
-        clock.set(12_001L)
         waitUntil { controller.snapshot().state == "STOPPED" }
 
         assertEquals(1, attempts.get())
@@ -362,6 +356,46 @@ class NtripCasterUploadControllerTest {
         waitUntil { controller.snapshot().stopReason == NtripCasterUploadStopReason.SESSION_VOLUME_LIMIT.name }
 
         assertEquals(NtripCasterUploadStopReason.SESSION_VOLUME_LIMIT.name, controller.snapshot().stopReason)
+    }
+
+    @Test
+    fun `stop reports false until an uncooperative upload worker has terminated`() {
+        val enteredSession = CountDownLatch(1)
+        val releaseSession = CountDownLatch(1)
+        val eventKinds = Collections.synchronizedList(mutableListOf<String>())
+        val controller = NtripCasterUploadController(
+            sessionFactory = {
+                object : CasterUploadSession {
+                    override fun connectOnce(
+                        onState: (NtripConnectionState) -> Unit,
+                        writeRtcmBytes: (OutputStream) -> Unit,
+                    ): NtripCasterUploadResult {
+                        onState(NtripConnectionState.STREAMING)
+                        enteredSession.countDown()
+                        while (releaseSession.count > 0L) {
+                            runCatching { releaseSession.await(50, TimeUnit.MILLISECONDS) }
+                        }
+                        return NtripCasterUploadResult.Completed(0)
+                    }
+
+                    override fun cancel() = Unit
+                }
+            },
+            eventSink = { eventKinds += it.kind },
+        )
+
+        controller.start(runtimeConfig())
+        assertTrue(enteredSession.await(2, TimeUnit.SECONDS))
+
+        assertFalse(controller.stop(timeoutMillis = 20))
+        assertFalse(eventKinds.contains("final_summary"))
+
+        releaseSession.countDown()
+        assertTrue(controller.stop(timeoutMillis = 2_000))
+        assertTrue(eventKinds.contains("final_summary"))
+        val eventCountAfterConfirmedStop = eventKinds.size
+        Thread.sleep(50)
+        assertEquals(eventCountAfterConfirmedStop, eventKinds.size)
     }
 
     private fun runtimeConfig(

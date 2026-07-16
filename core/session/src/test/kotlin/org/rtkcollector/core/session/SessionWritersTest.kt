@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -118,6 +120,117 @@ class SessionWritersTest {
             byteArrayOf(0x20, 0x21, 0x22),
             Files.readAllBytes(sessionDirectory.resolve(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName)),
         )
+    }
+
+    @Test
+    fun `receiver rx flush does not flush sidecar streams`() {
+        val operations = mutableListOf<String>()
+        val streams = mutableMapOf<String, TrackingOutputStream>()
+        val writers = SessionWriters.openAppendForRecovery(tempDir) { path ->
+            TrackingOutputStream(path.fileName.toString(), operations).also {
+                streams[path.fileName.toString()] = it
+            }
+        }
+
+        writers.flushReceiverRx()
+
+        assertEquals(listOf("receiver-rx.raw:flush"), operations)
+        assertEquals(1, streams.getValue("receiver-rx.raw").flushCount)
+        assertEquals(0, streams.getValue("tx-to-receiver.raw").flushCount)
+        writers.closeAll()
+    }
+
+    @Test
+    fun `closeAll reports each artifact failure and still finalises every stream`() {
+        val operations = mutableListOf<String>()
+        val streams = mutableMapOf<String, TrackingOutputStream>()
+        val writers = SessionWriters.openAppendForRecovery(tempDir) { path ->
+            val name = path.fileName.toString()
+            TrackingOutputStream(
+                name = name,
+                operations = operations,
+                failFlush = name == SessionArtifactFile.RECEIVER_RX_RAW.fileName,
+                failClose = name == SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName,
+            ).also { streams[name] = it }
+        }
+
+        val report = writers.closeAll()
+
+        assertEquals(
+            listOf(
+                "receiver-rx.raw:flush",
+                "receiver-rx.raw:close",
+                "tx-to-receiver.raw:flush",
+                "tx-to-receiver.raw:close",
+            ),
+            operations.take(4),
+        )
+        assertTrue(streams.values.all { it.closeCount == 1 })
+        assertEquals(2, report.issues.size)
+        assertEquals(SessionArtifactFile.RECEIVER_RX_RAW.fileName, report.issues[0].artifact)
+        assertEquals(SessionWriterIssueCategory.RAW_RX, report.issues[0].category)
+        assertEquals(SessionWriterIssueSeverity.FATAL, report.issues[0].severity)
+        assertEquals(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName, report.issues[1].artifact)
+        assertEquals(SessionWriterIssueCategory.BINARY_SIDECAR, report.issues[1].category)
+        assertEquals(SessionWriterIssueSeverity.DEGRADED, report.issues[1].severity)
+    }
+
+    @Test
+    fun `closeAll finalises each stream at most once`() {
+        val operations = mutableListOf<String>()
+        val streams = mutableListOf<TrackingOutputStream>()
+        val writers = SessionWriters.openAppendForRecovery(tempDir) { path ->
+            TrackingOutputStream(path.fileName.toString(), operations).also(streams::add)
+        }
+
+        val first = writers.closeAll()
+        val second = writers.closeAll()
+        writers.close()
+
+        assertEquals(first, second)
+        assertTrue(streams.all { it.flushCount == 1 && it.closeCount == 1 })
+    }
+
+    @Test
+    fun `optional absent artifact is not reported during finalisation`() {
+        val writers = SessionWriters.openAppendForRecovery(tempDir) { path ->
+            if (path.fileName.toString() == SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName) {
+                throw IOException("optional artifact unavailable")
+            }
+            TrackingOutputStream(path.fileName.toString(), mutableListOf())
+        }
+
+        val report = writers.closeAll()
+
+        assertTrue(report.issues.isEmpty())
+    }
+
+    @Test
+    fun `open failure closes every stream opened earlier`() {
+        val operations = mutableListOf<String>()
+        val opened = mutableListOf<TrackingOutputStream>()
+
+        val error = assertThrows(IOException::class.java) {
+            SessionWriters.openAppendForRecovery(tempDir) { path ->
+                if (path.fileName.toString() == SessionArtifactFile.CORRECTION_INPUT_RAW.fileName) {
+                    throw IOException("injected open failure")
+                }
+                TrackingOutputStream(
+                    name = path.fileName.toString(),
+                    operations = operations,
+                    failClose = opened.isEmpty(),
+                ).also(opened::add)
+            }
+        }
+
+        assertEquals("injected open failure", error.message)
+        assertEquals(2, opened.size)
+        assertTrue(opened.all { it.flushCount == 1 })
+        assertTrue(opened.all { it.closeCount == 1 })
+        assertEquals(1, error.suppressed.size)
+        assertTrue(operations.contains("tx-to-receiver.raw:flush"))
+        assertTrue(operations.contains("tx-to-receiver.raw:close"))
+        assertTrue(error.suppressed.single().message!!.contains(SessionArtifactFile.RECEIVER_RX_RAW.fileName))
     }
 
     @Test
@@ -285,5 +398,31 @@ class SessionWritersTest {
         assertFalse(source.contains(".writeText("))
         assertFalse(source.contains(".readText("))
         assertTrue(source.contains("StandardOpenOption.WRITE"))
+    }
+
+    private class TrackingOutputStream(
+        private val name: String,
+        private val operations: MutableList<String>,
+        private val failFlush: Boolean = false,
+        private val failClose: Boolean = false,
+    ) : OutputStream() {
+        var flushCount: Int = 0
+            private set
+        var closeCount: Int = 0
+            private set
+
+        override fun write(value: Int) = Unit
+
+        override fun flush() {
+            flushCount += 1
+            operations += "$name:flush"
+            if (failFlush) throw IOException("$name flush failed")
+        }
+
+        override fun close() {
+            closeCount += 1
+            operations += "$name:close"
+            if (failClose) throw IOException("$name close failed")
+        }
     }
 }

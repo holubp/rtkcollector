@@ -62,6 +62,11 @@ data class ActiveRecordingConfig(
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
             require(ntrip.mountpoint.isNotBlank()) { "NTRIP mountpoint is required for ${workflowName}." }
         }
+        if (storage.kind == "SAF_TREE") {
+            require(!storage.treeUri.isNullOrBlank()) {
+                "Select the Android recording folder again before starting."
+            }
+        }
         if (casterUpload.enabled) {
             require(casterUpload.host.isNotBlank()) { "NTRIP caster upload host is required for ${workflowName}." }
             require(casterUpload.port in 1..65535) { "NTRIP caster upload port must be 1..65535." }

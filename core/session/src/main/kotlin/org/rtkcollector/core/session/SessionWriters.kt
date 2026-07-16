@@ -2,6 +2,7 @@ package org.rtkcollector.core.session
 
 import java.io.BufferedOutputStream
 import java.io.Closeable
+import java.io.IOException
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -26,6 +27,8 @@ class SessionWriters private constructor(
     private val rtklibStatus: OutputStream,
     private val extractedRtcm: OutputStream,
 ) : Closeable {
+    private var finalCloseReport: SessionWriterCloseReport? = null
+
     fun writeSessionJson(json: String) {
         writeAtomicText(
             fileName = SessionArtifactFile.SESSION_JSON.fileName,
@@ -112,21 +115,25 @@ class SessionWriters private constructor(
         extractedRtcm.flush()
     }
 
+    fun flushReceiverRx() {
+        receiverRx.flush()
+    }
+
+    @Synchronized
+    fun closeAll(): SessionWriterCloseReport {
+        finalCloseReport?.let { return it }
+        val issues = mutableListOf<SessionWriterIssue>()
+        writerTargets().forEach { target ->
+            finaliseStream(target, issues)
+        }
+        return SessionWriterCloseReport(issues).also { finalCloseReport = it }
+    }
+
     override fun close() {
-        receiverRx.close()
-        txToReceiver.close()
-        correctionInput.close()
-        correctionInputRtcm3.closeBestEffort()
-        baseCasterUploadRtcm3.close()
-        events.close()
-        qualityLive.close()
-        receiverSolutionNmea.close()
-        receiverSolution.close()
-        receiverPppSolution.close()
-        rtklibSolutionNmea.close()
-        rtklibSolutionPos.close()
-        rtklibStatus.close()
-        extractedRtcm.close()
+        val report = closeAll()
+        if (report.issues.isNotEmpty()) {
+            throw IOException(report.userMessage ?: "Session writer close failed")
+        }
     }
 
     companion object {
@@ -136,24 +143,46 @@ class SessionWriters private constructor(
         }
 
         fun openAppendForRecovery(sessionDirectory: Path): SessionWriters {
+            return openAppendForRecovery(sessionDirectory) { path -> path.appendStream() }
+        }
+
+        internal fun openAppendForRecovery(
+            sessionDirectory: Path,
+            streamFactory: (Path) -> OutputStream,
+        ): SessionWriters {
             Files.createDirectories(sessionDirectory)
-            return SessionWriters(
-                sessionDirectory = sessionDirectory,
-                receiverRx = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_RX_RAW.fileName),
-                txToReceiver = sessionDirectory.appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName),
-                correctionInput = sessionDirectory.appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
-                correctionInputRtcm3 = sessionDirectory.tryAppendStream(SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName),
-                baseCasterUploadRtcm3 = sessionDirectory.appendStream(SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3.fileName),
-                events = sessionDirectory.appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
-                qualityLive = sessionDirectory.appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
-                receiverSolutionNmea = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
-                receiverSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_SOLUTION_JSONL.fileName),
-                receiverPppSolution = sessionDirectory.appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL.fileName),
-                rtklibSolutionNmea = sessionDirectory.appendStream(SessionArtifactFile.RTKLIB_SOLUTION_NMEA.fileName),
-                rtklibSolutionPos = sessionDirectory.appendStream(SessionArtifactFile.RTKLIB_SOLUTION_POS.fileName),
-                rtklibStatus = sessionDirectory.appendStream(SessionArtifactFile.RTKLIB_STATUS_JSONL.fileName),
-                extractedRtcm = sessionDirectory.appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
-            )
+            val openedStreams = mutableListOf<OpenedSessionWriterTarget>()
+            fun openRequired(artifact: SessionArtifactFile): OutputStream =
+                streamFactory(sessionDirectory.resolve(artifact.fileName)).also { stream ->
+                    openedStreams += OpenedSessionWriterTarget(artifact, stream)
+                }
+            fun openOptional(artifact: SessionArtifactFile): OutputStream? =
+                runCatching { openRequired(artifact) }.getOrNull()
+
+            return try {
+                SessionWriters(
+                    sessionDirectory = sessionDirectory,
+                    receiverRx = openRequired(SessionArtifactFile.RECEIVER_RX_RAW),
+                    txToReceiver = openRequired(SessionArtifactFile.TX_TO_RECEIVER_RAW),
+                    correctionInput = openRequired(SessionArtifactFile.CORRECTION_INPUT_RAW),
+                    correctionInputRtcm3 = openOptional(SessionArtifactFile.CORRECTION_INPUT_RTCM3),
+                    baseCasterUploadRtcm3 = openRequired(SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3),
+                    events = openRequired(SessionArtifactFile.EVENTS_JSONL),
+                    qualityLive = openRequired(SessionArtifactFile.QUALITY_LIVE_JSONL),
+                    receiverSolutionNmea = openRequired(SessionArtifactFile.RECEIVER_SOLUTION_NMEA),
+                    receiverSolution = openRequired(SessionArtifactFile.RECEIVER_SOLUTION_JSONL),
+                    receiverPppSolution = openRequired(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL),
+                    rtklibSolutionNmea = openRequired(SessionArtifactFile.RTKLIB_SOLUTION_NMEA),
+                    rtklibSolutionPos = openRequired(SessionArtifactFile.RTKLIB_SOLUTION_POS),
+                    rtklibStatus = openRequired(SessionArtifactFile.RTKLIB_STATUS_JSONL),
+                    extractedRtcm = openRequired(SessionArtifactFile.RTCM_EXTRACTED_RTCM3),
+                )
+            } catch (failure: Throwable) {
+                openedStreams.forEach { target ->
+                    finaliseOpenedStream(target, failure)
+                }
+                throw failure
+            }
         }
 
         fun open(sessionDirectory: Path): SessionWriters = openNew(sessionDirectory)
@@ -189,7 +218,66 @@ class SessionWriters private constructor(
             )
         }
     }
+
+    private fun writerTargets(): List<SessionWriterTarget> = buildList {
+        add(SessionWriterTarget(receiverRx, SessionArtifactFile.RECEIVER_RX_RAW, SessionWriterIssueCategory.RAW_RX, SessionWriterIssueSeverity.FATAL))
+        add(SessionWriterTarget(txToReceiver, SessionArtifactFile.TX_TO_RECEIVER_RAW, SessionWriterIssueCategory.BINARY_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(correctionInput, SessionArtifactFile.CORRECTION_INPUT_RAW, SessionWriterIssueCategory.BINARY_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        correctionInputRtcm3?.let {
+            add(SessionWriterTarget(it, SessionArtifactFile.CORRECTION_INPUT_RTCM3, SessionWriterIssueCategory.BINARY_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        }
+        add(SessionWriterTarget(baseCasterUploadRtcm3, SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3, SessionWriterIssueCategory.BINARY_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(extractedRtcm, SessionArtifactFile.RTCM_EXTRACTED_RTCM3, SessionWriterIssueCategory.BINARY_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(events, SessionArtifactFile.EVENTS_JSONL, SessionWriterIssueCategory.STRUCTURED_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(qualityLive, SessionArtifactFile.QUALITY_LIVE_JSONL, SessionWriterIssueCategory.STRUCTURED_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(receiverSolutionNmea, SessionArtifactFile.RECEIVER_SOLUTION_NMEA, SessionWriterIssueCategory.LINE_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(receiverSolution, SessionArtifactFile.RECEIVER_SOLUTION_JSONL, SessionWriterIssueCategory.STRUCTURED_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(receiverPppSolution, SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL, SessionWriterIssueCategory.STRUCTURED_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(rtklibSolutionNmea, SessionArtifactFile.RTKLIB_SOLUTION_NMEA, SessionWriterIssueCategory.LINE_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(rtklibSolutionPos, SessionArtifactFile.RTKLIB_SOLUTION_POS, SessionWriterIssueCategory.LINE_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+        add(SessionWriterTarget(rtklibStatus, SessionArtifactFile.RTKLIB_STATUS_JSONL, SessionWriterIssueCategory.STRUCTURED_SIDECAR, SessionWriterIssueSeverity.DEGRADED))
+    }
 }
+
+private data class SessionWriterTarget(
+    val stream: OutputStream,
+    val artifact: SessionArtifactFile,
+    val category: SessionWriterIssueCategory,
+    val severity: SessionWriterIssueSeverity,
+)
+
+private data class OpenedSessionWriterTarget(
+    val artifact: SessionArtifactFile,
+    val stream: OutputStream,
+)
+
+private fun finaliseStream(
+    target: SessionWriterTarget,
+    issues: MutableList<SessionWriterIssue>,
+) {
+    runCatching { target.stream.flush() }
+        .onFailure { error -> issues += target.issue("flush", error) }
+    runCatching { target.stream.close() }
+        .onFailure { error -> issues += target.issue("close", error) }
+}
+
+private fun SessionWriterTarget.issue(operation: String, error: Throwable): SessionWriterIssue =
+    SessionWriterIssue(
+        artifact = artifact.fileName,
+        category = category,
+        severity = severity,
+        message = error.message ?: "Failed to $operation ${artifact.fileName}",
+    )
+
+private fun finaliseOpenedStream(target: OpenedSessionWriterTarget, openingFailure: Throwable) {
+    runCatching { target.stream.flush() }
+        .onFailure { error -> openingFailure.addSuppressed(target.cleanupFailure("flush", error)) }
+    runCatching { target.stream.close() }
+        .onFailure { error -> openingFailure.addSuppressed(target.cleanupFailure("close", error)) }
+}
+
+private fun OpenedSessionWriterTarget.cleanupFailure(operation: String, error: Throwable): IOException =
+    IOException("Failed to $operation ${artifact.fileName} during partial session-writer cleanup.", error)
 
 private fun writeUtf8Text(path: Path, text: String, vararg options: StandardOpenOption) {
     Files.newOutputStream(path, StandardOpenOption.WRITE, *options).use { output ->
@@ -257,18 +345,15 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
     }
 }
 
-private fun Path.appendStream(fileName: String): OutputStream {
+private fun Path.appendStream(): OutputStream {
     return BufferedOutputStream(
         Files.newOutputStream(
-            resolve(fileName),
+            this,
             StandardOpenOption.CREATE,
             StandardOpenOption.APPEND,
         ),
     )
 }
-
-private fun Path.tryAppendStream(fileName: String): OutputStream? =
-    runCatching { appendStream(fileName) }.getOrNull()
 
 private fun OutputStream?.writeBestEffort(bytes: ByteArray) {
     this ?: return
@@ -280,10 +365,6 @@ private fun OutputStream?.flushBestEffort() {
     runCatching { flush() }
 }
 
-private fun OutputStream?.closeBestEffort() {
-    this ?: return
-    runCatching { close() }
-}
 
 private fun OutputStream.writeJsonLine(json: String) {
     write(json.toByteArray(StandardCharsets.UTF_8))

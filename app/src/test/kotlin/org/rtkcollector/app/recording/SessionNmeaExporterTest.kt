@@ -2,9 +2,11 @@ package org.rtkcollector.app.recording
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -114,5 +116,63 @@ class SessionNmeaExporterTest {
 
         assertEquals("\$GPGGA,data\n\$GPRMC,data\n", Files.readString(output))
         assertEquals("\$GPGGA,data\n\$GPRMC,data\n", Files.readString(source))
+    }
+
+    @Test
+    fun `export rejects an active filesystem session at the sharing boundary`() {
+        val session = Files.createDirectory(tempDir.resolve("session"))
+        val source = session.resolve("receiver-solution.nmea")
+        Files.writeString(source, "\$GPGGA,data\n")
+        val output = tempDir.resolve("cache/session.nmea")
+        val plan = SessionNmeaSharePlan(SessionNmeaSource.RECEIVER_SOLUTION, source, output)
+
+        ActiveRecordingSessionRegistry.activate(session.toString())
+        try {
+            assertThrows(IllegalArgumentException::class.java) { SessionNmeaExporter.export(plan) }
+            assertFalse(Files.exists(output))
+        } finally {
+            ActiveRecordingSessionRegistry.deactivate(session.toString())
+        }
+    }
+
+    @Test
+    fun `failed export removes final and temporary cache artifacts`() {
+        val session = Files.createDirectory(tempDir.resolve("broken-session"))
+        val source = session.resolve("receiver-solution.nmea")
+        val cache = Files.createDirectory(tempDir.resolve("cache"))
+        val output = cache.resolve("session.nmea")
+        val plan = SessionNmeaSharePlan(SessionNmeaSource.RECEIVER_SOLUTION, source, output)
+
+        assertThrows(Exception::class.java) { SessionNmeaExporter.export(plan) }
+
+        assertFalse(Files.exists(output))
+        Files.list(cache).use { files -> assertEquals(0L, files.count()) }
+    }
+
+    @Test
+    fun `multi-plan export removes earlier outputs when a later export fails`() {
+        val cache = Files.createDirectory(tempDir.resolve("multi-cache"))
+        val plans = listOf(
+            SessionNmeaSharePlan(
+                SessionNmeaSource.RECEIVER_SOLUTION,
+                tempDir.resolve("first-source"),
+                cache.resolve("first.nmea"),
+            ),
+            SessionNmeaSharePlan(
+                SessionNmeaSource.RTKLIB_FORWARD,
+                tempDir.resolve("second-source"),
+                cache.resolve("second.nmea"),
+            ),
+        )
+
+        assertThrows(IllegalStateException::class.java) {
+            SessionNmeaExporter.exportAll(plans, onBeforeExport = {}) { plan ->
+                if (plan === plans.last()) error("second export failed")
+                Files.writeString(plan.outputNmea, "first")
+            }
+        }
+
+        assertFalse(Files.exists(plans.first().outputNmea))
+        Files.list(cache).use { files -> assertEquals(0L, files.count()) }
     }
 }

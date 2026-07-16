@@ -2,6 +2,8 @@ package org.rtkcollector.core.capture
 
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.rtkcollector.core.transport.SerialTransport
@@ -89,6 +91,72 @@ class AdvisoryFanoutTest {
         }
         assertEquals(1, events.count { it.type == "advisory-queue-drop-summary" })
         assertTrue(events.single { it.type == "advisory-queue-drop-summary" }.message.contains("2"))
+    }
+
+    @Test
+    fun `async fanout shutdown interrupts in-flight work and discards queued chunks`() {
+        val started = CountDownLatch(1)
+        val processed = mutableListOf<Byte>()
+        val fanout = AsyncAdvisoryFanout(
+            delegate = ReceiverBytesConsumer { bytes ->
+                processed += bytes.single()
+                started.countDown()
+                try {
+                    CountDownLatch(1).await()
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
+            },
+            eventSink = MemoryEvents(),
+            queueCapacity = 2,
+        )
+
+        fanout.accept(byteArrayOf(1))
+        assertTrue(started.await(2, TimeUnit.SECONDS))
+        fanout.accept(byteArrayOf(2))
+
+        assertTrue(fanout.shutdown(1_000))
+        fanout.accept(byteArrayOf(3))
+
+        assertEquals(listOf(1.toByte()), processed)
+    }
+
+    @Test
+    fun `async fanout close reports timeout while delegate can still write`() {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val finished = CountDownLatch(1)
+        val fanout = AsyncAdvisoryFanout(
+            delegate = ReceiverBytesConsumer {
+                started.countDown()
+                while (true) {
+                    try {
+                        if (release.await(10, TimeUnit.MILLISECONDS)) {
+                            break
+                        }
+                    } catch (_: InterruptedException) {
+                        // Simulate a delegate that cannot stop until its writer operation returns.
+                    }
+                }
+                finished.countDown()
+            },
+            eventSink = MemoryEvents(),
+        )
+
+        try {
+            fanout.accept(byteArrayOf(1))
+            assertTrue(started.await(2, TimeUnit.SECONDS))
+
+            assertFalse(fanout.shutdown(20))
+            assertThrows(IllegalStateException::class.java) { fanout.close() }
+
+            release.countDown()
+            assertTrue(finished.await(2, TimeUnit.SECONDS))
+            assertTrue(fanout.shutdown(1_000))
+        } finally {
+            release.countDown()
+            fanout.shutdown(1_000)
+        }
     }
 
     private class FakeSerialTransport(

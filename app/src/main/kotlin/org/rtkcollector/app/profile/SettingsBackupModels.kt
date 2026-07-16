@@ -3,6 +3,19 @@ package org.rtkcollector.app.profile
 import org.json.JSONArray
 import org.json.JSONObject
 
+enum class SettingsBackupProfileFamily(val jsonKey: String) {
+    COMMAND("commandProfiles"),
+    USB_BAUD("usbBaudProfiles"),
+    NTRIP_CASTER("ntripCasterProfiles"),
+    NTRIP_CASTER_UPLOAD("ntripCasterUploadProfiles"),
+    NTRIP_MOUNTPOINT("ntripMountpointProfiles"),
+    RECORDING_POLICY("recordingPolicyProfiles"),
+    RTKLIB("rtklibProfiles"),
+    SOLUTION_POLICY("solutionPolicyProfiles"),
+    STORAGE("storageProfiles"),
+    SETTINGS_SET("settingsSets"),
+}
+
 data class SettingsBackupFile(
     val formatVersion: Int,
     val exportedAtEpochMillis: Long,
@@ -20,6 +33,8 @@ data class SettingsBackupFile(
     val selectedWorkflowId: String?,
     val lastActiveNtripMountpointProfileId: String?,
     val plaintextPasswordsBySecretId: Map<String, String>,
+    /** Families physically present in the imported JSON; all families are present in new exports. */
+    val includedProfileFamilies: Set<SettingsBackupProfileFamily> = SettingsBackupProfileFamily.entries.toSet(),
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("formatVersion", formatVersion)
@@ -126,6 +141,8 @@ data class SettingsBackupFile(
                 plaintextPasswordsBySecretId = passwords?.keys()?.asSequence()
                     ?.associateWith { secretId -> passwords.getString(secretId) }
                     .orEmpty(),
+                includedProfileFamilies = SettingsBackupProfileFamily.entries
+                    .filterTo(linkedSetOf()) { family -> json.optJSONArray(family.jsonKey) != null },
             )
         }
     }

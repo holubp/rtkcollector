@@ -139,6 +139,66 @@ class ProfileStores(context: Context) {
     fun saveSettingsSets(settingsSets: List<RecordingSettingsSet>) =
         writeProfiles("settingsSets", settingsSets.onEach(RecordingSettingsSet::validate).map(RecordingSettingsSet::toJson))
 
+    /** Replaces one validated settings snapshot without exposing a partially imported profile graph. */
+    fun replaceImportedSettings(
+        backup: SettingsBackupFile,
+        settingsSets: List<RecordingSettingsSet>,
+        selectedSettingsSetId: String,
+        selectedWorkflowId: String?,
+        lastActiveNtripMountpointProfileId: String?,
+    ) {
+        require(settingsSets.any { it.id == selectedSettingsSetId }) {
+            "Imported selected settings set is missing."
+        }
+        val values = linkedMapOf(
+            "commandProfiles" to profileJson(backup.commandProfiles.onEach(CommandProfile::validate), CommandProfile::toJson),
+            "usbBaudProfiles" to profileJson(backup.usbBaudProfiles.onEach(UsbBaudProfile::validate), UsbBaudProfile::toJson),
+            "ntripCasterProfiles" to profileJson(
+                backup.ntripCasterProfiles.onEach(NtripCasterProfile::validate),
+                NtripCasterProfile::toJson,
+            ),
+            "ntripMountpointProfiles" to profileJson(
+                backup.ntripMountpointProfiles.onEach(NtripMountpointProfile::validate),
+                NtripMountpointProfile::toJson,
+            ),
+            "recordingPolicyProfiles" to profileJson(
+                backup.recordingPolicyProfiles.onEach(RecordingPolicyProfile::validate),
+                RecordingPolicyProfile::toJson,
+            ),
+            "storageProfiles" to profileJson(backup.storageProfiles.onEach(StorageProfile::validate), StorageProfile::toJson),
+            "settingsSets" to profileJson(settingsSets.onEach(RecordingSettingsSet::validate), RecordingSettingsSet::toJson),
+        )
+        if (SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD in backup.includedProfileFamilies) {
+            values["ntripCasterUploadProfiles"] = profileJson(
+                backup.ntripCasterUploadProfiles.onEach(NtripCasterUploadProfile::validate),
+                NtripCasterUploadProfile::toJson,
+            )
+        }
+        if (SettingsBackupProfileFamily.RTKLIB in backup.includedProfileFamilies) {
+            values["rtklibProfiles"] = profileJson(backup.rtklibProfiles.onEach(RtklibProfile::validate), RtklibProfile::toJson)
+        }
+        if (SettingsBackupProfileFamily.SOLUTION_POLICY in backup.includedProfileFamilies) {
+            values["solutionPolicyProfiles"] = profileJson(
+                backup.solutionPolicyProfiles.onEach(SolutionPolicyProfile::validate),
+                SolutionPolicyProfile::toJson,
+            )
+        }
+
+        val changes = linkedMapOf<String, String?>().apply {
+            putAll(values)
+            put("selectedSettingsSetId", selectedSettingsSetId)
+            put("selectedWorkflowId", selectedWorkflowId?.takeIf(String::isNotBlank))
+            put(
+                "lastActiveNtripMountpointProfileId",
+                lastActiveNtripMountpointProfileId?.takeIf(String::isNotBlank),
+            )
+        }
+        preferences.commitStringChangesWithRollback(
+            changes = changes,
+            failureMessage = "Unable to commit imported settings.",
+        )
+    }
+
     fun selectedSettingsSetId(): String =
         preferences.getString("selectedSettingsSetId", null) ?: defaultSettingsSets().first().id
 
@@ -219,10 +279,11 @@ class ProfileStores(context: Context) {
     }
 
     private fun writeProfiles(key: String, jsonObjects: List<org.json.JSONObject>) {
-        val array = JSONArray()
-        jsonObjects.forEach(array::put)
-        preferences.edit().putString(key, array.toString()).apply()
+        preferences.edit().putString(key, profileJson(jsonObjects) { it }).apply()
     }
+
+    private fun <T> profileJson(profiles: List<T>, encode: (T) -> org.json.JSONObject): String =
+        JSONArray().also { array -> profiles.forEach { array.put(encode(it)) } }.toString()
 
     private fun defaultCommandProfiles(): List<CommandProfile> =
         defaultCommandProfilesForTests()

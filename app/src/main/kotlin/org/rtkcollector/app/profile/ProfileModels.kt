@@ -527,13 +527,22 @@ data class StorageProfile(
     val name: String,
     val kind: String = "APP_PRIVATE",
     val treeUri: String? = null,
+    val requiresTreeReselection: Boolean = false,
     val isProtected: Boolean = false,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "Storage profile id must not be blank." }
         require(name.isNotBlank()) { "Storage profile name must not be blank." }
         require(kind == "APP_PRIVATE" || kind == "SAF_TREE") { "Storage profile kind must be APP_PRIVATE or SAF_TREE." }
-        require(kind != "SAF_TREE" || !treeUri.isNullOrBlank()) { "SAF storage profile requires a tree URI." }
+        require(!requiresTreeReselection || kind == "SAF_TREE") {
+            "Only SAF storage profiles can require folder reselection."
+        }
+        require(kind != "SAF_TREE" || requiresTreeReselection || !treeUri.isNullOrBlank()) {
+            "SAF storage profile requires a tree URI."
+        }
+        require(!requiresTreeReselection || treeUri.isNullOrBlank()) {
+            "A SAF profile awaiting folder reselection must not retain an ungranted URI."
+        }
     }
 
     fun copyProfile(id: String, name: String): StorageProfile =
@@ -544,6 +553,7 @@ data class StorageProfile(
         .put("name", name)
         .put("isProtected", isProtected)
         .put("kind", kind)
+        .put("requiresTreeReselection", requiresTreeReselection)
         .putNullable("treeUri", treeUri)
 
     companion object {
@@ -553,6 +563,7 @@ data class StorageProfile(
             isProtected = json.optProtectedFlag(),
             kind = json.optString("kind", "APP_PRIVATE"),
             treeUri = json.optNullableString("treeUri"),
+            requiresTreeReselection = json.optBoolean("requiresTreeReselection", false),
         ).also(StorageProfile::validate)
     }
 }

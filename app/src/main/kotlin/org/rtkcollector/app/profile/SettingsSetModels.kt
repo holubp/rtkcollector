@@ -118,6 +118,7 @@ data class RecordingOutputOverride(
 data class StorageProfileOverride(
     val kind: String? = null,
     val treeUri: String? = null,
+    val requiresTreeReselection: Boolean = false,
 ) {
     fun validate() {
         kind?.let {
@@ -125,8 +126,16 @@ data class StorageProfileOverride(
                 "Storage kind override must be APP_PRIVATE or SAF_TREE."
             }
             if (it == "SAF_TREE") {
-                require(!treeUri.isNullOrBlank()) { "Storage tree URI is required for SAF_TREE override." }
+                require(requiresTreeReselection || !treeUri.isNullOrBlank()) {
+                    "Storage tree URI is required for SAF_TREE override."
+                }
             }
+        }
+        require(!requiresTreeReselection || kind == "SAF_TREE") {
+            "Only a SAF storage override can require folder reselection."
+        }
+        require(!requiresTreeReselection || treeUri.isNullOrBlank()) {
+            "A SAF override awaiting folder reselection must not retain an ungranted URI."
         }
     }
 }
@@ -503,7 +512,8 @@ private fun SettingsSetOverrides.toJson(): JSONObject {
             "storage",
             JSONObject()
                 .putNullable("kind", it.kind)
-                .putNullable("treeUri", it.treeUri),
+                .putNullable("treeUri", it.treeUri)
+                .put("requiresTreeReselection", it.requiresTreeReselection),
         )
     }
     return json
@@ -611,6 +621,7 @@ private object SettingsSetOverridesJson {
                 StorageProfileOverride(
                     kind = it.optNullableString("kind"),
                     treeUri = it.optNullableString("treeUri"),
+                    requiresTreeReselection = it.optBoolean("requiresTreeReselection", false),
                 )
             }
         },

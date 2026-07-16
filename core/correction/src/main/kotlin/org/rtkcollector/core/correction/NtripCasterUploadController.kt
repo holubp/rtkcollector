@@ -101,6 +101,7 @@ class NtripCasterUploadController(
     private val activeSession = AtomicReference<CasterUploadSession?>()
     private val finalSummaryEmitted = AtomicBoolean(false)
     private val stats = UploadStats()
+    private val lifecycleLock = Any()
 
     @Volatile
     private var running = false
@@ -112,25 +113,29 @@ class NtripCasterUploadController(
     private var activePolicy: NtripCasterUploadPolicy = NtripCasterUploadPolicy()
 
     fun start(config: NtripCasterUploadRuntimeConfig) {
-        stop()
+        check(stop()) { "Previous NTRIP caster upload worker did not stop." }
         val effectivePolicy = config.effectivePolicy
-        queue.clear()
-        bytesUploaded.set(0)
-        bytesDropped.set(0)
-        lastError.set(null)
-        currentRetryDelayMillis.set(null)
-        consecutiveFailures.set(0)
-        stopReason.set(null)
-        mountpointUrl.set(config.mountpointUrl)
-        safetyEnabled.set(effectivePolicy.safety.enabled)
-        safetyForced.set(effectivePolicy.safety.forced)
-        activePolicy = effectivePolicy
-        stats.reset()
-        finalSummaryEmitted.set(false)
-        running = true
-        state.set("CONNECTING")
-        worker = Thread({ runWorker(config.copy(policy = effectivePolicy, reconnectDelayMillis = null)) }, WORKER_NAME)
-            .also { it.start() }
+        synchronized(lifecycleLock) {
+            queue.clear()
+            bytesUploaded.set(0)
+            bytesDropped.set(0)
+            lastError.set(null)
+            currentRetryDelayMillis.set(null)
+            consecutiveFailures.set(0)
+            stopReason.set(null)
+            mountpointUrl.set(config.mountpointUrl)
+            safetyEnabled.set(effectivePolicy.safety.enabled)
+            safetyForced.set(effectivePolicy.safety.forced)
+            activePolicy = effectivePolicy
+            stats.reset()
+            finalSummaryEmitted.set(false)
+            running = true
+            state.set("CONNECTING")
+            worker = Thread(
+                { runWorker(config.copy(policy = effectivePolicy, reconnectDelayMillis = null)) },
+                WORKER_NAME,
+            ).also { it.start() }
+        }
     }
 
     fun offer(bytes: ByteArray, messageType: Int? = null): Boolean {
@@ -147,23 +152,33 @@ class NtripCasterUploadController(
         return accepted
     }
 
-    fun stop() {
-        val thread = worker
-        running = false
-        activeSession.get()?.cancel()
+    fun stop(timeoutMillis: Long = STOP_JOIN_MILLIS): Boolean {
+        require(timeoutMillis >= 0L) { "Caster upload stop timeout must not be negative." }
+        val (thread, session) = synchronized(lifecycleLock) {
+            running = false
+            queue.clear()
+            worker to activeSession.get()
+        }
+        runCatching { session?.cancel() }
         thread?.interrupt()
         if (thread != null && thread !== Thread.currentThread()) {
-            thread.join(STOP_JOIN_MILLIS)
+            thread.join(timeoutMillis)
         }
-        worker = null
-        activeSession.set(null)
-        queue.clear()
-        if (state.get() != "AUTH_ERROR") {
-            state.set("STOPPED")
+        val terminated = thread == null || (thread !== Thread.currentThread() && !thread.isAlive)
+        if (!terminated) {
+            return false
         }
-        if (thread != null || mountpointUrl.get().isNotBlank()) {
-            emitFinalSummaryIfNeeded()
+        synchronized(lifecycleLock) {
+            if (worker === thread) {
+                worker = null
+            }
+            activeSession.compareAndSet(session, null)
+            if (state.get() != "AUTH_ERROR") {
+                state.set("STOPPED")
+            }
         }
+        if (thread != null || mountpointUrl.get().isNotBlank()) emitFinalSummaryIfNeeded()
+        return true
     }
 
     fun snapshot(): NtripCasterUploadSnapshot {
@@ -193,7 +208,15 @@ class NtripCasterUploadController(
             while (running) {
                 emitEvent("connect_attempt", "Connecting to ${config.mountpointUrl}.")
                 val session = sessionFactory(config)
-                activeSession.set(session)
+                val mayConnect = synchronized(lifecycleLock) {
+                    if (running) {
+                        activeSession.set(session)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                if (!mayConnect) break
                 val connectedEventSent = AtomicBoolean(false)
                 val result = runCatching {
                     session.connectOnce(
@@ -216,10 +239,18 @@ class NtripCasterUploadController(
             }
         } finally {
             activeSession.set(null)
-            if (state.get() != "AUTH_ERROR" && state.get() != "STOPPED") {
-                state.set("STOPPED")
+            try {
+                if (state.get() != "AUTH_ERROR" && state.get() != "STOPPED") {
+                    state.set("STOPPED")
+                }
+                emitFinalSummaryIfNeeded()
+            } finally {
+                synchronized(lifecycleLock) {
+                    if (worker === Thread.currentThread()) {
+                        worker = null
+                    }
+                }
             }
-            emitFinalSummaryIfNeeded()
         }
     }
 

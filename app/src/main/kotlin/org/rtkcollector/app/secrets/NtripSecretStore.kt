@@ -10,6 +10,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import org.rtkcollector.app.profile.commitStringChangesWithRollback
 
 class NtripSecretStore(
     context: Context,
@@ -20,14 +21,33 @@ class NtripSecretStore(
     private val cipherTransformation = "AES/GCM/NoPadding"
 
     fun putPassword(secretId: String, password: String) {
-        require(secretId.isNotBlank()) { "NTRIP secret id must not be blank." }
-        val cipher = Cipher.getInstance(cipherTransformation)
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val ciphertext = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
-        preferences.edit()
-            .putString("$secretId.iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .putString("$secretId.ciphertext", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
-            .apply()
+        putPasswords(mapOf(secretId to password))
+    }
+
+    fun putPasswords(passwordsBySecretId: Map<String, String>) {
+        if (passwordsBySecretId.isEmpty()) return
+        passwordsBySecretId.keys.forEach { secretId ->
+            require(secretId.isNotBlank()) { "NTRIP secret id must not be blank." }
+        }
+        val key = getOrCreateKey()
+        val encrypted = passwordsBySecretId.mapValues { (_, password) ->
+            val cipher = Cipher.getInstance(cipherTransformation)
+            cipher.init(Cipher.ENCRYPT_MODE, key)
+            val ciphertext = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
+            EncodedSecret(
+                iv = Base64.encodeToString(cipher.iv, Base64.NO_WRAP),
+                ciphertext = Base64.encodeToString(ciphertext, Base64.NO_WRAP),
+            )
+        }
+        val changes = linkedMapOf<String, String?>()
+        encrypted.forEach { (secretId, secret) ->
+            changes["$secretId.iv"] = secret.iv
+            changes["$secretId.ciphertext"] = secret.ciphertext
+        }
+        preferences.commitStringChangesWithRollback(
+            changes = changes,
+            failureMessage = "Unable to commit imported NTRIP secrets.",
+        )
     }
 
     fun getPassword(secretId: String): String? {
@@ -66,4 +86,9 @@ class NtripSecretStore(
         )
         return generator.generateKey()
     }
+
+    private data class EncodedSecret(
+        val iv: String,
+        val ciphertext: String,
+    )
 }

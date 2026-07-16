@@ -68,13 +68,23 @@ object FilesystemSessionBrowser {
     }
 
     fun deleteRecording(sessionDirectory: Path) {
+        ActiveRecordingSessionRegistry.withDestructiveOperation(sessionDirectory.toString(), "delete") {
+            deleteRecordingWhileDestructiveOperationIsLeased(sessionDirectory)
+        }
+    }
+
+    internal fun deleteRecordingWhileDestructiveOperationIsLeased(sessionDirectory: Path) {
         require(Files.isDirectory(sessionDirectory)) { "Recording is not a directory: $sessionDirectory" }
         deleteRecursively(sessionDirectory)
     }
 
     fun deleteArchive(archive: Path) {
-        require(Files.isRegularFile(archive) && archive.name.endsWith(".zip")) { "Archive is not a ZIP file: $archive" }
-        archive.deleteIfExists()
+        ActiveRecordingSessionRegistry.withDestructiveOperation(archive.toString(), "delete") {
+            require(Files.isRegularFile(archive) && archive.name.endsWith(".zip")) {
+                "Archive is not a ZIP file: $archive"
+            }
+            archive.deleteIfExists()
+        }
     }
 
     private fun looksLikeSessionDirectory(path: Path): Boolean =

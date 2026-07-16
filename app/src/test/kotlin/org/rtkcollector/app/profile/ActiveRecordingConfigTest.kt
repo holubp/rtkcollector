@@ -10,6 +10,74 @@ import org.rtkcollector.core.workflow.SessionArtifact
 
 class ActiveRecordingConfigTest {
     @Test
+    fun `SAF profile awaiting folder reselection cannot start`() {
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "plain-rover",
+                ntripCasterProfileRef = null,
+                ntripMountpointProfileRef = null,
+            ),
+            commandProfile = CommandProfile("commands", "Commands", initScript = "UNLOG COM1"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud", profileBaud = 230400, serialBaud = 230400),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile(
+                id = "storage",
+                name = "Imported SAF folder",
+                kind = "SAF_TREE",
+                requiresTreeReselection = true,
+            ),
+            workflowName = "Plain rover recording",
+            workflowUsesNtrip = false,
+            passwordLookup = { null },
+        )
+
+        val failure = assertThrows(IllegalArgumentException::class.java) {
+            config.validateForStart()
+        }
+
+        assertTrue(failure.message.orEmpty().contains("Select the Android recording folder again"))
+    }
+
+    @Test
+    fun `SAF override marker uses folder selected later on referenced profile`() {
+        val selectedTreeUri = "content://documents/tree/selected-after-import"
+        val config = ActiveRecordingConfig.resolve(
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "plain-rover",
+                ntripCasterProfileRef = null,
+                ntripMountpointProfileRef = null,
+                overrides = SettingsSetOverrides(
+                    storage = StorageProfileOverride(
+                        kind = "SAF_TREE",
+                        treeUri = null,
+                        requiresTreeReselection = true,
+                    ),
+                ),
+            ),
+            commandProfile = CommandProfile("commands", "Commands", initScript = "UNLOG COM1"),
+            usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+            ntripCasterProfile = null,
+            ntripMountpointProfile = null,
+            recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+            storageProfile = StorageProfile(
+                id = "storage",
+                name = "Selected SAF folder",
+                kind = "SAF_TREE",
+                treeUri = selectedTreeUri,
+                requiresTreeReselection = false,
+            ),
+            workflowName = "Plain rover recording",
+            workflowUsesNtrip = false,
+            passwordLookup = { null },
+        )
+
+        assertEquals(selectedTreeUri, config.storage.treeUri)
+        config.validateForStart()
+    }
+
+    @Test
     fun `plain rover config disables ntrip`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(

@@ -1,5 +1,7 @@
 package org.rtkcollector.core.correction
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 enum class NtripRuntimeState {
@@ -68,16 +70,27 @@ class NtripRuntimeController(
         }
     }
 
-    fun update(config: NtripRuntimeConfig) {
+    /** Returns false without starting the replacement when the previous worker has not terminated. */
+    fun update(
+        config: NtripRuntimeConfig,
+        timeoutMillis: Long = JOIN_TIMEOUT_MILLIS,
+    ): Boolean {
+        require(timeoutMillis >= 0L) { "NTRIP runtime stop timeout must not be negative." }
         synchronized(lock) {
-            stopWorkerLocked()
+            if (!stopWorkerLocked(timeoutMillis)) return false
             startWorkerLocked(config)
+            return true
         }
     }
 
-    fun disable(message: String = "NTRIP disabled") {
+    /** Returns true only when the deactivated worker is confirmed terminated. */
+    fun disable(
+        message: String = "NTRIP disabled",
+        timeoutMillis: Long = JOIN_TIMEOUT_MILLIS,
+    ): Boolean {
+        require(timeoutMillis >= 0L) { "NTRIP runtime stop timeout must not be negative." }
         synchronized(lock) {
-            stopWorkerLocked()
+            val terminated = stopWorkerLocked(timeoutMillis)
             emit(
                 NtripRuntimeSnapshot(
                     state = NtripRuntimeState.DISABLED,
@@ -86,13 +99,17 @@ class NtripRuntimeController(
                     message = message,
                 ),
             )
+            return terminated
         }
     }
 
-    fun stop() {
+    /** Returns true only when no owned worker can make another correction callback. */
+    fun stop(timeoutMillis: Long = JOIN_TIMEOUT_MILLIS): Boolean {
+        require(timeoutMillis >= 0L) { "NTRIP runtime stop timeout must not be negative." }
         synchronized(lock) {
-            stopWorkerLocked()
+            val terminated = stopWorkerLocked(timeoutMillis)
             emit(NtripRuntimeSnapshot(NtripRuntimeState.STOPPED, rawRecordingActive = true, correctionsActive = false))
+            return terminated
         }
     }
 
@@ -107,33 +124,76 @@ class NtripRuntimeController(
         ).also { it.start() }
     }
 
-    private fun stopWorkerLocked() {
+    private fun stopWorkerLocked(timeoutMillis: Long): Boolean {
+        val startedAtNanos = System.nanoTime()
+        val timeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
         generation.incrementAndGet()
         val active = activeWorker
         active?.deactivate()
-        active?.client?.cancel()
+        runCatching { active?.client?.cancel() }
         val currentWorker = worker
-        if (currentWorker != null && currentWorker != Thread.currentThread()) {
-            currentWorker.join(JOIN_TIMEOUT_MILLIS)
+        val workerTerminated = awaitWorkerTermination(
+            currentWorker,
+            remainingNanos(startedAtNanos, timeoutNanos),
+        )
+        val callbacksQuiesced = active?.awaitCallbacksQuiesced(
+            remainingNanos(startedAtNanos, timeoutNanos),
+        ) ?: true
+        val terminated = workerTerminated && callbacksQuiesced
+        if (terminated && worker === currentWorker) {
+            worker = null
+            if (activeWorker === active) {
+                activeWorker = null
+            }
         }
-        activeWorker = null
-        worker = null
+        return terminated
     }
+
+    private fun awaitWorkerTermination(thread: Thread?, timeoutNanos: Long): Boolean {
+        if (thread == null) return true
+        if (thread === Thread.currentThread()) return false
+        if (!thread.isAlive) return true
+        if (timeoutNanos <= 0L) return false
+        return try {
+            thread.join(
+                TimeUnit.NANOSECONDS.toMillis(timeoutNanos),
+                (timeoutNanos % NANOS_PER_MILLISECOND).toInt(),
+            )
+            !thread.isAlive
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+    }
+
+    private fun remainingNanos(startedAtNanos: Long, timeoutNanos: Long): Long =
+        (timeoutNanos - (System.nanoTime() - startedAtNanos)).coerceAtLeast(0L)
 
     private fun runClient(config: NtripRuntimeConfig, active: ActiveNtripWorker) {
         active.deliverIfCurrent(snapshot = {
             NtripRuntimeSnapshot(NtripRuntimeState.CONNECTING, rawRecordingActive = true, correctionsActive = false)
         })
-        val result = active.client.run(
-            ggaLines = config.ggaLines,
-            onState = { status -> active.deliverIfCurrent(snapshot = { status.toRuntimeSnapshot() }) },
-            onRtcmBytes = { bytes ->
-                active.deliverIfCurrent(
-                    snapshot = { streamingSnapshot() },
-                    afterEmit = { onRtcmBytes(bytes) },
-                )
-            },
-        )
+        val result = try {
+            active.client.run(
+                ggaLines = config.ggaLines,
+                onState = { status -> active.deliverIfCurrent(snapshot = { status.toRuntimeSnapshot() }) },
+                onRtcmBytes = { bytes ->
+                    active.deliverIfCurrent(
+                        snapshot = { streamingSnapshot() },
+                        afterEmit = { onRtcmBytes(bytes) },
+                    )
+                },
+            )
+        } catch (exception: Exception) {
+            NtripConnectionResult.Failure(
+                NtripFailure(
+                    kind = NtripFailureKind.STREAM_FAILED,
+                    state = NtripConnectionState.STREAMING,
+                    message = exception.message ?: "NTRIP runtime callback failed",
+                    cause = exception,
+                ),
+            )
+        }
         active.deliverIfCurrent(snapshot = { result.toFinalSnapshot() })
     }
 
@@ -141,12 +201,29 @@ class NtripRuntimeController(
         val client: NtripRuntimeClient,
         private val generation: Long,
     ) {
-        private val callbackLock = Any()
-        private var active = true
+        private val callbackState = AtomicLong(0L)
+        private val callbacksQuiesced = CountDownLatch(1)
 
         fun deactivate() {
-            synchronized(callbackLock) {
-                active = false
+            while (true) {
+                val current = callbackState.get()
+                if (current and CALLBACK_DEACTIVATED_MASK != 0L) return
+                val deactivated = current or CALLBACK_DEACTIVATED_MASK
+                if (callbackState.compareAndSet(current, deactivated)) {
+                    if (deactivated == CALLBACK_DEACTIVATED_MASK) callbacksQuiesced.countDown()
+                    return
+                }
+            }
+        }
+
+        fun awaitCallbacksQuiesced(timeoutNanos: Long): Boolean {
+            if (callbacksQuiesced.count == 0L) return true
+            if (timeoutNanos <= 0L) return false
+            return try {
+                callbacksQuiesced.await(timeoutNanos, TimeUnit.NANOSECONDS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                false
             }
         }
 
@@ -154,10 +231,39 @@ class NtripRuntimeController(
             snapshot: () -> NtripRuntimeSnapshot,
             afterEmit: () -> Unit = {},
         ) {
-            synchronized(callbackLock) {
-                if (active && isCurrent(generation)) {
-                    emit(snapshot())
-                    afterEmit()
+            if (!tryEnterCallback()) return
+            try {
+                if (!isActiveAndCurrent()) return
+                val nextSnapshot = snapshot()
+                if (!isActiveAndCurrent()) return
+                emit(nextSnapshot)
+                if (isActiveAndCurrent()) afterEmit()
+            } finally {
+                exitCallback()
+            }
+        }
+
+        private fun isActiveAndCurrent(): Boolean =
+            callbackState.get() and CALLBACK_DEACTIVATED_MASK == 0L && isCurrent(generation)
+
+        private fun tryEnterCallback(): Boolean {
+            while (true) {
+                val current = callbackState.get()
+                if (current and CALLBACK_DEACTIVATED_MASK != 0L || !isCurrent(generation)) return false
+                check(current < CALLBACK_COUNT_MASK) { "NTRIP callback count overflow." }
+                if (callbackState.compareAndSet(current, current + 1L)) return true
+            }
+        }
+
+        private fun exitCallback() {
+            while (true) {
+                val current = callbackState.get()
+                val callbackCount = current and CALLBACK_COUNT_MASK
+                check(callbackCount > 0L) { "NTRIP callback count underflow." }
+                val updated = current - 1L
+                if (callbackState.compareAndSet(current, updated)) {
+                    if (updated == CALLBACK_DEACTIVATED_MASK) callbacksQuiesced.countDown()
+                    return
                 }
             }
         }
@@ -224,6 +330,9 @@ class NtripRuntimeController(
         }
 
     private companion object {
+        const val CALLBACK_DEACTIVATED_MASK = Long.MIN_VALUE
+        const val CALLBACK_COUNT_MASK = Long.MAX_VALUE
         const val JOIN_TIMEOUT_MILLIS = 1_500L
+        const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 }

@@ -153,6 +153,46 @@ Verification:
 - Manual: rover + NTRIP dashboard last update stays near current UTC time
   during receiver RTCM telemetry updates.
 
+### ANDROID-CORRECTION-003: Correction Callback Failure Has Explicit State
+
+Status: Normative
+
+An exception while recording or routing received correction bytes MUST NOT
+silently terminate the NTRIP worker while its last published state remains
+`STREAMING`. The controller MUST publish an explicit failed or stopped state;
+receiver raw recording MUST remain independent.
+
+Verification:
+- Automated: NTRIP runtime callback-exception test.
+- Review: callback exceptions cannot escape the worker without a final state.
+
+### ANDROID-CORRECTION-004: NTRIP Shutdown Is Bounded And Confirmed
+
+Status: Normative
+
+Stopping, disabling or replacing NTRIP correction intake MUST deactivate new
+callbacks without waiting indefinitely for callback code. Client cancellation
+and worker join MUST use bounded waits. If callback quiescence or worker
+termination is not confirmed, the controller MUST retain ownership so shutdown
+can be retried; it MUST NOT discard a possibly live client or worker reference.
+If replacement times out, the service MUST publish a non-streaming degraded
+state and retry deliberately rather than presenting the requested configuration
+as connected. Deferred replacement MUST use the correction-intake state rather
+than overwrite an unrelated global error, and MUST transition out of that state
+once replacement connection work starts. The service MUST retain ownership of any reconnect coordinator
+until it has joined it or observed a quiescent self-release performed as that
+coordinator's final state-accessing operation.
+Recording finalisation MUST keep session writers open until NTRIP callbacks and
+the correction worker and reconnect coordinator are confirmed unable to access
+them.
+
+Verification:
+- Automated: blocked-callback and stubborn-client shutdown tests in
+  `NtripRuntimeControllerTest`.
+- Review: recording-service replacement handles a false controller result,
+  scopes deferred status to correction intake, and finalisation retries unconfirmed
+  coordinator and NTRIP shutdown.
+
 ## Base Caster Upload
 
 ### ANDROID-UPLOAD-001: Upload Must Remain Advisory and Not Block Capture
@@ -242,6 +282,21 @@ Verification:
 - Manual: select a SAF folder, restart the app and start a recording.
 - Review: service start path validates SAF write access before session writers
   are opened.
+
+### ANDROID-STATE-001: Recording State Delivery Is App-Private
+
+Status: Normative
+
+Recording-service state and USB-permission result receivers MUST be registered
+as non-exported on every supported Android version. Another application MUST
+NOT be able to forge dashboard recording state, session paths, coordinates or
+errors through the app's private broadcast actions.
+
+Verification:
+- Automated: receiver-registration source test or cross-UID instrumentation
+  test on a pre-Android-13 API.
+- Review: private dynamic receivers use the AndroidX non-exported contract on
+  all supported APIs.
 
 ## Mock Location
 

@@ -41,9 +41,15 @@ class AsyncAdvisoryFanout(
     private val eventSink: CaptureEventSink,
     queueCapacity: Int = 64,
 ) : ReceiverBytesConsumer, Closeable {
+    init {
+        require(queueCapacity > 0) { "queueCapacity must be positive" }
+    }
+
     private val queue = ArrayBlockingQueue<ByteArray>(queueCapacity)
     private val droppedChunks = AtomicLong(0)
     private val dropEventRecorded = AtomicBoolean(false)
+    private val shutdownSummaryRecorded = AtomicBoolean(false)
+    private val shutdownLock = Any()
     @Volatile
     private var accepting = true
 
@@ -70,10 +76,13 @@ class AsyncAdvisoryFanout(
     }
 
     override fun accept(bytes: ByteArray) {
-        if (!accepting) {
-            return
+        val accepted = synchronized(shutdownLock) {
+            if (!accepting) {
+                return
+            }
+            queue.offer(bytes.copyOf())
         }
-        if (!queue.offer(bytes.copyOf())) {
+        if (!accepted) {
             droppedChunks.incrementAndGet()
             if (dropEventRecorded.compareAndSet(false, true)) {
                 eventSink.recordBestEffort(
@@ -87,9 +96,44 @@ class AsyncAdvisoryFanout(
         }
     }
 
+    /**
+     * Stops accepting work, discards queued advisory chunks, and waits at most [timeoutMillis]
+     * for an in-flight delegate call to finish.
+     *
+     * A `false` result means the delegate can still access its dependencies. Callers must not
+     * close those dependencies until a later call returns `true`.
+     */
+    fun shutdown(timeoutMillis: Long): Boolean {
+        require(timeoutMillis >= 0) { "timeoutMillis must not be negative" }
+
+        synchronized(shutdownLock) {
+            accepting = false
+            queue.clear()
+            worker.interrupt()
+            if (timeoutMillis > 0 && worker !== Thread.currentThread()) {
+                worker.join(timeoutMillis)
+            }
+
+            if (worker.isAlive) {
+                return false
+            }
+
+            recordDropSummary()
+            return true
+        }
+    }
+
     override fun close() {
-        accepting = false
-        worker.join(1_000)
+        check(shutdown(DEFAULT_SHUTDOWN_TIMEOUT_MILLIS)) {
+            "Async advisory fanout did not stop within $DEFAULT_SHUTDOWN_TIMEOUT_MILLIS ms. " +
+                "Dependent writers must remain open until shutdown succeeds."
+        }
+    }
+
+    private fun recordDropSummary() {
+        if (!shutdownSummaryRecorded.compareAndSet(false, true)) {
+            return
+        }
         val dropped = droppedChunks.get()
         if (dropped > 1) {
             eventSink.recordBestEffort(
@@ -100,6 +144,10 @@ class AsyncAdvisoryFanout(
                 ),
             )
         }
+    }
+
+    private companion object {
+        const val DEFAULT_SHUTDOWN_TIMEOUT_MILLIS = 1_000L
     }
 }
 

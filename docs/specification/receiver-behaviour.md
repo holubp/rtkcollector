@@ -61,7 +61,7 @@ Verification:
 
 ### RX-UM980-RTKLIB-001: UM980 RTKLIB Input Routing Is Message-Specific
 
-Status: Implemented, not field-tested
+Status: Normative
 
 UM980 RTKLIB routing MUST distinguish direct RTKLIB-EX compatible observation
 messages from compact or app-specific observation messages. OBSVMB MAY be
@@ -104,7 +104,7 @@ Verification:
 
 ### RX-UBLOX-RTKLIB-001: u-blox Raw Input Is First-Class RTKLIB Input
 
-Status: Implemented, not field-tested
+Status: Normative
 
 u-blox profiles that emit UBX RXM-RAWX and RXM-SFRBX MUST be eligible for a
 direct RTKLIB-EX route through the UBX decoder. The route model MUST preserve

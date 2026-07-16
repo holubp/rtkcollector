@@ -5,6 +5,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
 import org.rtkcollector.core.workflow.RtklibInputRouter
@@ -72,6 +73,81 @@ class RtklibWorkerTest {
 
         assertEquals(RtklibOfferStatus.DROPPED_FULL, result.status)
         assertEquals(4, result.droppedBytes)
+    }
+
+    @Test
+    fun `shutdown timeout keeps resources open until an uncooperative feed terminates`() {
+        val nmea = CloseTrackingOutputStream()
+        val pos = CloseTrackingOutputStream()
+        val backend = UncooperativeBackend()
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory {
+                override fun create(): RtklibBackend = backend
+            },
+            outputWriters = RtklibOutputWriters(nmea, pos),
+        )
+
+        assertTrue(worker.start(validConfig()).started)
+        assertTrue(worker.offerRoverBytes(byteArrayOf(1), 10L).accepted)
+        assertTrue(backend.awaitFeedStarted())
+        assertTrue(worker.offerRoverBytes(byteArrayOf(2, 3), 20L).accepted)
+
+        assertFalse(worker.shutdown(timeoutMillis = 20L))
+        assertTrue(backend.awaitCancellationRequest())
+        assertTrue(backend.cancellationRequested)
+        assertFalse(backend.closed)
+        assertFalse(nmea.closed)
+        assertFalse(pos.closed)
+        assertEquals(0, worker.snapshot().roverQueueBytes)
+        assertEquals(2L, worker.snapshot().droppedRoverBytes)
+
+        backend.releaseFeed()
+
+        assertTrue(worker.shutdown(timeoutMillis = 2_000L))
+        assertTrue(backend.closed)
+        assertTrue(nmea.closed)
+        assertTrue(pos.closed)
+        assertEquals("", nmea.toString(Charsets.US_ASCII.name()))
+    }
+
+    @Test
+    fun `shutdown finalizes never-started output writers exactly once`() {
+        val nmea = CloseTrackingOutputStream()
+        val pos = CloseTrackingOutputStream()
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory {
+                override fun create(): RtklibBackend = error("A never-started worker must not create a backend")
+            },
+            outputWriters = RtklibOutputWriters(nmea, pos),
+        )
+
+        assertTrue(worker.shutdown(timeoutMillis = 0L))
+        assertTrue(worker.shutdown(timeoutMillis = 0L))
+
+        assertEquals(1, nmea.closeCalls)
+        assertEquals(1, pos.closeCalls)
+    }
+
+    @Test
+    fun `shutdown finalizes failed-start outputs without reclosing the backend`() {
+        val nmea = CloseTrackingOutputStream()
+        val pos = CloseTrackingOutputStream()
+        val backend = StartRefusingBackend()
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory {
+                override fun create(): RtklibBackend = backend
+            },
+            outputWriters = RtklibOutputWriters(nmea, pos),
+        )
+
+        assertFalse(worker.start(validConfig()).started)
+        assertEquals(1, backend.closeCalls)
+        assertTrue(worker.shutdown(timeoutMillis = 0L))
+        assertTrue(worker.shutdown(timeoutMillis = 0L))
+
+        assertEquals(1, backend.closeCalls)
+        assertEquals(1, nmea.closeCalls)
+        assertEquals(1, pos.closeCalls)
     }
 
     @Test
@@ -334,6 +410,81 @@ class RtklibWorkerTest {
             RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
 
         override fun stop() = Unit
+    }
+
+    private class UncooperativeBackend : RtklibBackend {
+        private val feedStarted = CountDownLatch(1)
+        private val releaseFeed = CountDownLatch(1)
+        private val cancellationRequestedLatch = CountDownLatch(1)
+
+        @Volatile
+        var cancellationRequested = false
+            private set
+
+        @Volatile
+        var closed = false
+            private set
+
+        override fun start(config: RtklibConfig): RtklibStartResult = RtklibStartResult.started()
+
+        override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+            feedStarted.countDown()
+            releaseFeed.await()
+            return RtklibNativeOutputBatch(nmeaLines = listOf("\$GPGGA,late"))
+        }
+
+        override fun snapshot(): RtklibEngineSnapshot =
+            RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+
+        override fun stop() {
+            cancellationRequested = true
+            cancellationRequestedLatch.countDown()
+        }
+
+        override fun close() {
+            closed = true
+        }
+
+        fun awaitFeedStarted(): Boolean = feedStarted.await(2, TimeUnit.SECONDS)
+
+        fun awaitCancellationRequest(): Boolean = cancellationRequestedLatch.await(2, TimeUnit.SECONDS)
+
+        fun releaseFeed() {
+            releaseFeed.countDown()
+        }
+    }
+
+    private class CloseTrackingOutputStream : ByteArrayOutputStream() {
+        @Volatile
+        var closeCalls = 0
+            private set
+
+        val closed: Boolean
+            get() = closeCalls > 0
+
+        override fun close() {
+            closeCalls += 1
+            super.close()
+        }
+    }
+
+    private class StartRefusingBackend : RtklibBackend {
+        var closeCalls = 0
+            private set
+
+        override fun start(config: RtklibConfig): RtklibStartResult =
+            RtklibStartResult.failed("fixture backend refused to start")
+
+        override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch = RtklibNativeOutputBatch()
+
+        override fun snapshot(): RtklibEngineSnapshot =
+            RtklibEngineSnapshot(state = RtklibEngineState.FAILED)
+
+        override fun stop() = Unit
+
+        override fun close() {
+            closeCalls += 1
+        }
     }
 
     private open class FakeNativeApi : RtklibNativeBridge.NativeApi {

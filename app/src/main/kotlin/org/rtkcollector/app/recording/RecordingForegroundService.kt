@@ -33,6 +33,7 @@ import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
 import org.rtkcollector.app.receiver.isUm980CommandOkResponse
 import org.rtkcollector.app.receiver.um980VersionProbeBytes
+import org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry
 import org.rtkcollector.app.ui.usb.UsbStartAccessDecision
 import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
@@ -42,7 +43,11 @@ import org.rtkcollector.core.capture.AdvisoryFanout
 import org.rtkcollector.core.capture.CaptureEvent
 import org.rtkcollector.core.capture.CaptureEventSink
 import org.rtkcollector.core.capture.CaptureRuntime
+import org.rtkcollector.core.capture.CaptureFailureDisposition
 import org.rtkcollector.core.capture.RawRecorder
+import org.rtkcollector.core.capture.RawRecordingFlushPolicy
+import org.rtkcollector.core.capture.RawRecordingStorageException
+import org.rtkcollector.core.capture.captureFailureDisposition
 import org.rtkcollector.core.capture.RecordingHealthEvent
 import org.rtkcollector.core.capture.RecordingHealthMonitor
 import org.rtkcollector.core.correction.DefaultNtripRuntimeClient
@@ -156,13 +161,20 @@ import kotlin.math.sqrt
 
 class RecordingForegroundService : Service() {
     private enum class CompilePhase { START, STOP }
+    private enum class NtripReplacementAttempt { STARTED, DEFERRED, STALE }
     private val running = AtomicBoolean(false)
     private val stopping = AtomicBoolean(false)
     private val shutdownSent = AtomicBoolean(false)
     private val ntripReconnectRequested = AtomicBoolean(false)
-    private var captureThread: Thread? = null
+    private val captureThreadLock = Any()
+    private val ntripOperationLock = Any()
+    private val ntripReconnectThreadLock = Any()
+    @Volatile private var captureThread: Thread? = null
+    @Volatile private var ntripReconnectThread: Thread? = null
+    private var activeSessionLocation: String? = null
     @Volatile private var runtime: CaptureRuntime? = null
     @Volatile private var transport: AndroidUsbSerialTransport? = null
+    @Volatile private var reconnectTransport: AndroidUsbSerialTransport? = null
     private var writers: RecordingSessionWriters? = null
     private var advisoryFanout: AsyncAdvisoryFanout? = null
     private var activeSessionMetadata: SessionMetadata? = null
@@ -174,8 +186,8 @@ class RecordingForegroundService : Service() {
     private var activeBaudPlan: Um980BaudTransitionPlan? = null
     private var activeUsbVid: Int? = null
     private var activeUsbPid: Int? = null
-    private var ntripController: NtripRuntimeController? = null
-    private var activeNtripRuntimeConfig: NtripRuntimeConfig? = null
+    @Volatile private var ntripController: NtripRuntimeController? = null
+    @Volatile private var activeNtripRuntimeConfig: NtripRuntimeConfig? = null
     private var casterUploadController: NtripCasterUploadController? = null
     private var rtklibWorker: RtklibWorker? = null
     private var lastRtklibStatusWriteMillis: Long = 0L
@@ -196,6 +208,8 @@ class RecordingForegroundService : Service() {
         PerformanceDiagnostics(diagnosticsStore) { diagnosticsSettings.performanceMonitoringEnabled }
     }
     private val persistentWriteInProgress = AtomicBoolean(false)
+    private val persistentWriteThreadLock = Any()
+    @Volatile private var persistentWriteThread: Thread? = null
     private val runtimeLock = Any()
     private val txLock = Any()
     private var ntripRateWindowStartedAtMillis: Long = 0L
@@ -266,10 +280,18 @@ class RecordingForegroundService : Service() {
     }
 
     private fun startRecording(intent: Intent) {
+        if (stopping.get()) {
+            runCatching { broadcastState() }
+            return
+        }
         if (!running.compareAndSet(false, true)) {
             return
         }
-        stopping.set(false)
+        if (stopping.get()) {
+            running.set(false)
+            runCatching { broadcastState() }
+            return
+        }
         shutdownSent.set(false)
         ntripReconnectRequested.set(false)
         activeWorkflowUsesNtrip = false
@@ -447,8 +469,10 @@ class RecordingForegroundService : Service() {
                 validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
                 expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
             )
-            sessionWriters.writeSessionJson(exportSessionMetadata(metadata))
             writers = sessionWriters
+            ActiveRecordingSessionRegistry.activate(openedSession.displayPath)
+            activeSessionLocation = openedSession.displayPath
+            sessionWriters.writeSessionJson(exportSessionMetadata(metadata))
             activeSessionMetadata = metadata
             intent.getStringExtra(EXTRA_BASE_POSITION_JSON)
                 ?.takeIf { it.isNotBlank() }
@@ -456,6 +480,7 @@ class RecordingForegroundService : Service() {
             val recorder = SessionRawRecorder(
                 writers = sessionWriters,
                 recordCorrectionInput = intent.getBooleanExtra(EXTRA_RECORD_NTRIP_CORRECTION_INPUT, true),
+                initialFlushElapsedRealtimeMillis = SystemClock.elapsedRealtime(),
             )
             activeRecorder = recorder
             val eventSink = SessionEventSink(sessionWriters)
@@ -592,18 +617,40 @@ class RecordingForegroundService : Service() {
             previousMockResult = null
             startBestSolutionTicker()
 
-            captureThread = Thread({ captureLoop(recorder) }, "rtkcollector-capture").also { it.start() }
+            val startedCaptureThread = Thread(
+                {
+                    try {
+                        captureLoop(recorder)
+                    } finally {
+                        synchronized(captureThreadLock) {
+                            if (captureThread === Thread.currentThread()) {
+                                captureThread = null
+                            }
+                        }
+                    }
+                },
+                "rtkcollector-capture",
+            )
+            synchronized(captureThreadLock) {
+                captureThread = startedCaptureThread
+            }
+            startedCaptureThread.start()
             maybeStartNtrip(intent, recorder)
         } catch (error: Throwable) {
-            runCatching { casterUploadController?.stop() }
-            casterUploadController = null
             activeSatelliteTelemetry = SatelliteTelemetryCapability.NONE
             activeSatelliteTelemetryObserved = false
+            val startErrorCategory = if (
+                captureFailureDisposition(error) == CaptureFailureDisposition.FATAL_STORAGE_STOP
+            ) {
+                RecordingErrorCategory.STORAGE
+            } else {
+                classifyStartError(error)
+            }
             state = state.copy(
                 running = false,
                 lifecycle = RecordingLifecycleState.FAILED,
                 lastError = error.message,
-                errorCategory = classifyStartError(error),
+                errorCategory = startErrorCategory,
                 errorSeverity = RecordingErrorSeverity.FATAL,
                 rawRecordingActive = false,
                 correctionsActive = false,
@@ -620,11 +667,25 @@ class RecordingForegroundService : Service() {
 
     private fun captureLoop(recorder: SessionRawRecorder) {
         while (running.get()) {
-            runCatching {
-                val bytesRead = synchronized(runtimeLock) {
+            val bytesRead = try {
+                synchronized(runtimeLock) {
                     runtime?.readOnce(READ_BUFFER_BYTES) ?: 0
                 }
-                val nowMillis = SystemClock.elapsedRealtime()
+            } catch (failure: Throwable) {
+                handleCaptureReadOrRawFlushFailure(failure, recorder)
+                continue
+            }
+            val nowMillis = SystemClock.elapsedRealtime()
+            try {
+                synchronized(runtimeLock) {
+                    recorder.flushRawIfDue(nowMillis)
+                }
+            } catch (failure: Throwable) {
+                handleCaptureReadOrRawFlushFailure(failure, recorder)
+                continue
+            }
+            if (!running.get()) return
+            runCatching {
                 val receiverHealthEvents = recordingHealthMonitor.recordReceiverRead(bytesRead, nowMillis)
                 recordingHealthMonitor.recordReceiverProtocolBytes(bytesRead, nowMillis)
                 val receiverProtocolHealthEvents = recordingHealthMonitor.checkReceiverProtocol(
@@ -653,27 +714,81 @@ class RecordingForegroundService : Service() {
                 handleRecordingHealthEvents(correctionHealthEvents, recorder)
                 broadcastRoutineState()
                 updateForegroundNotification()
-            }.onFailure { error ->
-                state = state.copy(
-                    lastError = error.message,
-                    errorCategory = RecordingErrorCategory.USB,
-                    errorSeverity = RecordingErrorSeverity.DEGRADED,
-                    rawRecordingActive = false,
-                )
-                recordRuntimeDiagnostic(
-                    category = DiagnosticCategory.USB,
-                    severity = RecordingErrorSeverity.DEGRADED.name,
-                    message = { "USB capture read failed: ${error.message ?: error.javaClass.simpleName}" },
-                )
-                broadcastState()
-                if (!tryReconnectUsb(recorder)) {
-                    Thread.sleep(1_000)
-                }
-            }
+            }.onFailure(::recordCaptureSidecarOrAdvisoryFailure)
         }
     }
 
+    private fun handleCaptureReadOrRawFlushFailure(failure: Throwable, recorder: SessionRawRecorder) {
+        if (!running.get()) return
+        if (stopForFatalRawStorageFailure(failure)) return
+        try {
+            synchronized(runtimeLock) {
+                recorder.flushRawNow(SystemClock.elapsedRealtime())
+            }
+        } catch (rawFlushFailure: Throwable) {
+            if (!stopForFatalRawStorageFailure(rawFlushFailure)) {
+                stopForFatalRawStorageFailure(
+                    RawRecordingStorageException(
+                        "Unable to flush receiver-rx.raw before USB recovery.",
+                        rawFlushFailure,
+                    ),
+                )
+            }
+            return
+        }
+        if (!running.get()) return
+        state = state.copy(
+            lastError = failure.message,
+            errorCategory = RecordingErrorCategory.USB,
+            errorSeverity = RecordingErrorSeverity.DEGRADED,
+            rawRecordingActive = false,
+        )
+        recordRuntimeDiagnostic(
+            category = DiagnosticCategory.USB,
+            severity = RecordingErrorSeverity.DEGRADED.name,
+            message = { "USB capture read failed: ${failure.message ?: failure.javaClass.simpleName}" },
+        )
+        runCatching { broadcastState() }
+        if (running.get() && !tryReconnectUsb(recorder) && running.get()) {
+            Thread.sleep(1_000)
+        }
+    }
+
+    private fun stopForFatalRawStorageFailure(failure: Throwable): Boolean {
+        if (captureFailureDisposition(failure) != CaptureFailureDisposition.FATAL_STORAGE_STOP) return false
+        state = state.copy(
+            lastError = failure.message,
+            errorCategory = RecordingErrorCategory.STORAGE,
+            errorSeverity = RecordingErrorSeverity.FATAL,
+            rawRecordingActive = false,
+        )
+        recordRuntimeDiagnostic(
+            category = DiagnosticCategory.STORAGE,
+            severity = RecordingErrorSeverity.FATAL.name,
+            message = { failure.message ?: "Raw recording storage failed." },
+        )
+        runCatching { broadcastState() }
+        stopRecording(sendShutdown = false)
+        return true
+    }
+
+    private fun recordCaptureSidecarOrAdvisoryFailure(error: Throwable) {
+        if (!running.get()) return
+        state = state.copy(
+            lastError = error.message ?: "Capture sidecar or advisory processing failed.",
+            errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+            errorSeverity = RecordingErrorSeverity.DEGRADED,
+        )
+        recordRuntimeDiagnostic(
+            category = DiagnosticCategory.SERVICE,
+            severity = RecordingErrorSeverity.DEGRADED.name,
+            message = { "Capture sidecar or advisory processing failed: ${error.message ?: error.javaClass.simpleName}" },
+        )
+        runCatching { broadcastState() }
+    }
+
     private fun tryReconnectUsb(recorder: SessionRawRecorder): Boolean {
+        if (!running.get()) return false
         val vid = activeUsbVid ?: return false
         val pid = activeUsbPid ?: return false
         val plan = activeBaudPlan ?: return false
@@ -695,24 +810,40 @@ class RecordingForegroundService : Service() {
         }
         return runCatching {
             synchronized(runtimeLock) {
+                check(running.get()) { "Recording stopped during USB reconnect." }
                 runCatching { transport?.close() }
                 val usbTransport = AndroidUsbSerialTransport(
                     usbManager = usbManager,
                     device = device,
                     options = UsbSerialOpenOptions(activeProfileBaud),
                 )
-                val captureRuntime = CaptureRuntime(
-                    transport = usbTransport,
-                    recorder = recorder,
-                    eventSink = eventSink,
-                    advisoryFanout = fanout,
-                )
-                captureRuntime.open()
-                executeBaudTransition(plan, captureRuntime, usbTransport)
-                activeSerialBaud = activeTargetBaud
-                transport = usbTransport
-                runtime = captureRuntime
+                reconnectTransport = usbTransport
+                var promoted = false
+                try {
+                    val captureRuntime = CaptureRuntime(
+                        transport = usbTransport,
+                        recorder = recorder,
+                        eventSink = eventSink,
+                        advisoryFanout = fanout,
+                    )
+                    captureRuntime.open()
+                    check(running.get()) { "Recording stopped during USB reconnect." }
+                    executeBaudTransition(plan, captureRuntime, usbTransport)
+                    check(running.get()) { "Recording stopped during USB reconnect." }
+                    activeSerialBaud = activeTargetBaud
+                    transport = usbTransport
+                    runtime = captureRuntime
+                    promoted = true
+                } finally {
+                    if (reconnectTransport === usbTransport) {
+                        reconnectTransport = null
+                    }
+                    if (!promoted) {
+                        runCatching { usbTransport.close() }
+                    }
+                }
             }
+            check(running.get()) { "Recording stopped during USB reconnect." }
             recordSessionEvent("usb-reconnect-succeeded", "USB receiver reconnected and receiver profile was re-applied.")
             recordingHealthMonitor.reset(SystemClock.elapsedRealtime())
             state = state.copy(
@@ -723,6 +854,7 @@ class RecordingForegroundService : Service() {
             )
             broadcastState()
         }.onFailure { error ->
+            if (stopForFatalRawStorageFailure(error)) return@onFailure
             recordSessionEvent(
                 "usb-reconnect-failed",
                 error.message ?: error.javaClass.simpleName,
@@ -761,7 +893,15 @@ class RecordingForegroundService : Service() {
         recorder: SessionRawRecorder,
         sendCorrectionsToReceiver: Boolean,
     ) {
-        activeNtripRuntimeConfig = config
+        val configAccepted = synchronized(ntripOperationLock) {
+            if (!running.get()) {
+                false
+            } else {
+                activeNtripRuntimeConfig = config
+                true
+            }
+        }
+        if (!configAccepted) return
         val ntripRtcmExtractor = Rtcm3Extractor(validateCrc = true)
         val controller = NtripRuntimeController(
             clientFactory = { runtimeConfig ->
@@ -812,8 +952,11 @@ class RecordingForegroundService : Service() {
                 }
             },
         )
-        ntripController = controller
-        controller.start(config)
+        synchronized(ntripOperationLock) {
+            if (!running.get() || activeNtripRuntimeConfig != config) return
+            ntripController = controller
+            controller.start(config)
+        }
     }
 
     private fun processNtripCorrectionBytes(
@@ -988,39 +1131,136 @@ class RecordingForegroundService : Service() {
             )
 
     private fun requestNtripReconnect(config: NtripRuntimeConfig) {
+        if (!running.get() || activeNtripRuntimeConfig != config) return
         if (!ntripReconnectRequested.compareAndSet(false, true)) return
-        Thread(
-            {
-                try {
-                    if (running.get() && activeNtripRuntimeConfig == config) {
-                        ntripController?.update(config)
-                        recordSessionEvent("ntrip-reconnect-requested", state.ntripUrl)
-                    }
-                } catch (error: Throwable) {
-                    val message = error.message ?: error.javaClass.simpleName
-                    recordSessionEvent("ntrip-reconnect-failed", message)
-                    recordRuntimeDiagnostic(
-                        category = DiagnosticCategory.NTRIP,
-                        severity = RecordingErrorSeverity.DEGRADED.name,
-                        message = { "NTRIP reconnect request failed: $message" },
-                    )
-                    state = state.copy(
-                        lastError = message,
-                        errorCategory = RecordingErrorCategory.NTRIP,
-                        errorSeverity = RecordingErrorSeverity.DEGRADED,
-                        correctionsActive = false,
-                    )
-                    broadcastState()
-                    updateForegroundNotification(force = true)
-                } finally {
-                    ntripReconnectRequested.set(false)
-                }
-            },
+        lateinit var reconnectThread: Thread
+        reconnectThread = Thread(
+            { runNtripReconnectCoordinator(reconnectThread) },
             "rtkcollector-ntrip-health-reconnect",
-        ).also { thread ->
-            thread.isDaemon = true
-            thread.start()
+        )
+        reconnectThread.isDaemon = true
+        synchronized(ntripReconnectThreadLock) {
+            if (!running.get()) {
+                ntripReconnectRequested.set(false)
+                return
+            }
+            ntripReconnectThread = reconnectThread
+            reconnectThread.start()
         }
+    }
+
+    private fun runNtripReconnectCoordinator(coordinator: Thread) {
+        var lastAttemptedConfig: NtripRuntimeConfig? = null
+        var lastDeferredConfig: NtripRuntimeConfig? = null
+        while (true) {
+            while (running.get()) {
+                val desiredConfig = activeNtripRuntimeConfig ?: break
+                lastAttemptedConfig = desiredConfig
+                val attempt = try {
+                    attemptNtripReplacement(desiredConfig)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                } catch (error: Throwable) {
+                    reportNtripReplacementFailure(error)
+                    if (releaseNtripReconnectCoordinator(coordinator, desiredConfig)) return
+                    lastDeferredConfig = null
+                    continue
+                }
+                when (attempt) {
+                    NtripReplacementAttempt.STARTED -> {
+                        recordSessionEvent("ntrip-reconnect-requested", ntripDisplayUrl(desiredConfig))
+                        if (releaseNtripReconnectCoordinator(coordinator, desiredConfig)) return
+                        lastDeferredConfig = null
+                    }
+                    NtripReplacementAttempt.DEFERRED -> {
+                        if (lastDeferredConfig != desiredConfig) {
+                            reportNtripReplacementDeferred(desiredConfig)
+                            lastDeferredConfig = desiredConfig
+                        }
+                        try {
+                            Thread.sleep(NTRIP_REPLACEMENT_RETRY_MILLIS)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            break
+                        }
+                    }
+                    NtripReplacementAttempt.STALE -> {
+                        lastDeferredConfig = null
+                    }
+                }
+            }
+            if (releaseNtripReconnectCoordinator(coordinator, lastAttemptedConfig)) return
+            lastDeferredConfig = null
+        }
+    }
+
+    private fun releaseNtripReconnectCoordinator(
+        coordinator: Thread,
+        handledConfig: NtripRuntimeConfig?,
+    ): Boolean = synchronized(ntripReconnectThreadLock) {
+        synchronized(ntripOperationLock) {
+            if (ntripReconnectThread !== coordinator) {
+                true
+            } else {
+                val desiredConfig = activeNtripRuntimeConfig
+                if (running.get() && desiredConfig != null && desiredConfig != handledConfig) {
+                    false
+                } else {
+                    ntripReconnectRequested.set(false)
+                    ntripReconnectThread = null
+                    true
+                }
+            }
+        }
+    }
+
+    private fun reportNtripReplacementFailure(error: Throwable) {
+        val message = error.message ?: error.javaClass.simpleName
+        recordSessionEvent("ntrip-reconnect-failed", message)
+        recordRuntimeDiagnostic(
+            category = DiagnosticCategory.NTRIP,
+            severity = RecordingErrorSeverity.DEGRADED.name,
+            message = { "NTRIP reconnect request failed: $message" },
+        )
+        state = state.copy(
+            ntripState = NtripRuntimeState.RECONNECT_WAIT.name,
+            lastError = message,
+            errorCategory = RecordingErrorCategory.NTRIP,
+            errorSeverity = RecordingErrorSeverity.DEGRADED,
+            correctionsActive = false,
+        )
+        runCatching { broadcastState() }
+        runCatching { updateForegroundNotification(force = true) }
+    }
+
+    private fun attemptNtripReplacement(config: NtripRuntimeConfig): NtripReplacementAttempt =
+        synchronized(ntripOperationLock) {
+            if (!running.get() || activeNtripRuntimeConfig != config) {
+                return@synchronized NtripReplacementAttempt.STALE
+            }
+            val controller = ntripController ?: return@synchronized NtripReplacementAttempt.STALE
+            if (controller.update(config, NTRIP_REPLACEMENT_WAIT_MILLIS)) {
+                NtripReplacementAttempt.STARTED
+            } else {
+                NtripReplacementAttempt.DEFERRED
+            }
+        }
+
+    private fun reportNtripReplacementDeferred(config: NtripRuntimeConfig) {
+        val message = "NTRIP reconnect is waiting for the previous connection to stop."
+        recordSessionEvent("ntrip-reconnect-deferred", ntripDisplayUrl(config))
+        recordRuntimeDiagnostic(
+            category = DiagnosticCategory.NTRIP,
+            severity = RecordingErrorSeverity.DEGRADED.name,
+            message = { message },
+        )
+        state = state.copy(
+            ntripState = NtripRuntimeState.RECONNECT_WAIT.name,
+            correctionsActive = false,
+        )
+        runCatching { broadcastState() }
+        runCatching { updateForegroundNotification(force = true) }
     }
 
     private fun handleRecordingHealthEvents(
@@ -1125,7 +1365,6 @@ class RecordingForegroundService : Service() {
                 RecordingHealthEvent.CorrectionsRecovered -> {
                     val message = "NTRIP correction bytes resumed."
                     recordSessionEvent("ntrip-corrections-recovered", message)
-                    ntripReconnectRequested.set(false)
                     if (state.errorCategory == RecordingErrorCategory.NTRIP &&
                         state.errorSeverity == RecordingErrorSeverity.DEGRADED
                     ) {
@@ -1447,7 +1686,15 @@ class RecordingForegroundService : Service() {
             broadcastState()
             return
         }
-        activeNtripRuntimeConfig = config
+        val configAccepted = synchronized(ntripOperationLock) {
+            if (!running.get()) {
+                false
+            } else {
+                activeNtripRuntimeConfig = config
+                true
+            }
+        }
+        if (!configAccepted) return
         coordinateAveragingController.onNtripSourceChanged(
             casterLabel = config.request.host,
             mountpointLabel = config.request.mountpoint,
@@ -1478,15 +1725,28 @@ class RecordingForegroundService : Service() {
                 sendCorrectionsToReceiver = activeNtripSendToReceiver,
             )
         } else {
-            ntripController?.update(config)
+            state = state.copy(
+                ntripState = NtripRuntimeState.RECONNECT_WAIT.name,
+                correctionsActive = false,
+            )
+            broadcastState()
+            requestNtripReconnect(config)
         }
     }
 
     private fun disableNtrip() {
-        ntripController?.disable("User disabled NTRIP during recording.")
-        activeNtripRuntimeConfig = null
-        ntripReconnectRequested.set(false)
+        val cleanupConfirmed = synchronized(ntripOperationLock) {
+            activeNtripRuntimeConfig = null
+            ntripController?.disable("User disabled NTRIP during recording.") ?: true
+        }
         runCatching { writers?.appendEventJson("""{"type":"ntrip-disabled","reason":"user"}""") }
+        if (!cleanupConfirmed) {
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.NTRIP,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { "NTRIP was disabled, but its previous worker is still stopping." },
+            )
+        }
         state = state.copy(ntripState = "DISABLED", correctionsActive = false)
         broadcastState()
     }
@@ -1582,13 +1842,26 @@ class RecordingForegroundService : Service() {
             broadcastState()
             return
         }
-        Thread({
+        val worker = Thread({
             try {
                 writePersistentReceiverConfigAsync(captureRuntime, usbTransport, commands, label, targetBaud)
             } finally {
                 persistentWriteInProgress.set(false)
+                synchronized(persistentWriteThreadLock) {
+                    if (persistentWriteThread === Thread.currentThread()) {
+                        persistentWriteThread = null
+                    }
+                }
             }
-        }, "rtkcollector-persistent-receiver-write").start()
+        }, "rtkcollector-persistent-receiver-write")
+        synchronized(persistentWriteThreadLock) {
+            if (!running.get()) {
+                persistentWriteInProgress.set(false)
+                return
+            }
+            persistentWriteThread = worker
+            worker.start()
+        }
     }
 
     private fun writePersistentReceiverConfigAsync(
@@ -1619,13 +1892,17 @@ class RecordingForegroundService : Service() {
             writers?.appendEventJson(
                 """{"type":"persistent-receiver-write-succeeded","label":"${label.jsonEscape()}"}""",
             )
-            state = state.copy(
-                lastError = null,
-                errorCategory = RecordingErrorCategory.NONE,
-                errorSeverity = RecordingErrorSeverity.NONE,
-            )
-            broadcastState()
+            if (running.get()) {
+                state = state.copy(
+                    lastError = null,
+                    errorCategory = RecordingErrorCategory.NONE,
+                    errorSeverity = RecordingErrorSeverity.NONE,
+                )
+                broadcastState()
+            }
         }.onFailure { error ->
+            if (stopForFatalRawStorageFailure(error)) return@onFailure
+            if (!running.get()) return@onFailure
             val message = error.message ?: error.javaClass.simpleName
             runCatching {
                 writers?.appendEventJson(
@@ -1697,16 +1974,19 @@ class RecordingForegroundService : Service() {
         val response = ByteArrayOutputStream()
         while (System.currentTimeMillis() < deadline) {
             val bytes = captureRuntime.readReceiverBytesOnce(READ_BUFFER_BYTES)
+            flushActiveRawIfDue()
             if (bytes.isNotEmpty()) {
                 response.write(bytes)
                 val collected = response.toByteArray()
                 if (isUm980CommandOkResponse(collected)) {
+                    flushActiveRawNow()
                     return collected
                 }
             } else {
                 Thread.sleep(50)
             }
         }
+        flushActiveRawNow()
         return response.toByteArray()
     }
 
@@ -1715,31 +1995,53 @@ class RecordingForegroundService : Service() {
         val response = ByteArrayOutputStream()
         while (System.currentTimeMillis() < deadline) {
             val bytes = captureRuntime.readReceiverBytesOnce(READ_BUFFER_BYTES)
+            flushActiveRawIfDue()
             if (bytes.isNotEmpty()) {
                 response.write(bytes)
                 val collected = response.toByteArray()
                 if (isPlausibleUm980MaintenanceResponse(collected) || isUm980CommandOkResponse(collected)) {
+                    flushActiveRawNow()
                     return collected
                 }
             } else {
                 Thread.sleep(50)
             }
         }
+        flushActiveRawNow()
         return response.toByteArray()
     }
 
     private fun stopRecording(sendShutdown: Boolean) {
         if (!stopping.compareAndSet(false, true)) {
-            broadcastState()
+            runCatching { broadcastState() }
             return
         }
-        if (!running.getAndSet(false) && runtime == null && writers == null && transport == null) {
+        val wasRunning = synchronized(ntripReconnectThreadLock) {
+            synchronized(ntripOperationLock) {
+                running.getAndSet(false)
+            }
+        }
+        if (
+            !wasRunning &&
+            runtime == null &&
+            writers == null &&
+            transport == null &&
+            reconnectTransport == null &&
+            captureThread == null &&
+            persistentWriteThread == null &&
+            ntripReconnectThread == null &&
+            ntripController == null &&
+            casterUploadController == null &&
+            rtklibWorker == null &&
+            advisoryFanout == null
+        ) {
             stopping.set(false)
             return
         }
         routineStateBroadcastRateLimiter.reset()
         state = state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false)
-        broadcastState()
+        runCatching { broadcastState() }
+        persistentWriteThread?.interrupt()
         if (sendShutdown && shutdownSent.compareAndSet(false, true)) {
             runCatching {
                 runtime?.let { captureRuntime ->
@@ -1753,17 +2055,230 @@ class RecordingForegroundService : Service() {
                     errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                     errorSeverity = RecordingErrorSeverity.DEGRADED,
                 )
-                broadcastState()
+                runCatching { broadcastState() }
             }
         }
         bestSolutionTicker?.cancel(false)
         bestSolutionTicker = null
-        runCatching { ntripController?.stop() }
-        runCatching { captureThread?.join(1500) }
-        runCatching { advisoryFanout?.close() }
-        runCatching { rtklibWorker?.stop() }
-        val casterUploadSnapshot = casterUploadController?.snapshot()
-        runCatching { casterUploadController?.stop() }
+        val ntripReconnectStopped = tryStopNtripReconnect(NTRIP_RECONNECT_SHUTDOWN_WAIT_MILLIS)
+        val activeNtripController = ntripController
+        val ntripStopped = activeNtripController == null ||
+            tryStopNtrip(activeNtripController, NTRIP_SHUTDOWN_WAIT_MILLIS)
+        val captureStopped = tryStopCapture(CAPTURE_SHUTDOWN_WAIT_MILLIS)
+        val persistentWriteStopped = tryStopPersistentWrite(PERSISTENT_WRITE_SHUTDOWN_WAIT_MILLIS)
+        val activeRtklibWorker = rtklibWorker
+        val rtklibStopped = activeRtklibWorker == null ||
+            tryStopRtklib(activeRtklibWorker, RTKLIB_SHUTDOWN_WAIT_MILLIS)
+        val activeCasterUpload = casterUploadController
+        val casterUploadStopped = activeCasterUpload == null ||
+            tryStopCasterUpload(activeCasterUpload, CASTER_UPLOAD_SHUTDOWN_WAIT_MILLIS)
+        val activeAdvisoryFanout = advisoryFanout
+        val advisoryStopped = activeAdvisoryFanout == null ||
+            tryShutdownAdvisory(activeAdvisoryFanout, ADVISORY_SHUTDOWN_WAIT_MILLIS)
+        if (
+            !ntripReconnectStopped ||
+            !ntripStopped ||
+            !captureStopped ||
+            !persistentWriteStopped ||
+            !rtklibStopped ||
+            !casterUploadStopped ||
+            !advisoryStopped
+        ) {
+            val pendingComponents = buildList {
+                if (!ntripReconnectStopped) add("NTRIP reconnect coordinator")
+                if (!ntripStopped) add("NTRIP correction intake")
+                if (!captureStopped) add("USB capture")
+                if (!persistentWriteStopped) add("persistent receiver configuration")
+                if (!rtklibStopped) add("RTKLIB processing")
+                if (!casterUploadStopped) add("caster upload")
+                if (!advisoryStopped) add("advisory processing")
+            }.joinToString(" and ")
+            state = if (state.errorSeverity == RecordingErrorSeverity.FATAL) {
+                state.copy(lifecycle = RecordingLifecycleState.STOPPING)
+            } else {
+                state.copy(
+                    lifecycle = RecordingLifecycleState.STOPPING,
+                    lastError = "Stopping: waiting for $pendingComponents to release session writers.",
+                    errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+                    errorSeverity = RecordingErrorSeverity.DEGRADED,
+                )
+            }
+            recordRuntimeDiagnostic(
+                category = DiagnosticCategory.SERVICE,
+                severity = RecordingErrorSeverity.DEGRADED.name,
+                message = { "Writer finalization deferred until $pendingComponents stops." },
+            )
+            runCatching { broadcastState() }
+            Thread(
+                {
+                    var reconnectCoordinatorStopped = ntripReconnectStopped
+                    var correctionIntakeStopped = ntripStopped
+                    var captureWorkerStopped = captureStopped
+                    var persistentStopped = persistentWriteStopped
+                    var rtklibWorkerStopped = rtklibStopped
+                    var casterStopped = casterUploadStopped
+                    var fanoutStopped = advisoryStopped
+                    while (
+                        !reconnectCoordinatorStopped ||
+                        !correctionIntakeStopped ||
+                        !captureWorkerStopped ||
+                        !persistentStopped ||
+                        !rtklibWorkerStopped ||
+                        !casterStopped ||
+                        !fanoutStopped
+                    ) {
+                        if (!reconnectCoordinatorStopped) {
+                            reconnectCoordinatorStopped = tryStopNtripReconnect(
+                                NTRIP_RECONNECT_SHUTDOWN_RETRY_MILLIS,
+                            )
+                        }
+                        if (!correctionIntakeStopped && activeNtripController != null) {
+                            correctionIntakeStopped = tryStopNtrip(
+                                activeNtripController,
+                                NTRIP_SHUTDOWN_RETRY_MILLIS,
+                            )
+                        }
+                        if (!captureWorkerStopped) {
+                            captureWorkerStopped = tryStopCapture(CAPTURE_SHUTDOWN_RETRY_MILLIS)
+                        }
+                        if (!persistentStopped) {
+                            persistentStopped = tryStopPersistentWrite(
+                                PERSISTENT_WRITE_SHUTDOWN_RETRY_MILLIS,
+                            )
+                        }
+                        if (!rtklibWorkerStopped && activeRtklibWorker != null) {
+                            rtklibWorkerStopped = tryStopRtklib(
+                                activeRtklibWorker,
+                                RTKLIB_SHUTDOWN_RETRY_MILLIS,
+                            )
+                        }
+                        if (!casterStopped && activeCasterUpload != null) {
+                            casterStopped = tryStopCasterUpload(
+                                activeCasterUpload,
+                                CASTER_UPLOAD_SHUTDOWN_RETRY_MILLIS,
+                            )
+                        }
+                        if (!fanoutStopped && activeAdvisoryFanout != null) {
+                            fanoutStopped = tryShutdownAdvisory(
+                                activeAdvisoryFanout,
+                                ADVISORY_SHUTDOWN_RETRY_MILLIS,
+                            )
+                        }
+                    }
+                    completeRecordingStop(activeCasterUpload?.snapshot())
+                },
+                "rtkcollector-stop-finalizer",
+            ).apply {
+                isDaemon = true
+                start()
+            }
+            return
+        }
+        completeRecordingStop(activeCasterUpload?.snapshot())
+    }
+
+    private fun tryStopCapture(timeoutMillis: Long): Boolean {
+        // Either transport may currently own the USB connection during a reconnect transition.
+        runCatching { transport?.close() }
+        runCatching { reconnectTransport?.close() }
+        val thread = synchronized(captureThreadLock) { captureThread } ?: return true
+        thread.interrupt()
+        if (thread === Thread.currentThread()) return false
+        try {
+            thread.join(timeoutMillis)
+        } catch (_: InterruptedException) {
+            Thread.interrupted()
+            return false
+        }
+        if (thread.isAlive) return false
+        synchronized(captureThreadLock) {
+            if (captureThread === thread) {
+                captureThread = null
+            }
+        }
+        return true
+    }
+
+    private fun tryStopNtripReconnect(timeoutMillis: Long): Boolean {
+        val thread = synchronized(ntripReconnectThreadLock) { ntripReconnectThread } ?: return true
+        thread.interrupt()
+        if (thread === Thread.currentThread()) return false
+        try {
+            thread.join(timeoutMillis)
+        } catch (_: InterruptedException) {
+            Thread.interrupted()
+            return false
+        }
+        if (thread.isAlive) return false
+        synchronized(ntripReconnectThreadLock) {
+            if (ntripReconnectThread === thread) {
+                ntripReconnectThread = null
+            }
+        }
+        return true
+    }
+
+    private fun tryStopPersistentWrite(timeoutMillis: Long): Boolean {
+        val thread = synchronized(persistentWriteThreadLock) { persistentWriteThread } ?: return true
+        thread.interrupt()
+        if (thread !== Thread.currentThread()) {
+            try {
+                thread.join(timeoutMillis)
+            } catch (_: InterruptedException) {
+                Thread.interrupted()
+                return false
+            }
+        }
+        return thread !== Thread.currentThread() && !thread.isAlive
+    }
+
+    private fun tryShutdownAdvisory(fanout: AsyncAdvisoryFanout, timeoutMillis: Long): Boolean =
+        try {
+            fanout.shutdown(timeoutMillis)
+        } catch (_: InterruptedException) {
+            Thread.interrupted()
+            false
+        }
+
+    private fun tryStopNtrip(
+        controller: NtripRuntimeController,
+        timeoutMillis: Long,
+    ): Boolean =
+        try {
+            synchronized(ntripOperationLock) {
+                controller.stop(timeoutMillis)
+            }
+        } catch (_: InterruptedException) {
+            Thread.interrupted()
+            false
+        } catch (_: Throwable) {
+            false
+        }
+
+    private fun tryStopCasterUpload(
+        controller: NtripCasterUploadController,
+        timeoutMillis: Long,
+    ): Boolean =
+        try {
+            controller.stop(timeoutMillis)
+        } catch (_: InterruptedException) {
+            Thread.interrupted()
+            false
+        } catch (_: Throwable) {
+            false
+        }
+
+    private fun tryStopRtklib(worker: RtklibWorker, timeoutMillis: Long): Boolean =
+        try {
+            worker.shutdown(timeoutMillis)
+        } catch (_: InterruptedException) {
+            Thread.interrupted()
+            false
+        } catch (_: Throwable) {
+            false
+        }
+
+    private fun completeRecordingStop(casterUploadSnapshot: NtripCasterUploadSnapshot?) {
         casterUploadSnapshot?.let { snapshot ->
             runCatching {
                 writers?.appendEventJson(
@@ -1815,8 +2330,11 @@ class RecordingForegroundService : Service() {
                 )
             }
         }
+        activeSessionLocation?.let(ActiveRecordingSessionRegistry::deactivate)
+        activeSessionLocation = null
         runtime = null
         transport = null
+        reconnectTransport = null
         writers = null
         advisoryFanout = null
         activeSessionMetadata = null
@@ -1898,8 +2416,8 @@ class RecordingForegroundService : Service() {
             ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
         )
         stopping.set(false)
-        broadcastState()
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        runCatching { broadcastState() }
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
     }
 
@@ -2076,10 +2594,29 @@ class RecordingForegroundService : Service() {
         val deadline = System.currentTimeMillis() + PROFILE_DRAIN_MILLIS
         while (System.currentTimeMillis() < deadline) {
             captureRuntime.readOnce(READ_BUFFER_BYTES)
+            flushActiveRawIfDue()
         }
+        flushActiveRawNow()
     }
 
-    private fun openSessionWriters(intent: Intent): OpenedRecordingSession {
+    private fun flushActiveRawIfDue() {
+        activeRecorder?.flushRawIfDue(SystemClock.elapsedRealtime())
+    }
+
+    private fun flushActiveRawNow() {
+        activeRecorder?.flushRawNow(SystemClock.elapsedRealtime())
+    }
+
+    private fun openSessionWriters(intent: Intent): OpenedRecordingSession =
+        try {
+            openSessionWritersUnchecked(intent)
+        } catch (error: RawRecordingStorageException) {
+            throw error
+        } catch (error: Throwable) {
+            throw RawRecordingStorageException("Unable to open recording session storage.", error)
+        }
+
+    private fun openSessionWritersUnchecked(intent: Intent): OpenedRecordingSession {
         val sessionName = createSessionName()
         return if (intent.getStringExtra(EXTRA_STORAGE_KIND) == "SAF_TREE") {
             val treeUriText = intent.getStringExtra(EXTRA_STORAGE_TREE_URI)
@@ -2212,17 +2749,18 @@ class RecordingForegroundService : Service() {
         message: () -> String,
         attributes: () -> Map<String, String> = { emptyMap() },
     ) {
-        if (!diagnosticsSettings.runtimeLoggingEnabled) return
-        if (!runtimeDiagnostics.isEnabled) return
-        runtimeDiagnostics.record(
-            RuntimeDiagnosticRecord(
-                timestampMillis = System.currentTimeMillis(),
-                category = category,
-                severity = severity,
-                message = message(),
-                attributes = attributes(),
-            ),
-        )
+        runCatching {
+            if (!diagnosticsSettings.runtimeLoggingEnabled || !runtimeDiagnostics.isEnabled) return
+            runtimeDiagnostics.record(
+                RuntimeDiagnosticRecord(
+                    timestampMillis = System.currentTimeMillis(),
+                    category = category,
+                    severity = severity,
+                    message = message(),
+                    attributes = attributes(),
+                ),
+            )
+        }
     }
 
     private fun recordSessionEvent(type: String, message: String) {
@@ -2238,22 +2776,23 @@ class RecordingForegroundService : Service() {
     }
 
     private fun recordPerformanceDiagnosticIfDue() {
-        if (!diagnosticsSettings.performanceMonitoringEnabled) return
-        if (!performanceDiagnostics.isEnabled) return
-        val now = System.currentTimeMillis()
-        performanceDiagnostics.recordIfDue(now) {
-            val runtime = Runtime.getRuntime()
-            PerformanceDiagnosticSample(
-                timestampMillis = now,
-                receiverRxBytes = state.receiverRxBytes,
-                correctionInputBytes = state.correctionInputBytes,
-                txToReceiverBytes = state.txToReceiverBytes,
-                sessionTotalBytes = state.sessionTotalBytes,
-                heapUsedBytes = runtime.totalMemory() - runtime.freeMemory(),
-                heapMaxBytes = runtime.maxMemory(),
-                threadCount = Thread.activeCount(),
-                mockLastIntervalMs = state.mockLocationLastIntervalMs,
-            )
+        runCatching {
+            if (!diagnosticsSettings.performanceMonitoringEnabled || !performanceDiagnostics.isEnabled) return
+            val now = System.currentTimeMillis()
+            performanceDiagnostics.recordIfDue(now) {
+                val runtime = Runtime.getRuntime()
+                PerformanceDiagnosticSample(
+                    timestampMillis = now,
+                    receiverRxBytes = state.receiverRxBytes,
+                    correctionInputBytes = state.correctionInputBytes,
+                    txToReceiverBytes = state.txToReceiverBytes,
+                    sessionTotalBytes = state.sessionTotalBytes,
+                    heapUsedBytes = runtime.totalMemory() - runtime.freeMemory(),
+                    heapMaxBytes = runtime.maxMemory(),
+                    threadCount = Thread.activeCount(),
+                    mockLastIntervalMs = state.mockLocationLastIntervalMs,
+                )
+            }
         }
     }
 
@@ -2462,11 +3001,15 @@ class RecordingForegroundService : Service() {
     }
 
     private fun maybeAppendRtklibStatus(snapshot: RtklibEngineSnapshot, nowMillis: Long) {
+        if (!running.get()) return
         if (nowMillis - lastRtklibStatusWriteMillis < 1_000L) return
-        lastRtklibStatusWriteMillis = nowMillis
-        writers?.appendRtklibStatusJson(
-            """{"type":"rtklib-status","state":"${snapshot.state.name.jsonEscape()}","fix":${snapshot.latestSolution?.fixClass?.name.jsonStringOrNull()},"latDeg":${snapshot.latestSolution?.latDeg ?: "null"},"lonDeg":${snapshot.latestSolution?.lonDeg ?: "null"},"ellipsoidalHeightM":${snapshot.latestSolution?.ellipsoidalHeightM ?: "null"},"horizontalAccuracyM":${snapshot.latestSolution?.horizontalAccuracyM ?: "null"},"verticalAccuracyM":${snapshot.latestSolution?.verticalAccuracyM ?: "null"},"decodedRoverEpochs":${snapshot.decodedRoverEpochs},"decodedCorrectionMessages":${snapshot.decodedCorrectionMessages},"serverCpuTimeMillis":${snapshot.serverCpuTimeMillis ?: "null"},"serverRoverObservationMessages":${snapshot.serverRoverObservationMessages},"serverBaseObservationMessages":${snapshot.serverBaseObservationMessages},"serverMissingObservationCount":${snapshot.serverMissingObservationCount},"droppedRoverBytes":${snapshot.droppedRoverBytes},"droppedCorrectionBytes":${snapshot.droppedCorrectionBytes},"warning":${snapshot.lastWarning.jsonStringOrNull()},"error":${snapshot.lastError.jsonStringOrNull()}}""",
-        )
+        synchronized(runtimeLock) {
+            if (!running.get()) return
+            lastRtklibStatusWriteMillis = nowMillis
+            writers?.appendRtklibStatusJson(
+                """{"type":"rtklib-status","state":"${snapshot.state.name.jsonEscape()}","fix":${snapshot.latestSolution?.fixClass?.name.jsonStringOrNull()},"latDeg":${snapshot.latestSolution?.latDeg ?: "null"},"lonDeg":${snapshot.latestSolution?.lonDeg ?: "null"},"ellipsoidalHeightM":${snapshot.latestSolution?.ellipsoidalHeightM ?: "null"},"horizontalAccuracyM":${snapshot.latestSolution?.horizontalAccuracyM ?: "null"},"verticalAccuracyM":${snapshot.latestSolution?.verticalAccuracyM ?: "null"},"decodedRoverEpochs":${snapshot.decodedRoverEpochs},"decodedCorrectionMessages":${snapshot.decodedCorrectionMessages},"serverCpuTimeMillis":${snapshot.serverCpuTimeMillis ?: "null"},"serverRoverObservationMessages":${snapshot.serverRoverObservationMessages},"serverBaseObservationMessages":${snapshot.serverBaseObservationMessages},"serverMissingObservationCount":${snapshot.serverMissingObservationCount},"droppedRoverBytes":${snapshot.droppedRoverBytes},"droppedCorrectionBytes":${snapshot.droppedCorrectionBytes},"warning":${snapshot.lastWarning.jsonStringOrNull()},"error":${snapshot.lastError.jsonStringOrNull()}}""",
+            )
+        }
     }
 
     private fun satelliteMonitorBroadcastPayload(): SatelliteMonitorBroadcastPayload {
@@ -3410,7 +3953,11 @@ class RecordingForegroundService : Service() {
     private class SessionRawRecorder(
         private val writers: RecordingSessionWriters,
         private val recordCorrectionInput: Boolean,
+        initialFlushElapsedRealtimeMillis: Long,
+        private val rawFlushPolicy: RawRecordingFlushPolicy = RawRecordingFlushPolicy(),
     ) : RawRecorder {
+        private var unflushedReceiverRxBytes: Long = 0
+        private var lastRawFlushElapsedRealtimeMillis: Long = initialFlushElapsedRealtimeMillis
         var receiverRxBytes: Long = 0
             private set
         var txToReceiverBytes: Long = 0
@@ -3421,8 +3968,13 @@ class RecordingForegroundService : Service() {
             private set
 
         override fun appendReceiverBytes(bytes: ByteArray) {
-            writers.appendReceiverRx(bytes)
+            try {
+                writers.appendReceiverRx(bytes)
+            } catch (error: Throwable) {
+                throw RawRecordingStorageException("Unable to write receiver-rx.raw.", error)
+            }
             receiverRxBytes += bytes.size
+            unflushedReceiverRxBytes += bytes.size
         }
 
         override fun appendTransmittedBytes(bytes: ByteArray) {
@@ -3441,6 +3993,23 @@ class RecordingForegroundService : Service() {
             writers.flush()
         }
 
+        fun flushRawIfDue(nowElapsedRealtimeMillis: Long) {
+            val elapsed = (nowElapsedRealtimeMillis - lastRawFlushElapsedRealtimeMillis).coerceAtLeast(0L)
+            if (!rawFlushPolicy.isFlushDue(unflushedReceiverRxBytes, elapsed)) return
+            flushRawNow(nowElapsedRealtimeMillis)
+        }
+
+        fun flushRawNow(nowElapsedRealtimeMillis: Long) {
+            if (unflushedReceiverRxBytes == 0L) return
+            try {
+                writers.flushRaw()
+            } catch (error: Throwable) {
+                throw RawRecordingStorageException("Unable to flush receiver-rx.raw.", error)
+            }
+            unflushedReceiverRxBytes = 0
+            lastRawFlushElapsedRealtimeMillis = nowElapsedRealtimeMillis
+        }
+
         fun recordNmeaBytes(bytes: Int) {
             nmeaBytes += bytes
         }
@@ -3454,6 +4023,22 @@ class RecordingForegroundService : Service() {
     }
 
     companion object {
+        private const val ADVISORY_SHUTDOWN_WAIT_MILLIS = 1_000L
+        private const val ADVISORY_SHUTDOWN_RETRY_MILLIS = 1_000L
+        private const val CAPTURE_SHUTDOWN_WAIT_MILLIS = 1_500L
+        private const val CAPTURE_SHUTDOWN_RETRY_MILLIS = 1_000L
+        private const val CASTER_UPLOAD_SHUTDOWN_WAIT_MILLIS = 1_000L
+        private const val CASTER_UPLOAD_SHUTDOWN_RETRY_MILLIS = 1_000L
+        private const val NTRIP_SHUTDOWN_WAIT_MILLIS = 1_000L
+        private const val NTRIP_SHUTDOWN_RETRY_MILLIS = 1_000L
+        private const val NTRIP_REPLACEMENT_WAIT_MILLIS = 1_000L
+        private const val NTRIP_REPLACEMENT_RETRY_MILLIS = 500L
+        private const val NTRIP_RECONNECT_SHUTDOWN_WAIT_MILLIS = 1_500L
+        private const val NTRIP_RECONNECT_SHUTDOWN_RETRY_MILLIS = 1_000L
+        private const val PERSISTENT_WRITE_SHUTDOWN_WAIT_MILLIS = 1_000L
+        private const val PERSISTENT_WRITE_SHUTDOWN_RETRY_MILLIS = 1_000L
+        private const val RTKLIB_SHUTDOWN_WAIT_MILLIS = 1_000L
+        private const val RTKLIB_SHUTDOWN_RETRY_MILLIS = 1_000L
         const val ACTION_START = "org.rtkcollector.app.recording.START"
         const val ACTION_STOP = "org.rtkcollector.app.recording.STOP"
         const val ACTION_QUERY = "org.rtkcollector.app.recording.QUERY"

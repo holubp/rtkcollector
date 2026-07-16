@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -96,11 +97,15 @@ import org.rtkcollector.app.profile.NtripMountpointOverride
 import org.rtkcollector.app.profile.ProfileDeviceFilter
 import org.rtkcollector.app.profile.ProfileStores
 import org.rtkcollector.app.profile.ProfileReference
+import org.rtkcollector.app.profile.PreferenceCommitException
+import org.rtkcollector.app.profile.PreferenceRollbackStatus
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.RetainedSettingsProfileIds
 import org.rtkcollector.app.profile.RtklibProfile
 import org.rtkcollector.app.profile.SatelliteTelemetryCapability
 import org.rtkcollector.app.profile.SettingsBackupFile
+import org.rtkcollector.app.profile.SettingsBackupProfileFamily
 import org.rtkcollector.app.profile.SettingsImportValidationResult
 import org.rtkcollector.app.profile.SettingsSetExportOptions
 import org.rtkcollector.app.profile.SolutionPolicyProfile
@@ -123,6 +128,8 @@ import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.requireProfileReference
 import org.rtkcollector.app.profile.reapplied
+import org.rtkcollector.app.profile.sanitizedForPersistedSafWriteAccess
+import org.rtkcollector.app.profile.settingsBackupImportPlan
 import org.rtkcollector.app.profile.validateSettingsImportJson
 import org.rtkcollector.app.profile.withWorkflowActivationMode
 import org.rtkcollector.app.profile.workflowActivationMode
@@ -143,6 +150,7 @@ import org.rtkcollector.app.recording.SessionNmeaExporter
 import org.rtkcollector.app.recording.SessionNmeaShareSelection
 import org.rtkcollector.app.recording.SessionNmeaSource
 import org.rtkcollector.app.sessions.FilesystemSessionBrowser
+import org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry
 import org.rtkcollector.app.sessions.SafSessionActions
 import org.rtkcollector.app.sessions.SafSessionBrowser
 import org.rtkcollector.app.sessions.SessionArchiveManager
@@ -216,6 +224,7 @@ import org.rtkcollector.app.share.isSettingsBackupCacheFile
 import org.rtkcollector.app.share.settingsBackupFileName
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -262,7 +271,40 @@ class MainActivity : ComponentActivity() {
 private data class PendingSettingsImport(
     val source: String,
     val result: SettingsImportValidationResult,
+    val returnScreen: AppScreen,
 )
+
+private data class SettingsImportOutcome(
+    val safTreeUriReselectionCount: Int,
+    val secretStoreOutcome: SecretStoreImportOutcome,
+)
+
+internal enum class SecretStoreImportOutcome(
+    val userMessage: String?,
+) {
+    STORED(null),
+    PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED(
+        "NTRIP passwords could not be stored securely; previous password values were restored. Enter them again.",
+    ),
+    PRIMARY_AND_ROLLBACK_FAILED(
+        "NTRIP passwords could not be stored securely; persisted password state may be inconsistent. Check and enter them again.",
+    ),
+    FAILED("NTRIP passwords could not be stored securely; enter them again."),
+}
+
+internal fun classifySecretStoreImportFailure(error: Throwable): SecretStoreImportOutcome =
+    when (error.preferenceCommitFailure()?.rollbackStatus) {
+        PreferenceRollbackStatus.FAILED ->
+            SecretStoreImportOutcome.PRIMARY_AND_ROLLBACK_FAILED
+        PreferenceRollbackStatus.RESTORED ->
+            SecretStoreImportOutcome.PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED
+        null -> SecretStoreImportOutcome.FAILED
+    }
+
+private fun Throwable.preferenceCommitFailure(): PreferenceCommitException? =
+    generateSequence(this) { it.cause }
+        .filterIsInstance<PreferenceCommitException>()
+        .firstOrNull()
 
 private data class PendingStorageFolderSelection(
     val target: ProfileEditorTarget,
@@ -315,6 +357,7 @@ fun RtkCollectorApp(
     var pendingSettingsImport by remember { mutableStateOf<PendingSettingsImport?>(null) }
     var pendingStorageFolderSelection by remember { mutableStateOf<PendingStorageFolderSelection?>(null) }
     var settingsImportRequestId by remember { mutableStateOf(0) }
+    val settingsImportScope = rememberCoroutineScope()
     var sessionBrowserState by remember { mutableStateOf(SessionBrowserState()) }
     var pendingNmeaSources by remember { mutableStateOf<List<SessionNmeaSource>>(emptyList()) }
     var pendingNmeaEntries by remember { mutableStateOf<List<SessionBrowserEntry>>(emptyList()) }
@@ -358,28 +401,40 @@ fun RtkCollectorApp(
     var pendingFixedBaseSettingsSetId by rememberSaveable { mutableStateOf<String?>(null) }
     var fixedBaseProfileSelectionMode by remember { mutableStateOf<FixedBaseProfileSelectionMode?>(null) }
     var showReapplySettingsDialog by remember { mutableStateOf(false) }
+    fun stageSettingsImport(uri: Uri) {
+        val requestId = settingsImportRequestId + 1
+        val returnScreen = screen
+        settingsImportRequestId = requestId
+        pendingSettingsImport = PendingSettingsImport(
+            source = uri.toString(),
+            result = SettingsImportValidationResult.Loading,
+            returnScreen = returnScreen,
+        )
+        settingsImportScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    validateSettingsImportJson(readSettingsImportText(context.contentResolver, uri))
+                        .sanitizedForPersistedSafWriteAccess(
+                            persistedSafTreeUrisWithWriteAccess = context.persistedSafTreeUrisWithWriteAccess(),
+                            retainedProfileIds = profileStore.retainedSettingsProfileIds(),
+                        )
+                }.getOrElse { error ->
+                    SettingsImportValidationResult.Invalid(error.message ?: "Settings backup could not be read.")
+                }
+            }
+            if (settingsImportRequestId == requestId) {
+                pendingSettingsImport = PendingSettingsImport(
+                    source = uri.toString(),
+                    result = result,
+                    returnScreen = returnScreen,
+                )
+            }
+        }
+    }
     LaunchedEffect(externalIntent) {
         if (externalIntent != null) {
             settingsImportUriFromIntent(externalIntent)?.let { uri ->
-                val requestId = settingsImportRequestId + 1
-                settingsImportRequestId = requestId
-                pendingSettingsImport = PendingSettingsImport(
-                    source = uri.toString(),
-                    result = SettingsImportValidationResult.Loading,
-                )
-                val result = withContext(Dispatchers.IO) {
-                    runCatching {
-                        validateSettingsImportJson(readSettingsImportText(context.contentResolver, uri))
-                    }.getOrElse { error ->
-                        SettingsImportValidationResult.Invalid(error.message ?: "Settings backup could not be read.")
-                    }
-                }
-                if (settingsImportRequestId == requestId) {
-                    pendingSettingsImport = PendingSettingsImport(
-                        source = uri.toString(),
-                        result = result,
-                    )
-                }
+                stageSettingsImport(uri)
             }
             onExternalIntentConsumed()
         }
@@ -789,18 +844,7 @@ fun RtkCollectorApp(
     }
     val importSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            runCatching {
-                importSettingsBackup(context, uri)
-            }.onSuccess {
-                val updatedSelectedSettingsSetId = profileStore.selectedSettingsSetId()
-                settingsSets = profileStore.settingsSetsWithRememberedMountpoint(updatedSelectedSettingsSetId)
-                selectedSettingsSetId = updatedSelectedSettingsSetId
-                selectedWorkflowId = profileStore.selectedWorkflowId()
-                refreshProfileUi(settingsSets)
-                Toast.makeText(context, "Settings backup imported.", Toast.LENGTH_LONG).show()
-            }.onFailure { error ->
-                Toast.makeText(context, "Cannot import settings backup: ${error.message}", Toast.LENGTH_LONG).show()
-            }
+            stageSettingsImport(uri)
         }
     }
     val importBasePositionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -995,12 +1039,7 @@ fun RtkCollectorApp(
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
             addAction(ACTION_USB_PERMISSION)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            context.registerReceiver(receiver, filter)
-        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         context.startService(
             Intent(context, RecordingForegroundService::class.java).setAction(RecordingForegroundService.ACTION_QUERY),
         )
@@ -1032,7 +1071,7 @@ fun RtkCollectorApp(
                             if (valid != null) {
                                 runCatching {
                                     importSettingsBackup(context, valid.backup)
-                                }.onSuccess {
+                                }.onSuccess { outcome ->
                                     val updatedSelectedSettingsSetId = profileStore.selectedSettingsSetId()
                                     val updatedSettingsSets =
                                         profileStore.settingsSetsWithRememberedMountpoint(updatedSelectedSettingsSetId)
@@ -1049,8 +1088,22 @@ fun RtkCollectorApp(
                                     state = state.withPlannedConfiguration(planned)
                                     profileRevision++
                                     pendingSettingsImport = null
-                                    screen = AppScreen.HOME
-                                    Toast.makeText(context, "Settings backup imported.", Toast.LENGTH_LONG).show()
+                                    screen = pendingImport.returnScreen
+                                    val totalSafTreeUriReselectionCount = maxOf(
+                                        valid.summary.safTreeUriReselectionCount,
+                                        outcome.safTreeUriReselectionCount,
+                                    )
+                                    val storageMessage = if (totalSafTreeUriReselectionCount == 0) {
+                                        "Settings backup imported."
+                                    } else {
+                                        "Settings backup imported. Select ${
+                                            if (totalSafTreeUriReselectionCount == 1) "the Android folder" else "Android folders"
+                                        } again before use."
+                                    }
+                                    val message = storageMessage + outcome.secretStoreOutcome.userMessage
+                                        ?.let { " $it" }
+                                        .orEmpty()
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                                 }.onFailure { error ->
                                     pendingSettingsImport = pendingImport.copy(
                                         result = SettingsImportValidationResult.Invalid(
@@ -1064,7 +1117,7 @@ fun RtkCollectorApp(
                     onCancel = {
                         settingsImportRequestId++
                         pendingSettingsImport = null
-                        screen = AppScreen.HOME
+                        screen = pendingImport.returnScreen
                     },
                 )
                 return@Surface
@@ -3356,40 +3409,51 @@ private fun shareSettingsBackup(context: Context, includePlaintextPasswords: Boo
     scheduleSettingsBackupCacheCleanup(directory, file)
 }
 
-private fun importSettingsBackup(context: Context, uri: Uri) {
-    val result = validateSettingsImportJson(readSettingsImportText(context.contentResolver, uri))
-    val backup = when (result) {
-        SettingsImportValidationResult.Loading -> error("Settings backup is still being read.")
-        is SettingsImportValidationResult.Valid -> result.backup
-        is SettingsImportValidationResult.Invalid -> error(result.message)
-    }
-    importSettingsBackup(context, backup)
+private fun importSettingsBackup(context: Context, backup: SettingsBackupFile): SettingsImportOutcome {
+    ActiveRecordingSessionRegistry.requireNoActiveRecording("import settings")
+    val profileStore = ProfileStores(context)
+    val importPlan = settingsBackupImportPlan(
+        backup = backup,
+        persistedSafTreeUrisWithWriteAccess = context.persistedSafTreeUrisWithWriteAccess(),
+        retainedProfileIds = profileStore.retainedSettingsProfileIds(),
+    )
+    val sanitizedBackup = importPlan.backup
+    val importedSettingsSets = sanitizedImportedSettingsSets(sanitizedBackup.settingsSets)
+    val importedSelectedSettingsSetId = sanitizedBackup.selectedSettingsSetId
+        ?.takeIf { id -> importedSettingsSets.any { it.id == id } }
+        ?: importedSettingsSets.first().id
+    val secretStore = NtripSecretStore(context)
+    profileStore.replaceImportedSettings(
+        backup = sanitizedBackup,
+        settingsSets = importedSettingsSets,
+        selectedSettingsSetId = importedSelectedSettingsSetId,
+        selectedWorkflowId = restoredWorkflowIdOrNull(sanitizedBackup.selectedWorkflowId),
+        lastActiveNtripMountpointProfileId = sanitizedBackup.lastActiveNtripMountpointProfileId
+            ?.takeIf { id -> sanitizedBackup.ntripMountpointProfiles.any { it.id == id } },
+    )
+    val secretStoreOutcome = runCatching {
+        secretStore.putPasswords(sanitizedBackup.plaintextPasswordsBySecretId)
+        SecretStoreImportOutcome.STORED
+    }.getOrElse(::classifySecretStoreImportFailure)
+    return SettingsImportOutcome(
+        safTreeUriReselectionCount = importPlan.safTreeUriReselectionCount,
+        secretStoreOutcome = secretStoreOutcome,
+    )
 }
 
-private fun importSettingsBackup(context: Context, backup: SettingsBackupFile) {
-    val profileStore = ProfileStores(context)
-    val importedSettingsSets = sanitizedImportedSettingsSets(backup.settingsSets)
-    profileStore.saveCommandProfiles(backup.commandProfiles)
-    profileStore.saveUsbBaudProfiles(backup.usbBaudProfiles)
-    profileStore.saveNtripCasterProfiles(backup.ntripCasterProfiles)
-    profileStore.saveNtripCasterUploadProfiles(backup.ntripCasterUploadProfiles)
-    profileStore.saveNtripMountpointProfiles(backup.ntripMountpointProfiles)
-    profileStore.saveRecordingPolicyProfiles(backup.recordingPolicyProfiles)
-    profileStore.saveStorageProfiles(backup.storageProfiles)
-    profileStore.saveSettingsSets(importedSettingsSets)
-    backup.selectedSettingsSetId
-        ?.takeIf { id -> importedSettingsSets.any { it.id == id } }
-        ?.let(profileStore::saveSelectedSettingsSetId)
-    profileStore.saveSelectedWorkflowId(restoredWorkflowIdOrNull(backup.selectedWorkflowId))
-    profileStore.saveLastActiveNtripMountpointProfileId(
-        backup.lastActiveNtripMountpointProfileId
-            ?.takeIf { id -> backup.ntripMountpointProfiles.any { it.id == id } },
+private fun Context.persistedSafTreeUrisWithWriteAccess(): Set<String> =
+    contentResolver.persistedUriPermissions
+        .asSequence()
+        .filter { permission -> permission.isWritePermission }
+        .map { permission -> permission.uri.toString() }
+        .toSet()
+
+private fun ProfileStores.retainedSettingsProfileIds(): RetainedSettingsProfileIds =
+    RetainedSettingsProfileIds(
+        ntripCasterUploadProfileIds = ntripCasterUploadProfiles().mapTo(mutableSetOf()) { it.id },
+        rtklibProfileIds = rtklibProfiles().mapTo(mutableSetOf()) { it.id },
+        solutionPolicyProfileIds = solutionPolicyProfiles().mapTo(mutableSetOf()) { it.id },
     )
-    val secretStore = NtripSecretStore(context)
-    backup.plaintextPasswordsBySecretId.forEach { (secretId, password) ->
-        secretStore.putPassword(secretId, password)
-    }
-}
 
 private fun shareZip(context: Context, zipFile: File) {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", zipFile)
@@ -3480,33 +3544,43 @@ private fun shareNmeaFromEntries(
                 outputDirectory = cacheRoot,
                 requestedSources = requestedSources,
             )
-            val outputs = filesystemSelection.plans.mapIndexed { index, plan ->
-                runOnMain(context) {
-                    setProgress("NMEA ${index + 1}/${entries.size}", (index + 1).toFloat() / entries.size.toFloat())
-                }
-                SessionNmeaExporter.export(plan)
-            }.toMutableList()
-            var skipped = filesystemSelection.skippedCount
-            safEntries.forEachIndexed { index, entry ->
-                val safOutputs = SafSessionActions.createTemporaryNmeaShares(
-                    resolver = context.contentResolver,
-                    sessionUri = Uri.parse(entry.location),
-                    cacheRoot = cacheRoot,
-                    requestedSources = requestedSources,
-                    useLegacyReceiverName =
-                        requestedSources == null || requestedSources == setOf(SessionNmeaSource.RECEIVER_SOLUTION),
+            val outputs = mutableListOf<Path>()
+            try {
+                outputs.addAll(
+                    SessionNmeaExporter.exportAll(filesystemSelection.plans) { index ->
+                        runOnMain(context) {
+                            setProgress(
+                                "NMEA ${index + 1}/${entries.size}",
+                                (index + 1).toFloat() / entries.size.toFloat(),
+                            )
+                        }
+                    },
                 )
-                if (safOutputs.isEmpty()) {
-                    skipped++
-                } else {
-                    outputs.addAll(safOutputs)
+                var skipped = filesystemSelection.skippedCount
+                safEntries.forEachIndexed { index, entry ->
+                    val safOutputs = SafSessionActions.createTemporaryNmeaShares(
+                        resolver = context.contentResolver,
+                        sessionUri = Uri.parse(entry.location),
+                        cacheRoot = cacheRoot,
+                        requestedSources = requestedSources,
+                        useLegacyReceiverName =
+                            requestedSources == null || requestedSources == setOf(SessionNmeaSource.RECEIVER_SOLUTION),
+                    )
+                    if (safOutputs.isEmpty()) {
+                        skipped++
+                    } else {
+                        outputs.addAll(safOutputs)
+                    }
+                    runOnMain(context) {
+                        val completed = filesystemEntries.size + index + 1
+                        setProgress("NMEA $completed/${entries.size}", completed.toFloat() / entries.size.toFloat())
+                    }
                 }
-                runOnMain(context) {
-                    val completed = filesystemEntries.size + index + 1
-                    setProgress("NMEA $completed/${entries.size}", completed.toFloat() / entries.size.toFloat())
-                }
+                skipped to outputs
+            } catch (error: Throwable) {
+                outputs.forEach { path -> runCatching { Files.deleteIfExists(path) } }
+                throw error
             }
-            skipped to outputs
         }.onSuccess { (skipped, outputs) ->
             runOnMain(context) {
                 setProgress(null, null)
@@ -4658,6 +4732,7 @@ private fun ProfileStores.saveProfileEditorData(
                         name = values.required("name"),
                         kind = values.required("kind"),
                         treeUri = values.optional("treeUri"),
+                        requiresTreeReselection = false,
                     )
                 } else {
                     profile

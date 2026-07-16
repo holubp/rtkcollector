@@ -11,6 +11,7 @@ import org.rtkcollector.core.session.SessionWriterIssueSeverity
 import org.rtkcollector.core.session.SessionWriters
 import java.io.BufferedOutputStream
 import java.io.Closeable
+import java.io.IOException
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
@@ -124,26 +125,15 @@ internal class PathRecordingSessionWriters private constructor(
         countUtf8(text)
     }
     override fun flush() = delegate.flush()
-    override fun flushRaw() = delegate.flush()
-    override fun closeAll(): SessionWriterCloseReport {
-        val issue = runCatching {
-            delegate.flush()
-            delegate.close()
-        }.exceptionOrNull() ?: return SessionWriterCloseReport()
+    override fun flushRaw() = delegate.flushReceiverRx()
+    override fun closeAll(): SessionWriterCloseReport = delegate.closeAll()
 
-        return SessionWriterCloseReport(
-            issues = listOf(
-                SessionWriterIssue(
-                    artifact = SessionArtifactFile.RECEIVER_RX_RAW.fileName,
-                    category = SessionWriterIssueCategory.RAW_RX,
-                    severity = SessionWriterIssueSeverity.FATAL,
-                    message = issue.message ?: "Session writer close failed",
-                ),
-            ),
-        )
+    override fun close() {
+        val report = closeAll()
+        if (report.issues.isNotEmpty()) {
+            throw IOException(report.userMessage ?: "Session writer close failed")
+        }
     }
-
-    override fun close() = delegate.close()
 
     private fun count(bytes: Long) {
         totalBytes.addAndGet(bytes)
@@ -188,6 +178,7 @@ internal class SafRecordingSessionWriters private constructor(
     private val extractedRtcm: OutputStream,
 ) : RecordingSessionWriters {
     private val totalBytes = AtomicLong(0)
+    private var finalCloseReport: SessionWriterCloseReport? = null
 
     override val totalBytesWritten: Long
         get() = totalBytes.get()
@@ -292,7 +283,9 @@ internal class SafRecordingSessionWriters private constructor(
         receiverRx.flush()
     }
 
+    @Synchronized
     override fun closeAll(): SessionWriterCloseReport {
+        finalCloseReport?.let { return it }
         val issues = mutableListOf<SessionWriterIssue>()
         closeStream(
             stream = receiverRx,
@@ -392,24 +385,14 @@ internal class SafRecordingSessionWriters private constructor(
             severity = SessionWriterIssueSeverity.DEGRADED,
             issues = issues,
         )
-        return SessionWriterCloseReport(issues)
+        return SessionWriterCloseReport(issues).also { finalCloseReport = it }
     }
 
     override fun close() {
-        receiverRx.close()
-        txToReceiver.close()
-        correctionInput.close()
-        correctionInputRtcm3.closeBestEffort()
-        baseCasterUploadRtcm3.close()
-        events.close()
-        qualityLive.close()
-        receiverSolutionNmea.close()
-        receiverSolution.close()
-        receiverPppSolution.close()
-        rtklibSolutionNmea.close()
-        rtklibSolutionPos.close()
-        rtklibStatus.close()
-        extractedRtcm.close()
+        val report = closeAll()
+        if (report.issues.isNotEmpty()) {
+            throw IOException(report.userMessage ?: "Session writer close failed")
+        }
     }
 
     private fun count(bytes: Int) {
@@ -469,39 +452,60 @@ internal class SafRecordingSessionWriters private constructor(
                     ?.also { files[fileName] = it }
                     ?: error("Unable to create SAF file: $fileName")
 
-            fun appendStream(fileName: String): OutputStream {
-                val uri = create(fileName)
+            val openedStreams = mutableListOf<OpenedSafStream>()
+            fun appendStream(artifact: SessionArtifactFile): OutputStream {
+                val uri = create(artifact.fileName)
                 return BufferedOutputStream(
                     resolver.openOutputStream(uri, "wa")
-                        ?: error("Unable to open SAF file for append: $fileName"),
-                )
+                        ?: error("Unable to open SAF file for append: ${artifact.fileName}"),
+                ).also { stream -> openedStreams += OpenedSafStream(artifact, stream) }
             }
 
-            fun tryAppendStream(fileName: String): OutputStream? =
-                runCatching { appendStream(fileName) }.getOrNull()
+            fun tryAppendStream(artifact: SessionArtifactFile): OutputStream? =
+                runCatching { appendStream(artifact) }.getOrNull()
 
-            return SafRecordingSessionWriters(
-                resolver = resolver,
-                sessionUri = sessionUri,
-                files = files,
-                receiverRx = appendStream(SessionArtifactFile.RECEIVER_RX_RAW.fileName),
-                txToReceiver = appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW.fileName),
-                correctionInput = appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW.fileName),
-                correctionInputRtcm3 = tryAppendStream(SessionArtifactFile.CORRECTION_INPUT_RTCM3.fileName),
-                baseCasterUploadRtcm3 = appendStream(SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3.fileName),
-                events = appendStream(SessionArtifactFile.EVENTS_JSONL.fileName),
-                qualityLive = appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL.fileName),
-                receiverSolutionNmea = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA.fileName),
-                receiverSolution = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_JSONL.fileName),
-                receiverPppSolution = appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL.fileName),
-                rtklibSolutionNmea = appendStream(SessionArtifactFile.RTKLIB_SOLUTION_NMEA.fileName),
-                rtklibSolutionPos = appendStream(SessionArtifactFile.RTKLIB_SOLUTION_POS.fileName),
-                rtklibStatus = appendStream(SessionArtifactFile.RTKLIB_STATUS_JSONL.fileName),
-                extractedRtcm = appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3.fileName),
-            )
+            return try {
+                SafRecordingSessionWriters(
+                    resolver = resolver,
+                    sessionUri = sessionUri,
+                    files = files,
+                    receiverRx = appendStream(SessionArtifactFile.RECEIVER_RX_RAW),
+                    txToReceiver = appendStream(SessionArtifactFile.TX_TO_RECEIVER_RAW),
+                    correctionInput = appendStream(SessionArtifactFile.CORRECTION_INPUT_RAW),
+                    correctionInputRtcm3 = tryAppendStream(SessionArtifactFile.CORRECTION_INPUT_RTCM3),
+                    baseCasterUploadRtcm3 = appendStream(SessionArtifactFile.BASE_CASTER_UPLOAD_RTCM3),
+                    events = appendStream(SessionArtifactFile.EVENTS_JSONL),
+                    qualityLive = appendStream(SessionArtifactFile.QUALITY_LIVE_JSONL),
+                    receiverSolutionNmea = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_NMEA),
+                    receiverSolution = appendStream(SessionArtifactFile.RECEIVER_SOLUTION_JSONL),
+                    receiverPppSolution = appendStream(SessionArtifactFile.RECEIVER_PPP_SOLUTION_JSONL),
+                    rtklibSolutionNmea = appendStream(SessionArtifactFile.RTKLIB_SOLUTION_NMEA),
+                    rtklibSolutionPos = appendStream(SessionArtifactFile.RTKLIB_SOLUTION_POS),
+                    rtklibStatus = appendStream(SessionArtifactFile.RTKLIB_STATUS_JSONL),
+                    extractedRtcm = appendStream(SessionArtifactFile.RTCM_EXTRACTED_RTCM3),
+                )
+            } catch (failure: Throwable) {
+                openedStreams.forEach { target -> finaliseOpenedSafStream(target, failure) }
+                throw failure
+            }
         }
     }
 }
+
+private data class OpenedSafStream(
+    val artifact: SessionArtifactFile,
+    val stream: OutputStream,
+)
+
+private fun finaliseOpenedSafStream(target: OpenedSafStream, openingFailure: Throwable) {
+    runCatching { target.stream.flush() }
+        .onFailure { error -> openingFailure.addSuppressed(safCleanupFailure(target.artifact, "flush", error)) }
+    runCatching { target.stream.close() }
+        .onFailure { error -> openingFailure.addSuppressed(safCleanupFailure(target.artifact, "close", error)) }
+}
+
+private fun safCleanupFailure(artifact: SessionArtifactFile, operation: String, error: Throwable): IOException =
+    IOException("Failed to $operation ${artifact.fileName} during partial SAF session-writer cleanup.", error)
 
 private fun closeOptionalStream(
     stream: OutputStream?,
@@ -521,10 +525,15 @@ private fun closeStream(
     severity: SessionWriterIssueSeverity,
     issues: MutableList<SessionWriterIssue>,
 ) {
-    runCatching {
-        stream.flush()
-        stream.close()
-    }.onFailure { error ->
+    runCatching { stream.flush() }.onFailure { error ->
+        issues += SessionWriterIssue(
+            artifact = artifact.fileName,
+            category = category,
+            severity = severity,
+            message = error.message ?: "Failed to flush ${artifact.fileName}",
+        )
+    }
+    runCatching { stream.close() }.onFailure { error ->
         issues += SessionWriterIssue(
             artifact = artifact.fileName,
             category = category,

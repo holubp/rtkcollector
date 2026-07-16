@@ -53,6 +53,18 @@ fun SettingsImportScreen(
                 if (result.summary.containsPlaintextPasswords) {
                     Warning("This backup contains plaintext NTRIP passwords. Import only if you trust the source.")
                 }
+                if (result.summary.omittedProfileFamilies.isNotEmpty()) {
+                    Warning(
+                        "This older backup does not contain ${result.summary.omittedProfileFamilies.joinToString()}. " +
+                            "The currently installed profiles in those categories will be kept.",
+                    )
+                }
+                if (result.summary.safTreeUriReselectionCount > 0) {
+                    val count = result.summary.safTreeUriReselectionCount
+                    Warning(
+                        "$count imported Android folder ${if (count == 1) "needs" else "need"} to be selected again before use.",
+                    )
+                }
                 if (recordingActive) {
                     Warning("Stop recording before importing settings.")
                 }
@@ -75,8 +87,11 @@ private fun Summary(summary: SettingsImportSummary) {
         Text("Command profiles: ${summary.commandProfileCount}")
         Text("USB/baud profiles: ${summary.usbBaudProfileCount}")
         Text("NTRIP casters: ${summary.ntripCasterProfileCount}")
+        Text("NTRIP caster uploads: ${summary.ntripCasterUploadProfileCount}")
         Text("NTRIP mountpoints: ${summary.ntripMountpointProfileCount}")
         Text("Recording outputs: ${summary.recordingPolicyProfileCount}")
+        Text("RTKLIB profiles: ${summary.rtklibProfileCount}")
+        Text("Solution policies: ${summary.solutionPolicyProfileCount}")
         Text("Storage locations: ${summary.storageProfileCount}")
         Text("Settings sets: ${summary.settingsSetCount}")
         Text("Selected settings: ${summary.selectedSettingsSetId ?: "n/a"}")

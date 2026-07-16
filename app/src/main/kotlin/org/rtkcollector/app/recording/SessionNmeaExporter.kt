@@ -1,6 +1,7 @@
 package org.rtkcollector.app.recording
 
 import org.rtkcollector.core.session.SessionArtifactFile
+import org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -115,9 +116,59 @@ data class SessionNmeaShareSelection(
 }
 
 object SessionNmeaExporter {
+    fun exportAll(
+        plans: List<SessionNmeaSharePlan>,
+        onBeforeExport: (Int) -> Unit = {},
+    ): List<Path> = exportAll(plans, onBeforeExport, ::export)
+
+    internal fun exportAll(
+        plans: List<SessionNmeaSharePlan>,
+        onBeforeExport: (Int) -> Unit,
+        exportOne: (SessionNmeaSharePlan) -> Path,
+    ): List<Path> {
+        val outputs = mutableListOf<Path>()
+        try {
+            plans.forEachIndexed { index, plan ->
+                onBeforeExport(index)
+                outputs.add(exportOne(plan))
+            }
+            return outputs
+        } catch (error: Throwable) {
+            outputs.forEach { path ->
+                runCatching { Files.deleteIfExists(path) }.exceptionOrNull()?.let(error::addSuppressed)
+            }
+            throw error
+        }
+    }
+
     fun export(plan: SessionNmeaSharePlan): Path {
-        plan.outputNmea.parent?.let(Files::createDirectories)
-        Files.copy(plan.sourceNmea, plan.outputNmea, StandardCopyOption.REPLACE_EXISTING)
-        return plan.outputNmea
+        val sessionDirectory = plan.sourceNmea.parent ?: error("NMEA share source must have a session directory.")
+        return ActiveRecordingSessionRegistry.withDestructiveOperation(
+            sessionDirectory.toString(),
+            "share",
+        ) {
+            ActiveRecordingSessionRegistry.requireInactive(sessionDirectory.toString(), "share")
+            val outputDirectory = plan.outputNmea.parent ?: error("NMEA share output must have a cache directory.")
+            Files.createDirectories(outputDirectory)
+            val temporary = Files.createTempFile(
+                outputDirectory,
+                plan.outputNmea.fileName.toString(),
+                ".tmp",
+            )
+            try {
+                ActiveRecordingSessionRegistry.requireInactive(sessionDirectory.toString(), "share")
+                Files.copy(plan.sourceNmea, temporary, StandardCopyOption.REPLACE_EXISTING)
+                Files.move(
+                    temporary,
+                    plan.outputNmea,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+                plan.outputNmea
+            } catch (error: Throwable) {
+                runCatching { Files.deleteIfExists(temporary) }.exceptionOrNull()?.let(error::addSuppressed)
+                runCatching { Files.deleteIfExists(plan.outputNmea) }.exceptionOrNull()?.let(error::addSuppressed)
+                throw error
+            }
+        }
     }
 }

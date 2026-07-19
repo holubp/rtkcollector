@@ -8,6 +8,17 @@ import check_android_test_compilation as gate
 
 
 class AndroidTestCompilationGateTest(unittest.TestCase):
+    def test_ci_does_not_require_gradlew_executable_bit(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github" / "workflows" / "android.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("run: ./gradlew", workflow)
+        self.assertIn("run: sh gradlew clean", workflow)
+        self.assertIn("run: sh gradlew assembleDebug", workflow)
+        self.assertIn("run: sh gradlew test --no-parallel", workflow)
+
     def test_auto_mode_detects_termux(self) -> None:
         environment = {
             "PREFIX": "/data/data/com.termux/files/usr",

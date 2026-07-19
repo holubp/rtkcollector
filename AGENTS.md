@@ -260,6 +260,9 @@ Prefer the strongest feasible verification for the touched code:
   app unit-test sources, test fixtures and test-only dependencies are complete.
   The gate must compile the app test source sets, and CI must repeat the full
   host check.
+- Invoke the Gradle wrapper as `sh gradlew` in Linux/Termux automation. Android
+  shared storage does not reliably preserve the executable bit, so CI commands
+  must not assume `./gradlew` is directly executable.
 - Android Gradle/AGP task changes must preserve Android Studio compatibility
   aliases used by IDE import/build actions. Keep `:app:unitTestClasses` and
   `:app:androidTestClasses` available unless verified obsolete, and check them

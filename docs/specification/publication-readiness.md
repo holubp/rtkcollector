@@ -223,6 +223,39 @@ Traceability:
 - Source: `app/build.gradle.kts`.
 - Source: `docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md`.
 
+### PLAY-BUILD-002: Android Test Sources Must Compile Before Push
+
+Status: Normative
+
+Every pushed change MUST pass an explicit Android test-source compilation
+gate. Compiling production Kotlin or dry-running Gradle tasks alone MUST NOT be
+accepted as evidence that unit-test source, test fixtures and test-only
+dependencies are complete.
+
+On a full Android build host, both the app JVM unit-test and instrumentation
+test source sets MUST compile. A constrained Termux host MAY bypass the known
+non-runnable Android resource-processing binary only if it still compiles app
+JVM unit-test Kotlin against a generated debug `R.jar`, verifies the standard
+task aliases, and CI repeats the full-host compilation.
+
+Rationale:
+Missing test dependencies and stale test APIs have repeatedly reached shared
+branches when only production compilation or Gradle task selection was checked.
+
+Applies to:
+- Contributor and agent pre-push verification.
+- Android CI.
+- Android Gradle compatibility aliases.
+
+Verification:
+- Automated: `tools/test_check_android_test_compilation.py`.
+- Automated: `scripts/pre_push_check.sh`.
+- Automated: Android CI runs the gate in standard mode before broader tests.
+
+Traceability:
+- Source: `tools/check_android_test_compilation.py`.
+- Source: `.github/workflows/android.yml`.
+
 ### PLAY-LICENSE-001: Third-Party Licence Documentation Matches Release Dependencies
 
 Status: Normative

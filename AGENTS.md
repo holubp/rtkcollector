@@ -255,14 +255,21 @@ Prefer the strongest feasible verification for the touched code:
   tests and broader `./gradlew test` when the environment supports it.
 - Android app changes: run `:app:compileDebugKotlin`; run `assembleDebug` on a
   host where Android SDK native tools can execute.
+- Before every push, run `sh scripts/pre_push_check.sh`. This is a blocking
+  gate: production compilation and Gradle task dry-runs alone do not prove that
+  app unit-test sources, test fixtures and test-only dependencies are complete.
+  The gate must compile the app test source sets, and CI must repeat the full
+  host check.
 - Android Gradle/AGP task changes must preserve Android Studio compatibility
   aliases used by IDE import/build actions. Keep `:app:unitTestClasses` and
   `:app:androidTestClasses` available unless verified obsolete, and check them
   with `sh gradlew :app:unitTestClasses :app:androidTestClasses --dry-run`.
-  In Termux, a real Android-test/resource compile may still fail on the known
-  non-runnable Maven `aapt2`; use dry-run for task-selection validation there
-  and run full Android test/resource packaging on Windows Android Studio, CI or
-  another host with working Android SDK native tools.
+  In Termux, `tools/check_android_test_compilation.py` compiles production
+  Kotlin, seeds the generated debug `R.jar`, and compiles the JVM unit-test
+  sources while excluding only the non-runnable resource-processing task. It
+  then dry-runs both compatibility aliases. Full Android test/resource
+  compilation remains mandatory in CI, Windows Android Studio or another host
+  with working Android SDK native tools.
 - Hardware-facing UM980 changes: document manual hardware smoke tests and the
   exact receiver/USB/baud assumptions.
 - UM980 live parsers must be byte-level for mixed NMEA, UM980 ASCII and UM980

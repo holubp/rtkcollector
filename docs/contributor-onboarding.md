@@ -180,10 +180,20 @@ In this order, you will have a working mental model in roughly 90 minutes:
 - Pure Kotlin modules (`core:*`, `receiver:*`): JUnit 5
   (`useJUnitPlatform()`), runs anywhere with JDK 17. `./gradlew test` is fine.
 - `app/` JVM tests: also JUnit 5, but uses Android-named classes that compile
-  against `compileDebugKotlin`. Use `:app:compileDebugKotlin` to validate
-  Kotlin/UI locally; full `assembleDebug` needs SDK native binaries such as
-  `aapt2` that do not run on every host (the Termux/aarch64 caveat
-  `AGENTS.md` warns about).
+  against the debug Android variant. Compiling only `compileDebugKotlin` is not
+  sufficient: it misses stale test calls, missing test fixtures and absent
+  test-only dependencies. Before every push, run the repository gate:
+
+  ```bash
+  sh scripts/pre_push_check.sh
+  ```
+
+  On a normal Android build host the gate compiles both `unitTestClasses` and
+  `androidTestClasses`. On Termux/aarch64 it compiles production Kotlin, seeds
+  the already-generated debug `R.jar`, compiles the JVM unit-test sources while
+  excluding only `processDebugResources`, and verifies both compatibility task
+  aliases with a dry-run. CI repeats the normal full-host compilation, so the
+  Termux workaround cannot weaken the shared gate.
 - Pattern: pure logic is extracted out of the service into testable Kotlin
   classes (`RecordingStartPreflight`, `NtripUpdatePolicy`,
   `Um980BaudTransition`, `PersistentReceiverWritePolicy`). Follow this
@@ -271,18 +281,24 @@ sh gradlew :core:workflow:test :core:rtklib:test :core:session:test \
   :receiver:unicore-n4:test :receiver:ublox-m8:test :app:compileDebugKotlin
 ```
 
-After Android Gradle Plugin or app build-task changes, verify Android Studio
-compatibility task names before handing the build back to users:
+The normal pre-push command is:
+
+```bash
+sh scripts/pre_push_check.sh
+```
+
+After Android Gradle Plugin or app build-task changes, the underlying Android
+Studio compatibility task names can also be checked directly:
 
 ```bash
 sh gradlew :app:unitTestClasses :app:androidTestClasses --dry-run
 ```
 
 These aliases intentionally map old IDE-requested task names to current AGP
-tasks. On Termux/aarch64, use dry-run for this task-selection check: executing
-the real Android-test resource compile can still hit the known non-runnable
-Maven `aapt2` binary. Run full Android-test/resource packaging on Windows
-Android Studio, CI or another host with working Android SDK native tools.
+tasks. A dry-run proves only that task selection works; it does not compile any
+test source. `scripts/pre_push_check.sh` is therefore still required. Full
+Android-test/resource packaging runs on Windows Android Studio, CI or another
+host with working Android SDK native tools.
 
 Do not mark RTKLIB-EX native integration as fully validated until
 `assembleDebug` has run on a host with a working NDK and at least one suitable

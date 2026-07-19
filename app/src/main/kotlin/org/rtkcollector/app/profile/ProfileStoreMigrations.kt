@@ -93,7 +93,9 @@ internal object ProfileStoreMigrations {
                 } else {
                     settingsSet.recordingOutputProfileRef
                 },
-            ).repairRtklibWorkflow()
+            )
+                .repairRtklibWorkflow()
+                .restoreProtectedDefault(defaults)
         }.withMissingDefaults(defaults, RecordingSettingsSet::id)
 }
 
@@ -142,6 +144,25 @@ private fun RecordingSettingsSet.repairRtklibWorkflow(): RecordingSettingsSet {
         workflowApplicationPolicy = WorkflowApplicationPolicy.SET_SPECIFIC,
     )
 }
+
+private fun RecordingSettingsSet.restoreProtectedDefault(
+    defaults: List<RecordingSettingsSet>,
+): RecordingSettingsSet {
+    val canonical = defaults.firstOrNull { it.id == id && it.isProtected } ?: return this
+    val retainedOverrides = if (canonical.workflowId.isRoverWorkflow()) {
+        overrides.copy(
+            ntripCasterUploadProfileRef = null,
+            baseCasterUploadEnabled = null,
+            ntripCasterUpload = null,
+        )
+    } else {
+        overrides
+    }
+    return canonical.copy(overrides = retainedOverrides)
+}
+
+private fun String.isRoverWorkflow(): Boolean =
+    this == "plain-rover" || startsWith("rover-")
 
 private fun List<CommandProfile>.required(id: String): CommandProfile =
     firstOrNull { it.id == id } ?: error("Missing default command profile '$id'.")

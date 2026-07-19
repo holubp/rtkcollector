@@ -124,8 +124,6 @@ fun SettingsHub(
                         }.joinToString(" · "),
                         warning = activeSettingsSetOutsideDeviceFilter,
                     )
-                    SettingsDivider()
-                    SettingsRow("↗", "Recent sessions and sharing", onSessions)
                     if (canReapplySettingsSet) {
                         SettingsDivider()
                         SettingsRow(
@@ -135,6 +133,10 @@ fun SettingsHub(
                             subtitle = "Discard local changes and restore the stored set",
                         )
                     }
+                }
+
+                SettingsSection("Sessions") {
+                    SettingsRow("↗", "Recent sessions and sharing", onSessions)
                 }
 
                 SettingsSection("Session setup") {

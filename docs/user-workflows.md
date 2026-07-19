@@ -94,8 +94,13 @@ reference point, datum/frame and source session whenever possible.
 
 The app ships with focused protected UM980 settings sets: plain rover, rover
 with NTRIP, temporary base and fixed base. NTRIP source upload is off by
-default. The Home dashboard `Upload` selector has an explicit `Off` row; choose
-a source-upload profile only for base workflows that should publish RTCM.
+default, and every rover settings set has no source-upload profile selected.
+The built-in `UM980 rover + NTRIP` set deliberately has no predefined
+mountpoint: select or type one before Start. The app does not silently reuse the
+last active mountpoint. Copy that built-in when you want a named editable set
+with a predefined mountpoint. The Home dashboard `Upload` selector has an
+explicit `Off` row; choose a source-upload profile only for base workflows that
+should publish RTCM.
 
 The seven Home setup selectors can be folded under `Active setup`. The app
 remembers that choice. It expands the section automatically when the selected
@@ -197,11 +202,11 @@ height and geoid separation remain recorded metadata for review, dashboard
 display and mock-location semantics.
 
 The Files card shows the active session location and recorded byte counts. In
-Menu, `Recent sessions and sharing` is available directly in the top
-`Active setup` group. It lists recordings in the configured app-private
-storage with latest sessions first and separates the current session, completed
-recordings and archived recordings. Active recordings cannot be shared,
-archived, restored or deleted from this screen.
+Menu, a dedicated `Sessions` group appears directly below `Active setup` and
+contains `Recent sessions and sharing`. It lists recordings in the configured
+app-private storage with latest sessions first and separates the current
+session, completed recordings and archived recordings. Active recordings
+cannot be shared, archived, restored or deleted from this screen.
 
 Android mock-location output is a recording-scoped option. When enabled, the
 foreground recording service publishes the current best fresh RtkCollector

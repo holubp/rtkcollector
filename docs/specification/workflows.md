@@ -180,18 +180,27 @@ Verification:
 - Review: plain-rover and rover-with-NTRIP dashboard show upload as not needed,
   while fixed-base and temporary-base workflows allow explicit upload selection.
 
-### WF-BUILTIN-SETTINGS-001: Built-In Settings Do Not Enable Source Upload
+### WF-BUILTIN-SETTINGS-001: Built-In Rover Settings Require Explicit NTRIP Selection
 
 Status: Normative
 
 Built-in rover and base settings sets MUST NOT enable NTRIP source upload by
-default. A settings set MAY reference an NTRIP correction-download caster where
-the workflow uses corrections, but source upload MUST remain off until the user
-selects an upload profile or explicitly enables upload for the active setup.
+default. Every built-in rover settings set MUST have no NTRIP source-upload
+profile selected. A settings set MAY reference an NTRIP correction-download
+caster where the workflow uses corrections, but the built-in `UM980 rover +
+NTRIP` settings set MUST NOT contain a fixed correction mountpoint. Selecting or
+loading that built-in MUST NOT silently materialise the last active mountpoint;
+the user MUST explicitly select or type a mountpoint before Start.
+
+An explicit selection MAY be represented as a visible local override on the
+built-in settings set. Users MAY copy the built-in to create an editable named
+settings set with a predefined mountpoint. User-created copies MUST NOT be reset
+to built-in defaults during migration.
 
 Verification:
-- Automated: built-in settings set tests.
-- Manual: first launch and built-in settings inspection show Upload as `Off`.
+- Automated: built-in settings-set and profile-store migration tests.
+- Manual: selecting `UM980 rover + NTRIP` shows Mountpoint unresolved and Upload
+  as `Off` until the user explicitly chooses a mountpoint.
 
 ## Future In-Phone Solution
 

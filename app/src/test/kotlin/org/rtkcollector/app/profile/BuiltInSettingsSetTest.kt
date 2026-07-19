@@ -37,6 +37,29 @@ class BuiltInSettingsSetTest {
     }
 
     @Test
+    fun `built in rover variants select no ntrip caster upload`() {
+        val roverDefaults = RecordingSettingsSet.builtInDefaults().filter {
+            it.workflowId == "plain-rover" || it.workflowId.startsWith("rover-")
+        }
+
+        assertTrue(roverDefaults.isNotEmpty())
+        assertTrue(roverDefaults.all { it.ntripCasterUploadProfileRef == null })
+        assertTrue(roverDefaults.all { !it.baseCasterUploadEnabled })
+        assertTrue(roverDefaults.all { it.overrides.ntripCasterUploadProfileRef == null })
+        assertTrue(roverDefaults.all { it.overrides.baseCasterUploadEnabled == null })
+        assertTrue(roverDefaults.all { it.overrides.ntripCasterUpload == null })
+    }
+
+    @Test
+    fun `built in um980 rover ntrip requires explicit mountpoint selection`() {
+        val roverNtrip = RecordingSettingsSet.builtInRoverNtrip()
+
+        assertNull(roverNtrip.ntripMountpointProfileRef)
+        assertNull(roverNtrip.overrides.ntripMountpointProfileRef)
+        assertNull(roverNtrip.overrides.ntripMountpoint)
+    }
+
+    @Test
     fun `plain rover and fixed base defaults do not configure correction download`() {
         val defaults = RecordingSettingsSet.builtInDefaults().associateBy(RecordingSettingsSet::id)
 

@@ -317,18 +317,20 @@ Verification:
   profile remains visible with a warning, then select a compatible UM980 profile
   and confirm the warning clears.
 
-### UI-SETUP-007: Sessions Are Available In Active Setup
+### UI-SETUP-007: Sessions Have A Dedicated Top-Level Group
 
 Status: Normative
 
-The Settings screen MUST expose the recent-sessions and sharing action in its
-top-level `Active setup` group so routine session review does not require
-searching lower settings sections. The action MUST retain the existing session
-browser behaviour and active-session protections.
+The Settings screen MUST expose a dedicated top-level `Sessions` group directly
+below `Active setup`. That group MUST contain the `Recent sessions and sharing`
+action so routine session review remains prominent without mixing recorded-data
+operations into active configuration. The action MUST retain the existing
+session-browser behaviour and active-session protections.
 
 Verification:
-- Review: Settings hub section placement and session action wiring.
-- Manual: open Settings and reach recent sessions from `Active setup`.
+- Automated: Settings hub source-structure test.
+- Manual: open Settings and reach recent sessions from the dedicated `Sessions`
+  group immediately below `Active setup`.
 
 ### UI-SETUP-008: Dashboard Setup Selectors Are Foldable And Self-Revealing
 

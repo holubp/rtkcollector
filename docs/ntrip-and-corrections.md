@@ -40,8 +40,11 @@ Fetching caster mountpoints must update the cached list only. The current
 mountpoint text changes only when the user types a new value or explicitly
 selects an item from the fetched list.
 
-The last active NTRIP mountpoint profile may be remembered for convenience, but
-NTRIP must only connect when the selected workflow uses NTRIP corrections.
+The last active NTRIP mountpoint profile may be remembered for selector
+convenience, but it must not be silently assigned to a settings set. A built-in
+rover-with-NTRIP setup starts without a fixed mountpoint and requires an
+explicit selection or typed value before recording. NTRIP must only connect
+when the selected workflow uses NTRIP corrections.
 
 ## Reconnect State Machine
 

@@ -3,6 +3,7 @@ package org.rtkcollector.app.profile
 import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -427,6 +428,52 @@ class ProfileStoresTest {
         assertEquals(ProfileStores.UM980_BINARY_MULTI_HZ_PROFILE_ID, set.commandProfileRef.id)
         assertEquals(null, set.ntripMountpointProfileRef)
         assertEquals("Default V1 recording outputs", set.recordingOutputProfileRef.name)
+    }
+
+    @Test
+    fun `migration restores protected rover defaults without discarding explicit mountpoint override`() {
+        val explicitMountpoint = ProfileReference("mount-user", "User mountpoint")
+        val staleBuiltIn = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripMountpointProfileRef = ProfileReference("mount-remembered", "Remembered mountpoint"),
+            ntripCasterUploadProfileRef = ProfileReference("upload-stale", "Stale upload"),
+            baseCasterUploadEnabled = true,
+            overrides = SettingsSetOverrides(
+                ntripMountpointProfileRef = explicitMountpoint,
+                ntripCasterUploadProfileRef = ProfileReference("upload-override", "Upload override"),
+                baseCasterUploadEnabled = true,
+                ntripCasterUpload = NtripCasterUploadOverride(host = "upload.example.org"),
+            ),
+        )
+
+        val migrated = ProfileStoreMigrations.settingsSets(
+            settingsSets = listOf(staleBuiltIn),
+            defaults = RecordingSettingsSet.builtInDefaults(),
+        ).single { it.id == staleBuiltIn.id }
+
+        assertNull(migrated.ntripMountpointProfileRef)
+        assertEquals(explicitMountpoint, migrated.overrides.ntripMountpointProfileRef)
+        assertNull(migrated.ntripCasterUploadProfileRef)
+        assertFalse(migrated.baseCasterUploadEnabled)
+        assertNull(migrated.overrides.ntripCasterUploadProfileRef)
+        assertNull(migrated.overrides.baseCasterUploadEnabled)
+        assertNull(migrated.overrides.ntripCasterUpload)
+    }
+
+    @Test
+    fun `migration leaves copied rover settings with predefined mountpoint unchanged`() {
+        val copied = RecordingSettingsSet.builtInRoverNtrip().copy(
+            id = "user-rover-ntrip",
+            name = "My rover",
+            ntripMountpointProfileRef = ProfileReference("mount-user", "User mountpoint"),
+            isProtected = false,
+        )
+
+        val migrated = ProfileStoreMigrations.settingsSets(
+            settingsSets = listOf(copied),
+            defaults = RecordingSettingsSet.builtInDefaults(),
+        ).single { it.id == copied.id }
+
+        assertEquals(copied, migrated)
     }
 
     @Test

@@ -40,17 +40,17 @@ class ProfileCompatibilityTest {
     }
 
     @Test
-    fun `known receiver baud is recommended and unusual baud is warned`() {
+    fun `known receiver baud is recommended and supported-list baud is untested`() {
         val recommended = ProfileCompatibility.baudProfile(
             receiverProfileId = "um980-n4",
             usbBaudProfile = UsbBaudProfile(id = "um980-230400", name = "UM980 230400", serialBaud = 230400),
         )
-        val unusual = ProfileCompatibility.baudProfile(
+        val untested = ProfileCompatibility.baudProfile(
             receiverProfileId = "um980-n4",
             usbBaudProfile = UsbBaudProfile(id = "um980-128000", name = "UM980 128000", serialBaud = 128000),
         )
 
         assertEquals(BaudCompatibilityStatus.RECOMMENDED, recommended.baudStatus)
-        assertEquals(BaudCompatibilityStatus.UNUSUAL, unusual.baudStatus)
+        assertEquals(BaudCompatibilityStatus.UNTESTED, untested.baudStatus)
     }
 }

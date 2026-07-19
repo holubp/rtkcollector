@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test
 import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 
 class SafSessionActionsSourceTest {
     @Test
@@ -78,10 +77,8 @@ class SafSessionActionsSourceTest {
         assertTrue(source.contains("(outputs + temporaries).forEach"))
     }
 
-    private fun sourceFile(): Path =
-        sequenceOf(
-            Paths.get("app/src/main/kotlin/org/rtkcollector/app/sessions/SafSessionActions.kt"),
-            Paths.get("src/main/kotlin/org/rtkcollector/app/sessions/SafSessionActions.kt"),
-        ).firstOrNull(Files::isRegularFile)
-            ?: error("Cannot locate SafSessionActions.kt from ${Paths.get("").toAbsolutePath()}")
+    private fun sourceFile(): Path = TestFiles.locateProjectPath(
+        "app/src/main/kotlin/org/rtkcollector/app/sessions/SafSessionActions.kt",
+        Files::isRegularFile,
+    )
 }

@@ -14,7 +14,7 @@ class SettingsImportIntentReaderTest {
     @Test
     fun `extracts action view data uri`() {
         val uri = Uri.parse("content://example/settings.json")
-        val intent = Intent(Intent.ACTION_VIEW, uri).setType("application/json")
+        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/json")
 
         assertEquals(uri, settingsImportUriFromIntent(intent))
     }

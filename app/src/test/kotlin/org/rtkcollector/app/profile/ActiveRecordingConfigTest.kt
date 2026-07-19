@@ -278,6 +278,7 @@ class ActiveRecordingConfigTest {
     fun `enabled rtklib profile adds configured output artifacts`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "rover-ntrip-rtklib",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
                 receiverProfileId = "um980-n4",
             ),
@@ -312,6 +313,7 @@ class ActiveRecordingConfigTest {
     fun `enabled rtklib accepts UM980 compact OBSVMCMPB through decoder shim`() {
         val config = ActiveRecordingConfig.resolve(
             settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "rover-ntrip-rtklib",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
                 receiverProfileId = "um980-n4",
             ),
@@ -595,13 +597,26 @@ class ActiveRecordingConfigTest {
     @Test
     fun `recording config resolves solution policy profile`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
-            commandProfile = CommandProfile("commands", "Commands"),
+            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                workflowId = "rover-ntrip-rtklib",
+                receiverProfileId = "um980-n4",
+                rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
+            ),
+            commandProfile = CommandProfile(
+                "commands",
+                "Commands",
+                runtimeScript = "MODE ROVER\nOBSVMB COM1 0.2",
+            ),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
             recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
             storageProfile = StorageProfile("storage", "Storage"),
+            rtklibProfile = RtklibProfile(
+                id = "rtklib-rover",
+                name = "RTKLIB rover",
+                enabled = true,
+            ),
             solutionPolicyProfile = SolutionPolicyProfile(
                 id = "solution-rtklib",
                 name = "RTKLIB solution",

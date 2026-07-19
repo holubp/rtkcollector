@@ -29,11 +29,15 @@ class RtklibSessionPostprocessorTest {
         val request = backend.requests.single()
         assertEquals(session.resolve("receiver-rx.raw"), request.receiverRxRaw)
         assertEquals(session.resolve("correction-input.rtcm3"), request.correctionRtcm3)
-        assertEquals(session.resolve("rtklib-postprocessed-forward.nmea"), request.outputNmea)
-        assertEquals(session.resolve("rtklib-postprocessed-forward.pos"), request.outputPos)
+        assertEquals(session.resolve("rtklib-postprocessed-forward.nmea.tmp"), request.outputNmea)
+        assertEquals(session.resolve("rtklib-postprocessed-forward.pos.tmp"), request.outputPos)
         assertEquals("UBX_RXM_RAWX_SFRBX", request.roverFormat)
         assertEquals(1, request.frequencyCount)
         assertEquals(RtklibPostprocessMode.FORWARD, request.mode)
+        assertTrue(Files.isRegularFile(session.resolve("rtklib-postprocessed-forward.nmea")))
+        assertTrue(Files.isRegularFile(session.resolve("rtklib-postprocessed-forward.pos")))
+        assertFalse(Files.exists(request.outputNmea))
+        assertFalse(Files.exists(request.outputPos))
     }
 
     @Test
@@ -48,9 +52,11 @@ class RtklibSessionPostprocessorTest {
         )
 
         val request = backend.requests.single()
-        assertEquals(session.resolve("rtklib-postprocessed-combined.nmea"), request.outputNmea)
-        assertEquals(session.resolve("rtklib-postprocessed-combined.pos"), request.outputPos)
+        assertEquals(session.resolve("rtklib-postprocessed-combined.nmea.tmp"), request.outputNmea)
+        assertEquals(session.resolve("rtklib-postprocessed-combined.pos.tmp"), request.outputPos)
         assertEquals(RtklibPostprocessMode.FORWARD_BACKWARD, request.mode)
+        assertTrue(Files.isRegularFile(session.resolve("rtklib-postprocessed-combined.nmea")))
+        assertTrue(Files.isRegularFile(session.resolve("rtklib-postprocessed-combined.pos")))
     }
 
     @Test

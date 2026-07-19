@@ -18,7 +18,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT/tools${PYTHONPATH:+:$PYTHONPATH}" \
 echo "Checking formal specification consistency..."
 python3 tools/check_spec_requirements.py docs/specification
 
-echo "Compiling Android test source sets..."
+echo "Compiling Android test source sets and running feasible tests..."
 python3 tools/check_android_test_compilation.py --root "$ROOT" --mode auto
 
 echo "Pre-push checks passed."

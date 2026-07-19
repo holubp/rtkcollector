@@ -33,6 +33,7 @@ val rtklibNativeReleaseTaskNames = setOf(
     "validateGooglePlayReleaseBuildInputs",
     "validateGooglePlayReleaseBundle",
 )
+val appCompileSdkVersion = 36
 val rtklibNativeReleaseRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.substringAfterLast(":") in rtklibNativeReleaseTaskNames
 }
@@ -46,7 +47,7 @@ if (rtklibNativeReleaseRequested && !rtklibNativeBuildAvailable) {
 
 android {
     namespace = "org.rtkcollector.app"
-    compileSdk = 36
+    compileSdk = appCompileSdkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -145,6 +146,52 @@ tasks.register("androidTestClasses") {
     group = "build"
     description = "Compatibility alias for tools that request Android instrumentation test classes in the app module."
     dependsOn("compileDebugAndroidTestSources")
+}
+
+val termuxDebugUnitTestClasses = files(
+    layout.buildDirectory.dir("intermediates/built_in_kotlinc/debugUnitTest/compileDebugUnitTestKotlin/classes"),
+    layout.buildDirectory.dir("intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes"),
+)
+val termuxDebugMainClasses = files(
+    layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes"),
+    layout.buildDirectory.dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes"),
+    layout.buildDirectory.file("intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar"),
+    layout.buildDirectory.dir("intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out"),
+)
+val termuxAndroidJar = localSdkDir()?.resolve("platforms/android-$appCompileSdkVersion/android.jar")
+
+tasks.register<org.gradle.api.tasks.testing.Test>("termuxTestDebugUnitTest") {
+    group = "verification"
+    description = "Runs debug JVM tests from compiled classes without Android resource linking."
+    dependsOn("unitTestClasses")
+    doFirst {
+        require(termuxAndroidJar?.isFile == true) {
+            "Termux unit tests require the Android $appCompileSdkVersion platform android.jar."
+        }
+    }
+    testClassesDirs = termuxDebugUnitTestClasses
+    classpath = termuxDebugUnitTestClasses + termuxDebugMainClasses + files(provider {
+        configurations.getByName("debugUnitTestRuntimeClasspath")
+            .incoming
+            .artifactView {
+                attributes.attribute(
+                    org.gradle.api.attributes.Attribute.of("artifactType", String::class.java),
+                    "android-classes-jar",
+                )
+                componentFilter { identifier ->
+                    identifier !is org.gradle.api.artifacts.component.ProjectComponentIdentifier ||
+                        identifier.projectPath != project.path
+                }
+            }
+            .files
+            .files
+    }) + files(termuxAndroidJar)
+    useJUnitPlatform()
+    filter {
+        excludeTestsMatching("org.rtkcollector.app.mocklocation.MockLocationPublisherTest")
+        excludeTestsMatching("org.rtkcollector.app.ui.dashboard.DashboardServiceMapperTest")
+        excludeTestsMatching("org.rtkcollector.app.ui.imports.SettingsImportIntentReaderTest")
+    }
 }
 
 fun validateReleaseBundleNativeLibrary(bundleFile: File) {

@@ -107,7 +107,7 @@ class BasePositionJsonCodecTest {
         )
 
         assertEquals(752.9215, decoded.ellipsoidalHeightM)
-        assertEquals(707.8, decoded.mslAltitudeM)
+        assertEquals(707.8, decoded.mslAltitudeM!!, 1e-9)
         assertEquals(45.1215, decoded.geoidSeparationM)
     }
 }

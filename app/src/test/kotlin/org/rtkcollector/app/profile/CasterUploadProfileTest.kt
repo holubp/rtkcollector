@@ -120,7 +120,7 @@ class CasterUploadProfileTest {
                 name = "Upload",
                 retryMode = NtripCasterUploadRetryMode.FIXED,
                 fixedReconnectDelaySeconds = 9,
-            )
+            ).validate()
         }
 
         assertTrue(error.message!!.contains("Fixed reconnect delay must be at least 10 seconds."))
@@ -134,7 +134,7 @@ class CasterUploadProfileTest {
                     id = "upload",
                     name = "Upload",
                     adaptiveInitialDelaySeconds = 9,
-                )
+                ).validate()
             }.message!!.contains("Adaptive initial reconnect delay must be at least 10 seconds."),
         )
         assertTrue(
@@ -144,7 +144,7 @@ class CasterUploadProfileTest {
                     name = "Upload",
                     adaptiveInitialDelaySeconds = 20,
                     adaptiveMaxDelaySeconds = 19,
-                )
+                ).validate()
             }.message!!.contains("Adaptive maximum reconnect delay must be greater than or equal to the initial delay."),
         )
         assertTrue(
@@ -153,7 +153,7 @@ class CasterUploadProfileTest {
                     id = "upload",
                     name = "Upload",
                     stopAfterConsecutiveFailures = 0,
-                )
+                ).validate()
             }.message!!.contains("Stop-after-failures count must be at least 1."),
         )
         assertTrue(
@@ -162,7 +162,7 @@ class CasterUploadProfileTest {
                     id = "upload",
                     name = "Upload",
                     safetyMaxBitrateKbps = 0,
-                )
+                ).validate()
             }.message!!.contains("Safety bitrate threshold must be positive."),
         )
         assertTrue(
@@ -171,7 +171,7 @@ class CasterUploadProfileTest {
                     id = "upload",
                     name = "Upload",
                     safetyBitrateWindowSeconds = 0,
-                )
+                ).validate()
             }.message!!.contains("Safety bitrate window must be positive."),
         )
         assertTrue(
@@ -180,7 +180,7 @@ class CasterUploadProfileTest {
                     id = "upload",
                     name = "Upload",
                     safetyMaxSessionUploadMb = 0,
-                )
+                ).validate()
             }.message!!.contains("Safety session upload limit must be positive."),
         )
     }

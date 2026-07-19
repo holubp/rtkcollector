@@ -45,15 +45,14 @@ class SessionArchiveManagerTest {
     @Test
     fun `active session is rejected before temporary share opens source files`() {
         val session = sessionDir("session-share-active")
+        val cache = tempDir.resolve("cache")
         ActiveRecordingSessionRegistry.activate(session.toString())
 
         try {
             assertThrows(IllegalArgumentException::class.java) {
-                SessionArchiveManager.createTemporaryShareZip(session, tempDir.resolve("cache"))
+                SessionArchiveManager.createTemporaryShareZip(session, cache)
             }
-            assertTrue(
-                Files.list(tempDir.resolve("cache")).use { files -> files.noneMatch { it.toString().endsWith(".zip") } },
-            )
+            assertFalse(Files.exists(cache))
             assertTrue(Files.exists(session.resolve("receiver-rx.raw")))
         } finally {
             ActiveRecordingSessionRegistry.deactivate(session.toString())

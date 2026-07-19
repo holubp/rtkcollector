@@ -68,7 +68,10 @@ private fun settingsSetSummary(set: RecordingSettingsSet): String =
     listOf(
         set.workflowId,
         set.effectiveCommandProfileRef().name,
-        set.effectiveNtripMountpointProfileRef()?.name ?: "No NTRIP mountpoint",
+        set.overrides.ntripMountpoint?.mountpoint
+            ?.takeIf(String::isNotBlank)
+            ?: set.effectiveNtripMountpointProfileRef()?.name
+            ?: "No NTRIP mountpoint",
         set.effectiveStorageProfileRef().name,
     ).joinToString(" · ")
 

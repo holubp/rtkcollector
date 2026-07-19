@@ -9,7 +9,6 @@ import org.junit.jupiter.api.io.TempDir
 import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 
 class FilesystemSessionBrowserTest {
     @TempDir
@@ -70,7 +69,7 @@ class FilesystemSessionBrowserTest {
 
     @Test
     fun `android runtime code avoids Path of`() {
-        val sourceRoot = locateProjectPath("app/src/main/kotlin", Files::isDirectory)
+        val sourceRoot = TestFiles.locateProjectPath("app/src/main/kotlin", Files::isDirectory)
         val offenders = Files.walk(sourceRoot).use { stream ->
             stream
                 .filter { path -> Files.isRegularFile(path) && path.toString().endsWith(".kt") }
@@ -92,9 +91,4 @@ class FilesystemSessionBrowserTest {
         Files.write(session.resolve("receiver-rx.raw"), byteArrayOf(1))
         return session
     }
-
-    private fun locateProjectPath(relative: String, predicate: (Path) -> Boolean): Path =
-        sequenceOf(Paths.get(relative), Paths.get("app").resolve(relative.removePrefix("app/")))
-            .firstOrNull(predicate)
-            ?: error("Cannot locate project path $relative from ${Paths.get("").toAbsolutePath()}")
 }

@@ -240,10 +240,21 @@ accepted as evidence that unit-test source, test fixtures and test-only
 dependencies are complete.
 
 On a full Android build host, both the app JVM unit-test and instrumentation
-test source sets MUST compile. A constrained Termux host MAY bypass the known
+test source sets MUST compile and the complete JVM unit-test suite MUST run. A
+constrained Termux host MAY bypass the known
 non-runnable Android resource-processing binary only if it still compiles app
-JVM unit-test Kotlin against a generated debug `R.jar`, verifies the standard
-task aliases, and CI repeats the full-host compilation.
+JVM unit-test Kotlin against a generated debug `R.jar`, runs every app JVM test
+that does not require Robolectric's dynamically selected Android runtime,
+runs every pure JVM module test, verifies the standard task aliases, and CI
+repeats the full-host compilation and complete test execution. Tests skipped
+locally for this host limitation MUST remain compiled locally and executed in
+CI. The locally excluded test-class list MUST exactly match the source files
+that use `RobolectricTestRunner`; broad or stale exclusions are forbidden. The
+pre-push gate MUST reject test sources, resources, fixtures and gate scripts
+that exist locally but are not tracked by Git, including ignored inputs,
+because those inputs would be missing from the clean checkout used by CI and
+other developers. It MUST start from clean Gradle outputs and keep the explicit
+constrained-host JVM-module task list aligned with every test-bearing module.
 
 CI MUST execute unit tests before independent native APK assembly. A missing
 native source checkout or native compiler failure MUST NOT cause the test step
@@ -263,6 +274,7 @@ Applies to:
 Verification:
 - Automated: `tools/test_check_android_test_compilation.py`.
 - Automated: `scripts/pre_push_check.sh`.
+- Automated: `:app:termuxTestDebugUnitTest` on constrained Termux hosts.
 - Automated: Android CI runs the gate in standard mode and executes tests
   before provisioning native sources and assembling the APK; test reports are
   uploaded with an unconditional post-test step.

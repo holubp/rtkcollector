@@ -626,6 +626,8 @@ class DashboardStateTest {
                 "\"latDeg\":50.087451234," +
                 "\"lonDeg\":14.421253456," +
                 "\"heightM\":321.456," +
+                "\"mslAltitudeM\":null," +
+                "\"geoidSeparationM\":null," +
                 "\"frame\":\"UNKNOWN\"," +
                 "\"method\":\"MANUAL_KNOWN_POINT\"," +
                 "\"source\":\"AVERAGE\"," +

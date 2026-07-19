@@ -22,17 +22,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Clean
-        run: sh gradlew clean
-
       - name: Test Android test-compilation gate
         run: python3 -m unittest discover -s tools -p 'test_check_android_test_compilation.py' -v
 
-      - name: Compile Android test source sets
+      - name: Compile and run Android tests
         run: python3 tools/check_android_test_compilation.py --mode standard
-
-      - name: Run tests
-        run: sh gradlew test --no-parallel
 
       - name: Upload test reports
         if: always()

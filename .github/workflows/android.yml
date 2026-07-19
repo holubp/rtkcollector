@@ -31,8 +31,16 @@ jobs:
       - name: Compile Android test source sets
         run: python3 tools/check_android_test_compilation.py --mode standard
 
-      - name: Assemble debug bootstrap
-        run: sh gradlew assembleDebug
-
       - name: Run tests
         run: sh gradlew test --no-parallel
+
+      - name: Provision pinned RTKLIB-EX source
+        shell: bash
+        run: |
+          RTKLIB_REF="$(python3 -c 'import json; print(json.load(open("third_party/rtklib-ex/snapshot.json", encoding="utf-8"))["resolvedCommit"])')"
+          python3 tools/update_rtklib_ex.py \
+            --ref "$RTKLIB_REF" \
+            --metadata "$RUNNER_TEMP/rtklib-ex-snapshot.json"
+
+      - name: Assemble debug bootstrap
+        run: sh gradlew assembleDebug --no-parallel

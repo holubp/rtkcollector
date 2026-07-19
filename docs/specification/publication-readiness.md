@@ -207,6 +207,11 @@ Google Play release AAB/APK builds MUST fail rather than silently omitting
 required native libraries such as the RTKLIB native backend when a workflow or
 shipped feature depends on them.
 
+A clean automated native build MUST provision the exact RTKLIB-EX commit
+recorded in `third_party/rtklib-ex/snapshot.json`. It MUST NOT depend on the
+ignored `third_party/rtklib-ex/upstream/` checkout already existing on a
+developer machine.
+
 Rationale:
 Google Play builds must not differ from tested local functionality by missing
 native backends.
@@ -217,6 +222,8 @@ Applies to:
 
 Verification:
 - Automated: release build input validation and AAB library-entry checks.
+- Automated: clean CI provisions the pinned RTKLIB-EX snapshot before native
+  debug assembly.
 - Manual: full release AAB build on Windows Android Studio or CI.
 
 Traceability:
@@ -238,6 +245,10 @@ non-runnable Android resource-processing binary only if it still compiles app
 JVM unit-test Kotlin against a generated debug `R.jar`, verifies the standard
 task aliases, and CI repeats the full-host compilation.
 
+CI MUST execute unit tests before independent native APK assembly. A missing
+native source checkout or native compiler failure MUST NOT cause the test step
+to be skipped.
+
 Rationale:
 Missing test dependencies and stale test APIs have repeatedly reached shared
 branches when only production compilation or Gradle task selection was checked.
@@ -250,7 +261,8 @@ Applies to:
 Verification:
 - Automated: `tools/test_check_android_test_compilation.py`.
 - Automated: `scripts/pre_push_check.sh`.
-- Automated: Android CI runs the gate in standard mode before broader tests.
+- Automated: Android CI runs the gate in standard mode and executes tests
+  before provisioning native sources and assembling the APK.
 
 Traceability:
 - Source: `tools/check_android_test_compilation.py`.

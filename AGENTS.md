@@ -258,8 +258,9 @@ Prefer the strongest feasible verification for the touched code:
 - Before every push, run `sh scripts/pre_push_check.sh`. This is a blocking
   gate: production compilation and Gradle task dry-runs alone do not prove that
   app unit-test sources, test fixtures and test-only dependencies are complete.
-  The gate must compile the app test source sets, and CI must repeat the full
-  host check.
+  The gate must compile the app test source sets. CI must repeat the full-host
+  check and execute the tests before any independent native assembly step can
+  stop the job.
 - Invoke the Gradle wrapper as `sh gradlew` in Linux/Termux automation. Android
   shared storage does not reliably preserve the executable bit, so CI commands
   must not assume `./gradlew` is directly executable.
@@ -273,6 +274,9 @@ Prefer the strongest feasible verification for the touched code:
   then dry-runs both compatibility aliases. Full Android test/resource
   compilation remains mandatory in CI, Windows Android Studio or another host
   with working Android SDK native tools.
+- Clean CI native builds must provision the exact RTKLIB-EX commit recorded in
+  `third_party/rtklib-ex/snapshot.json`; the ignored local upstream checkout is
+  not part of a Git clone and must never be assumed to exist.
 - Hardware-facing UM980 changes: document manual hardware smoke tests and the
   exact receiver/USB/baud assumptions.
 - UM980 live parsers must be byte-level for mixed NMEA, UM980 ASCII and UM980

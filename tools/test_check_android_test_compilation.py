@@ -16,8 +16,24 @@ class AndroidTestCompilationGateTest(unittest.TestCase):
 
         self.assertNotIn("run: ./gradlew", workflow)
         self.assertIn("run: sh gradlew clean", workflow)
-        self.assertIn("run: sh gradlew assembleDebug", workflow)
+        self.assertIn("run: sh gradlew assembleDebug --no-parallel", workflow)
         self.assertIn("run: sh gradlew test --no-parallel", workflow)
+
+    def test_ci_runs_tests_before_native_assembly(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github" / "workflows" / "android.yml").read_text(
+            encoding="utf-8"
+        )
+
+        test_step = workflow.index("- name: Run tests")
+        provision_step = workflow.index("- name: Provision pinned RTKLIB-EX source")
+        assemble_step = workflow.index("- name: Assemble debug bootstrap")
+
+        self.assertLess(test_step, provision_step)
+        self.assertLess(provision_step, assemble_step)
+        self.assertIn("third_party/rtklib-ex/snapshot.json", workflow)
+        self.assertIn("tools/update_rtklib_ex.py", workflow)
+        self.assertIn("--metadata \"$RUNNER_TEMP/rtklib-ex-snapshot.json\"", workflow)
 
     def test_auto_mode_detects_termux(self) -> None:
         environment = {

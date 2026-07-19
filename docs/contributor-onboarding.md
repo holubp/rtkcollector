@@ -192,8 +192,9 @@ In this order, you will have a working mental model in roughly 90 minutes:
   `androidTestClasses`. On Termux/aarch64 it compiles production Kotlin, seeds
   the already-generated debug `R.jar`, compiles the JVM unit-test sources while
   excluding only `processDebugResources`, and verifies both compatibility task
-  aliases with a dry-run. CI repeats the normal full-host compilation, so the
-  Termux workaround cannot weaken the shared gate.
+  aliases with a dry-run. CI repeats the normal full-host compilation and runs
+  the tests before native APK assembly, so the Termux workaround and an
+  unrelated native-build failure cannot hide a missing test dependency.
 - Pattern: pure logic is extracted out of the service into testable Kotlin
   classes (`RecordingStartPreflight`, `NtripUpdatePolicy`,
   `Um980BaudTransition`, `PersistentReceiverWritePolicy`). Follow this
@@ -235,6 +236,9 @@ python3 tools/update_rtklib_ex.py \
 This creates or refreshes `third_party/rtklib-ex/upstream/`. That directory is
 ignored by Git; do not commit it. The reproducibility record is
 `third_party/rtklib-ex/snapshot.json`.
+
+Clean CI reads that snapshot and provisions the ignored checkout before native
+APK assembly; it does not assume a developer's local checkout is present.
 
 Make sure `local.properties` points at the Android SDK on the build host:
 

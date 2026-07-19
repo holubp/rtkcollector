@@ -14,6 +14,20 @@ Verification:
 - Review: recording loop and writers live in service/runtime code.
 - Manual: recording continues with screen off and app backgrounded.
 
+### ANDROID-SERVICE-002: UI State Queries Respect Background Start Restrictions
+
+Status: Normative
+
+Activity or Compose requests for recording-service state MUST be initiated only
+from a foreground Activity lifecycle state. Android or vendor background-start
+rejections MUST be handled without terminating the app process. A failed UI
+state refresh MUST NOT stop, restart or otherwise alter an active recording.
+
+Verification:
+- Automated: recording-service state-query helper tests.
+- Review: Activity lifecycle and service-query call sites.
+- Manual: background and restore the app while recording and while idle.
+
 ### ANDROID-CAPTURE-001: Capture Path Is Independent Of UI
 
 Status: Normative

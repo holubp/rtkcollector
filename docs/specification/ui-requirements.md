@@ -242,19 +242,21 @@ Verification:
 - Automated: active setup resolver tests.
 - Manual: activate settings set, override dashboard selectors and restart app.
 
-### UI-SETUP-003: Dashboard Setup Strip Has Explicit Upload Selection
+### UI-SETUP-003: Dashboard Setup Strip Keeps Essential Selectors
 
 Status: Normative
 
-The dashboard setup strip MUST expose Device, Settings, Workflow, Profiles,
-Upload and Storage selectors, with Device first because it filters compatible
-profile choices. `Profiles` selects the active init/shutdown profile. The Upload
-selector MUST list an explicit `Off` row first and MUST apply `Off` as a real
-disabled state for NTRIP source upload. Selecting or disabling source upload
-from this strip MUST NOT silently rewrite unrelated settings-set profile fields.
+The dashboard setup strip MUST expose Device, Settings, Workflow, Mountpoint,
+Profiles, Upload and Storage selectors, with Device first because it filters
+compatible profile choices. `Profiles` selects the active init/shutdown profile.
+`Mountpoint` MUST provide direct access to NTRIP correction-download selection
+before recording starts. The Upload selector MUST list an explicit `Off` row
+first and MUST apply `Off` as a real disabled state for NTRIP source upload.
+Selecting or disabling source upload from this strip MUST NOT silently rewrite
+unrelated settings-set profile fields.
 
 Verification:
-- Automated: dashboard upload selector and dashboard layout tests.
+- Automated: dashboard mountpoint/upload selector and dashboard layout tests.
 - Manual: dashboard selector review with no upload profile and with a configured
   upload profile.
 
@@ -277,10 +279,10 @@ Status: Normative
 
 The active Device filter MUST be exposed as a clearly clickable selector
 wherever it appears as a profile-filter control. The Home dashboard setup strip
-MUST place Device before Settings, Workflow, Profiles, Upload and Storage
-because the selected Device filter constrains the compatible options shown by
-other profile selectors. The Settings screen MUST also expose the active Device
-filter as a button-like control, not as plain status text.
+MUST place Device before Settings, Workflow, Mountpoint, Profiles, Upload and
+Storage because the selected Device filter constrains the compatible options
+shown by other profile selectors. The Settings screen MUST also expose the
+active Device filter as a button-like control, not as plain status text.
 
 Opening the Device selector from Settings MUST keep the user in the Settings
 context after selection or dismissal. Selecting a Device filter from Settings
@@ -314,6 +316,19 @@ Verification:
 - Manual: select a u-blox profile, switch Device to `UM980`, confirm the active
   profile remains visible with a warning, then select a compatible UM980 profile
   and confirm the warning clears.
+
+### UI-SETUP-007: Sessions Are Available In Active Setup
+
+Status: Normative
+
+The Settings screen MUST expose the recent-sessions and sharing action in its
+top-level `Active setup` group so routine session review does not require
+searching lower settings sections. The action MUST retain the existing session
+browser behaviour and active-session protections.
+
+Verification:
+- Review: Settings hub section placement and session action wiring.
+- Manual: open Settings and reach recent sessions from `Active setup`.
 
 ### UI-KEYBOARD-002: Editable One-Line Profile Fields Use Shared Native Editor
 

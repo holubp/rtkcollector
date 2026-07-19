@@ -101,8 +101,8 @@ a source-upload profile only for base workflows that should publish RTCM.
 
 The user guide and Play listing would benefit from these screenshots:
 
-1. Home screen before recording, showing Device, Settings, Workflow, Profiles,
-   Upload and Storage selectors.
+1. Home screen before recording, showing Device, Settings, Workflow,
+   Mountpoint, Profiles, Upload and Storage selectors.
 2. USB permission/device selection flow.
 3. Plain rover recording in progress, with Position/Fix/Files cards visible.
 4. Rover with NTRIP recording in progress, with NTRIP state and correction byte
@@ -189,11 +189,12 @@ UM980/N4, the generated `MODE BASE` command uses MSL altitude. Ellipsoidal
 height and geoid separation remain recorded metadata for review, dashboard
 display and mock-location semantics.
 
-The Files card shows the active session location and recorded byte counts. The
-Sessions menu lists recordings in the configured app-private storage with latest
-sessions first and separates the current session, completed recordings and
-archived recordings. Active recordings cannot be shared, archived, restored or
-deleted from this menu.
+The Files card shows the active session location and recorded byte counts. In
+Menu, `Recent sessions and sharing` is available directly in the top
+`Active setup` group. It lists recordings in the configured app-private
+storage with latest sessions first and separates the current session, completed
+recordings and archived recordings. Active recordings cannot be shared,
+archived, restored or deleted from this screen.
 
 Android mock-location output is a recording-scoped option. When enabled, the
 foreground recording service publishes the current best fresh RtkCollector

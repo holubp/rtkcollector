@@ -547,6 +547,7 @@ private fun RailDashboard(
                             DashboardSetupItem.WORKFLOW -> onWorkflow
                             DashboardSetupItem.SETTINGS -> onSettingsSet
                             DashboardSetupItem.DEVICE -> onDevice
+                            DashboardSetupItem.MOUNTPOINT -> onMountpoint
                             DashboardSetupItem.INIT_PROFILES -> onInitProfiles
                             DashboardSetupItem.UPLOAD -> onUpload
                             DashboardSetupItem.STORAGE -> onStorage
@@ -669,6 +670,7 @@ private fun SetupStrip(
                                 DashboardSetupItem.SETTINGS -> onSettingsSet
                                 DashboardSetupItem.WORKFLOW -> onWorkflow
                                 DashboardSetupItem.DEVICE -> onDevice
+                                DashboardSetupItem.MOUNTPOINT -> onMountpoint
                                 DashboardSetupItem.INIT_PROFILES -> onInitProfiles
                                 DashboardSetupItem.UPLOAD -> onUpload
                                 DashboardSetupItem.STORAGE -> onStorage
@@ -686,6 +688,7 @@ private fun DashboardStatus.valueFor(item: DashboardSetupItem): String =
         DashboardSetupItem.SETTINGS -> settingsSet
         DashboardSetupItem.WORKFLOW -> workflow
         DashboardSetupItem.DEVICE -> device
+        DashboardSetupItem.MOUNTPOINT -> mountpoint
         DashboardSetupItem.INIT_PROFILES -> initProfile
         DashboardSetupItem.UPLOAD -> if (uploadAvailable) upload else "Not needed"
         DashboardSetupItem.STORAGE -> storage

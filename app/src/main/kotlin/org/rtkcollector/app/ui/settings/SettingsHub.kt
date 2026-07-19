@@ -124,6 +124,8 @@ fun SettingsHub(
                         }.joinToString(" · "),
                         warning = activeSettingsSetOutsideDeviceFilter,
                     )
+                    SettingsDivider()
+                    SettingsRow("↗", "Recent sessions and sharing", onSessions)
                     if (canReapplySettingsSet) {
                         SettingsDivider()
                         SettingsRow(
@@ -173,10 +175,6 @@ fun SettingsHub(
                     SettingsRow("M", "NTRIP mountpoints", onNtripMountpoint)
                     SettingsDivider()
                     SettingsRow("UP", "NTRIP caster upload", onNtripCasterUpload)
-                }
-
-                SettingsSection("Sessions") {
-                    SettingsRow("↗", "Recent sessions and sharing", onSessions)
                 }
 
                 SettingsSection("Settings transfer") {

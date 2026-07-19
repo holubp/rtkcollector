@@ -3,6 +3,7 @@ package org.rtkcollector.core.capture
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -10,6 +11,7 @@ import org.rtkcollector.core.transport.SerialTransport
 import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class AdvisoryFanoutTest {
     @Test
@@ -122,6 +124,27 @@ class AdvisoryFanoutTest {
     }
 
     @Test
+    fun `async fanout idle shutdown does not escape interrupted exception`() {
+        val processed = CountDownLatch(1)
+        val uncaught = AtomicReference<Throwable?>()
+        val fanout = AsyncAdvisoryFanout(
+            delegate = ReceiverBytesConsumer { processed.countDown() },
+            eventSink = MemoryEvents(),
+        )
+
+        fanout.accept(byteArrayOf(1))
+        assertTrue(processed.await(2, TimeUnit.SECONDS))
+        val worker = advisoryWorkerOf(fanout)
+        worker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error ->
+            uncaught.set(error)
+        }
+        assertTrue(waitUntil(2_000) { worker.state == Thread.State.TIMED_WAITING })
+
+        assertTrue(fanout.shutdown(1_000))
+        assertNull(uncaught.get())
+    }
+
+    @Test
     fun `async fanout close reports timeout while delegate can still write`() {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -201,6 +224,21 @@ class AdvisoryFanoutTest {
 
     private class MemoryEvents : CaptureEventSink {
         override fun recordEvent(event: CaptureEvent) = Unit
+    }
+
+    private fun advisoryWorkerOf(fanout: AsyncAdvisoryFanout): Thread =
+        AsyncAdvisoryFanout::class.java
+            .getDeclaredField("worker")
+            .apply { isAccessible = true }
+            .get(fanout) as Thread
+
+    private fun waitUntil(timeoutMillis: Long, condition: () -> Boolean): Boolean {
+        val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        while (System.nanoTime() < deadlineNanos) {
+            if (condition()) return true
+            Thread.sleep(1)
+        }
+        return condition()
     }
 
     private fun queueOf(vararg chunks: ByteArray): ArrayDeque<ByteArray> =

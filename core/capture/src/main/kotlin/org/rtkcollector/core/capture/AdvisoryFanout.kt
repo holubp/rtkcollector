@@ -56,7 +56,12 @@ class AsyncAdvisoryFanout(
     private val worker = Thread(
         {
             while (accepting || queue.isNotEmpty()) {
-                val bytes = queue.poll(100, TimeUnit.MILLISECONDS) ?: continue
+                val bytes = try {
+                    queue.poll(100, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    if (!accepting) break
+                    continue
+                } ?: continue
                 runCatching { delegate.accept(bytes) }
                     .onFailure { error ->
                         eventSink.recordBestEffort(

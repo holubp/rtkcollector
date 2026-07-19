@@ -24,6 +24,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -243,6 +245,14 @@ private const val DEVICE_CONSOLE_PERMISSION_REQUIRED = "USB permission is requir
 private const val NTRIP_CLEARTEXT_TRANSPORT_WARNING =
     "NTRIP may use cleartext TCP; credentials and GGA/source data are not universally encrypted."
 private val persistentReceiverWriteInProgress = AtomicBoolean(false)
+
+internal fun tryStartRecordingServiceStateQuery(startService: () -> Unit): Boolean =
+    try {
+        startService()
+        true
+    } catch (_: IllegalStateException) {
+        false
+    }
 
 class MainActivity : ComponentActivity() {
     private var latestImportIntent by mutableStateOf<Intent?>(null)
@@ -1040,10 +1050,43 @@ fun RtkCollectorApp(
             addAction(ACTION_USB_PERMISSION)
         }
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        context.startService(
-            Intent(context, RecordingForegroundService::class.java).setAction(RecordingForegroundService.ACTION_QUERY),
-        )
+        val activity = context as? ComponentActivity
+        fun queryRecordingServiceState() {
+            val queryStarted = tryStartRecordingServiceStateQuery {
+                context.startService(
+                    Intent(context, RecordingForegroundService::class.java)
+                        .setAction(RecordingForegroundService.ACTION_QUERY),
+                )
+            }
+            if (!queryStarted) {
+                recordAppRuntimeDiagnosticIfEnabled(
+                    context = context,
+                    severity = "WARNING",
+                    message = "Recording-service state query was blocked by Android background restrictions.",
+                )
+            }
+        }
+        var queryDispatchedForCurrentResume = false
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> if (!queryDispatchedForCurrentResume) {
+                    queryDispatchedForCurrentResume = true
+                    queryRecordingServiceState()
+                }
+                Lifecycle.Event.ON_PAUSE -> queryDispatchedForCurrentResume = false
+                else -> Unit
+            }
+        }
+        activity?.lifecycle?.addObserver(lifecycleObserver)
+        if (
+            activity?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true &&
+            !queryDispatchedForCurrentResume
+        ) {
+            queryDispatchedForCurrentResume = true
+            queryRecordingServiceState()
+        }
         onDispose {
+            activity?.lifecycle?.removeObserver(lifecycleObserver)
             runCatching { context.unregisterReceiver(receiver) }
         }
     }

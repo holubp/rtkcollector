@@ -8,18 +8,20 @@ import org.junit.jupiter.api.Test
 
 class DashboardStateTest {
     @Test
-    fun `dashboard setup items put device filter first and use profile naming`() {
+    fun `dashboard setup items include explicit mountpoint selector and retain existing items`() {
         assertEquals(
             listOf(
                 DashboardSetupItem.DEVICE,
                 DashboardSetupItem.SETTINGS,
                 DashboardSetupItem.WORKFLOW,
+                DashboardSetupItem.MOUNTPOINT,
                 DashboardSetupItem.INIT_PROFILES,
                 DashboardSetupItem.UPLOAD,
                 DashboardSetupItem.STORAGE,
             ),
             defaultDashboardSetupItems,
         )
+        assertEquals("Mountpoint", DashboardSetupItem.MOUNTPOINT.label)
         assertEquals("Profiles", DashboardSetupItem.INIT_PROFILES.label)
     }
 

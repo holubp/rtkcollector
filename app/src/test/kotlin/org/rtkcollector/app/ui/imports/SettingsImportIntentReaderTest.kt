@@ -3,10 +3,13 @@ package org.rtkcollector.app.ui.imports
 import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
-import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class SettingsImportIntentReaderTest {
     @Test
     fun `extracts action view data uri`() {

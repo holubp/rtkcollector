@@ -3,11 +3,14 @@ package org.rtkcollector.app.mocklocation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Test
+import org.junit.Test
+import org.junit.runner.RunWith
 import org.rtkcollector.core.solution.BestSolutionSnapshot
 import org.rtkcollector.core.solution.FixClass
 import org.rtkcollector.core.solution.SolutionEngine
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class MockLocationPublisherTest {
     @Test
     fun `publishes fresh snapshot when enabled`() {

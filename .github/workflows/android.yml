@@ -34,6 +34,16 @@ jobs:
       - name: Run tests
         run: sh gradlew test --no-parallel
 
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: |
+            **/build/test-results/**/*.xml
+            **/build/reports/tests/**
+          if-no-files-found: warn
+
       - name: Provision pinned RTKLIB-EX source
         shell: bash
         run: |

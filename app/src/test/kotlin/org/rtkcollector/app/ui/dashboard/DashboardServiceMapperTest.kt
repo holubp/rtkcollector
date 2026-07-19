@@ -4,11 +4,14 @@ import android.content.Intent
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import org.junit.Test
+import org.junit.runner.RunWith
 import org.rtkcollector.app.recording.RecordingErrorCategory
 import org.rtkcollector.app.recording.RecordingErrorSeverity
 import org.rtkcollector.app.recording.RecordingForegroundService
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class DashboardServiceMapperTest {
     @Test
     fun `failed service state exposes last error on planned dashboard`() {

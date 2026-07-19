@@ -25,8 +25,11 @@ the Gradle dependency graph used for the released AAB/APK.
 | JUnit BOM (`org.junit:junit-bom`) | JUnit test dependency alignment | Eclipse Public License 2.0 |
 | JUnit Jupiter API + Engine split artifacts | App module unit-test API and engine declarations | Eclipse Public License 2.0 |
 | JUnit Jupiter aggregate (`org.junit.jupiter:junit-jupiter`) | Equivalent aggregate test declaration used by selected JVM library modules instead of the split app-module form | Eclipse Public License 2.0 |
+| JUnit 4 + JUnit Vintage engine | Runs the small Robolectric Android-API compatibility subset alongside JUnit Jupiter | Eclipse Public License 1.0 / 2.0 |
 | JUnit Platform Launcher | Test runtime/discovery | Eclipse Public License 2.0 |
 | Kotlin test (`kotlin-test`) | Shared Kotlin unit-test API | Apache-2.0 |
+| JSON-Java (`org.json:json`) | Real JVM JSON implementation for app unit tests | Public domain |
+| Robolectric | JVM implementation of Android APIs used by focused app compatibility tests | MIT |
 | Compose UI tooling | Debug-only UI inspection | Apache-2.0 |
 
 ## RTKLIB-EX

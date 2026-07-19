@@ -26,11 +26,16 @@ class AndroidTestCompilationGateTest(unittest.TestCase):
         )
 
         test_step = workflow.index("- name: Run tests")
+        report_step = workflow.index("- name: Upload test reports")
         provision_step = workflow.index("- name: Provision pinned RTKLIB-EX source")
         assemble_step = workflow.index("- name: Assemble debug bootstrap")
 
+        self.assertLess(test_step, report_step)
+        self.assertLess(report_step, provision_step)
         self.assertLess(test_step, provision_step)
         self.assertLess(provision_step, assemble_step)
+        self.assertIn("if: always()", workflow)
+        self.assertIn("**/build/test-results/**/*.xml", workflow)
         self.assertIn("third_party/rtklib-ex/snapshot.json", workflow)
         self.assertIn("tools/update_rtklib_ex.py", workflow)
         self.assertIn("--metadata \"$RUNNER_TEMP/rtklib-ex-snapshot.json\"", workflow)

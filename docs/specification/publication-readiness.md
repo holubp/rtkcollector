@@ -247,7 +247,9 @@ task aliases, and CI repeats the full-host compilation.
 
 CI MUST execute unit tests before independent native APK assembly. A missing
 native source checkout or native compiler failure MUST NOT cause the test step
-to be skipped.
+to be skipped. CI MUST retain machine-readable test results and readable test
+reports even when tests fail, and failed-test logs MUST include full exception
+details.
 
 Rationale:
 Missing test dependencies and stale test APIs have repeatedly reached shared
@@ -262,7 +264,8 @@ Verification:
 - Automated: `tools/test_check_android_test_compilation.py`.
 - Automated: `scripts/pre_push_check.sh`.
 - Automated: Android CI runs the gate in standard mode and executes tests
-  before provisioning native sources and assembling the APK.
+  before provisioning native sources and assembling the APK; test reports are
+  uploaded with an unconditional post-test step.
 
 Traceability:
 - Source: `tools/check_android_test_compilation.py`.

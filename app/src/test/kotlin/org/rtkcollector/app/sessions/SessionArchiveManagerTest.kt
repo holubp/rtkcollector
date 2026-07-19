@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.ZipEntry
@@ -180,7 +181,7 @@ class SessionArchiveManagerTest {
 
     private fun sessionDir(name: String): Path {
         val session = Files.createDirectory(tempDir.resolve(name))
-        Files.writeString(session.resolve("session.json"), "{}\n")
+        TestFiles.writeString(session.resolve("session.json"), "{}\n")
         Files.write(session.resolve("receiver-rx.raw"), byteArrayOf(1, 2, 3))
         return session
     }

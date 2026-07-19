@@ -26,9 +26,10 @@ class CoordinateAveragingControllerTest {
         )
 
         assertTrue(result.accepted)
-        assertEquals(1, controller.summary()?.sampleCount)
-        assertEquals(302.0, controller.summary()?.heightMeanM, 1e-12)
-        assertEquals(257.0, controller.summary()?.mslAltitudeMeanM, 1e-12)
+        val summary = requireNotNull(controller.summary())
+        assertEquals(1, summary.sampleCount)
+        assertEquals(302.0, summary.heightMeanM, 1e-12)
+        assertEquals(257.0, requireNotNull(summary.mslAltitudeMeanM), 1e-12)
     }
 
     @Test

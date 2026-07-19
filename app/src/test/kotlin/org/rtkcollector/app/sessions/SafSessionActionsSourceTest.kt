@@ -2,6 +2,7 @@ package org.rtkcollector.app.sessions
 
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -9,7 +10,7 @@ import java.nio.file.Paths
 class SafSessionActionsSourceTest {
     @Test
     fun `SAF destructive entry points hold a session operation lease`() {
-        val source = Files.readString(sourceFile())
+        val source = TestFiles.readString(sourceFile())
 
         assertTrue(source.contains("ActiveRecordingSessionRegistry.withDestructiveOperation(sessionUri.toString(), \"archive\")"))
         assertTrue(source.contains("deleteRecordingWhileDestructiveOperationIsLeased(resolver, sessionUri)"))
@@ -19,7 +20,7 @@ class SafSessionActionsSourceTest {
 
     @Test
     fun `SAF restore requires session shape and reuses nested parent directories`() {
-        val source = Files.readString(sourceFile())
+        val source = TestFiles.readString(sourceFile())
 
         assertTrue(source.contains("ArchiveIntegrity.requireSessionArchive(ArchiveIntegrity.inspect(input, integrityPolicy))"))
         assertTrue(source.contains("val existing = current.findChild(resolver, directoryName)"))
@@ -31,7 +32,7 @@ class SafSessionActionsSourceTest {
 
     @Test
     fun `SAF archive lease starts before session export`() {
-        val source = Files.readString(sourceFile())
+        val source = TestFiles.readString(sourceFile())
         val archiveLease = source.indexOf(
             "ActiveRecordingSessionRegistry.withDestructiveOperation(sessionUri.toString(), \"archive\")",
         )
@@ -42,7 +43,7 @@ class SafSessionActionsSourceTest {
 
     @Test
     fun `SAF temporary share holds operation lease and checks before source streams`() {
-        val source = Files.readString(sourceFile())
+        val source = TestFiles.readString(sourceFile())
         val shareLease = source.indexOf(
             "ActiveRecordingSessionRegistry.withDestructiveOperation(sessionUri.toString(), \"share\")",
         )
@@ -59,7 +60,7 @@ class SafSessionActionsSourceTest {
 
     @Test
     fun `SAF temporary NMEA shares hold operation lease and check before source streams`() {
-        val source = Files.readString(sourceFile())
+        val source = TestFiles.readString(sourceFile())
         val nmeaEntry = source.indexOf("fun createTemporaryNmeaShares")
         val shareLease = source.indexOf(
             "ActiveRecordingSessionRegistry.withDestructiveOperation(sessionUri.toString(), \"share\")",

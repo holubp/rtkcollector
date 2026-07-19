@@ -48,6 +48,11 @@ android {
     namespace = "org.rtkcollector.app"
     compileSdk = 36
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     defaultConfig {
         applicationId = "org.rtkcollector.app"
         minSdk = 26
@@ -88,6 +93,12 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.05.00"))
     implementation("androidx.activity:activity-compose:1.12.0")
@@ -107,6 +118,7 @@ dependencies {
     implementation(project(":receiver:ublox-m8"))
     implementation(project(":core:solution"))
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.14.1")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.14.1")
 }

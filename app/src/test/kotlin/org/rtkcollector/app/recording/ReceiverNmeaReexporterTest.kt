@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.rtkcollector.app.testing.TestFiles
 import org.rtkcollector.receiver.ublox.UbloxFrame
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -26,7 +27,7 @@ class ReceiverNmeaReexporterTest {
             receiverFamily = "ublox-m8t",
         )
 
-        val text = Files.readString(output)
+        val text = TestFiles.readString(output)
         assertEquals(1L, result.sentencesWritten)
         assertTrue(text.startsWith("\$GNGGA,120000.000,"))
         assertTrue(text.contains(",2,12,"))
@@ -35,7 +36,7 @@ class ReceiverNmeaReexporterTest {
     @Test
     fun `ublox stream passes through existing nmea when no nav pvt is available`() {
         val raw = tempDir.resolve("receiver-rx.raw")
-        Files.writeString(raw, "\$GNGGA,120000,5000.0,N,01400.0,E,1,12,0.8,300.0,M,0.0,M,,*00\r\n")
+        TestFiles.writeString(raw, "\$GNGGA,120000,5000.0,N,01400.0,E,1,12,0.8,300.0,M,0.0,M,,*00\r\n")
         val output = tempDir.resolve("receiver-solution.nmea")
 
         val result = ReceiverNmeaReexporter.reexportReceiverRxRaw(
@@ -47,7 +48,7 @@ class ReceiverNmeaReexporterTest {
         assertEquals(1L, result.sentencesWritten)
         assertEquals(
             "\$GNGGA,120000,5000.0,N,01400.0,E,1,12,0.8,300.0,M,0.0,M,,*00\r\n",
-            Files.readString(output),
+            TestFiles.readString(output),
         )
     }
 
@@ -56,7 +57,7 @@ class ReceiverNmeaReexporterTest {
         val raw = tempDir.resolve("receiver-rx.raw")
         Files.write(raw, byteArrayOf(0x01, 0x02, 0x03))
         val output = tempDir.resolve("receiver-solution.nmea")
-        Files.writeString(output, "\$GNGGA,old\n")
+        TestFiles.writeString(output, "\$GNGGA,old\n")
 
         val result = ReceiverNmeaReexporter.reexportReceiverRxRaw(
             receiverRxRaw = raw,
@@ -65,7 +66,7 @@ class ReceiverNmeaReexporterTest {
         )
 
         assertEquals(0L, result.sentencesWritten)
-        assertEquals("\$GNGGA,old\n", Files.readString(output))
+        assertEquals("\$GNGGA,old\n", TestFiles.readString(output))
     }
 
     private fun ubloxNavPvtFrame(): ByteArray {

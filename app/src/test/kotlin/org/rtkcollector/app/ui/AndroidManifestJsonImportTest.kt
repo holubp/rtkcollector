@@ -3,13 +3,14 @@ package org.rtkcollector.app.ui
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
 
 class AndroidManifestJsonImportTest {
     @Test
     fun `manifest registers json view and send import filters`() {
-        val manifest = Files.readString(sourceFile("src/main/AndroidManifest.xml"))
+        val manifest = TestFiles.readString(sourceFile("src/main/AndroidManifest.xml"))
         val importFilter = settingsImportViewIntentFilter(manifest)
 
         assertTrue(manifest.contains("android.intent.action.VIEW"))
@@ -22,7 +23,7 @@ class AndroidManifestJsonImportTest {
 
     @Test
     fun `settings import view intent does not use browsable or file scheme`() {
-        val manifest = Files.readString(sourceFile("src/main/AndroidManifest.xml"))
+        val manifest = TestFiles.readString(sourceFile("src/main/AndroidManifest.xml"))
         val importFilter = settingsImportViewIntentFilter(manifest)
 
         assertFalse(importFilter.contains("android.intent.category.BROWSABLE"))

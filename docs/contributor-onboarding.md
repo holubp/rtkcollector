@@ -238,6 +238,12 @@ Then build the full debug APK with RTKLIB-EX native code:
 ./gradlew clean assembleDebug
 ```
 
+The checked-in `gradle.properties` gives the Gradle daemon enough heap for the
+large Android/Kotlin compilation, runs Kotlin compilation in that same bounded
+heap and limits worker concurrency. Keep those reliability settings enabled in
+Android Studio. Avoid launching debug assembly, release packaging and all test
+class compilation as one parallel build when a narrower task is sufficient.
+
 Successful output should include `app/build/outputs/apk/debug/app-debug.apk`
 and the native build should produce `librtkcollector_rtklib.so` under the app
 build intermediates. If you want to inspect just the native step, run the app

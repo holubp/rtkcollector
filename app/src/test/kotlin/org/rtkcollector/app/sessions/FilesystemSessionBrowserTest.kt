@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -73,7 +74,7 @@ class FilesystemSessionBrowserTest {
         val offenders = Files.walk(sourceRoot).use { stream ->
             stream
                 .filter { path -> Files.isRegularFile(path) && path.toString().endsWith(".kt") }
-                .filter { path -> Files.readString(path).contains("Path.of(") }
+                .filter { path -> TestFiles.readString(path).contains("Path.of(") }
                 .map { path -> sourceRoot.relativize(path).toString() }
                 .sorted()
                 .toList()
@@ -87,7 +88,7 @@ class FilesystemSessionBrowserTest {
 
     private fun sessionDir(name: String): Path {
         val session = Files.createDirectory(tempDir.resolve(name))
-        Files.writeString(session.resolve("session.json"), "{}\n")
+        TestFiles.writeString(session.resolve("session.json"), "{}\n")
         Files.write(session.resolve("receiver-rx.raw"), byteArrayOf(1))
         return session
     }

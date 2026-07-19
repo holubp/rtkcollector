@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.rtkcollector.app.testing.TestFiles
 import org.rtkcollector.core.rtklib.RtklibPostprocessBackend
 import org.rtkcollector.core.rtklib.RtklibPostprocessMode
 import org.rtkcollector.core.rtklib.RtklibPostprocessRequest
@@ -87,8 +88,8 @@ class RtklibSessionPostprocessorTest {
     @Test
     fun `postprocess replaces final artifact pair only after both outputs are valid`() {
         val session = ubloxRtklibSession()
-        Files.writeString(session.resolve("rtklib-postprocessed-forward.nmea"), "old nmea\n")
-        Files.writeString(session.resolve("rtklib-postprocessed-forward.pos"), "old pos\n")
+        TestFiles.writeString(session.resolve("rtklib-postprocessed-forward.nmea"), "old nmea\n")
+        TestFiles.writeString(session.resolve("rtklib-postprocessed-forward.pos"), "old pos\n")
 
         val result = RtklibSessionPostprocessor.postprocessFilesystemSession(
             sessionDirectory = session,
@@ -97,14 +98,14 @@ class RtklibSessionPostprocessorTest {
         )
 
         assertFalse(result.success)
-        assertEquals("old nmea\n", Files.readString(session.resolve("rtklib-postprocessed-forward.nmea")))
-        assertEquals("old pos\n", Files.readString(session.resolve("rtklib-postprocessed-forward.pos")))
+        assertEquals("old nmea\n", TestFiles.readString(session.resolve("rtklib-postprocessed-forward.nmea")))
+        assertEquals("old pos\n", TestFiles.readString(session.resolve("rtklib-postprocessed-forward.pos")))
     }
 
     @Test
     fun `postprocess reports malformed session metadata as structured failure`() {
         val session = ubloxRtklibSession()
-        Files.writeString(session.resolve("session.json"), "{")
+        TestFiles.writeString(session.resolve("session.json"), "{")
 
         val result = RtklibSessionPostprocessor.postprocessFilesystemSession(
             sessionDirectory = session,
@@ -118,9 +119,9 @@ class RtklibSessionPostprocessorTest {
 
     private fun ubloxRtklibSession(): Path {
         val session = createTempDirectory("rtklib-postprocess-test")
-        Files.writeString(session.resolve("receiver-rx.raw"), "receiver")
-        Files.writeString(session.resolve("correction-input.rtcm3"), "correction")
-        Files.writeString(
+        TestFiles.writeString(session.resolve("receiver-rx.raw"), "receiver")
+        TestFiles.writeString(session.resolve("correction-input.rtcm3"), "correction")
+        TestFiles.writeString(
             session.resolve("session.json"),
             """
             {
@@ -139,24 +140,24 @@ class RtklibSessionPostprocessorTest {
 
         override fun postprocess(request: RtklibPostprocessRequest): RtklibPostprocessResult {
             requests += request
-            Files.writeString(request.outputNmea, "\$GPGGA,postprocessed\n")
-            Files.writeString(request.outputPos, "postprocessed pos\n")
+            TestFiles.writeString(request.outputNmea, "\$GPGGA,postprocessed\n")
+            TestFiles.writeString(request.outputPos, "postprocessed pos\n")
             return RtklibPostprocessResult.success()
         }
     }
 
     private class ThrowingPostprocessBackend : RtklibPostprocessBackend {
         override fun postprocess(request: RtklibPostprocessRequest): RtklibPostprocessResult {
-            Files.writeString(request.outputNmea, "\$GPGGA,partial\n")
-            Files.writeString(request.outputPos, "partial pos\n")
+            TestFiles.writeString(request.outputNmea, "\$GPGGA,partial\n")
+            TestFiles.writeString(request.outputPos, "partial pos\n")
             error("native failure")
         }
     }
 
     private class EmptyPosPostprocessBackend : RtklibPostprocessBackend {
         override fun postprocess(request: RtklibPostprocessRequest): RtklibPostprocessResult {
-            Files.writeString(request.outputNmea, "\$GPGGA,new\n")
-            Files.writeString(request.outputPos, "")
+            TestFiles.writeString(request.outputNmea, "\$GPGGA,new\n")
+            TestFiles.writeString(request.outputPos, "")
             return RtklibPostprocessResult.success()
         }
     }

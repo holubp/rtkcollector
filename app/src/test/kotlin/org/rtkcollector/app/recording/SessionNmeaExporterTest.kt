@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry
+import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -17,7 +18,7 @@ class SessionNmeaExporterTest {
     @Test
     fun `receiver only share keeps legacy session nmea name`() {
         val session = Files.createDirectory(tempDir.resolve("session-2026-06-14T12-00-00Z-abc"))
-        Files.writeString(session.resolve("receiver-solution.nmea"), "\$GPGGA,data\n")
+        TestFiles.writeString(session.resolve("receiver-solution.nmea"), "\$GPGGA,data\n")
         val cache = Files.createDirectory(tempDir.resolve("cache"))
 
         val selection = SessionNmeaShareSelection.fromSessionDirectories(
@@ -35,7 +36,7 @@ class SessionNmeaExporterTest {
     @Test
     fun `rtklib realtime share uses source suffix`() {
         val session = Files.createDirectory(tempDir.resolve("session-a"))
-        Files.writeString(session.resolve("rtklib-solution.nmea"), "\$GNGGA,rtklib\n")
+        TestFiles.writeString(session.resolve("rtklib-solution.nmea"), "\$GNGGA,rtklib\n")
         val cache = Files.createDirectory(tempDir.resolve("cache"))
 
         val selection = SessionNmeaShareSelection.fromSessionDirectories(
@@ -51,9 +52,9 @@ class SessionNmeaExporterTest {
     @Test
     fun `multiple nmea sources use source suffixes`() {
         val session = Files.createDirectory(tempDir.resolve("session-a"))
-        Files.writeString(session.resolve("receiver-solution.nmea"), "\$GNGGA,receiver\n")
-        Files.writeString(session.resolve("rtklib-solution.nmea"), "\$GNGGA,rtklib\n")
-        Files.writeString(session.resolve("rtklib-postprocessed-forward.nmea"), "\$GNGGA,postforward\n")
+        TestFiles.writeString(session.resolve("receiver-solution.nmea"), "\$GNGGA,receiver\n")
+        TestFiles.writeString(session.resolve("rtklib-solution.nmea"), "\$GNGGA,rtklib\n")
+        TestFiles.writeString(session.resolve("rtklib-postprocessed-forward.nmea"), "\$GNGGA,postforward\n")
         val cache = Files.createDirectory(tempDir.resolve("cache"))
 
         val selection = SessionNmeaShareSelection.fromSessionDirectories(
@@ -74,8 +75,8 @@ class SessionNmeaExporterTest {
     @Test
     fun `empty nmea files are not offered`() {
         val session = Files.createDirectory(tempDir.resolve("session-a"))
-        Files.writeString(session.resolve("receiver-solution.nmea"), "")
-        Files.writeString(session.resolve("rtklib-solution.nmea"), "\$GNGGA,rtklib\n")
+        TestFiles.writeString(session.resolve("receiver-solution.nmea"), "")
+        TestFiles.writeString(session.resolve("rtklib-solution.nmea"), "\$GNGGA,rtklib\n")
         val cache = Files.createDirectory(tempDir.resolve("cache"))
 
         val selection = SessionNmeaShareSelection.fromSessionDirectories(
@@ -104,7 +105,7 @@ class SessionNmeaExporterTest {
     fun `export copies selected nmea bytes without altering source`() {
         val session = Files.createDirectory(tempDir.resolve("session"))
         val source = session.resolve("rtklib-solution.nmea")
-        Files.writeString(source, "\$GPGGA,data\n\$GPRMC,data\n")
+        TestFiles.writeString(source, "\$GPGGA,data\n\$GPRMC,data\n")
         val cache = Files.createDirectory(tempDir.resolve("cache"))
         val plan = SessionNmeaSharePlan(
             source = SessionNmeaSource.RTKLIB_REALTIME,
@@ -114,15 +115,15 @@ class SessionNmeaExporterTest {
 
         val output = SessionNmeaExporter.export(plan)
 
-        assertEquals("\$GPGGA,data\n\$GPRMC,data\n", Files.readString(output))
-        assertEquals("\$GPGGA,data\n\$GPRMC,data\n", Files.readString(source))
+        assertEquals("\$GPGGA,data\n\$GPRMC,data\n", TestFiles.readString(output))
+        assertEquals("\$GPGGA,data\n\$GPRMC,data\n", TestFiles.readString(source))
     }
 
     @Test
     fun `export rejects an active filesystem session at the sharing boundary`() {
         val session = Files.createDirectory(tempDir.resolve("session"))
         val source = session.resolve("receiver-solution.nmea")
-        Files.writeString(source, "\$GPGGA,data\n")
+        TestFiles.writeString(source, "\$GPGGA,data\n")
         val output = tempDir.resolve("cache/session.nmea")
         val plan = SessionNmeaSharePlan(SessionNmeaSource.RECEIVER_SOLUTION, source, output)
 
@@ -152,15 +153,17 @@ class SessionNmeaExporterTest {
     @Test
     fun `multi-plan export removes earlier outputs when a later export fails`() {
         val cache = Files.createDirectory(tempDir.resolve("multi-cache"))
+        val receiverSource = SessionNmeaSource.RECEIVER_SOLUTION
+        val rtklibSource = SessionNmeaSource.RTKLIB_POSTPROCESSED_FORWARD
         val plans = listOf(
             SessionNmeaSharePlan(
-                SessionNmeaSource.RECEIVER_SOLUTION,
-                tempDir.resolve("first-source"),
+                receiverSource,
+                tempDir.resolve(receiverSource.artifactFileName),
                 cache.resolve("first.nmea"),
             ),
             SessionNmeaSharePlan(
-                SessionNmeaSource.RTKLIB_FORWARD,
-                tempDir.resolve("second-source"),
+                rtklibSource,
+                tempDir.resolve(rtklibSource.artifactFileName),
                 cache.resolve("second.nmea"),
             ),
         )
@@ -168,7 +171,7 @@ class SessionNmeaExporterTest {
         assertThrows(IllegalStateException::class.java) {
             SessionNmeaExporter.exportAll(plans, onBeforeExport = {}) { plan ->
                 if (plan === plans.last()) error("second export failed")
-                Files.writeString(plan.outputNmea, "first")
+                TestFiles.writeString(plan.outputNmea, "first")
             }
         }
 

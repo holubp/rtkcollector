@@ -424,11 +424,11 @@ class DashboardStateTest {
             altitude = "707.800 m",
         )
 
-        val candidate = state.baseCoordinateCandidateOrNull()
+        val candidate = requireNotNull(state.baseCoordinateCandidateOrNull())
 
-        assertEquals(752.922, candidate?.ellipsoidalHeightM, 1e-12)
-        assertEquals(707.800, candidate?.mslAltitudeM, 1e-12)
-        assertEquals(45.122, candidate?.geoidSeparationM, 1e-12)
+        assertEquals(752.922, candidate.ellipsoidalHeightM, 1e-12)
+        assertEquals(707.800, requireNotNull(candidate.mslAltitudeM), 1e-12)
+        assertEquals(45.122, requireNotNull(candidate.geoidSeparationM), 1e-12)
     }
 
     @Test
@@ -443,13 +443,13 @@ class DashboardStateTest {
             baseCandidateMslAltitudeM = null,
         )
 
-        val candidate = state.baseCoordinateCandidateOrNull()
+        val candidate = requireNotNull(state.baseCoordinateCandidateOrNull())
 
-        assertEquals("49.4637593130", candidate?.coordinates?.lat)
-        assertEquals("15.4512544790", candidate?.coordinates?.lon)
-        assertEquals(752.922, candidate?.ellipsoidalHeightM, 1e-12)
-        assertNull(candidate?.mslAltitudeM)
-        assertNull(candidate?.geoidSeparationM)
+        assertEquals("49.4637593130", candidate.coordinates.lat)
+        assertEquals("15.4512544790", candidate.coordinates.lon)
+        assertEquals(752.922, candidate.ellipsoidalHeightM, 1e-12)
+        assertNull(candidate.mslAltitudeM)
+        assertNull(candidate.geoidSeparationM)
     }
 
     @Test
@@ -478,12 +478,12 @@ class DashboardStateTest {
             baseAverageSampleCount = 12,
         )
 
-        val candidate = state.serviceCoordinateAveragingState().averageBaseCandidateOrNull()
+        val candidate = requireNotNull(state.serviceCoordinateAveragingState().averageBaseCandidateOrNull())
 
-        assertEquals(752.922, candidate?.ellipsoidalHeightM, 1e-12)
-        assertEquals(707.800, candidate?.mslAltitudeM, 1e-12)
-        assertEquals(45.122, candidate?.geoidSeparationM, 1e-12)
-        assertEquals("AVERAGE", candidate?.source)
+        assertEquals(752.922, candidate.ellipsoidalHeightM, 1e-12)
+        assertEquals(707.800, requireNotNull(candidate.mslAltitudeM), 1e-12)
+        assertEquals(45.122, requireNotNull(candidate.geoidSeparationM), 1e-12)
+        assertEquals("AVERAGE", candidate.source)
     }
 
     @Test

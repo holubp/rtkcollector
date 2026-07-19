@@ -295,7 +295,7 @@ class ProfileListModelsTest {
 
     @Test
     fun `profile editor actions are non destructive by default`() {
-        val action = ProfileEditorAction("Refresh") {}
+        val action = ProfileEditorAction(label = "Refresh", onClick = {})
 
         assertFalse(action.destructive)
     }

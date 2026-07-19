@@ -80,14 +80,14 @@ class SharedPreferencesTransactionsTest {
             return commitResults.removeFirst()
         }
     }
-
-    private fun StoredPreferenceValue.rawValue(): Any =
-        when (this) {
-            is StoredPreferenceValue.StringValue -> value
-            is StoredPreferenceValue.StringSetValue -> value.toSet()
-            is StoredPreferenceValue.IntValue -> value
-            is StoredPreferenceValue.LongValue -> value
-            is StoredPreferenceValue.FloatValue -> value
-            is StoredPreferenceValue.BooleanValue -> value
-        }
 }
+
+private fun StoredPreferenceValue.rawValue(): Any =
+    when (this) {
+        is StoredPreferenceValue.StringValue -> value
+        is StoredPreferenceValue.StringSetValue -> value.toSet()
+        is StoredPreferenceValue.IntValue -> value
+        is StoredPreferenceValue.LongValue -> value
+        is StoredPreferenceValue.FloatValue -> value
+        is StoredPreferenceValue.BooleanValue -> value
+    }

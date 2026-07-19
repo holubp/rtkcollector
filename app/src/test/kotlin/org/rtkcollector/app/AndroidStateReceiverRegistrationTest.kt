@@ -4,13 +4,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.rtkcollector.app.testing.TestFiles
 import java.nio.file.Files
 import java.nio.file.Path
 
 class AndroidStateReceiverRegistrationTest {
     @Test
     fun `legacy activity keeps both private receivers non-exported on every supported api`() {
-        val source = Files.readString(sourceFile("src/main/kotlin/org/rtkcollector/app/MainActivity.kt"))
+        val source = TestFiles.readString(sourceFile("src/main/kotlin/org/rtkcollector/app/MainActivity.kt"))
         val registration = source.substringAfter("private fun registerReceivers()")
             .substringBefore("private fun rebuildListener()")
 
@@ -24,6 +25,6 @@ class AndroidStateReceiverRegistrationTest {
     private fun sourceFile(relative: String): Path {
         val candidates = listOf(Path.of(relative), Path.of("app").resolve(relative))
         return candidates.firstOrNull(Files::exists)
-            ?: error("Cannot locate source file $relative from ${Path.of(\"\").toAbsolutePath()}")
+            ?: error("Cannot locate source file $relative from ${Path.of("").toAbsolutePath()}")
     }
 }

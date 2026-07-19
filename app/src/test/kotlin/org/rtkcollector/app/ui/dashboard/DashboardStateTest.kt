@@ -5,8 +5,236 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.rtkcollector.app.profile.StorageProfile
+import org.rtkcollector.app.profile.StorageProfileOverride
 
 class DashboardStateTest {
+    @Test
+    fun `setup selectors default to expanded`() {
+        assertTrue(DefaultDashboardSetupExpanded)
+    }
+
+    @Test
+    fun `setup fold preference persists without changing the default`() {
+        val store = FakeDashboardUiPreferenceStore()
+        val preferences = DashboardUiPreferences(store)
+
+        assertTrue(preferences.setupExpanded())
+        preferences.saveSetupExpanded(false)
+
+        assertFalse(DashboardUiPreferences(store).setupExpanded())
+    }
+
+    @Test
+    fun `forced expansion does not overwrite a remembered collapsed preference`() {
+        val store = FakeDashboardUiPreferenceStore()
+        val preferences = DashboardUiPreferences(store)
+        preferences.saveSetupExpanded(false)
+        val invalidStatus = validDashboardStatus().copy(
+            mountpointRequired = true,
+            mountpoint = "n/a",
+        )
+
+        assertTrue(effectiveDashboardSetupExpanded(preferences.setupExpanded(), invalidStatus))
+        assertFalse(DashboardUiPreferences(store).setupExpanded())
+        assertFalse(effectiveDashboardSetupExpanded(preferences.setupExpanded(), validDashboardStatus()))
+    }
+
+    @Test
+    fun `collapsed setup stays collapsed when configuration is valid`() {
+        val status = DashboardStatus(
+            settingsSet = "UM980 rover",
+            workflow = "Plain rover",
+            mountpoint = "n/a",
+            initProfile = "UM980 rover binary",
+            upload = "Off",
+            uploadAvailable = false,
+            storage = "App-private storage",
+        )
+
+        assertFalse(status.requiresSetupAttention())
+        assertFalse(effectiveDashboardSetupExpanded(preferredExpanded = false, status = status))
+    }
+
+    @Test
+    fun `required missing NTRIP mountpoint forces setup expansion`() {
+        val status = DashboardStatus(
+            settingsSet = "UM980 rover with NTRIP",
+            workflow = "Rover with NTRIP",
+            mountpoint = "n/a",
+            mountpointRequired = true,
+            initProfile = "UM980 rover binary",
+            upload = "Off",
+            uploadAvailable = false,
+            storage = "App-private storage",
+        )
+
+        assertEquals(
+            "Required NTRIP configuration is incomplete",
+            status.setupWarningReason(DashboardSetupItem.MOUNTPOINT),
+        )
+        assertTrue(status.requiresSetupAttention())
+        assertTrue(effectiveDashboardSetupExpanded(preferredExpanded = false, status = status))
+    }
+
+    @Test
+    fun `missing mountpoint is valid when workflow does not use NTRIP`() {
+        val status = DashboardStatus(
+            settingsSet = "UM980 plain rover",
+            workflow = "Plain rover",
+            mountpoint = "n/a",
+            mountpointRequired = false,
+            initProfile = "UM980 rover binary",
+            upload = "Off",
+            uploadAvailable = false,
+            storage = "App-private storage",
+        )
+
+        assertNull(status.setupWarningReason(DashboardSetupItem.MOUNTPOINT))
+        assertFalse(status.requiresSetupAttention())
+    }
+
+    @Test
+    fun `enabled unresolved base upload forces setup expansion`() {
+        val status = DashboardStatus(
+            settingsSet = "UM980 fixed base",
+            workflow = "Fixed base",
+            mountpoint = "n/a",
+            initProfile = "UM980 fixed base RTCM",
+            upload = "Off",
+            uploadAvailable = true,
+            uploadEnabled = true,
+            uploadConfigurationResolved = false,
+            storage = "App-private storage",
+        )
+
+        assertEquals(
+            "Enabled NTRIP upload configuration is incomplete",
+            status.setupWarningReason(DashboardSetupItem.UPLOAD),
+        )
+        assertTrue(status.requiresSetupAttention())
+        assertTrue(effectiveDashboardSetupExpanded(preferredExpanded = false, status = status))
+    }
+
+    @Test
+    fun `explicit upload off does not force setup expansion`() {
+        val status = DashboardStatus(
+            settingsSet = "UM980 fixed base",
+            workflow = "Fixed base",
+            mountpoint = "n/a",
+            initProfile = "UM980 fixed base RTCM",
+            upload = "Off",
+            uploadAvailable = true,
+            uploadEnabled = false,
+            uploadConfigurationResolved = false,
+            storage = "App-private storage",
+        )
+
+        assertNull(status.setupWarningReason(DashboardSetupItem.UPLOAD))
+        assertFalse(status.requiresSetupAttention())
+    }
+
+    @Test
+    fun `enabled upload outside a base workflow forces expansion and remains selectable`() {
+        val status = validDashboardStatus().copy(
+            upload = "Private caster",
+            uploadAvailable = false,
+            uploadEnabled = true,
+        )
+
+        assertEquals(
+            "NTRIP upload is enabled outside a base workflow",
+            status.setupWarningReason(DashboardSetupItem.UPLOAD),
+        )
+        assertTrue(status.isSetupItemEnabled(DashboardSetupItem.UPLOAD))
+        assertTrue(effectiveDashboardSetupExpanded(preferredExpanded = false, status = status))
+    }
+
+    @Test
+    fun `storage configuration requires a selected SAF folder`() {
+        val appPrivate = StorageProfile(id = "private", name = "Private")
+        val selectedSaf = StorageProfile(
+            id = "saf",
+            name = "Selected folder",
+            kind = "SAF_TREE",
+            treeUri = "content://tree/selected",
+        )
+        val pendingSaf = StorageProfile(
+            id = "pending",
+            name = "Select folder",
+            kind = "SAF_TREE",
+            requiresTreeReselection = true,
+        )
+
+        assertTrue(dashboardStorageConfigurationResolved(appPrivate, override = null))
+        assertTrue(dashboardStorageConfigurationResolved(selectedSaf, override = null))
+        assertFalse(dashboardStorageConfigurationResolved(pendingSaf, override = null))
+        assertFalse(
+            dashboardStorageConfigurationResolved(
+                appPrivate,
+                StorageProfileOverride(kind = "SAF_TREE", requiresTreeReselection = true),
+            ),
+        )
+        assertTrue(
+            dashboardStorageConfigurationResolved(
+                pendingSaf,
+                StorageProfileOverride(kind = "APP_PRIVATE"),
+            ),
+        )
+    }
+
+    @Test
+    fun `missing core setup values and device mismatches require attention`() {
+        val valid = DashboardStatus(
+            settingsSet = "UM980 plain rover",
+            workflow = "Plain rover",
+            mountpoint = "n/a",
+            initProfile = "UM980 rover binary",
+            upload = "Off",
+            uploadAvailable = false,
+            storage = "App-private storage",
+        )
+
+        assertEquals(
+            "Settings set is missing",
+            valid.copy(settingsSet = "n/a").setupWarningReason(DashboardSetupItem.SETTINGS),
+        )
+        assertEquals(
+            "Workflow is missing",
+            valid.copy(workflow = "Select workflow").setupWarningReason(DashboardSetupItem.WORKFLOW),
+        )
+        assertEquals(
+            "Init/shutdown profile is missing",
+            valid.copy(initProfile = "n/a").setupWarningReason(DashboardSetupItem.INIT_PROFILES),
+        )
+        assertEquals(
+            "Storage profile is missing",
+            valid.copy(storage = "n/a").setupWarningReason(DashboardSetupItem.STORAGE),
+        )
+        assertEquals(
+            "Settings set is unavailable",
+            valid.copy(settingsSetResolved = false).setupWarningReason(DashboardSetupItem.SETTINGS),
+        )
+        assertEquals(
+            "Workflow is unavailable",
+            valid.copy(workflowResolved = false).setupWarningReason(DashboardSetupItem.WORKFLOW),
+        )
+        assertEquals(
+            "Init/shutdown profile is unavailable",
+            valid.copy(initProfileResolved = false).setupWarningReason(DashboardSetupItem.INIT_PROFILES),
+        )
+        assertEquals(
+            "Storage profile is unavailable",
+            valid.copy(storageProfileResolved = false).setupWarningReason(DashboardSetupItem.STORAGE),
+        )
+        assertEquals(
+            "Storage configuration is incomplete",
+            valid.copy(storageConfigurationResolved = false).setupWarningReason(DashboardSetupItem.STORAGE),
+        )
+        assertTrue(valid.copy(settingsSetOutsideDeviceFilter = true).requiresSetupAttention())
+        assertTrue(valid.copy(initProfileOutsideDeviceFilter = true).requiresSetupAttention())
+    }
+
     @Test
     fun `dashboard setup items include explicit mountpoint selector and retain existing items`() {
         assertEquals(
@@ -24,6 +252,16 @@ class DashboardStateTest {
         assertEquals("Mountpoint", DashboardSetupItem.MOUNTPOINT.label)
         assertEquals("Profiles", DashboardSetupItem.INIT_PROFILES.label)
     }
+
+    private fun validDashboardStatus(): DashboardStatus = DashboardStatus(
+        settingsSet = "UM980 plain rover",
+        workflow = "Plain rover",
+        mountpoint = "n/a",
+        initProfile = "UM980 rover binary",
+        upload = "Off",
+        uploadAvailable = false,
+        storage = "App-private storage",
+    )
 
     @Test
     fun `planned session shows start as primary action`() {
@@ -537,5 +775,16 @@ class DashboardStateTest {
         )
 
         assertEquals(null, state.errorClipboardText())
+    }
+}
+
+private class FakeDashboardUiPreferenceStore : DashboardUiPreferenceStore {
+    private val values = mutableMapOf<String, Boolean>()
+
+    override fun getBoolean(key: String, defaultValue: Boolean): Boolean =
+        values[key] ?: defaultValue
+
+    override fun putBoolean(key: String, value: Boolean) {
+        values[key] = value
     }
 }

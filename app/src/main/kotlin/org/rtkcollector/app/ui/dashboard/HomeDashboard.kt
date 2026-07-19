@@ -33,6 +33,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -93,8 +94,10 @@ fun HomeDashboard(
     layoutPreference: DashboardLayoutPreference = DashboardLayoutPreference.default,
     distanceUnitPreference: DashboardDistanceUnitPreference = DashboardDistanceUnitPreference.default,
     satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference = SatelliteMonitorCardThemePreference.default,
+    setupExpandedPreference: Boolean = DefaultDashboardSetupExpanded,
     startInProgress: Boolean = false,
     recordingReliabilityWarning: String? = null,
+    onSetupExpandedPreferenceChange: (Boolean) -> Unit = {},
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
     onNtrip: () -> Unit,
@@ -132,6 +135,13 @@ fun HomeDashboard(
     var errorFirstSeenAtMillis by remember { mutableStateOf(0L) }
     var errorNowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     val currentErrorFingerprint = errorSnapshot.fingerprint
+    val setupNeedsAttention = state.status.requiresSetupAttention()
+    val setupExpanded = effectiveDashboardSetupExpanded(setupExpandedPreference, state.status)
+    val toggleSetupExpanded = {
+        if (!setupNeedsAttention) {
+            onSetupExpandedPreferenceChange(!setupExpandedPreference)
+        }
+    }
 
     LaunchedEffect(currentErrorFingerprint) {
         displayedErrorFingerprint = currentErrorFingerprint
@@ -207,6 +217,9 @@ fun HomeDashboard(
                         status = state.status,
                         distanceUnitPreference = distanceUnitPreference,
                         satelliteMonitorThemePreference = satelliteMonitorThemePreference,
+                        setupExpanded = setupExpanded,
+                        setupNeedsAttention = setupNeedsAttention,
+                        onToggleSetupExpanded = toggleSetupExpanded,
                         onWorkflow = onWorkflow,
                         onSettingsSet = onSettingsSet,
                         onDevice = onDevice,
@@ -231,6 +244,9 @@ fun HomeDashboard(
                         status = state.status,
                         distanceUnitPreference = distanceUnitPreference,
                         satelliteMonitorThemePreference = satelliteMonitorThemePreference,
+                        setupExpanded = setupExpanded,
+                        setupNeedsAttention = setupNeedsAttention,
+                        onToggleSetupExpanded = toggleSetupExpanded,
                         availableWidthDp = maxWidth.value.toInt(),
                         availableHeightDp = maxHeight.value.toInt(),
                         onWorkflow = onWorkflow,
@@ -420,6 +436,9 @@ private fun CompactDashboard(
     status: DashboardStatus,
     distanceUnitPreference: DashboardDistanceUnitPreference,
     satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference,
+    setupExpanded: Boolean,
+    setupNeedsAttention: Boolean,
+    onToggleSetupExpanded: () -> Unit,
     availableWidthDp: Int,
     availableHeightDp: Int,
     onWorkflow: () -> Unit,
@@ -449,6 +468,9 @@ private fun CompactDashboard(
     ) {
         SetupStrip(
             status = status,
+            expanded = setupExpanded,
+            needsAttention = setupNeedsAttention,
+            onToggleExpanded = onToggleSetupExpanded,
             onSettingsSet = onSettingsSet,
             onWorkflow = onWorkflow,
             onDevice = onDevice,
@@ -486,6 +508,9 @@ private fun RailDashboard(
     status: DashboardStatus,
     distanceUnitPreference: DashboardDistanceUnitPreference,
     satelliteMonitorThemePreference: SatelliteMonitorCardThemePreference,
+    setupExpanded: Boolean,
+    setupNeedsAttention: Boolean,
+    onToggleSetupExpanded: () -> Unit,
     onWorkflow: () -> Unit,
     onSettingsSet: () -> Unit,
     onDevice: () -> Unit,
@@ -521,11 +546,10 @@ private fun RailDashboard(
                 modifier = Modifier.padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "Setup",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
+                SetupSectionHeader(
+                    expanded = setupExpanded,
+                    needsAttention = setupNeedsAttention,
+                    onToggle = onToggleSetupExpanded,
                 )
                 Text(
                     text = dashboardContextLine(status),
@@ -534,25 +558,27 @@ private fun RailDashboard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                defaultDashboardSetupItems.forEach { item ->
-                    val enabled = item != DashboardSetupItem.UPLOAD || status.uploadAvailable
-                    SetupRailItem(
-                        label = item.label,
-                        value = status.valueFor(item),
-                        active = item == DashboardSetupItem.WORKFLOW,
-                        enabled = enabled,
-                        warning = status.warningFor(item),
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = when (item) {
-                            DashboardSetupItem.WORKFLOW -> onWorkflow
-                            DashboardSetupItem.SETTINGS -> onSettingsSet
-                            DashboardSetupItem.DEVICE -> onDevice
-                            DashboardSetupItem.MOUNTPOINT -> onMountpoint
-                            DashboardSetupItem.INIT_PROFILES -> onInitProfiles
-                            DashboardSetupItem.UPLOAD -> onUpload
-                            DashboardSetupItem.STORAGE -> onStorage
-                        },
-                    )
+                if (setupExpanded) {
+                    defaultDashboardSetupItems.forEach { item ->
+                        val enabled = status.isSetupItemEnabled(item)
+                        SetupRailItem(
+                            label = item.label,
+                            value = status.valueFor(item),
+                            active = item == DashboardSetupItem.WORKFLOW,
+                            enabled = enabled,
+                            warningReason = status.setupWarningReason(item),
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = when (item) {
+                                DashboardSetupItem.WORKFLOW -> onWorkflow
+                                DashboardSetupItem.SETTINGS -> onSettingsSet
+                                DashboardSetupItem.DEVICE -> onDevice
+                                DashboardSetupItem.MOUNTPOINT -> onMountpoint
+                                DashboardSetupItem.INIT_PROFILES -> onInitProfiles
+                                DashboardSetupItem.UPLOAD -> onUpload
+                                DashboardSetupItem.STORAGE -> onStorage
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -642,6 +668,9 @@ private fun ErrorStrip(
 @Composable
 private fun SetupStrip(
     status: DashboardStatus,
+    expanded: Boolean,
+    needsAttention: Boolean,
+    onToggleExpanded: () -> Unit,
     onSettingsSet: () -> Unit,
     onWorkflow: () -> Unit,
     onDevice: () -> Unit,
@@ -650,32 +679,41 @@ private fun SetupStrip(
     onUpload: () -> Unit,
     onStorage: () -> Unit,
 ) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val columns = compactDashboardCardColumnCount(maxWidth.value.toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            defaultDashboardSetupItems.chunked(columns).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    rowItems.forEach { item ->
-                        val enabled = item != DashboardSetupItem.UPLOAD || status.uploadAvailable
-                        SetupTile(
-                            label = item.label,
-                            value = status.valueFor(item),
-                            enabled = enabled,
-                            warning = status.warningFor(item),
-                            modifier = Modifier.weight(1f),
-                            onClick = when (item) {
-                                DashboardSetupItem.SETTINGS -> onSettingsSet
-                                DashboardSetupItem.WORKFLOW -> onWorkflow
-                                DashboardSetupItem.DEVICE -> onDevice
-                                DashboardSetupItem.MOUNTPOINT -> onMountpoint
-                                DashboardSetupItem.INIT_PROFILES -> onInitProfiles
-                                DashboardSetupItem.UPLOAD -> onUpload
-                                DashboardSetupItem.STORAGE -> onStorage
-                            },
-                        )
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SetupSectionHeader(
+            expanded = expanded,
+            needsAttention = needsAttention,
+            onToggle = onToggleExpanded,
+        )
+        if (expanded) {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val columns = compactDashboardCardColumnCount(maxWidth.value.toInt())
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    defaultDashboardSetupItems.chunked(columns).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            rowItems.forEach { item ->
+                                val enabled = status.isSetupItemEnabled(item)
+                                SetupTile(
+                                    label = item.label,
+                                    value = status.valueFor(item),
+                                    enabled = enabled,
+                                    warningReason = status.setupWarningReason(item),
+                                    modifier = Modifier.weight(1f),
+                                    onClick = when (item) {
+                                        DashboardSetupItem.SETTINGS -> onSettingsSet
+                                        DashboardSetupItem.WORKFLOW -> onWorkflow
+                                        DashboardSetupItem.DEVICE -> onDevice
+                                        DashboardSetupItem.MOUNTPOINT -> onMountpoint
+                                        DashboardSetupItem.INIT_PROFILES -> onInitProfiles
+                                        DashboardSetupItem.UPLOAD -> onUpload
+                                        DashboardSetupItem.STORAGE -> onStorage
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -690,16 +728,63 @@ private fun DashboardStatus.valueFor(item: DashboardSetupItem): String =
         DashboardSetupItem.DEVICE -> device
         DashboardSetupItem.MOUNTPOINT -> mountpoint
         DashboardSetupItem.INIT_PROFILES -> initProfile
-        DashboardSetupItem.UPLOAD -> if (uploadAvailable) upload else "Not needed"
+        DashboardSetupItem.UPLOAD -> if (uploadAvailable || uploadEnabled) upload else "Not needed"
         DashboardSetupItem.STORAGE -> storage
     }
 
-private fun DashboardStatus.warningFor(item: DashboardSetupItem): Boolean =
-    when (item) {
-        DashboardSetupItem.SETTINGS -> settingsSetOutsideDeviceFilter
-        DashboardSetupItem.INIT_PROFILES -> initProfileOutsideDeviceFilter
-        else -> false
+@Composable
+private fun SetupSectionHeader(
+    expanded: Boolean,
+    needsAttention: Boolean,
+    onToggle: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Active setup",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (needsAttention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = onToggle,
+                enabled = !needsAttention,
+                modifier = Modifier
+                    .size(36.dp)
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = when {
+                            needsAttention -> "Active setup expanded while configuration needs attention"
+                            expanded -> "Fold Active setup"
+                            else -> "Expand Active setup"
+                        }
+                    },
+            ) {
+                Text(
+                    text = if (expanded) "▴" else "▾",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
+        if (needsAttention) {
+            Text(
+                text = "Needs attention",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
+}
 
 @Composable
 private fun SetupTile(
@@ -707,9 +792,10 @@ private fun SetupTile(
     value: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    warning: Boolean = false,
+    warningReason: String? = null,
     onClick: () -> Unit,
 ) {
+    val warning = warningReason != null
     val missing = value.isMissingDashboardValue()
     val background = when {
         !enabled -> MaterialTheme.colorScheme.surfaceContainerLowest
@@ -734,7 +820,7 @@ private fun SetupTile(
             .semantics {
                 role = Role.Button
                 contentDescription = if (warning) {
-                    "$label: $value; outside active device filter"
+                    "$label: $value; $warningReason"
                 } else {
                     "$label: $value"
                 }
@@ -778,9 +864,10 @@ private fun SetupRailItem(
     active: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    warning: Boolean = false,
+    warningReason: String? = null,
     onClick: () -> Unit,
 ) {
+    val warning = warningReason != null
     val missing = value.isMissingDashboardValue()
     val background = when {
         !enabled -> MaterialTheme.colorScheme.surfaceContainerLowest
@@ -805,7 +892,7 @@ private fun SetupRailItem(
             .semantics {
                 role = Role.Button
                 contentDescription = if (warning) {
-                    "$label: $value; outside active device filter"
+                    "$label: $value; $warningReason"
                 } else {
                     "$label: $value"
                 }
@@ -854,14 +941,6 @@ private fun SetupRailItem(
             }
         }
     }
-}
-
-private fun String.isMissingDashboardValue(): Boolean {
-    val normalized = trim()
-    return normalized.isBlank() ||
-        normalized.equals("n/a", ignoreCase = true) ||
-        normalized.startsWith("Select ", ignoreCase = true) ||
-        normalized.equals("Not selected", ignoreCase = true)
 }
 
 @Composable

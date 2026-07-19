@@ -164,6 +164,7 @@ import org.rtkcollector.app.usb.AndroidUsbSerialTransport
 import org.rtkcollector.app.usb.UsbSerialOpenOptions
 import org.rtkcollector.app.ui.dashboard.DashboardState
 import org.rtkcollector.app.ui.dashboard.DashboardLayoutPreference
+import org.rtkcollector.app.ui.dashboard.DashboardUiPreferences
 import org.rtkcollector.app.ui.dashboard.DashboardDistanceUnitPreference
 import org.rtkcollector.app.ui.dashboard.SatelliteMonitorCardThemePreference
 import org.rtkcollector.app.ui.dashboard.BaseCoordinateCandidate
@@ -180,8 +181,10 @@ import org.rtkcollector.app.ui.dashboard.coordinatePairOrNull
 import org.rtkcollector.app.ui.dashboard.dashboardUploadSelectorRows
 import org.rtkcollector.app.ui.dashboard.UploadSelectorOffProfileId
 import org.rtkcollector.app.ui.dashboard.dashboardStateFromRecordingIntent
+import org.rtkcollector.app.ui.dashboard.dashboardStorageConfigurationResolved
 import org.rtkcollector.app.ui.dashboard.formatBytes
 import org.rtkcollector.app.ui.dashboard.isNtripCasterUploadProfileSelected
+import org.rtkcollector.app.ui.dashboard.isMissingDashboardValue
 import org.rtkcollector.app.ui.dashboard.receiverFrequencyForFamily
 import org.rtkcollector.app.ui.dashboard.serviceCoordinateAveragingState
 import org.rtkcollector.app.ui.console.DeviceConsoleOption
@@ -337,6 +340,7 @@ fun RtkCollectorApp(
     var diagnosticsRevision by remember { mutableStateOf(0) }
     var diagnosticsError by remember { mutableStateOf<String?>(null) }
     val profileStore = remember(context) { ProfileStores(context) }
+    val dashboardUiPreferences = remember(context) { DashboardUiPreferences(context) }
     val baseCoordinateStore = remember(context) { AcceptedBaseCoordinateStore(context) }
     val initialSelectedSettingsSetId = remember(profileStore) { profileStore.selectedSettingsSetId() }
     var settingsSets by remember {
@@ -357,6 +361,9 @@ fun RtkCollectorApp(
     }
     var satelliteMonitorCardTheme by rememberSaveable(stateSaver = SatelliteMonitorCardThemePreferenceSaver) {
         mutableStateOf(SatelliteMonitorCardThemePreference.default)
+    }
+    var dashboardSetupExpanded by remember {
+        mutableStateOf(dashboardUiPreferences.setupExpanded())
     }
     var showDashboardLayoutDialog by remember { mutableStateOf(false) }
     var showMockGpsDialog by remember { mutableStateOf(false) }
@@ -1312,8 +1319,13 @@ fun RtkCollectorApp(
                             layoutPreference = dashboardLayout,
                             distanceUnitPreference = dashboardDistanceUnits,
                             satelliteMonitorThemePreference = satelliteMonitorCardTheme,
+                            setupExpandedPreference = dashboardSetupExpanded,
                             startInProgress = startInProgress,
                             recordingReliabilityWarning = batteryWarning.message.takeIf { batteryWarning.show },
+                            onSetupExpandedPreferenceChange = { expanded ->
+                                dashboardSetupExpanded = expanded
+                                dashboardUiPreferences.saveSetupExpanded(expanded)
+                            },
                             onPrimaryAction = {
                                 if (state.isRecording) {
                                     startInProgress = false
@@ -5996,7 +6008,7 @@ private fun ProfileStores.selectedSettingsSet(): RecordingSettingsSet {
 
 private fun ProfileStores.selectedMountpointLabel(selectedSettingsSetId: String): String {
     val settingsSet = settingsSets().firstOrNull { it.id == selectedSettingsSetId } ?: return "n/a"
-    settingsSet.overrides.ntripMountpoint?.mountpoint?.takeIf { it.isNotBlank() }?.let { return it }
+    settingsSet.overrides.ntripMountpoint?.mountpoint?.let { return it }
     val profile = settingsSet.effectiveNtripMountpointProfileRef()?.id?.let { id ->
         ntripMountpointProfiles().firstOrNull { it.id == id }
     } ?: return "n/a"
@@ -6070,14 +6082,31 @@ private fun ProfileStores.plannedDashboardState(
 ): DashboardState {
     val selected = settingsSets.firstOrNull { it.id == selectedSettingsSetId }
     val deviceFilter = selectedDeviceFilter()
+    val casterProfiles = ntripCasterProfiles()
     val mountpointProfiles = ntripMountpointProfiles()
     val mountpoint = selected.selectedMountpointLabel(mountpointProfiles)
+    val ntripResolution = selected?.resolveNtripProfiles(casterProfiles, mountpointProfiles)
+    val mountpointRequired = selectedWorkflowId?.workflowUsesNtrip() == true
+    val effectiveNtripHost = selected?.overrides?.ntripCaster?.host
+        ?: ntripResolution?.caster?.host.orEmpty()
+    val effectiveNtripPort = selected?.overrides?.ntripCaster?.port
+        ?: ntripResolution?.caster?.port
+        ?: 2101
+    val mountpointConfigurationResolved = !mountpointRequired ||
+        (effectiveNtripHost.isNotBlank() && effectiveNtripPort in 1..65535 && !mountpoint.isMissingDashboardValue())
     val selectedCommandProfile = selected?.effectiveCommandProfileRef()?.id?.let { id ->
         commandProfiles().firstOrNull { it.id == id }
     }
     val recordingPolicyProfile = selected?.effectiveRecordingOutputProfileRef()?.id?.let { id ->
         recordingPolicyProfiles().firstOrNull { it.id == id }
     }
+    val storageProfile = selected?.effectiveStorageProfileRef()?.id?.let { id ->
+        storageProfiles().firstOrNull { it.id == id }
+    }
+    val storageConfigurationResolved = dashboardStorageConfigurationResolved(
+        profile = storageProfile,
+        override = selected?.overrides?.storage,
+    )
     val rtklibProfile = selected?.rtklibProfileRef?.id?.let { id ->
         rtklibProfiles().firstOrNull { it.id == id }
     }
@@ -6085,7 +6114,20 @@ private fun ProfileStores.plannedDashboardState(
     val casterUploadProfile = selected?.effectiveNtripCasterUploadProfileRef()?.id?.let { id ->
         uploadProfiles.firstOrNull { it.id == id }
     }
-    val casterUploadEnabled = selected?.effectiveBaseCasterUploadEnabled() == true && casterUploadProfile != null
+    val casterUploadRequested = selected?.effectiveBaseCasterUploadEnabled() == true
+    val casterUploadEnabled = casterUploadRequested && casterUploadProfile != null
+    val effectiveUploadHost = selected?.overrides?.ntripCasterUpload?.host
+        ?: casterUploadProfile?.host.orEmpty()
+    val effectiveUploadPort = selected?.overrides?.ntripCasterUpload?.port
+        ?: casterUploadProfile?.port
+        ?: 2101
+    val effectiveUploadMountpoint = selected?.overrides?.ntripCasterUpload?.mountpoint
+        ?: casterUploadProfile?.mountpoint.orEmpty()
+    val uploadConfigurationResolved = !casterUploadRequested ||
+        (casterUploadProfile != null &&
+            effectiveUploadHost.isNotBlank() &&
+            effectiveUploadPort in 1..65535 &&
+            effectiveUploadMountpoint.isNotBlank())
     val mockEnabled = selected?.overrides?.recordingOutput?.enableMockLocation
         ?: recordingPolicyProfile?.enableMockLocation
         ?: false
@@ -6099,6 +6141,15 @@ private fun ProfileStores.plannedDashboardState(
         initProfile = selectedReceiverLabel(selectedSettingsSetId),
         upload = selected.selectedUploadLabel(uploadProfiles),
         uploadAvailable = selectedWorkflowId == WORKFLOW_FIXED_BASE || selectedWorkflowId == WORKFLOW_BASE_CALIBRATION,
+        mountpointRequired = mountpointRequired,
+        uploadEnabled = casterUploadRequested,
+        settingsSetResolved = selected != null,
+        workflowResolved = selectedWorkflowId != null && WORKFLOW_MODE_OPTIONS.any { it.value == selectedWorkflowId },
+        mountpointConfigurationResolved = mountpointConfigurationResolved,
+        initProfileResolved = selectedCommandProfile != null,
+        uploadConfigurationResolved = uploadConfigurationResolved,
+        storageProfileResolved = storageProfile != null,
+        storageConfigurationResolved = storageConfigurationResolved,
         settingsSetOutsideDeviceFilter = selected != null && !deviceFilter.matchesSettingsSet(selected),
         initProfileOutsideDeviceFilter = selectedCommandProfile != null && !deviceFilter.matchesCommandProfile(selectedCommandProfile),
         storage = selectedStorageLabel(selectedSettingsSetId),
@@ -6190,7 +6241,7 @@ internal fun RecordingSettingsSet?.selectedMountpointLabel(
     mountpointProfiles: List<NtripMountpointProfile>,
 ): String {
     val settingsSet = this ?: return "n/a"
-    settingsSet.overrides.ntripMountpoint?.mountpoint?.takeIf { it.isNotBlank() }?.let { return it }
+    settingsSet.overrides.ntripMountpoint?.mountpoint?.let { return it }
     val profile = settingsSet.effectiveNtripMountpointProfileRef()?.id?.let { id ->
         mountpointProfiles.firstOrNull { it.id == id }
     } ?: return "n/a"

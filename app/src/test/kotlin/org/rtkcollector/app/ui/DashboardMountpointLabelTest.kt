@@ -263,6 +263,26 @@ class DashboardMountpointLabelTest {
     }
 
     @Test
+    fun `blank local mountpoint override is not masked by a profile value`() {
+        val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripMountpointProfileRef = ProfileReference("mount-tubo", "TUBO"),
+            overrides = SettingsSetOverrides(
+                ntripMountpoint = NtripMountpointOverride(mountpoint = ""),
+            ),
+        )
+        val profiles = listOf(
+            NtripMountpointProfile(
+                id = "mount-tubo",
+                name = "TUBO",
+                casterProfileId = "caster",
+                mountpoint = "TUBO00CZE0",
+            ),
+        )
+
+        assertEquals("", settingsSet.selectedMountpointLabel(profiles))
+    }
+
+    @Test
     fun `missing remembered mountpoint is displayed as missing`() {
         val label = selectedMountpointLabelFromProfileId("missing", emptyList())
 

@@ -97,6 +97,13 @@ with NTRIP, temporary base and fixed base. NTRIP source upload is off by
 default. The Home dashboard `Upload` selector has an explicit `Off` row; choose
 a source-upload profile only for base workflows that should publish RTCM.
 
+The seven Home setup selectors can be folded under `Active setup`. The app
+remembers that choice. It expands the section automatically when the selected
+workflow has an incomplete setup, such as a missing required NTRIP mountpoint
+or storage folder, or an enabled upload that is unavailable for the selected
+workflow. After the issue is fixed, the section returns to the user's
+remembered expanded or folded state.
+
 ## Screenshots To Capture
 
 The user guide and Play listing would benefit from these screenshots:

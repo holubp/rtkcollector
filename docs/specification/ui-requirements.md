@@ -330,6 +330,33 @@ Verification:
 - Review: Settings hub section placement and session action wiring.
 - Manual: open Settings and reach recent sessions from `Active setup`.
 
+### UI-SETUP-008: Dashboard Setup Selectors Are Foldable And Self-Revealing
+
+Status: Normative
+
+The seven dashboard setup selectors MUST be grouped under a foldable `Active
+setup` header in both compact and rail layouts. The default preference for a
+new installation MUST be expanded. A user-triggered expanded or collapsed
+preference MUST be persisted across app recreation and process restart.
+
+The effective section state MUST be expanded whenever the active configuration
+needs attention. This includes a missing settings set, workflow, required NTRIP
+mountpoint, init/shutdown profile or storage profile; SAF storage awaiting
+folder selection; an enabled base-upload configuration whose upload profile is
+unresolved or which is enabled outside a base workflow; and active profiles
+that are incompatible with the selected Device filter. An invalid enabled
+upload MUST remain selectable so the user can turn it off. `Upload: Off` MUST
+remain valid and MUST NOT force expansion when upload is not enabled. Forced
+expansion MUST NOT overwrite the remembered user preference; once all setup
+issues are fixed, the section MUST return to that preference.
+
+Verification:
+- Automated: dashboard setup-attention, effective-expansion and preference
+  default tests.
+- Review: compact and rail layouts share the same effective expansion policy.
+- Manual: collapse, restart, trigger/fix each setup warning and confirm the
+  remembered collapsed preference returns after correction.
+
 ### UI-KEYBOARD-002: Editable One-Line Profile Fields Use Shared Native Editor
 
 Status: Normative

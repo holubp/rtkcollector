@@ -2,6 +2,8 @@ package org.rtkcollector.app.ui.dashboard
 
 import org.rtkcollector.app.profile.NtripCasterUploadProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.StorageProfile
+import org.rtkcollector.app.profile.StorageProfileOverride
 import org.rtkcollector.app.profile.effectiveBaseCasterUploadEnabled
 import org.rtkcollector.app.profile.effectiveNtripCasterUploadProfileRef
 import org.rtkcollector.app.ui.profiles.ProfileListRow
@@ -47,6 +49,15 @@ data class DashboardState(
             initProfile: String,
             upload: String = "Off",
             uploadAvailable: Boolean = true,
+            mountpointRequired: Boolean = false,
+            uploadEnabled: Boolean = false,
+            settingsSetResolved: Boolean = true,
+            workflowResolved: Boolean = true,
+            mountpointConfigurationResolved: Boolean = true,
+            initProfileResolved: Boolean = true,
+            uploadConfigurationResolved: Boolean = true,
+            storageProfileResolved: Boolean = true,
+            storageConfigurationResolved: Boolean = true,
             settingsSetOutsideDeviceFilter: Boolean = false,
             initProfileOutsideDeviceFilter: Boolean = false,
             storage: String,
@@ -74,6 +85,15 @@ data class DashboardState(
                     initProfile = initProfile,
                     upload = upload,
                     uploadAvailable = uploadAvailable,
+                    mountpointRequired = mountpointRequired,
+                    uploadEnabled = uploadEnabled,
+                    settingsSetResolved = settingsSetResolved,
+                    workflowResolved = workflowResolved,
+                    mountpointConfigurationResolved = mountpointConfigurationResolved,
+                    initProfileResolved = initProfileResolved,
+                    uploadConfigurationResolved = uploadConfigurationResolved,
+                    storageProfileResolved = storageProfileResolved,
+                    storageConfigurationResolved = storageConfigurationResolved,
                     settingsSetOutsideDeviceFilter = settingsSetOutsideDeviceFilter,
                     initProfileOutsideDeviceFilter = initProfileOutsideDeviceFilter,
                     storage = storage,
@@ -138,13 +158,6 @@ fun DashboardState.errorClipboardText(): String? {
     return "$errorCategory: $message"
 }
 
-private fun String.isMissingOrBogusMountpoint(): Boolean {
-    val value = trim()
-    return value.isBlank() ||
-        value.equals("n/a", ignoreCase = true) ||
-        value.equals("a", ignoreCase = true)
-}
-
 data class DashboardStatus(
     val settingsSet: String = "n/a",
     val workflow: String = "n/a",
@@ -153,12 +166,22 @@ data class DashboardStatus(
     val initProfile: String = "n/a",
     val upload: String = "Off",
     val uploadAvailable: Boolean = true,
+    val mountpointRequired: Boolean = false,
+    val uploadEnabled: Boolean = false,
+    val settingsSetResolved: Boolean = true,
+    val workflowResolved: Boolean = true,
+    val mountpointConfigurationResolved: Boolean = true,
+    val initProfileResolved: Boolean = true,
+    val uploadConfigurationResolved: Boolean = true,
+    val storageProfileResolved: Boolean = true,
+    val storageConfigurationResolved: Boolean = true,
     val settingsSetOutsideDeviceFilter: Boolean = false,
     val initProfileOutsideDeviceFilter: Boolean = false,
     val storage: String = "n/a",
 )
 
 internal const val CompactDashboardTwoColumnMinWidthDp = 340
+internal const val DefaultDashboardSetupExpanded = true
 internal const val UploadSelectorOffProfileId = "__rtkcollector_upload_off__"
 internal const val DefaultUm980ReceiverFrequency =
     "Frequency BESTNAV/GGA/PPPNAV/ADRNAV/RTKSTATUS/OBSVM -/-/-/-/-/- Hz"
@@ -205,6 +228,79 @@ internal val defaultDashboardSetupItems: List<DashboardSetupItem> = listOf(
     DashboardSetupItem.UPLOAD,
     DashboardSetupItem.STORAGE,
 )
+
+internal fun effectiveDashboardSetupExpanded(
+    preferredExpanded: Boolean,
+    status: DashboardStatus,
+): Boolean = preferredExpanded || status.requiresSetupAttention()
+
+internal fun DashboardStatus.requiresSetupAttention(): Boolean =
+    defaultDashboardSetupItems.any { setupWarningReason(it) != null }
+
+internal fun DashboardStatus.isSetupItemEnabled(item: DashboardSetupItem): Boolean =
+    item != DashboardSetupItem.UPLOAD || uploadAvailable || uploadEnabled
+
+internal fun DashboardStatus.setupWarningReason(item: DashboardSetupItem): String? =
+    when (item) {
+        DashboardSetupItem.DEVICE -> null
+        DashboardSetupItem.SETTINGS -> when {
+            !settingsSetResolved -> "Settings set is unavailable"
+            settingsSetOutsideDeviceFilter -> "Settings set is outside active Device filter"
+            settingsSet.isMissingDashboardValue() -> "Settings set is missing"
+            else -> null
+        }
+        DashboardSetupItem.WORKFLOW -> when {
+            !workflowResolved -> "Workflow is unavailable"
+            workflow.isMissingDashboardValue() -> "Workflow is missing"
+            else -> null
+        }
+        DashboardSetupItem.MOUNTPOINT ->
+            "Required NTRIP configuration is incomplete".takeIf {
+                mountpointRequired &&
+                    (mountpoint.isMissingMountpointValue() || !mountpointConfigurationResolved)
+            }
+        DashboardSetupItem.INIT_PROFILES -> when {
+            !initProfileResolved -> "Init/shutdown profile is unavailable"
+            initProfileOutsideDeviceFilter -> "Init/shutdown profile is outside active Device filter"
+            initProfile.isMissingDashboardValue() -> "Init/shutdown profile is missing"
+            else -> null
+        }
+        DashboardSetupItem.UPLOAD ->
+            when {
+                uploadEnabled && !uploadAvailable -> "NTRIP upload is enabled outside a base workflow"
+                uploadEnabled && !uploadConfigurationResolved -> "Enabled NTRIP upload configuration is incomplete"
+                else -> null
+            }
+        DashboardSetupItem.STORAGE -> when {
+            !storageProfileResolved -> "Storage profile is unavailable"
+            !storageConfigurationResolved -> "Storage configuration is incomplete"
+            storage.isMissingDashboardValue() -> "Storage profile is missing"
+            else -> null
+        }
+    }
+
+internal fun String.isMissingDashboardValue(): Boolean {
+    val normalized = trim()
+    return normalized.isBlank() ||
+        normalized.equals("n/a", ignoreCase = true) ||
+        normalized.startsWith("Select ", ignoreCase = true) ||
+        normalized.equals("Not selected", ignoreCase = true)
+}
+
+private fun String.isMissingMountpointValue(): Boolean =
+    isMissingDashboardValue() || trim().equals("a", ignoreCase = true)
+
+internal fun dashboardStorageConfigurationResolved(
+    profile: StorageProfile?,
+    override: StorageProfileOverride?,
+): Boolean {
+    if (profile == null) return false
+    val kind = override?.kind ?: profile.kind
+    val treeUri = override?.treeUri ?: profile.treeUri
+    val requiresTreeReselection = override?.requiresTreeReselection == true ||
+        (override == null && profile.requiresTreeReselection)
+    return !requiresTreeReselection && (kind != "SAF_TREE" || !treeUri.isNullOrBlank())
+}
 
 internal fun dashboardUploadSelectorRows(
     profiles: List<NtripCasterUploadProfile>,

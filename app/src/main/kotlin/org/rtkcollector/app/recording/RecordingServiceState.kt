@@ -26,6 +26,12 @@ enum class RecordingErrorSeverity {
     FATAL,
 }
 
+internal data class RecordingErrorSnapshot(
+    val message: String?,
+    val category: RecordingErrorCategory,
+    val severity: RecordingErrorSeverity,
+)
+
 data class RecordingServiceState(
     val running: Boolean = false,
     val lifecycle: RecordingLifecycleState = RecordingLifecycleState.IDLE,
@@ -285,3 +291,32 @@ internal fun RecordingServiceState.clearRecoverableUsbError(): RecordingServiceS
     } else {
         this
     }
+
+internal fun RecordingServiceState.recordingErrorSnapshot(): RecordingErrorSnapshot =
+    RecordingErrorSnapshot(
+        message = lastError,
+        category = errorCategory,
+        severity = errorSeverity,
+    )
+
+internal fun RecordingServiceState.restoreErrorAfterCompletedFinalization(
+    beforeWait: RecordingErrorSnapshot,
+): RecordingServiceState =
+    if (
+        lifecycle == RecordingLifecycleState.STOPPING &&
+        errorCategory == RecordingErrorCategory.SERVICE_LIFECYCLE &&
+        errorSeverity == RecordingErrorSeverity.DEGRADED &&
+        lastError?.startsWith(WRITER_FINALIZATION_WAIT_PREFIX) == true &&
+        lastError.endsWith(WRITER_FINALIZATION_WAIT_SUFFIX)
+    ) {
+        copy(
+            lastError = beforeWait.message,
+            errorCategory = beforeWait.category,
+            errorSeverity = beforeWait.severity,
+        )
+    } else {
+        this
+    }
+
+private const val WRITER_FINALIZATION_WAIT_PREFIX = "Stopping: waiting for "
+private const val WRITER_FINALIZATION_WAIT_SUFFIX = " to release session writers."

@@ -2094,13 +2094,14 @@ class RecordingForegroundService : Service() {
                 if (!casterUploadStopped) add("caster upload")
                 if (!advisoryStopped) add("advisory processing")
             }.joinToString(" and ")
+            val errorBeforeDeferredFinalization = state.recordingErrorSnapshot()
             state = if (state.errorSeverity == RecordingErrorSeverity.FATAL) {
                 state.copy(lifecycle = RecordingLifecycleState.STOPPING)
             } else {
                 state.copy(
                     lifecycle = RecordingLifecycleState.STOPPING,
                     lastError = "Stopping: waiting for $pendingComponents to release session writers.",
-                    errorCategory = RecordingErrorCategory.PARSER_EXPORT,
+                    errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
                     errorSeverity = RecordingErrorSeverity.DEGRADED,
                 )
             }
@@ -2166,7 +2167,10 @@ class RecordingForegroundService : Service() {
                             )
                         }
                     }
-                    completeRecordingStop(activeCasterUpload?.snapshot())
+                    completeRecordingStop(
+                        casterUploadSnapshot = activeCasterUpload?.snapshot(),
+                        errorBeforeDeferredFinalization = errorBeforeDeferredFinalization,
+                    )
                 },
                 "rtkcollector-stop-finalizer",
             ).apply {
@@ -2279,7 +2283,10 @@ class RecordingForegroundService : Service() {
             false
         }
 
-    private fun completeRecordingStop(casterUploadSnapshot: NtripCasterUploadSnapshot?) {
+    private fun completeRecordingStop(
+        casterUploadSnapshot: NtripCasterUploadSnapshot?,
+        errorBeforeDeferredFinalization: RecordingErrorSnapshot? = null,
+    ) {
         casterUploadSnapshot?.let { snapshot ->
             runCatching {
                 writers?.appendEventJson(
@@ -2365,6 +2372,9 @@ class RecordingForegroundService : Service() {
         mockLocationRequested = false
         mockLocationRateHz = RecordingPolicyProfile.DEFAULT_MOCK_LOCATION_RATE_HZ
         releaseWakeLock()
+        if (errorBeforeDeferredFinalization != null) {
+            state = state.restoreErrorAfterCompletedFinalization(errorBeforeDeferredFinalization)
+        }
         state = state.copy(
             running = false,
             lifecycle = if (state.errorSeverity == RecordingErrorSeverity.FATAL) {

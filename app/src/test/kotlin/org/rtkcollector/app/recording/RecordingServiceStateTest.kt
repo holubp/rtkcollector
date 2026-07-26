@@ -9,6 +9,55 @@ import org.rtkcollector.core.solution.SolutionEngine
 
 class RecordingServiceStateTest {
     @Test
+    fun `completed deferred finalization clears its temporary wait status`() {
+        val beforeWait = RecordingServiceState().recordingErrorSnapshot()
+        val completed = RecordingServiceState(
+            lifecycle = RecordingLifecycleState.STOPPING,
+            lastError = "Stopping: waiting for NTRIP correction intake to release session writers.",
+            errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+            errorSeverity = RecordingErrorSeverity.DEGRADED,
+        ).restoreErrorAfterCompletedFinalization(beforeWait)
+
+        assertNull(completed.lastError)
+        assertEquals(RecordingErrorCategory.NONE, completed.errorCategory)
+        assertEquals(RecordingErrorSeverity.NONE, completed.errorSeverity)
+    }
+
+    @Test
+    fun `completed deferred finalization restores the error present before waiting`() {
+        val beforeWait = RecordingServiceState(
+            lastError = "NTRIP stream ended unexpectedly.",
+            errorCategory = RecordingErrorCategory.NTRIP,
+            errorSeverity = RecordingErrorSeverity.DEGRADED,
+        ).recordingErrorSnapshot()
+        val completed = RecordingServiceState(
+            lifecycle = RecordingLifecycleState.STOPPING,
+            lastError = "Stopping: waiting for NTRIP correction intake to release session writers.",
+            errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+            errorSeverity = RecordingErrorSeverity.DEGRADED,
+        ).restoreErrorAfterCompletedFinalization(beforeWait)
+
+        assertEquals("NTRIP stream ended unexpectedly.", completed.lastError)
+        assertEquals(RecordingErrorCategory.NTRIP, completed.errorCategory)
+        assertEquals(RecordingErrorSeverity.DEGRADED, completed.errorSeverity)
+    }
+
+    @Test
+    fun `completed deferred finalization does not overwrite a writer close failure`() {
+        val beforeWait = RecordingServiceState().recordingErrorSnapshot()
+        val failed = RecordingServiceState(
+            lifecycle = RecordingLifecycleState.STOPPING,
+            lastError = "Could not close receiver-rx.raw.",
+            errorCategory = RecordingErrorCategory.STORAGE,
+            errorSeverity = RecordingErrorSeverity.FATAL,
+        ).restoreErrorAfterCompletedFinalization(beforeWait)
+
+        assertEquals("Could not close receiver-rx.raw.", failed.lastError)
+        assertEquals(RecordingErrorCategory.STORAGE, failed.errorCategory)
+        assertEquals(RecordingErrorSeverity.FATAL, failed.errorSeverity)
+    }
+
+    @Test
     fun `clearBestSolutionFields removes stale position and best-solution display state`() {
         val cleared = RecordingServiceState(
             latDeg = 50.0,

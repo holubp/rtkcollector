@@ -5,7 +5,7 @@ It must be reviewed before every Play release.
 
 ## Current Intended Release Status
 
-The current source candidate is `1.0-RC1`. Its GitHub source release may be
+The current source candidate is `1.0-RC2`. Its GitHub source release may be
 published before APK/AAB artifacts are attached. It is not ready for Play upload
 until the signed release build and manual checks below have passed.
 

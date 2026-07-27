@@ -257,10 +257,13 @@ class NtripClient(
     private val cancelled = AtomicBoolean(false)
     @Volatile
     private var activeSocket: NtripSocket? = null
+    @Volatile
+    private var reconnectDelayThread: Thread? = null
 
     fun cancel() {
         cancelled.set(true)
         runCatching { activeSocket?.close() }
+        reconnectDelayThread?.interrupt()
     }
 
     fun connectOnce(
@@ -371,7 +374,7 @@ class NtripClient(
                             ),
                         )
                         try {
-                            delay(reconnectPolicy.delayMillis)
+                            waitBeforeReconnect(reconnectPolicy.delayMillis)
                         } catch (exception: InterruptedException) {
                             Thread.currentThread().interrupt()
                             onState(CorrectionStatus(NtripConnectionState.STOPPED))
@@ -391,7 +394,7 @@ class NtripClient(
                     if (attemptIndex < reconnectPolicy.maxAttempts - 1) {
                         onState(CorrectionStatus(NtripConnectionState.RECONNECT_WAIT, lastError = result.failure.message))
                         try {
-                            delay(reconnectPolicy.delayMillis)
+                            waitBeforeReconnect(reconnectPolicy.delayMillis)
                         } catch (exception: InterruptedException) {
                             Thread.currentThread().interrupt()
                             onState(CorrectionStatus(NtripConnectionState.STOPPED))
@@ -410,6 +413,20 @@ class NtripClient(
                 message = "NTRIP client stopped without attempting a connection",
             ),
         )
+    }
+
+    private fun waitBeforeReconnect(delayMillis: Long) {
+        val currentThread = Thread.currentThread()
+        reconnectDelayThread = currentThread
+        try {
+            if (!cancelled.get()) {
+                delay(delayMillis)
+            }
+        } finally {
+            if (reconnectDelayThread === currentThread) {
+                reconnectDelayThread = null
+            }
+        }
     }
 
     private fun writeRequestAndGga(output: OutputStream, activeRequest: NtripRequest, ggaLines: Iterable<String>) {

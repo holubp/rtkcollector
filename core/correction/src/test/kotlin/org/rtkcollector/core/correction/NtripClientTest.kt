@@ -436,7 +436,6 @@ class NtripClientTest {
         thread.start()
         assertTrue(delayStarted.await(2, TimeUnit.SECONDS))
         client.cancel()
-        thread.interrupt()
         thread.join(2_000)
 
         assertFalse(thread.isAlive)

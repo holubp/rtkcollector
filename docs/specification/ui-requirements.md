@@ -247,16 +247,21 @@ Verification:
 Status: Normative
 
 The dashboard setup strip MUST expose Device, Settings, Workflow, Mountpoint,
-Profiles, Upload and Storage selectors, with Device first because it filters
-compatible profile choices. `Profiles` selects the active init/shutdown profile.
-`Mountpoint` MUST provide direct access to NTRIP correction-download selection
-before recording starts. The Upload selector MUST list an explicit `Off` row
-first and MUST apply `Off` as a real disabled state for NTRIP source upload.
-Selecting or disabling source upload from this strip MUST NOT silently rewrite
-unrelated settings-set profile fields.
+Profiles, Upload, Storage and Sessions actions, in that order. The first seven
+are active-configuration selectors. Sessions is a navigation shortcut to the
+existing Recent sessions and sharing screen and MUST NOT participate in setup
+validation. `Profiles` selects the active init/shutdown profile. `Mountpoint`
+MUST provide direct access to NTRIP correction-download selection before
+recording starts. The Upload selector MUST list an explicit `Off` row first and
+MUST apply `Off` as a real disabled state for NTRIP source upload. Selecting or
+disabling source upload from this strip MUST NOT silently rewrite unrelated
+settings-set profile fields.
 
 Verification:
-- Automated: dashboard mountpoint/upload selector and dashboard layout tests.
+- Automated: dashboard mountpoint/upload selector, dashboard layout and session
+  action tests.
+- Review: compact two-column layout ends with `Storage | Sessions`; existing
+  session-browser protections remain authoritative.
 - Manual: dashboard selector review with no upload profile and with a configured
   upload profile.
 
@@ -336,19 +341,21 @@ Verification:
 
 Status: Normative
 
-The seven dashboard setup selectors MUST be grouped under a foldable `Active
-setup` header in both compact and rail layouts. The default preference for a
-new installation MUST be expanded. A user-triggered expanded or collapsed
-preference MUST be persisted across app recreation and process restart.
+The seven dashboard setup selectors and the Sessions shortcut MUST be grouped
+under a foldable `Active setup` header in both compact and rail layouts. All
+eight actions MUST fold together. The default preference for a new installation
+MUST be expanded. A user-triggered expanded or collapsed preference MUST be
+persisted across app recreation and process restart.
 
-The effective section state MUST be expanded whenever the active configuration
-needs attention. This includes a missing settings set, workflow, required NTRIP
-mountpoint, init/shutdown profile or storage profile; SAF storage awaiting
-folder selection; an enabled base-upload configuration whose upload profile is
-unresolved or which is enabled outside a base workflow; and active profiles
-that are incompatible with the selected Device filter. An invalid enabled
-upload MUST remain selectable so the user can turn it off. `Upload: Off` MUST
-remain valid and MUST NOT force expansion when upload is not enabled. Forced
+Automatic expansion MUST remain driven only by the existing active-configuration
+errors. The effective section state MUST be expanded whenever the active
+configuration needs attention. This includes a missing settings set, workflow,
+required NTRIP mountpoint, init/shutdown profile or storage profile; SAF storage
+awaiting folder selection; an enabled base-upload configuration whose upload
+profile is unresolved or which is enabled outside a base workflow; and active
+profiles that are incompatible with the selected Device filter. An invalid
+enabled upload MUST remain selectable so the user can turn it off. `Upload: Off`
+MUST remain valid and MUST NOT force expansion when upload is not enabled. Forced
 expansion MUST NOT overwrite the remembered user preference; once all setup
 issues are fixed, the section MUST return to that preference.
 

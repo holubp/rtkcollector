@@ -109,6 +109,7 @@ fun HomeDashboard(
     onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
+    onSessions: () -> Unit,
     coordinateAveraging: CoordinateAveragingState = CoordinateAveragingState(),
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit = { _, _ -> },
     onStopCoordinateAveraging: () -> Unit = {},
@@ -227,6 +228,7 @@ fun HomeDashboard(
                         onInitProfiles = onInitProfiles,
                         onUpload = onUpload,
                         onStorage = onStorage,
+                        onSessions = onSessions,
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
@@ -256,6 +258,7 @@ fun HomeDashboard(
                         onInitProfiles = onInitProfiles,
                         onUpload = onUpload,
                         onStorage = onStorage,
+                        onSessions = onSessions,
                         onHelp = { helpTopic = it },
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
@@ -448,6 +451,7 @@ private fun CompactDashboard(
     onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
+    onSessions: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
@@ -478,6 +482,7 @@ private fun CompactDashboard(
             onInitProfiles = onInitProfiles,
             onUpload = onUpload,
             onStorage = onStorage,
+            onSessions = onSessions,
         )
         DashboardAlerts(
             displayedError = displayedError,
@@ -518,6 +523,7 @@ private fun RailDashboard(
     onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
+    onSessions: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
@@ -576,6 +582,7 @@ private fun RailDashboard(
                                 DashboardSetupItem.INIT_PROFILES -> onInitProfiles
                                 DashboardSetupItem.UPLOAD -> onUpload
                                 DashboardSetupItem.STORAGE -> onStorage
+                                DashboardSetupItem.SESSIONS -> onSessions
                             },
                         )
                     }
@@ -678,6 +685,7 @@ private fun SetupStrip(
     onInitProfiles: () -> Unit,
     onUpload: () -> Unit,
     onStorage: () -> Unit,
+    onSessions: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SetupSectionHeader(
@@ -710,6 +718,7 @@ private fun SetupStrip(
                                         DashboardSetupItem.INIT_PROFILES -> onInitProfiles
                                         DashboardSetupItem.UPLOAD -> onUpload
                                         DashboardSetupItem.STORAGE -> onStorage
+                                        DashboardSetupItem.SESSIONS -> onSessions
                                     },
                                 )
                             }
@@ -730,6 +739,7 @@ private fun DashboardStatus.valueFor(item: DashboardSetupItem): String =
         DashboardSetupItem.INIT_PROFILES -> initProfile
         DashboardSetupItem.UPLOAD -> if (uploadAvailable || uploadEnabled) upload else "Not needed"
         DashboardSetupItem.STORAGE -> storage
+        DashboardSetupItem.SESSIONS -> "Recent & share"
     }
 
 @Composable
@@ -2023,6 +2033,7 @@ private fun HomeDashboardPortraitPreview() {
             onInitProfiles = {},
             onUpload = {},
             onStorage = {},
+            onSessions = {},
         )
     }
 }
@@ -2044,6 +2055,7 @@ private fun HomeDashboardReadyMissingPreview() {
             onInitProfiles = {},
             onUpload = {},
             onStorage = {},
+            onSessions = {},
         )
     }
 }
@@ -2065,6 +2077,7 @@ private fun HomeDashboardLandscapePreview() {
             onInitProfiles = {},
             onUpload = {},
             onStorage = {},
+            onSessions = {},
         )
     }
 }
@@ -2087,6 +2100,7 @@ private fun HomeDashboardRailPreview() {
             onInitProfiles = {},
             onUpload = {},
             onStorage = {},
+            onSessions = {},
         )
     }
 }
@@ -2109,6 +2123,7 @@ private fun HomeDashboardSatelliteDarkPreview() {
             onInitProfiles = {},
             onUpload = {},
             onStorage = {},
+            onSessions = {},
         )
     }
 }

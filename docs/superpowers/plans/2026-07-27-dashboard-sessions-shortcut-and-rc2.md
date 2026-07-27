@@ -156,10 +156,14 @@ class SessionBrowserNavigationTest {
 Run sequentially:
 
 ```bash
+sh gradlew :app:compileDebugKotlin --no-parallel
+PYTHONPATH=tools python3 -c \
+  'from pathlib import Path; from check_android_test_compilation import seed_termux_unit_test_r_jar; seed_termux_unit_test_r_jar(Path.cwd())'
 sh gradlew :app:termuxTestDebugUnitTest \
   --tests org.rtkcollector.app.ui.dashboard.DashboardStateTest \
   --tests org.rtkcollector.app.ui.dashboard.DashboardLayoutModelsTest \
   --tests org.rtkcollector.app.ui.SessionBrowserNavigationTest \
+  -x :app:processDebugResources \
   --no-parallel
 ```
 
@@ -233,12 +237,15 @@ sources compile.
 Run:
 
 ```bash
+sh gradlew :app:compileDebugKotlin --no-parallel
+PYTHONPATH=tools python3 -c \
+  'from pathlib import Path; from check_android_test_compilation import seed_termux_unit_test_r_jar; seed_termux_unit_test_r_jar(Path.cwd())'
 sh gradlew :app:termuxTestDebugUnitTest \
   --tests org.rtkcollector.app.ui.dashboard.DashboardStateTest \
   --tests org.rtkcollector.app.ui.dashboard.DashboardLayoutModelsTest \
   --tests org.rtkcollector.app.ui.SessionBrowserNavigationTest \
+  -x :app:processDebugResources \
   --no-parallel
-sh gradlew :app:compileDebugKotlin --no-parallel
 ```
 
 Expected: all targeted tests and production Kotlin compilation pass.
@@ -451,8 +458,12 @@ Run:
 
 ```bash
 sh gradlew :core:correction:test --no-parallel
-sh gradlew :app:termuxTestDebugUnitTest --no-parallel
 sh gradlew :app:compileDebugKotlin --no-parallel
+PYTHONPATH=tools python3 -c \
+  'from pathlib import Path; from check_android_test_compilation import seed_termux_unit_test_r_jar; seed_termux_unit_test_r_jar(Path.cwd())'
+sh gradlew :app:termuxTestDebugUnitTest \
+  -x :app:processDebugResources \
+  --no-parallel
 ```
 
 Expected: all commands pass.
@@ -529,4 +540,3 @@ gh release view v1.0-RC2 \
 ```
 
 Expected: tag/name are RC2, `isPrerelease` is true, and `assets` is empty.
-

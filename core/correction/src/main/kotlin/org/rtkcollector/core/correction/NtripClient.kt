@@ -28,6 +28,7 @@ data class NtripRequest(
     val credentials: NtripCredentials? = null,
     val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
+    val transportSecurity: NtripTransportSecurity = NtripTransportSecurity(),
 ) {
     init {
         require(host.isNotBlank()) { "NTRIP host must not be blank" }
@@ -90,6 +91,7 @@ data class NtripSourcetableRequest(
     val credentials: NtripCredentials? = null,
     val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
+    val transportSecurity: NtripTransportSecurity = NtripTransportSecurity(),
 ) {
     init {
         require(host.isNotBlank()) { "NTRIP host must not be blank" }
@@ -145,7 +147,7 @@ class NtripSourcetableClient(
     private val connector: NtripSocketConnector = JavaNtripSocketConnector(),
 ) {
     fun fetch(): NtripSourcetableResult {
-        val socket = connector.connect(request.host, request.port)
+        val socket = connector.connect(request.host, request.port, request.transportSecurity)
         return socket.use {
             socket.output.write(request.render().toByteArray(Charsets.US_ASCII))
             socket.output.flush()
@@ -191,6 +193,9 @@ private fun requireNoCrLf(label: String, value: String) {
 
 interface NtripSocketConnector {
     fun connect(host: String, port: Int): NtripSocket
+
+    fun connect(host: String, port: Int, security: NtripTransportSecurity): NtripSocket =
+        connect(host, port)
 }
 
 class JavaNtripSocketConnector : NtripSocketConnector {
@@ -292,7 +297,7 @@ class NtripClient(
         }
         onState(CorrectionStatus(NtripConnectionState.CONNECTING))
         val socket = try {
-            connector.connect(activeRequest.host, activeRequest.port)
+            connector.connect(activeRequest.host, activeRequest.port, activeRequest.transportSecurity)
         } catch (exception: Exception) {
             return failure(
                 kind = NtripFailureKind.CONNECT_FAILED,

@@ -12,6 +12,7 @@ data class NtripCasterUploadRequest(
     val credentials: NtripCredentials?,
     val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
+    val transportSecurity: NtripTransportSecurity = NtripTransportSecurity(),
 ) {
     init {
         require(host.isNotBlank()) { "NTRIP caster upload host must not be blank" }
@@ -145,7 +146,7 @@ class NtripCasterUploadClient(
             return stoppedFailure()
         }
         onState(NtripConnectionState.CONNECTING)
-        val socket = runCatching { connector.connect(request.host, request.port) }
+        val socket = runCatching { connector.connect(request.host, request.port, request.transportSecurity) }
             .getOrElse {
                 return NtripCasterUploadResult.Failure(
                     NtripCasterUploadFailure(
@@ -172,7 +173,7 @@ class NtripCasterUploadClient(
             }
             socket.output.write(renderedRequest.toByteArray(Charsets.US_ASCII))
             socket.output.flush()
-            val response = socket.input.readHeaderText()
+            val response = socket.input.readResponseStatusLine()
             classifyResponse(response)?.let { failure ->
                 return NtripCasterUploadResult.Failure(failure)
             }
@@ -232,29 +233,41 @@ class NtripCasterUploadClient(
                 state = NtripConnectionState.AUTHENTICATING,
             )
         }
-        val firstLine = response.lineSequence().firstOrNull().orEmpty()
         val accepted = if (request.protocolVersion == NtripProtocolVersion.NTRIP_V1) {
-            firstLine.startsWith("ICY 200", ignoreCase = true)
+            response.equals("ICY 200 OK", ignoreCase = true)
         } else {
-            firstLine.startsWith("ICY 200", ignoreCase = true) ||
-                firstLine.startsWith("HTTP/1.1 200", ignoreCase = true) ||
-                firstLine.startsWith("HTTP/1.0 200", ignoreCase = true)
+            HTTP_200_STATUS.matches(response)
         }
         if (accepted) {
             return null
         }
         val kind = when {
-            firstLine.contains("401") ||
-                firstLine.contains("bad password", ignoreCase = true) ||
-                firstLine.contains("unauthorized", ignoreCase = true) -> NtripCasterUploadFailureKind.AUTHENTICATION_FAILED
-            firstLine.contains("403") -> NtripCasterUploadFailureKind.AUTHORIZATION_FAILED
+            response.contains("401") ||
+                response.contains("bad password", ignoreCase = true) ||
+                response.contains("unauthorized", ignoreCase = true) -> NtripCasterUploadFailureKind.AUTHENTICATION_FAILED
+            response.contains("403") -> NtripCasterUploadFailureKind.AUTHORIZATION_FAILED
             else -> NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE
         }
         return NtripCasterUploadFailure(
             kind = kind,
-            message = "NTRIP caster upload rejected source upload request: $firstLine",
+            message = "NTRIP caster upload rejected source upload request: ${redactResponseLine(response)}",
             state = NtripConnectionState.AUTHENTICATING,
         )
+    }
+
+    private fun redactResponseLine(response: String): String {
+        val secrets = request.credentials?.let { credentials ->
+            listOf(
+                credentials.password,
+                credentials.username,
+                uploadBasicAuthToken(credentials),
+            )
+        }.orEmpty()
+            .filter(String::isNotBlank)
+            .sortedByDescending(String::length)
+        return secrets.fold(response.take(MAX_RESPONSE_MESSAGE_CHARACTERS)) { redacted, secret ->
+            redacted.replace(secret, REDACTED_VALUE)
+        }
     }
 
     private fun stoppedFailure(): NtripCasterUploadResult.Failure =
@@ -265,6 +278,12 @@ class NtripCasterUploadClient(
                 state = NtripConnectionState.STOPPED,
             ),
         )
+
+    private companion object {
+        val HTTP_200_STATUS = Regex("""HTTP/1\.[01] 200(?:\s+.+)?""", RegexOption.IGNORE_CASE)
+        const val MAX_RESPONSE_MESSAGE_CHARACTERS = 512
+        const val REDACTED_VALUE = "[redacted]"
+    }
 }
 
 private class CountingOutputStream(
@@ -301,22 +320,13 @@ private class ChunkedTransferOutputStream(
     }
 }
 
-private fun java.io.InputStream.readHeaderText(maxBytes: Int = 16 * 1024): String {
+private fun java.io.InputStream.readResponseStatusLine(maxBytes: Int = 4 * 1024): String {
     val output = java.io.ByteArrayOutputStream()
     while (output.size() < maxBytes) {
         val next = read()
         if (next < 0) break
-        output.write(next)
-        val bytes = output.toByteArray()
-        if (
-            bytes.size >= 4 &&
-            bytes[bytes.size - 4] == '\r'.code.toByte() &&
-            bytes[bytes.size - 3] == '\n'.code.toByte() &&
-            bytes[bytes.size - 2] == '\r'.code.toByte() &&
-            bytes[bytes.size - 1] == '\n'.code.toByte()
-        ) {
-            break
-        }
+        if (next == '\n'.code) break
+        if (next != '\r'.code) output.write(next)
     }
     return output.toString(Charsets.ISO_8859_1.name())
 }

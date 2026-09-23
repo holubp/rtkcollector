@@ -6,7 +6,6 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.security.KeyStore
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SNIHostName
@@ -14,10 +13,8 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManager
-import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 import java.security.SecureRandom
-import java.security.cert.CertificateFactory
 
 data class NtripCredentials(
     val username: String,
@@ -32,20 +29,17 @@ enum class NtripProtocolVersion {
 const val DEFAULT_NTRIP_USER_AGENT: String = "NTRIP RtkCollector/1.0-RC1"
 
 data class NtripRequest(
-    val host: String,
-    val port: Int,
+    val policy: NtripEndpointSecurityPolicy,
     val mountpoint: String,
     val credentials: NtripCredentials? = null,
     val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
-    val transportSecurity: NtripTransportSecurity = NtripTransportSecurity(),
 ) {
+    val host: String get() = policy.endpoint.host
+    val port: Int get() = policy.endpoint.port
     init {
-        require(host.isNotBlank()) { "NTRIP host must not be blank" }
-        require(port in 1..65535) { "NTRIP port must be between 1 and 65535" }
         require(mountpoint.isNotBlank()) { "NTRIP mountpoint must not be blank" }
         require(userAgent.isNotBlank()) { "NTRIP user agent must not be blank" }
-        requireNoCrLf("host", host)
         requireNoCrLf("mountpoint", mountpoint)
         requireNoCrLf("userAgent", userAgent)
     }
@@ -59,7 +53,7 @@ data class NtripRequest(
                     NtripProtocolVersion.NTRIP_V1 -> "GET /$path HTTP/1.0"
                 },
             )
-            add("Host: $host:$port")
+            add("Host: ${policy.endpoint.hostHeader}")
             add("User-Agent: $userAgent")
             add(
                 when (protocolVersion) {
@@ -96,18 +90,15 @@ data class NtripRedactedMetadata(
 )
 
 data class NtripSourcetableRequest(
-    val host: String,
-    val port: Int,
+    val policy: NtripEndpointSecurityPolicy,
     val credentials: NtripCredentials? = null,
     val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
-    val transportSecurity: NtripTransportSecurity = NtripTransportSecurity(),
 ) {
+    val host: String get() = policy.endpoint.host
+    val port: Int get() = policy.endpoint.port
     init {
-        require(host.isNotBlank()) { "NTRIP host must not be blank" }
-        require(port in 1..65535) { "NTRIP port must be between 1 and 65535" }
         require(userAgent.isNotBlank()) { "NTRIP user agent must not be blank" }
-        requireNoCrLf("host", host)
         requireNoCrLf("userAgent", userAgent)
     }
 
@@ -119,7 +110,7 @@ data class NtripSourcetableRequest(
                     NtripProtocolVersion.NTRIP_V1 -> "GET / HTTP/1.0"
                 },
             )
-            add("Host: $host:$port")
+            add("Host: ${policy.endpoint.hostHeader}")
             add("User-Agent: $userAgent")
             add(
                 when (protocolVersion) {
@@ -157,7 +148,7 @@ class NtripSourcetableClient(
     private val connector: NtripSocketConnector = JavaNtripSocketConnector(),
 ) {
     fun fetch(): NtripSourcetableResult {
-        val socket = connector.connect(request.host, request.port, request.transportSecurity)
+        val socket = connector.connect(request.policy)
         return socket.use {
             socket.output.write(request.render().toByteArray(Charsets.US_ASCII))
             socket.output.flush()
@@ -202,14 +193,11 @@ private fun requireNoCrLf(label: String, value: String) {
 }
 
 interface NtripSocketConnector {
-    fun connect(host: String, port: Int): NtripSocket
-
-    fun connect(host: String, port: Int, security: NtripTransportSecurity): NtripSocket =
-        connect(host, port)
+    fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket
 }
 
 class JavaNtripSocketConnector : NtripSocketConnector {
-    override fun connect(host: String, port: Int): NtripSocket {
+    private fun connectPlaintext(host: String, port: Int): NtripSocket {
         val socket = Socket().apply {
             connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
             soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
@@ -224,22 +212,24 @@ class JavaNtripSocketConnector : NtripSocketConnector {
         }
     }
 
-    override fun connect(host: String, port: Int, security: NtripTransportSecurity): NtripSocket {
-        if (security.mode == NtripTransportMode.PLAINTEXT) {
-            return connect(host, port)
+    override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket {
+        val host = policy.endpoint.host
+        val port = policy.endpoint.port
+        if (policy.transport == NtripTransportMode.PLAINTEXT) {
+            return connectPlaintext(host, port)
         }
         val rawSocket = Socket().apply {
             connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
             soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
         }
         try {
-            val socket = (socketFactory(security).createSocket(rawSocket, host, port, true) as SSLSocket).apply {
+            val socket = (socketFactory(policy).createSocket(rawSocket, host, port, true) as SSLSocket).apply {
                 soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
                 sslParameters = sslParameters.apply {
-                    if (security.verification != NtripTlsVerification.UnsafeAccepted) {
+                    if (policy.verification != NtripTlsVerification.Unsafe) {
                         endpointIdentificationAlgorithm = "HTTPS"
                     }
-                    runCatching { serverNames = listOf(SNIHostName(host)) }
+                    policy.endpoint.sniName?.let { serverNames = listOf(SNIHostName(it)) }
                 }
                 startHandshake()
             }
@@ -257,23 +247,9 @@ class JavaNtripSocketConnector : NtripSocketConnector {
         }
     }
 
-    private fun socketFactory(security: NtripTransportSecurity): SSLSocketFactory = when (val verification = security.verification) {
+    private fun socketFactory(policy: NtripEndpointSecurityPolicy): SSLSocketFactory = when (policy.verification) {
         NtripTlsVerification.SystemTrust -> SSLSocketFactory.getDefault() as SSLSocketFactory
-        is NtripTlsVerification.CustomCa -> {
-            val certificate = CertificateFactory.getInstance("X.509")
-                .generateCertificate(verification.certificateDer.inputStream())
-            val keyStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
-                load(null)
-                setCertificateEntry("ntrip-custom-ca", certificate)
-            }
-            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
-                init(keyStore)
-            }
-            SSLContext.getInstance("TLS").apply {
-                init(null, trustManagerFactory.trustManagers, null)
-            }.socketFactory
-        }
-        NtripTlsVerification.UnsafeAccepted -> SSLContext.getInstance("TLS").apply {
+        NtripTlsVerification.Unsafe -> SSLContext.getInstance("TLS").apply {
             init(null, arrayOf<TrustManager>(UnsafeTrustManager), SecureRandom())
         }.socketFactory
     }
@@ -367,7 +343,7 @@ class NtripClient(
         }
         onState(CorrectionStatus(NtripConnectionState.CONNECTING))
         val socket = try {
-            connector.connect(activeRequest.host, activeRequest.port, activeRequest.transportSecurity)
+            connector.connect(activeRequest.policy)
         } catch (exception: Exception) {
             return failure(
                 kind = NtripFailureKind.CONNECT_FAILED,

@@ -169,7 +169,7 @@ class NtripClientTest {
     @Test
     fun `request rejects crlf in rendered host mountpoint and user agent fields`() {
         assertThrows(IllegalArgumentException::class.java) {
-            defaultRequest().copy(host = "caster.example\r\nX-Bad: yes")
+            NtripEndpoint.parse("caster.example\r\nX-Bad: yes", 2101)
         }
         assertThrows(IllegalArgumentException::class.java) {
             defaultRequest().copy(mountpoint = "MOUNT\r\nX-Bad: yes")
@@ -463,7 +463,7 @@ class NtripClientTest {
     }
 
     private class FakeNtripSocketConnector(private val socket: NtripSocket) : NtripSocketConnector {
-        override fun connect(host: String, port: Int): NtripSocket = socket
+        override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = socket
     }
 
     private class BlockingNtripSocket : NtripSocket {
@@ -505,6 +505,6 @@ class NtripClientTest {
     private class QueueingNtripSocketConnector(vararg sockets: FakeNtripSocket) : NtripSocketConnector {
         private val sockets = ArrayDeque(sockets.toList())
 
-        override fun connect(host: String, port: Int): NtripSocket = sockets.removeFirst()
+        override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = sockets.removeFirst()
     }
 }

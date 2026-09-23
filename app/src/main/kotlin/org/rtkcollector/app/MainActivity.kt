@@ -36,6 +36,7 @@ import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.usb.UsbDeviceSummary
 import org.rtkcollector.core.correction.NtripCredentials
+import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSourcetableClient
 import org.rtkcollector.core.correction.NtripSourcetableRequest
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
@@ -677,8 +678,7 @@ class MainActivity : Activity() {
                 runCatching {
                     NtripSourcetableClient(
                         NtripSourcetableRequest(
-                            host = host,
-                            port = port,
+                            policy = NtripEndpointSecurityPolicy.systemTrust(host, port),
                             credentials = credentials,
                         ),
                     ).fetch()

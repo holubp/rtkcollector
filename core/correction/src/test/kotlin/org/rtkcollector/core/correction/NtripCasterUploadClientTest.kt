@@ -106,7 +106,7 @@ class NtripCasterUploadClientTest {
     @Test
     fun `request rejects crlf in rendered fields`() {
         assertThrows(IllegalArgumentException::class.java) {
-            defaultRequest().copy(host = "caster.example\r\nBad: yes")
+            defaultRequest(host = "caster.example\r\nBad: yes")
         }
         assertThrows(IllegalArgumentException::class.java) {
             defaultRequest().copy(mountpoint = "BASE\r\nBad: yes")
@@ -194,7 +194,9 @@ class NtripCasterUploadClientTest {
                     host = "127.0.0.1",
                     port = caster.port,
                     protocolVersion = NtripProtocolVersion.NTRIP_V1,
-                    transportSecurity = NtripTransportSecurity(NtripTransportMode.PLAINTEXT),
+                    policy = NtripEndpointSecurityPolicy(NtripEndpoint.parse("127.0.0.1", caster.port),
+                        NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust,
+                        allowInsecure = true, unsafeAcknowledged = false),
                 ),
             )
 
@@ -363,7 +365,7 @@ class NtripCasterUploadClientTest {
         val client = NtripCasterUploadClient(
             defaultRequest(),
             object : NtripSocketConnector {
-                override fun connect(host: String, port: Int): NtripSocket = error("network down")
+                override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = error("network down")
             },
         )
 
@@ -404,20 +406,18 @@ class NtripCasterUploadClientTest {
         credentials: NtripCredentials = NtripCredentials(username = "uploader", password = "password"),
         userAgent: String = "RtkCollectorTest/1",
         protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
-        transportSecurity: NtripTransportSecurity = NtripTransportSecurity(),
+        policy: NtripEndpointSecurityPolicy = NtripEndpointSecurityPolicy.systemTrust(host, port),
     ): NtripCasterUploadRequest =
         NtripCasterUploadRequest(
-            host = host,
-            port = port,
+            policy = policy,
             mountpoint = mountpoint,
             credentials = credentials,
             userAgent = userAgent,
             protocolVersion = protocolVersion,
-            transportSecurity = transportSecurity,
         )
 
     private class FakeUploadConnector(private val socket: NtripSocket) : NtripSocketConnector {
-        override fun connect(host: String, port: Int): NtripSocket = socket
+        override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = socket
     }
 
     private open class FakeUploadSocket(inputBytes: ByteArray) : NtripSocket {

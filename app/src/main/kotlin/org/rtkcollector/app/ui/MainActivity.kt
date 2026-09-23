@@ -221,6 +221,7 @@ import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.core.correction.NtripCredentials
+import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSourcetableClient
 import org.rtkcollector.core.correction.NtripSourcetableRequest
 import org.rtkcollector.core.rtklib.RtklibNativeBridge
@@ -3337,8 +3338,7 @@ private fun refreshNtripCasterMountpoints(
             runCatching {
                 NtripSourcetableClient(
                     NtripSourcetableRequest(
-                        host = host,
-                        port = port,
+                        policy = NtripEndpointSecurityPolicy.systemTrust(host, port),
                         credentials = credentials,
                     ),
                 ).fetch()

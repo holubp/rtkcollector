@@ -63,6 +63,7 @@ import org.rtkcollector.core.correction.NtripCasterUploadRuntimeConfig
 import org.rtkcollector.core.correction.NtripCasterUploadSafetyPolicy
 import org.rtkcollector.core.correction.NtripCasterUploadSnapshot
 import org.rtkcollector.core.correction.NtripCredentials
+import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripProtocolVersion
 import org.rtkcollector.core.correction.NtripReconnectPolicy
 import org.rtkcollector.core.correction.NtripRequest
@@ -1543,14 +1544,28 @@ class RecordingForegroundService : Service() {
             broadcastState()
             return null
         }
-        val request = NtripRequest(
-            host = host,
-            port = validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
-            mountpoint = mountpoint,
-            credentials = intent.getStringExtra(EXTRA_NTRIP_USERNAME)?.takeIf { it.isNotBlank() }?.let { username ->
-                NtripCredentials(username = username, password = intent.getStringExtra(EXTRA_NTRIP_PASSWORD).orEmpty())
-            },
-        )
+        val request = runCatching {
+            NtripRequest(
+                policy = NtripEndpointSecurityPolicy.systemTrust(
+                    host,
+                    validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
+                ),
+                mountpoint = mountpoint,
+                credentials = intent.getStringExtra(EXTRA_NTRIP_USERNAME)?.takeIf { it.isNotBlank() }?.let { username ->
+                    NtripCredentials(username = username, password = intent.getStringExtra(EXTRA_NTRIP_PASSWORD).orEmpty())
+                },
+            )
+        }.getOrElse {
+            state = state.copy(
+                ntripState = "CONFIG_ERROR",
+                correctionsActive = false,
+                lastError = "NTRIP endpoint is invalid: ${it.message ?: it.javaClass.simpleName}",
+                errorCategory = RecordingErrorCategory.NTRIP,
+                errorSeverity = RecordingErrorSeverity.DEGRADED,
+            )
+            broadcastState()
+            return null
+        }
         return NtripRuntimeConfig(
             request = request,
             ggaLines = listOfNotNull(intent.getStringExtra(EXTRA_NTRIP_GGA)?.takeIf { it.isNotBlank() }),
@@ -1631,8 +1646,10 @@ class RecordingForegroundService : Service() {
         )
         val uploadRequest = runCatching {
             NtripCasterUploadRequest(
-                host = host,
-                port = validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
+                policy = NtripEndpointSecurityPolicy.systemTrust(
+                    host,
+                    validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
+                ),
                 mountpoint = mountpoint,
                 credentials = credentials,
                 protocolVersion = uploadProtocolVersion(

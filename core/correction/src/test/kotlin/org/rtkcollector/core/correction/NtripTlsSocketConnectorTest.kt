@@ -21,9 +21,7 @@ class NtripTlsSocketConnectorTest {
 
             assertThrows(Exception::class.java) {
                 JavaNtripSocketConnector().connect(
-                    host = "127.0.0.1",
-                    port = server.localPort,
-                    security = NtripTransportSecurity(),
+                    NtripEndpointSecurityPolicy.systemTrust("127.0.0.1", server.localPort),
                 )
             }
 

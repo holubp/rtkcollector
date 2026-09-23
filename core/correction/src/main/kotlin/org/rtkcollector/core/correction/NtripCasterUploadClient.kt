@@ -6,20 +6,17 @@ import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class NtripCasterUploadRequest(
-    val host: String,
-    val port: Int,
+    val policy: NtripEndpointSecurityPolicy,
     val mountpoint: String,
     val credentials: NtripCredentials?,
     val userAgent: String = DEFAULT_NTRIP_USER_AGENT,
     val protocolVersion: NtripProtocolVersion = NtripProtocolVersion.NTRIP_V2,
-    val transportSecurity: NtripTransportSecurity = NtripTransportSecurity(),
 ) {
+    val host: String get() = policy.endpoint.host
+    val port: Int get() = policy.endpoint.port
     init {
-        require(host.isNotBlank()) { "NTRIP caster upload host must not be blank" }
-        require(port in 1..65535) { "NTRIP caster upload port must be between 1 and 65535" }
         require(mountpoint.isNotBlank()) { "NTRIP caster upload mountpoint must not be blank" }
         require(userAgent.isNotBlank()) { "NTRIP caster upload user agent must not be blank" }
-        requireNoUploadCrLf("host", host)
         requireNoUploadCrLf("mountpoint", mountpoint)
         requireNoUploadCrLf("userAgent", userAgent)
         credentials?.let {
@@ -51,7 +48,7 @@ data class NtripCasterUploadRequest(
         val path = normalizeSourceUploadMountpoint(mountpoint)
         val lines = buildList {
             add("POST $path HTTP/1.1")
-            add("Host: $host:$port")
+            add("Host: ${policy.endpoint.hostHeader}")
             add("User-Agent: $userAgent")
             add("Ntrip-Version: Ntrip/2.0")
             add("Connection: close")
@@ -146,7 +143,7 @@ class NtripCasterUploadClient(
             return stoppedFailure()
         }
         onState(NtripConnectionState.CONNECTING)
-        val socket = runCatching { connector.connect(request.host, request.port, request.transportSecurity) }
+        val socket = runCatching { connector.connect(request.policy) }
             .getOrElse {
                 return NtripCasterUploadResult.Failure(
                     NtripCasterUploadFailure(

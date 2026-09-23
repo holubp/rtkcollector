@@ -6,8 +6,18 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.security.KeyStore
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.SNIHostName
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManager
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
+import java.security.SecureRandom
+import java.security.cert.CertificateFactory
 
 data class NtripCredentials(
     val username: String,
@@ -212,6 +222,66 @@ class JavaNtripSocketConnector : NtripSocketConnector {
                 socket.close()
             }
         }
+    }
+
+    override fun connect(host: String, port: Int, security: NtripTransportSecurity): NtripSocket {
+        if (security.mode == NtripTransportMode.PLAINTEXT) {
+            return connect(host, port)
+        }
+        val rawSocket = Socket().apply {
+            connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
+            soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
+        }
+        try {
+            val socket = (socketFactory(security).createSocket(rawSocket, host, port, true) as SSLSocket).apply {
+                soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
+                sslParameters = sslParameters.apply {
+                    if (security.verification != NtripTlsVerification.UnsafeAccepted) {
+                        endpointIdentificationAlgorithm = "HTTPS"
+                    }
+                    runCatching { serverNames = listOf(SNIHostName(host)) }
+                }
+                startHandshake()
+            }
+            return object : NtripSocket {
+                override val input: InputStream = socket.inputStream
+                override val output: OutputStream = socket.outputStream
+
+                override fun close() {
+                    socket.close()
+                }
+            }
+        } catch (exception: Exception) {
+            rawSocket.close()
+            throw exception
+        }
+    }
+
+    private fun socketFactory(security: NtripTransportSecurity): SSLSocketFactory = when (val verification = security.verification) {
+        NtripTlsVerification.SystemTrust -> SSLSocketFactory.getDefault() as SSLSocketFactory
+        is NtripTlsVerification.CustomCa -> {
+            val certificate = CertificateFactory.getInstance("X.509")
+                .generateCertificate(verification.certificateDer.inputStream())
+            val keyStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+                load(null)
+                setCertificateEntry("ntrip-custom-ca", certificate)
+            }
+            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
+                init(keyStore)
+            }
+            SSLContext.getInstance("TLS").apply {
+                init(null, trustManagerFactory.trustManagers, null)
+            }.socketFactory
+        }
+        NtripTlsVerification.UnsafeAccepted -> SSLContext.getInstance("TLS").apply {
+            init(null, arrayOf<TrustManager>(UnsafeTrustManager), SecureRandom())
+        }.socketFactory
+    }
+
+    private data object UnsafeTrustManager : X509TrustManager {
+        override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
+        override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
+        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = emptyArray()
     }
 
     private companion object {

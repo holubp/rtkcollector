@@ -64,7 +64,10 @@ jobs:
           mkdir -p release-assets
           ASSET="rtkcollector-${RELEASE_TAG}-sideload-debug.apk"
           cp app/build/outputs/apk/sideload/debug/app-sideload-debug.apk "release-assets/$ASSET"
-          sha256sum "release-assets/$ASSET" | tee "release-assets/$ASSET.sha256"
+          (
+            cd release-assets
+            sha256sum "$ASSET" | tee "$ASSET.sha256"
+          )
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4

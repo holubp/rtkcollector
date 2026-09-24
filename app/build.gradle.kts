@@ -60,6 +60,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0-RC1"
+        buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "true")
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")

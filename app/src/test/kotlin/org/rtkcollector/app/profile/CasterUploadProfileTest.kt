@@ -6,8 +6,42 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.json.JSONObject
+import org.rtkcollector.core.correction.NtripTransportMode
+import org.rtkcollector.core.correction.NtripTlsVerification
 
 class CasterUploadProfileTest {
+    @Test
+    fun `new upload profiles serialize safe TLS selection`() {
+        val profile = NtripCasterUploadProfile(id = "upload", name = "Upload")
+        val json = profile.toJson()
+        assertEquals("TLS", json.getString("transportMode"))
+        assertEquals("SYSTEM_TRUST", json.getString("tlsVerification"))
+        assertFalse(json.getBoolean("unsafeTlsAcknowledged"))
+    }
+
+    @Test
+    fun `legacy upload JSON remains explicit plaintext`() {
+        val profile = NtripCasterUploadProfile.fromJson(JSONObject().put("id", "upload").put("name", "Upload"))
+        assertEquals("PLAINTEXT", profile.toJson().getString("transportMode"))
+    }
+
+    @Test
+    fun `upload security selection round trips and validates in core`() {
+        val profile = NtripCasterUploadProfile(
+            id = "upload", name = "Upload", host = "caster.example",
+            transportMode = NtripTransportMode.TLS,
+            tlsVerification = NtripTlsVerification.Unsafe,
+            unsafeTlsAcknowledged = true,
+        )
+        val restored = NtripCasterUploadProfile.fromJson(profile.toJson())
+        assertEquals(profile, restored)
+        assertFailsWith<IllegalArgumentException> { restored.toCore(allowInsecure = false) }
+        assertEquals(NtripTlsVerification.Unsafe, restored.toCore(allowInsecure = true).verification)
+        assertFailsWith<IllegalArgumentException> {
+            restored.copy(unsafeTlsAcknowledged = false).toCore(allowInsecure = true)
+        }
+    }
+
     @Test
     fun `caster upload profile defaults to adaptive retry and disabled manual safety`() {
         val profile = NtripCasterUploadProfile(id = "upload", name = "Upload")

@@ -28,6 +28,7 @@ import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.SatelliteTelemetryCapability
+import org.rtkcollector.app.profile.ntripSecurityPolicyFromStorage
 import org.rtkcollector.app.profile.validateUm980OutputFrequenciesForStart
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
@@ -63,7 +64,6 @@ import org.rtkcollector.core.correction.NtripCasterUploadRuntimeConfig
 import org.rtkcollector.core.correction.NtripCasterUploadSafetyPolicy
 import org.rtkcollector.core.correction.NtripCasterUploadSnapshot
 import org.rtkcollector.core.correction.NtripCredentials
-import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripProtocolVersion
 import org.rtkcollector.core.correction.NtripReconnectPolicy
 import org.rtkcollector.core.correction.NtripRequest
@@ -1546,9 +1546,13 @@ class RecordingForegroundService : Service() {
         }
         val request = runCatching {
             NtripRequest(
-                policy = NtripEndpointSecurityPolicy.systemTrust(
+                policy = ntripSecurityPolicyFromStorage(
                     host,
                     validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
+                    intent.getStringExtra(EXTRA_NTRIP_TRANSPORT_MODE),
+                    intent.getStringExtra(EXTRA_NTRIP_TLS_VERIFICATION),
+                    intent.getBooleanExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, false),
+                    BuildConfig.ALLOW_INSECURE_NTRIP,
                 ),
                 mountpoint = mountpoint,
                 credentials = intent.getStringExtra(EXTRA_NTRIP_USERNAME)?.takeIf { it.isNotBlank() }?.let { username ->
@@ -1646,9 +1650,13 @@ class RecordingForegroundService : Service() {
         )
         val uploadRequest = runCatching {
             NtripCasterUploadRequest(
-                policy = NtripEndpointSecurityPolicy.systemTrust(
+                policy = ntripSecurityPolicyFromStorage(
                     host,
                     validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
+                    intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE),
+                    intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION),
+                    intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, false),
+                    BuildConfig.ALLOW_INSECURE_NTRIP,
                 ),
                 mountpoint = mountpoint,
                 credentials = credentials,
@@ -4094,6 +4102,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_NTRIP_ENABLED = "ntripEnabled"
         const val EXTRA_NTRIP_HOST = "ntripHost"
         const val EXTRA_NTRIP_PORT = "ntripPort"
+        const val EXTRA_NTRIP_TRANSPORT_MODE = "ntripTransportMode"
+        const val EXTRA_NTRIP_TLS_VERIFICATION = "ntripTlsVerification"
+        const val EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED = "ntripUnsafeTlsAcknowledged"
         const val EXTRA_NTRIP_MOUNTPOINT = "ntripMountpoint"
         const val EXTRA_NTRIP_USERNAME = "ntripUsername"
         const val EXTRA_NTRIP_PASSWORD = "ntripPassword"
@@ -4150,6 +4161,9 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BASE_CASTER_UPLOAD_ENABLED = "baseCasterUploadEnabled"
         const val EXTRA_BASE_CASTER_UPLOAD_HOST = "baseCasterUploadHost"
         const val EXTRA_BASE_CASTER_UPLOAD_PORT = "baseCasterUploadPort"
+        const val EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE = "baseCasterUploadTransportMode"
+        const val EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION = "baseCasterUploadTlsVerification"
+        const val EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED = "baseCasterUploadUnsafeTlsAcknowledged"
         const val EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT = "baseCasterUploadMountpoint"
         const val EXTRA_BASE_CASTER_UPLOAD_USERNAME = "baseCasterUploadUsername"
         const val EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT = "baseCasterUploadUsernamePresent"

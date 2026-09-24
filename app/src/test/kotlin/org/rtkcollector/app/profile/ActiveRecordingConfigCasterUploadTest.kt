@@ -4,8 +4,24 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.rtkcollector.core.correction.NtripTransportMode
 
 class ActiveRecordingConfigCasterUploadTest {
+    @Test
+    fun `active upload retains selected plaintext policy`() {
+        val config = activeConfig(
+            workflowId = "fixed-base",
+            hasAcceptedBaseCoordinate = true,
+            uploadProfile = NtripCasterUploadProfile(
+                id = "upload", name = "Upload", host = "caster.example.org", mountpoint = "BASEOUT",
+                transportMode = NtripTransportMode.PLAINTEXT,
+            ),
+        )
+
+        assertEquals(NtripTransportMode.PLAINTEXT, config.casterUpload.toCore(allowInsecure = true).transport)
+        assertThrows(IllegalArgumentException::class.java) { config.casterUpload.toCore(allowInsecure = false) }
+    }
+
     @Test
     fun `fixed base resolves enabled caster upload profile`() {
         val config = activeConfig(

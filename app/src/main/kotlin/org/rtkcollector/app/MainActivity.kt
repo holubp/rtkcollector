@@ -32,11 +32,11 @@ import org.rtkcollector.app.profile.SavedRecordingDefaults
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.UsbBaudProfile
 import org.rtkcollector.app.profile.ntripCasterSecretId
+import org.rtkcollector.app.profile.storageValue
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.secrets.NtripSecretStore
 import org.rtkcollector.app.usb.UsbDeviceSummary
 import org.rtkcollector.core.correction.NtripCredentials
-import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSourcetableClient
 import org.rtkcollector.core.correction.NtripSourcetableRequest
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
@@ -678,7 +678,12 @@ class MainActivity : Activity() {
                 runCatching {
                     NtripSourcetableClient(
                         NtripSourcetableRequest(
-                            policy = NtripEndpointSecurityPolicy.systemTrust(host, port),
+                            policy = selected.copy(
+                                host = host,
+                                port = port,
+                                unsafeTlsAcknowledged = selected.unsafeTlsAcknowledged &&
+                                    selected.host == host && selected.port == port,
+                            ).toCore(BuildConfig.ALLOW_INSECURE_NTRIP),
                             credentials = credentials,
                         ),
                     ).fetch()
@@ -922,6 +927,14 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_NTRIP_ENABLED, ntripEnabled)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, host)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, ntripPort)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_MODE,
+                selectedNtripCasterProfile()?.transportMode?.name ?: "TLS")
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_TLS_VERIFICATION,
+                selectedNtripCasterProfile()?.tlsVerification?.storageValue ?: "SYSTEM_TRUST")
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED,
+                selectedNtripCasterProfile()?.let {
+                    it.unsafeTlsAcknowledged && it.host == host && it.port == ntripPort
+                } == true)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, mountpoint)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, username)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, runtimePassword)
@@ -976,6 +989,14 @@ class MainActivity : Activity() {
             action = RecordingForegroundService.ACTION_UPDATE_NTRIP
             putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, host)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, port)
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_MODE,
+                selectedNtripCasterProfile()?.transportMode?.name ?: "TLS")
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_TLS_VERIFICATION,
+                selectedNtripCasterProfile()?.tlsVerification?.storageValue ?: "SYSTEM_TRUST")
+            putExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED,
+                selectedNtripCasterProfile()?.let {
+                    it.unsafeTlsAcknowledged && it.host == host && it.port == port
+                } == true)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, mountpoint)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, username)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, runtimePassword)

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.rtkcollector.core.solution.SolutionSourcePolicy
+import org.rtkcollector.core.correction.NtripTransportMode
 import org.rtkcollector.core.workflow.SessionArtifact
 
 class ActiveRecordingConfigTest {
@@ -197,7 +198,8 @@ class ActiveRecordingConfigTest {
             ),
             commandProfile = CommandProfile("commands", "Commands", initScript = "#comment\nUNLOG COM1", shutdownScript = "UNLOG COM1"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud", profileBaud = 230400, serialBaud = 230400),
-            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "legacy", port = 2101, username = "legacy"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "legacy", port = 2101,
+                username = "legacy", transportMode = NtripTransportMode.PLAINTEXT),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "OLD"),
             recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
             storageProfile = StorageProfile("storage", "Storage"),
@@ -216,6 +218,7 @@ class ActiveRecordingConfigTest {
         assertTrue(config.ntrip.enabled)
         assertEquals("runtime-host", config.ntrip.host)
         assertEquals(2101, config.ntrip.port)
+        assertEquals(NtripTransportMode.PLAINTEXT, config.ntrip.toCore(allowInsecure = true).transport)
         assertEquals("TUBO00CZE0", config.ntrip.mountpoint)
         assertEquals("runtime-user", config.ntrip.username)
         assertEquals("secret-override", config.ntrip.secretRef)

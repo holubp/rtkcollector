@@ -26,6 +26,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import org.rtkcollector.app.BuildConfig
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,6 +99,7 @@ import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.NtripMountpointOverride
 import org.rtkcollector.app.profile.ProfileDeviceFilter
 import org.rtkcollector.app.profile.ProfileStores
+import org.rtkcollector.app.profile.storageValue
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.PreferenceCommitException
 import org.rtkcollector.app.profile.PreferenceRollbackStatus
@@ -221,7 +223,6 @@ import org.rtkcollector.receiver.unicore.Um980PersistentBaudStep
 import org.rtkcollector.receiver.unicore.Um980NmeaExportOptions
 import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.core.correction.NtripCredentials
-import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSourcetableClient
 import org.rtkcollector.core.correction.NtripSourcetableRequest
 import org.rtkcollector.core.rtklib.RtklibNativeBridge
@@ -3338,7 +3339,12 @@ private fun refreshNtripCasterMountpoints(
             runCatching {
                 NtripSourcetableClient(
                     NtripSourcetableRequest(
-                        policy = NtripEndpointSecurityPolicy.systemTrust(host, port),
+                        policy = existing.copy(
+                            host = host,
+                            port = port,
+                            unsafeTlsAcknowledged = existing.unsafeTlsAcknowledged &&
+                                existing.host == host && existing.port == port,
+                        ).toCore(BuildConfig.ALLOW_INSECURE_NTRIP),
                         credentials = credentials,
                     ),
                 ).fetch()
@@ -5396,6 +5402,9 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_NTRIP_ENABLED, activeConfig.ntrip.enabled)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, activeConfig.ntrip.host)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, activeConfig.ntrip.port)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_MODE, activeConfig.ntrip.transportMode.name)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_TLS_VERIFICATION, activeConfig.ntrip.tlsVerification.storageValue)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, activeConfig.ntrip.unsafeTlsAcknowledged)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, activeConfig.ntrip.mountpoint)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, activeConfig.ntrip.username)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, activeConfig.ntrip.password.orEmpty())
@@ -5408,6 +5417,12 @@ private fun buildDashboardStartIntent(
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_ENABLED, activeConfig.casterUpload.enabled)
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_HOST, activeConfig.casterUpload.host)
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PORT, activeConfig.casterUpload.port)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE,
+            activeConfig.casterUpload.transportMode.name)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION,
+            activeConfig.casterUpload.tlsVerification.storageValue)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED,
+            activeConfig.casterUpload.unsafeTlsAcknowledged)
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT, activeConfig.casterUpload.mountpoint)
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_USERNAME, activeConfig.casterUpload.username)
         putExtra(
@@ -5588,6 +5603,9 @@ private fun buildNtripUpdateIntent(
         action = RecordingForegroundService.ACTION_UPDATE_NTRIP
         putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, activeConfig.ntrip.host)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, activeConfig.ntrip.port)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_MODE, activeConfig.ntrip.transportMode.name)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_TLS_VERIFICATION, activeConfig.ntrip.tlsVerification.storageValue)
+        putExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, activeConfig.ntrip.unsafeTlsAcknowledged)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, activeConfig.ntrip.mountpoint)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, activeConfig.ntrip.username)
         putExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD, activeConfig.ntrip.password.orEmpty())

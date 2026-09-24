@@ -1,7 +1,11 @@
 package org.rtkcollector.app.profile
 
+import org.rtkcollector.app.BuildConfig
 import org.rtkcollector.core.correction.DEFAULT_NTRIP_USER_AGENT
+import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSourceUploadRequest
+import org.rtkcollector.core.correction.NtripTlsVerification
+import org.rtkcollector.core.correction.NtripTransportMode
 import org.rtkcollector.core.correction.Um980RtcmBaseOutputSanity
 import org.rtkcollector.core.correction.normalizeSourceUploadMountpoint
 import org.rtkcollector.core.rtklib.RtklibSnapshot
@@ -61,6 +65,7 @@ data class ActiveRecordingConfig(
             require(ntrip.host.isNotBlank()) { "NTRIP host is required for ${workflowName}." }
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
             require(ntrip.mountpoint.isNotBlank()) { "NTRIP mountpoint is required for ${workflowName}." }
+            ntrip.toCore(BuildConfig.ALLOW_INSECURE_NTRIP)
         }
         if (storage.kind == "SAF_TREE") {
             require(!storage.treeUri.isNullOrBlank()) {
@@ -71,6 +76,7 @@ data class ActiveRecordingConfig(
             require(casterUpload.host.isNotBlank()) { "NTRIP caster upload host is required for ${workflowName}." }
             require(casterUpload.port in 1..65535) { "NTRIP caster upload port must be 1..65535." }
             require(casterUpload.mountpoint.isNotBlank()) { "NTRIP caster upload mountpoint is required for ${workflowName}." }
+            casterUpload.toCore(BuildConfig.ALLOW_INSECURE_NTRIP)
             normalizeSourceUploadMountpoint(casterUpload.mountpoint)
             if (casterUpload.protocolPolicy == "NTRIP_V1_ONLY") {
                 NtripSourceUploadRequest(
@@ -179,10 +185,12 @@ data class ActiveRecordingConfig(
                             ?.let(passwordLookup)
                 }
 
+            val ntripHost = localNtripHost ?: casterOverride?.host ?: ntripCasterProfile?.host.orEmpty()
+            val ntripPort = localNtripPort ?: casterOverride?.port ?: ntripCasterProfile?.port ?: 2101
             val ntrip = ActiveNtripConfig(
                 enabled = workflowUsesNtrip,
-                host = localNtripHost ?: casterOverride?.host ?: ntripCasterProfile?.host.orEmpty(),
-                port = localNtripPort ?: casterOverride?.port ?: ntripCasterProfile?.port ?: 2101,
+                host = ntripHost,
+                port = ntripPort,
                 mountpoint = localNtripMountpoint ?: mountOverride?.mountpoint ?: ntripMountpointProfile?.mountpoint.orEmpty(),
                 username = localNtripUsername ?: casterOverride?.username ?: ntripCasterProfile?.username.orEmpty(),
                 secretRef = ntripSecretRef.takeIf { it.isNotBlank() },
@@ -190,6 +198,11 @@ data class ActiveRecordingConfig(
                 stationId = mountOverride?.stationId,
                 baseLatDeg = mountOverride?.baseLatDeg,
                 baseLonDeg = mountOverride?.baseLonDeg,
+                transportMode = ntripCasterProfile?.transportMode ?: NtripTransportMode.TLS,
+                tlsVerification = ntripCasterProfile?.tlsVerification ?: NtripTlsVerification.SystemTrust,
+                unsafeTlsAcknowledged = ntripCasterProfile?.let {
+                    it.unsafeTlsAcknowledged && ntripHost == it.host && ntripPort == it.port
+                } == true,
             )
 
             val profileOwnedUploadSecretRef = ntripCasterUploadProfile
@@ -214,10 +227,12 @@ data class ActiveRecordingConfig(
                             }
                             ?.let(passwordLookup)
                 }
+            val uploadHost = casterUploadOverride?.host ?: ntripCasterUploadProfile?.host.orEmpty()
+            val uploadPort = casterUploadOverride?.port ?: ntripCasterUploadProfile?.port ?: 2101
             val casterUpload = ActiveCasterUploadConfig(
                 enabled = casterUploadEnabled,
-                host = casterUploadOverride?.host ?: ntripCasterUploadProfile?.host.orEmpty(),
-                port = casterUploadOverride?.port ?: ntripCasterUploadProfile?.port ?: 2101,
+                host = uploadHost,
+                port = uploadPort,
                 mountpoint = casterUploadOverride?.mountpoint ?: ntripCasterUploadProfile?.mountpoint.orEmpty(),
                 username = casterUploadOverride?.username ?: ntripCasterUploadProfile?.username.orEmpty(),
                 secretRef = casterUploadSecretRef.takeIf(String::isNotBlank),
@@ -235,6 +250,11 @@ data class ActiveRecordingConfig(
                 safetyMaxSessionUploadMb = ntripCasterUploadProfile?.safetyMaxSessionUploadMb ?: 500,
                 effectiveSafetyRulesEnabled = ntripCasterUploadProfile?.effectiveSafetyRulesEnabled ?: false,
                 hasAcceptedBaseCoordinate = hasAcceptedBaseCoordinate,
+                transportMode = ntripCasterUploadProfile?.transportMode ?: NtripTransportMode.TLS,
+                tlsVerification = ntripCasterUploadProfile?.tlsVerification ?: NtripTlsVerification.SystemTrust,
+                unsafeTlsAcknowledged = ntripCasterUploadProfile?.let {
+                    it.unsafeTlsAcknowledged && uploadHost == it.host && uploadPort == it.port
+                } == true,
             )
             val resolvedModeCommands = commandProfile.runtimeScript.commandLines()
                 .ifEmpty { modeCommands }
@@ -375,7 +395,13 @@ data class ActiveCasterUploadConfig(
     val safetyMaxSessionUploadMb: Int,
     val effectiveSafetyRulesEnabled: Boolean,
     val hasAcceptedBaseCoordinate: Boolean,
-)
+    val transportMode: NtripTransportMode = NtripTransportMode.TLS,
+    val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
+    val unsafeTlsAcknowledged: Boolean = false,
+) {
+    fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
+        ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
+}
 
 data class ActiveNtripConfig(
     val enabled: Boolean,
@@ -388,8 +414,14 @@ data class ActiveNtripConfig(
     val stationId: String?,
     val baseLatDeg: Double?,
     val baseLonDeg: Double?,
+    val transportMode: NtripTransportMode = NtripTransportMode.TLS,
+    val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
+    val unsafeTlsAcknowledged: Boolean = false,
 ) {
     val isConfigured: Boolean get() = host.isNotBlank() && mountpoint.isNotBlank()
+
+    fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
+        ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
 }
 
 data class ActiveRecordingOutputConfig(

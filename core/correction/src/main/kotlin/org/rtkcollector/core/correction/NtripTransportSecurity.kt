@@ -48,7 +48,16 @@ class NtripEndpoint private constructor(
             val ascii = runCatching { IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES) }.getOrNull()
                 ?.lowercase(Locale.ROOT)
             require(!ascii.isNullOrEmpty() && ascii.length <= 253 && ascii == ascii.trimEnd('.') &&
-                ascii.split('.').all { label -> label.isNotEmpty() && label.length <= 63 } &&
+                ascii.split('.').all { label ->
+                    label.isNotEmpty() && label.length <= 63 &&
+                        (!label.startsWith("xn--") || run {
+                            val decoded = IDN.toUnicode(label, IDN.USE_STD3_ASCII_RULES)
+                            decoded != label && runCatching {
+                                IDN.toASCII(decoded, IDN.USE_STD3_ASCII_RULES)
+                                    .lowercase(Locale.ROOT) == label
+                            }.getOrDefault(false)
+                        })
+                } &&
                 ascii.any(Char::isLetter)
             ) { "NTRIP DNS host is invalid" }
             return NtripEndpoint(ascii, port, "$ascii:$port", ascii)

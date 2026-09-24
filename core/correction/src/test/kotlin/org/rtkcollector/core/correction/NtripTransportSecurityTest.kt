@@ -51,6 +51,13 @@ class NtripTransportSecurityTest {
     }
 
     @Test
+    fun `malformed A labels are rejected even when ASCII syntax is valid`() {
+        listOf("xn--a.example", "xn--abc.example", "XN--A.example").forEach { host ->
+            assertThrows(IllegalArgumentException::class.java, { NtripEndpoint.parse(host, 2101) }, "host=$host")
+        }
+    }
+
+    @Test
     fun `IP literals are canonical and omit SNI`() {
         val ipv4 = NtripEndpoint.parse("192.0.2.1", 2101)
         assertEquals("192.0.2.1:2101", ipv4.hostHeader)

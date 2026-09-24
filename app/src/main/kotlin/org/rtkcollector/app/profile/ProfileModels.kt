@@ -1,6 +1,10 @@
 package org.rtkcollector.app.profile
 
 import org.json.JSONObject
+import org.rtkcollector.core.correction.NtripEndpoint
+import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
+import org.rtkcollector.core.correction.NtripTlsVerification
+import org.rtkcollector.core.correction.NtripTransportMode
 import org.rtkcollector.core.solution.SolutionSourcePolicy
 
 enum class SatelliteTelemetryCapability(
@@ -33,6 +37,50 @@ enum class NtripCasterUploadRetryMode {
 }
 
 private val RTK2GO_HOSTS = setOf("rtk2go.com", "www.rtk2go.com")
+
+private fun JSONObject.ntripTransportMode(): NtripTransportMode =
+    if (has("transportMode")) NtripTransportMode.valueOf(getString("transportMode"))
+    else NtripTransportMode.PLAINTEXT
+
+fun ntripTlsVerificationFromStorage(value: String): NtripTlsVerification = when (value) {
+    "SYSTEM_TRUST" -> NtripTlsVerification.SystemTrust
+    "UNSAFE" -> NtripTlsVerification.Unsafe
+    else -> throw IllegalArgumentException("NTRIP TLS verification is invalid.")
+}
+
+private fun JSONObject.ntripTlsVerification(): NtripTlsVerification =
+    ntripTlsVerificationFromStorage(optString("tlsVerification", "SYSTEM_TRUST"))
+
+val NtripTlsVerification.storageValue: String
+    get() = when (this) {
+        NtripTlsVerification.SystemTrust -> "SYSTEM_TRUST"
+        NtripTlsVerification.Unsafe -> "UNSAFE"
+    }
+
+fun ntripSecurityPolicy(
+    host: String,
+    port: Int,
+    transportMode: NtripTransportMode,
+    tlsVerification: NtripTlsVerification,
+    unsafeTlsAcknowledged: Boolean,
+    allowInsecure: Boolean,
+): NtripEndpointSecurityPolicy = NtripEndpointSecurityPolicy(
+    NtripEndpoint.parse(host, port), transportMode, tlsVerification, allowInsecure, unsafeTlsAcknowledged,
+)
+
+fun ntripSecurityPolicyFromStorage(
+    host: String,
+    port: Int,
+    transportMode: String?,
+    tlsVerification: String?,
+    unsafeTlsAcknowledged: Boolean,
+    allowInsecure: Boolean,
+): NtripEndpointSecurityPolicy = ntripSecurityPolicy(
+    host, port,
+    NtripTransportMode.valueOf(transportMode ?: "TLS"),
+    ntripTlsVerificationFromStorage(tlsVerification ?: "SYSTEM_TRUST"),
+    unsafeTlsAcknowledged, allowInsecure,
+)
 
 data class CommandProfile(
     val id: String,
@@ -134,6 +182,9 @@ data class NtripCasterProfile(
     val username: String = "",
     val secretId: String = "",
     val protocolPolicy: String = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+    val transportMode: NtripTransportMode = NtripTransportMode.TLS,
+    val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
+    val unsafeTlsAcknowledged: Boolean = false,
     val sourcetableMountpoints: List<String> = emptyList(),
     val isProtected: Boolean = false,
 ) {
@@ -144,8 +195,12 @@ data class NtripCasterProfile(
     }
 
     fun copyProfile(id: String, name: String): NtripCasterProfile =
-        copy(id = id, name = name, secretId = ntripCasterSecretId(id), isProtected = false)
+        copy(id = id, name = name, secretId = ntripCasterSecretId(id),
+            unsafeTlsAcknowledged = false, isProtected = false)
             .also(NtripCasterProfile::validate)
+
+    fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
+        ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -156,6 +211,9 @@ data class NtripCasterProfile(
         .put("username", username)
         .put("secretId", secretId)
         .put("protocolPolicy", protocolPolicy)
+        .put("transportMode", transportMode.name)
+        .put("tlsVerification", tlsVerification.storageValue)
+        .put("unsafeTlsAcknowledged", unsafeTlsAcknowledged)
         .putStringList("sourcetableMountpoints", sourcetableMountpoints)
 
     companion object {
@@ -168,6 +226,9 @@ data class NtripCasterProfile(
             username = json.optString("username", ""),
             secretId = json.optString("secretId", ""),
             protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
+            transportMode = json.ntripTransportMode(),
+            tlsVerification = json.ntripTlsVerification(),
+            unsafeTlsAcknowledged = json.optBoolean("unsafeTlsAcknowledged", false),
             sourcetableMountpoints = json.optStringList("sourcetableMountpoints"),
         ).also(NtripCasterProfile::validate)
     }
@@ -187,6 +248,9 @@ data class NtripCasterUploadProfile(
     val username: String = "",
     val secretId: String = "",
     val protocolPolicy: String = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+    val transportMode: NtripTransportMode = NtripTransportMode.TLS,
+    val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
+    val unsafeTlsAcknowledged: Boolean = false,
     val retryMode: NtripCasterUploadRetryMode = NtripCasterUploadRetryMode.ADAPTIVE,
     val fixedReconnectDelaySeconds: Int = 10,
     val adaptiveInitialDelaySeconds: Int = 10,
@@ -231,8 +295,12 @@ data class NtripCasterUploadProfile(
     }
 
     fun copyProfile(id: String, name: String): NtripCasterUploadProfile =
-        copy(id = id, name = name, secretId = ntripCasterUploadSecretId(id), isProtected = false)
+        copy(id = id, name = name, secretId = ntripCasterUploadSecretId(id),
+            unsafeTlsAcknowledged = false, isProtected = false)
             .also(NtripCasterUploadProfile::validate)
+
+    fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
+        ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -244,6 +312,9 @@ data class NtripCasterUploadProfile(
         .put("username", username)
         .put("secretId", secretId)
         .put("protocolPolicy", protocolPolicy)
+        .put("transportMode", transportMode.name)
+        .put("tlsVerification", tlsVerification.storageValue)
+        .put("unsafeTlsAcknowledged", unsafeTlsAcknowledged)
         .put("retryMode", retryMode.name)
         .put("fixedReconnectDelaySeconds", fixedReconnectDelaySeconds)
         .put("adaptiveInitialDelaySeconds", adaptiveInitialDelaySeconds)
@@ -279,6 +350,9 @@ data class NtripCasterUploadProfile(
             username = json.optString("username", ""),
             secretId = json.optString("secretId", ""),
             protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
+            transportMode = json.ntripTransportMode(),
+            tlsVerification = json.ntripTlsVerification(),
+            unsafeTlsAcknowledged = json.optBoolean("unsafeTlsAcknowledged", false),
             retryMode = NtripCasterUploadRetryMode.fromStorageValue(json.optString("retryMode", "")),
             fixedReconnectDelaySeconds = json.optInt("fixedReconnectDelaySeconds", 10),
             adaptiveInitialDelaySeconds = json.optInt("adaptiveInitialDelaySeconds", 10),

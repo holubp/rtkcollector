@@ -43,6 +43,7 @@ private data class StoredNtripSecurity(
     val tlsVerification: NtripTlsVerification,
     val unsafeTlsAcknowledged: Boolean,
     val needsSecurityPersistenceMigration: Boolean,
+    val requiresTlsVerificationChoice: Boolean,
 )
 
 private fun JSONObject.storedNtripSecurity(): StoredNtripSecurity {
@@ -62,6 +63,7 @@ private fun JSONObject.storedNtripSecurity(): StoredNtripSecurity {
         tlsVerification = tlsVerification,
         unsafeTlsAcknowledged = !legacyCustomCa && optBoolean("unsafeTlsAcknowledged", false),
         needsSecurityPersistenceMigration = legacyCustomCa,
+        requiresTlsVerificationChoice = legacyCustomCa || optBoolean("requiresTlsVerificationChoice", false),
     )
 }
 
@@ -207,6 +209,7 @@ data class NtripCasterProfile(
     val unsafeTlsAcknowledged: Boolean = false,
     /** Causes one canonical rewrite after decoding a legacy Custom-CA JSON value. */
     val needsSecurityPersistenceMigration: Boolean = false,
+    val requiresTlsVerificationChoice: Boolean = false,
     val sourcetableMountpoints: List<String> = emptyList(),
     val isProtected: Boolean = false,
 ) {
@@ -223,6 +226,11 @@ data class NtripCasterProfile(
 
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
+            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
+
+    fun chooseTlsVerification(verification: NtripTlsVerification): NtripCasterProfile =
+        copy(transportMode = NtripTransportMode.TLS, tlsVerification = verification,
+            unsafeTlsAcknowledged = false, requiresTlsVerificationChoice = false)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -236,6 +244,7 @@ data class NtripCasterProfile(
         .put("transportMode", transportMode.name)
         .put("tlsVerification", tlsVerification.storageValue)
         .put("unsafeTlsAcknowledged", unsafeTlsAcknowledged)
+        .put("requiresTlsVerificationChoice", requiresTlsVerificationChoice)
         .putStringList("sourcetableMountpoints", sourcetableMountpoints)
 
     companion object {
@@ -254,6 +263,7 @@ data class NtripCasterProfile(
                 tlsVerification = security.tlsVerification,
                 unsafeTlsAcknowledged = security.unsafeTlsAcknowledged,
                 needsSecurityPersistenceMigration = security.needsSecurityPersistenceMigration,
+                requiresTlsVerificationChoice = security.requiresTlsVerificationChoice,
                 sourcetableMountpoints = json.optStringList("sourcetableMountpoints"),
             ).also(NtripCasterProfile::validate)
         }
@@ -279,6 +289,7 @@ data class NtripCasterUploadProfile(
     val unsafeTlsAcknowledged: Boolean = false,
     /** Causes one canonical rewrite after decoding a legacy Custom-CA JSON value. */
     val needsSecurityPersistenceMigration: Boolean = false,
+    val requiresTlsVerificationChoice: Boolean = false,
     val retryMode: NtripCasterUploadRetryMode = NtripCasterUploadRetryMode.ADAPTIVE,
     val fixedReconnectDelaySeconds: Int = 10,
     val adaptiveInitialDelaySeconds: Int = 10,
@@ -329,6 +340,11 @@ data class NtripCasterUploadProfile(
 
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
+            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
+
+    fun chooseTlsVerification(verification: NtripTlsVerification): NtripCasterUploadProfile =
+        copy(transportMode = NtripTransportMode.TLS, tlsVerification = verification,
+            unsafeTlsAcknowledged = false, requiresTlsVerificationChoice = false)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -343,6 +359,7 @@ data class NtripCasterUploadProfile(
         .put("transportMode", transportMode.name)
         .put("tlsVerification", tlsVerification.storageValue)
         .put("unsafeTlsAcknowledged", unsafeTlsAcknowledged)
+        .put("requiresTlsVerificationChoice", requiresTlsVerificationChoice)
         .put("retryMode", retryMode.name)
         .put("fixedReconnectDelaySeconds", fixedReconnectDelaySeconds)
         .put("adaptiveInitialDelaySeconds", adaptiveInitialDelaySeconds)
@@ -384,6 +401,7 @@ data class NtripCasterUploadProfile(
                 tlsVerification = security.tlsVerification,
                 unsafeTlsAcknowledged = security.unsafeTlsAcknowledged,
                 needsSecurityPersistenceMigration = security.needsSecurityPersistenceMigration,
+                requiresTlsVerificationChoice = security.requiresTlsVerificationChoice,
                 retryMode = NtripCasterUploadRetryMode.fromStorageValue(json.optString("retryMode", "")),
                 fixedReconnectDelaySeconds = json.optInt("fixedReconnectDelaySeconds", 10),
                 adaptiveInitialDelaySeconds = json.optInt("adaptiveInitialDelaySeconds", 10),

@@ -29,16 +29,11 @@ internal object ProfileStoreMigrations {
         defaults: List<NtripCasterProfile>,
     ): List<NtripCasterProfile> =
         profiles.map { profile ->
-            if (profile.id == ProfileStores.DEFAULT_NTRIP_CASTER_PROFILE_ID) {
-                profile.copy(isProtected = false, unsafeTlsAcknowledged = false)
-            } else if (profile.needsSecurityPersistenceMigration) {
-                profile.copy(
-                    unsafeTlsAcknowledged = false,
-                    needsSecurityPersistenceMigration = false,
-                )
-            } else {
-                profile
-            }
+            profile.copy(
+                isProtected = if (profile.id == ProfileStores.DEFAULT_NTRIP_CASTER_PROFILE_ID) false else profile.isProtected,
+                unsafeTlsAcknowledged = if (profile.needsSecurityPersistenceMigration) false else profile.unsafeTlsAcknowledged,
+                needsSecurityPersistenceMigration = false,
+            )
         }.withMissingDefaults(defaults, NtripCasterProfile::id)
 
     fun ntripCasterUploadProfiles(
@@ -125,7 +120,7 @@ private fun String.blankOldNone(): String =
 internal fun NtripCasterProfile.clearUnsafeAcknowledgementUnlessUnchanged(
     persisted: NtripCasterProfile?,
 ): NtripCasterProfile =
-    if (persisted != null &&
+    if (!requiresTlsVerificationChoice && persisted != null &&
         host == persisted.host &&
         port == persisted.port &&
         transportMode == persisted.transportMode &&
@@ -139,7 +134,7 @@ internal fun NtripCasterProfile.clearUnsafeAcknowledgementUnlessUnchanged(
 internal fun NtripCasterUploadProfile.clearUnsafeAcknowledgementUnlessUnchanged(
     persisted: NtripCasterUploadProfile?,
 ): NtripCasterUploadProfile =
-    if (persisted != null &&
+    if (!requiresTlsVerificationChoice && persisted != null &&
         host == persisted.host &&
         port == persisted.port &&
         transportMode == persisted.transportMode &&

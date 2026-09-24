@@ -71,8 +71,6 @@ class NtripCasterProfileSecurityTest {
     }
 
     @Test
-
-    @Test
     fun `service policy decoding rejects invalid and unacknowledged modes`() {
         assertEquals(NtripTransportMode.TLS,
             ntripSecurityPolicyFromStorage("caster.example", 2101, null, null, false, false).transport)

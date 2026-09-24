@@ -2,6 +2,22 @@
 
 ## Secrets
 
+### SEC-NTRIP-TLS-001: Local Unsafe Consent And Legacy Custom-CA Migration
+
+Status: Normative
+
+An unchanged, locally acknowledged TLS/unsafe correction or upload profile MAY retain
+its acknowledgement across store reads and saves, including the editable default
+correction profile. Endpoint or security changes and profile copies MUST clear it.
+Legacy Custom-CA profiles MUST be rewritten without raw certificate bytes and MUST
+retain a disabled verification-choice state across persistence. Acknowledgement alone
+MUST NOT enable such a profile. Connecting requires an explicit supported TLS
+verification choice; unsafe TLS also requires fresh local acknowledgement.
+
+Verification:
+- Automated: profile-store read/save/read and legacy migration tests.
+- Manual: Android profile editor and recording/upload smoke tests after migration.
+
 ### SEC-SECRETS-001: Session Metadata Excludes Secrets
 
 Status: Normative

@@ -526,6 +526,11 @@ class MainActivity : Activity() {
     private fun selectedNtripCasterProfile(): NtripCasterProfile? =
         ntripCasterProfiles.getOrNull(ntripCasterProfileSpinner.selectedItemPosition.coerceAtLeast(0))
 
+    private fun selectedPersistedNtripCasterProfile(): NtripCasterProfile? =
+        selectedNtripCasterProfile()?.id?.let { selectedId ->
+            profileStores.ntripCasterProfiles().firstOrNull { it.id == selectedId }
+        }
+
     private fun selectedNtripMountpointProfile(): NtripMountpointProfile? =
         ntripMountpointProfiles.getOrNull(ntripMountpointProfileSpinner.selectedItemPosition.coerceAtLeast(0))
 
@@ -647,6 +652,7 @@ class MainActivity : Activity() {
         )
         ntripCasterProfiles = saveOrCopy(ntripCasterProfiles, selected, updated, copy) { it.copyProfile(profileStores.duplicateId("caster"), "${it.name} copy") }
         profileStores.saveNtripCasterProfiles(ntripCasterProfiles)
+        ntripCasterProfiles = profileStores.ntripCasterProfiles()
         refreshProfileAdapters()
     }
 
@@ -928,12 +934,12 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, host)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, ntripPort)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_MODE,
-                selectedNtripCasterProfile()?.transportMode?.name ?: "TLS")
+                selectedPersistedNtripCasterProfile()?.transportMode?.name ?: "TLS")
             putExtra(RecordingForegroundService.EXTRA_NTRIP_TLS_VERIFICATION,
-                selectedNtripCasterProfile()?.tlsVerification?.storageValue ?: "SYSTEM_TRUST")
+                selectedPersistedNtripCasterProfile()?.tlsVerification?.storageValue ?: "SYSTEM_TRUST")
             putExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED,
-                selectedNtripCasterProfile()?.let {
-                    it.unsafeTlsAcknowledged && it.host == host && it.port == ntripPort
+                selectedPersistedNtripCasterProfile()?.let {
+                    !it.requiresTlsVerificationChoice && it.unsafeTlsAcknowledged && it.host == host && it.port == ntripPort
                 } == true)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, mountpoint)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, username)
@@ -990,12 +996,12 @@ class MainActivity : Activity() {
             putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, host)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, port)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_MODE,
-                selectedNtripCasterProfile()?.transportMode?.name ?: "TLS")
+                selectedPersistedNtripCasterProfile()?.transportMode?.name ?: "TLS")
             putExtra(RecordingForegroundService.EXTRA_NTRIP_TLS_VERIFICATION,
-                selectedNtripCasterProfile()?.tlsVerification?.storageValue ?: "SYSTEM_TRUST")
+                selectedPersistedNtripCasterProfile()?.tlsVerification?.storageValue ?: "SYSTEM_TRUST")
             putExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED,
-                selectedNtripCasterProfile()?.let {
-                    it.unsafeTlsAcknowledged && it.host == host && it.port == port
+                selectedPersistedNtripCasterProfile()?.let {
+                    !it.requiresTlsVerificationChoice && it.unsafeTlsAcknowledged && it.host == host && it.port == port
                 } == true)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT, mountpoint)
             putExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME, username)

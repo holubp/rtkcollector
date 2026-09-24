@@ -74,6 +74,13 @@ class NtripProfileStoreSecurityTest {
     fun editorCanPersistFreshUploadConsentAfterEndpointEditButLaterEditClearsIt() {
         reset()
         val store = ProfileStores(context)
+        val created = NtripCasterUploadProfile(
+            id = store.duplicateId("caster-upload"),
+            name = "Upload",
+            host = "initial.example",
+            mountpoint = "BASE",
+        )
+        store.saveNtripCasterUploadProfiles(listOf(created))
         val original = store.ntripCasterUploadProfiles().single()
         val edited = original.copy(host = "upload.example", port = 2201,
             tlsVerification = NtripTlsVerification.Unsafe, unsafeTlsAcknowledged = true)

@@ -28,7 +28,7 @@ import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.SatelliteTelemetryCapability
-import org.rtkcollector.app.profile.ntripSecurityPolicyFromStorage
+import org.rtkcollector.app.profile.ntripSecurityPolicy
 import org.rtkcollector.app.profile.validateUm980OutputFrequenciesForStart
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
@@ -72,6 +72,7 @@ import org.rtkcollector.core.correction.NtripRuntimeController
 import org.rtkcollector.core.correction.NtripRuntimeSnapshot
 import org.rtkcollector.core.correction.NtripRuntimeState
 import org.rtkcollector.core.correction.Rtcm3Extractor
+import org.rtkcollector.core.correction.Rtcm3Frame
 import org.rtkcollector.core.correction.Rtcm3MsmParser
 import org.rtkcollector.core.correction.Rtcm3ReferenceStation
 import org.rtkcollector.core.correction.Rtcm3ReferenceStationParser
@@ -160,6 +161,51 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
+
+internal fun <T> withValidatedServiceNtripPolicy(
+    host: String,
+    port: Int,
+    transportMode: String?,
+    tlsVerification: String?,
+    unsafeTlsAcknowledged: Boolean?,
+    allowInsecure: Boolean,
+    construct: (org.rtkcollector.core.correction.NtripEndpointSecurityPolicy) -> T,
+): T {
+    require(transportMode != null && tlsVerification != null && unsafeTlsAcknowledged != null) {
+        "NTRIP security extras are required."
+    }
+    val transport = when (transportMode) {
+        "TLS" -> org.rtkcollector.core.correction.NtripTransportMode.TLS
+        "PLAINTEXT" -> org.rtkcollector.core.correction.NtripTransportMode.PLAINTEXT
+        else -> throw IllegalArgumentException("NTRIP transport mode is invalid.")
+    }
+    val verification = when (tlsVerification) {
+        "SYSTEM_TRUST" -> org.rtkcollector.core.correction.NtripTlsVerification.SystemTrust
+        "UNSAFE" -> org.rtkcollector.core.correction.NtripTlsVerification.Unsafe
+        else -> throw IllegalArgumentException("NTRIP TLS verification is invalid.")
+    }
+    return construct(ntripSecurityPolicy(host, port, transport, verification, unsafeTlsAcknowledged, allowInsecure))
+}
+
+internal fun routeBaseCasterUploadFrame(
+    frame: Rtcm3Frame,
+    uploaderActive: Boolean,
+    timestampMillis: Long,
+    appendAudit: (ByteArray) -> Unit,
+    appendDroppedEvent: (String) -> Unit,
+    offerUpload: (ByteArray, Int?) -> Boolean,
+): Boolean? {
+    if (!uploaderActive) return null
+    if (frame.crcValid != true) {
+        appendAudit(frame.bytes)
+        appendDroppedEvent(
+            """{"type":"base-caster-upload-frame-dropped","reason":"invalid-rtcm-crc","messageType":${frame.messageType ?: "null"},"frameBytes":${frame.bytes.size},"timestampMillis":$timestampMillis}""",
+        )
+        return false
+    }
+    appendAudit(frame.bytes)
+    return offerUpload(frame.bytes, frame.messageType)
+}
 
 class RecordingForegroundService : Service() {
     private enum class CompilePhase { START, STOP }
@@ -1545,20 +1591,21 @@ class RecordingForegroundService : Service() {
             return null
         }
         val request = runCatching {
-            NtripRequest(
-                policy = ntripSecurityPolicyFromStorage(
-                    host,
-                    validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
-                    intent.getStringExtra(EXTRA_NTRIP_TRANSPORT_MODE),
-                    intent.getStringExtra(EXTRA_NTRIP_TLS_VERIFICATION),
-                    intent.getBooleanExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, false),
-                    BuildConfig.ALLOW_INSECURE_NTRIP,
-                ),
+            withValidatedServiceNtripPolicy(
+                host,
+                validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
+                intent.getStringExtra(EXTRA_NTRIP_TRANSPORT_MODE),
+                intent.getStringExtra(EXTRA_NTRIP_TLS_VERIFICATION),
+                intent.takeIf { it.hasExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED) }
+                    ?.getBooleanExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, false),
+                BuildConfig.ALLOW_INSECURE_NTRIP,
+            ) { securityPolicy -> NtripRequest(
+                policy = securityPolicy,
                 mountpoint = mountpoint,
                 credentials = intent.getStringExtra(EXTRA_NTRIP_USERNAME)?.takeIf { it.isNotBlank() }?.let { username ->
                     NtripCredentials(username = username, password = intent.getStringExtra(EXTRA_NTRIP_PASSWORD).orEmpty())
                 },
-            )
+            ) }
         }.getOrElse {
             state = state.copy(
                 ntripState = "CONFIG_ERROR",
@@ -1649,21 +1696,22 @@ class RecordingForegroundService : Service() {
             ),
         )
         val uploadRequest = runCatching {
-            NtripCasterUploadRequest(
-                policy = ntripSecurityPolicyFromStorage(
-                    host,
-                    validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
-                    intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE),
-                    intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION),
-                    intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, false),
-                    BuildConfig.ALLOW_INSECURE_NTRIP,
-                ),
+            withValidatedServiceNtripPolicy(
+                host,
+                validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
+                intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE),
+                intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION),
+                intent.takeIf { it.hasExtra(EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED) }
+                    ?.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, false),
+                BuildConfig.ALLOW_INSECURE_NTRIP,
+            ) { securityPolicy -> NtripCasterUploadRequest(
+                policy = securityPolicy,
                 mountpoint = mountpoint,
                 credentials = credentials,
                 protocolVersion = uploadProtocolVersion(
                     intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY),
                 ),
-            )
+            ) }
         }.getOrElse {
             state = state.copy(
                 lastError = it.message ?: "NTRIP caster upload request is invalid.",
@@ -3758,15 +3806,17 @@ class RecordingForegroundService : Service() {
                 },
                 AdvisoryConsumer("rtcm3-extractor") { bytes ->
                     rtcmExtractor.accept(bytes).forEach { frame ->
-                        if (frame.crcValid != true) {
-                            return@forEach
-                        }
-                        val baseUploadOffered = if (casterUploadController != null && frame.crcValid == true) {
-                            sessionWriters.appendBaseCasterUploadRtcm(frame.bytes)
-                            casterUploadController.offer(frame.bytes, frame.messageType)
-                        } else {
-                            null
-                        }
+                        val baseUploadOffered = routeBaseCasterUploadFrame(
+                            frame = frame,
+                            uploaderActive = casterUploadController != null,
+                            timestampMillis = System.currentTimeMillis(),
+                            appendAudit = sessionWriters::appendBaseCasterUploadRtcm,
+                            appendDroppedEvent = sessionWriters::appendEventJson,
+                            offerUpload = { frameBytes, messageType ->
+                                casterUploadController?.offer(frameBytes, messageType) ?: false
+                            },
+                        )
+                        if (frame.crcValid != true) return@forEach
                         sessionWriters.appendExtractedRtcm(frame.bytes)
                         sessionWriters.appendQualityLiveJson(
                             """{"type":"rtcm3-frame","payloadLength":${frame.payloadLength},"messageType":${frame.messageType ?: "null"},"crcValid":${frame.crcValid ?: "null"},"baseCasterUploadOffered":${baseUploadOffered ?: "null"}}""",

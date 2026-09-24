@@ -195,7 +195,7 @@ class RobolectricExampleTest
 
             def runner(command: list[str], cwd: Path) -> None:
                 commands.append(command)
-                if ":app:compileDebugKotlin" in command:
+                if ":app:compileSideloadDebugKotlin" in command:
                     source = gate.termux_r_jar_source(root)
                     source.parent.mkdir(parents=True, exist_ok=True)
                     source.write_bytes(b"generated-r-jar")
@@ -211,14 +211,14 @@ class RobolectricExampleTest
                 commands,
                 [
                     ["sh", "gradlew", "clean", "--no-parallel"],
-                    ["sh", "gradlew", ":app:compileDebugKotlin", "--no-parallel"],
+                    ["sh", "gradlew", ":app:compileSideloadDebugKotlin", "--no-parallel"],
                     [
                         "sh",
                         "gradlew",
                         ":app:termuxTestDebugUnitTest",
                         *gate.PURE_JVM_TEST_TASKS,
                         "-x",
-                        ":app:processDebugResources",
+                        ":app:processSideloadDebugResources",
                         "--no-parallel",
                     ],
                     [

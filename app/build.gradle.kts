@@ -28,8 +28,8 @@ val rtklibNativeBuildAvailable = localSdkDir()
     ?.any { it.resolve("source.properties").isFile }
     ?: false
 val rtklibNativeReleaseTaskNames = setOf(
-    "assembleRelease",
-    "bundleRelease",
+    "assembleGooglePlayRelease",
+    "bundleGooglePlayRelease",
     "validateGooglePlayReleaseBuildInputs",
     "validateGooglePlayReleaseBundle",
 )
@@ -60,7 +60,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0-RC1"
-        buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "true")
+        buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "false")
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -91,6 +91,18 @@ android {
             ndk {
                 debugSymbolLevel = "FULL"
             }
+        }
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("googlePlay") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "false")
+        }
+        create("sideload") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "true")
         }
     }
 }
@@ -140,24 +152,24 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
 tasks.register("unitTestClasses") {
     group = "build"
     description = "Compatibility alias for tools that request JVM-style unit test classes in the Android app module."
-    dependsOn("compileDebugUnitTestKotlin", "compileDebugUnitTestJavaWithJavac", "processDebugUnitTestJavaRes")
+    dependsOn("compileSideloadDebugUnitTestKotlin", "compileSideloadDebugUnitTestJavaWithJavac", "processSideloadDebugUnitTestJavaRes")
 }
 
 tasks.register("androidTestClasses") {
     group = "build"
     description = "Compatibility alias for tools that request Android instrumentation test classes in the app module."
-    dependsOn("compileDebugAndroidTestSources")
+    dependsOn("compileSideloadDebugAndroidTestSources")
 }
 
 val termuxDebugUnitTestClasses = files(
-    layout.buildDirectory.dir("intermediates/built_in_kotlinc/debugUnitTest/compileDebugUnitTestKotlin/classes"),
-    layout.buildDirectory.dir("intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes"),
+    layout.buildDirectory.dir("intermediates/built_in_kotlinc/sideloadDebugUnitTest/compileSideloadDebugUnitTestKotlin/classes"),
+    layout.buildDirectory.dir("intermediates/javac/sideloadDebugUnitTest/compileSideloadDebugUnitTestJavaWithJavac/classes"),
 )
 val termuxDebugMainClasses = files(
-    layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes"),
-    layout.buildDirectory.dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes"),
-    layout.buildDirectory.file("intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar"),
-    layout.buildDirectory.dir("intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out"),
+    layout.buildDirectory.dir("intermediates/built_in_kotlinc/sideloadDebug/compileSideloadDebugKotlin/classes"),
+    layout.buildDirectory.dir("intermediates/javac/sideloadDebug/compileSideloadDebugJavaWithJavac/classes"),
+    layout.buildDirectory.file("intermediates/compile_r_class_jar/sideloadDebug/generateSideloadDebugRFile/R.jar"),
+    layout.buildDirectory.dir("intermediates/java_res/sideloadDebugUnitTest/processSideloadDebugUnitTestJavaRes/out"),
 )
 val termuxAndroidJar = localSdkDir()?.resolve("platforms/android-$appCompileSdkVersion/android.jar")
 
@@ -172,7 +184,7 @@ tasks.register<org.gradle.api.tasks.testing.Test>("termuxTestDebugUnitTest") {
     }
     testClassesDirs = termuxDebugUnitTestClasses
     classpath = termuxDebugUnitTestClasses + termuxDebugMainClasses + files(provider {
-        configurations.getByName("debugUnitTestRuntimeClasspath")
+        configurations.getByName("sideloadDebugUnitTestRuntimeClasspath")
             .incoming
             .artifactView {
                 attributes.attribute(
@@ -192,6 +204,7 @@ tasks.register<org.gradle.api.tasks.testing.Test>("termuxTestDebugUnitTest") {
         excludeTestsMatching("org.rtkcollector.app.mocklocation.MockLocationPublisherTest")
         excludeTestsMatching("org.rtkcollector.app.ui.dashboard.DashboardServiceMapperTest")
         excludeTestsMatching("org.rtkcollector.app.ui.imports.SettingsImportIntentReaderTest")
+        excludeTestsMatching("org.rtkcollector.app.profile.NtripProfileStoreSecurityTest")
     }
 }
 
@@ -231,14 +244,14 @@ val validateGooglePlayReleaseBuildInputs = tasks.register("validateGooglePlayRel
     }
 }
 
-tasks.matching { it.name == "assembleRelease" }.configureEach {
+tasks.matching { it.name == "assembleGooglePlayRelease" }.configureEach {
     dependsOn(validateGooglePlayReleaseBuildInputs)
 }
 
-tasks.matching { it.name == "bundleRelease" }.configureEach {
+tasks.matching { it.name == "bundleGooglePlayRelease" }.configureEach {
     dependsOn(validateGooglePlayReleaseBuildInputs)
     doLast {
-        val bundleFile = layout.buildDirectory.file("outputs/bundle/release/app-release.aab").get().asFile
+        val bundleFile = layout.buildDirectory.file("outputs/bundle/googlePlayRelease/app-googlePlay-release.aab").get().asFile
         validateReleaseBundleNativeLibrary(bundleFile)
     }
 }
@@ -246,5 +259,5 @@ tasks.matching { it.name == "bundleRelease" }.configureEach {
 tasks.register("validateGooglePlayReleaseBundle") {
     group = "verification"
     description = "Builds the release AAB and verifies it contains the RTKLIB native library for Play delivery."
-    dependsOn("bundleRelease")
+    dependsOn("bundleGooglePlayRelease")
 }

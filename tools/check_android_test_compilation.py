@@ -61,7 +61,7 @@ def termux_r_jar_source(root: Path) -> Path:
 
     return (
         root
-        / "app/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar"
+        / "app/build/intermediates/compile_r_class_jar/sideloadDebug/generateSideloadDebugRFile/R.jar"
     )
 
 
@@ -70,8 +70,8 @@ def termux_r_jar_destination(root: Path) -> Path:
 
     return (
         root
-        / "app/build/intermediates/compile_and_runtime_r_class_jar/debug/"
-        "processDebugResources/R.jar"
+        / "app/build/intermediates/compile_and_runtime_r_class_jar/sideloadDebug/"
+        "processSideloadDebugResources/R.jar"
     )
 
 
@@ -291,7 +291,7 @@ def run_gate(
         )
         return resolved_mode
 
-    runner(gradle + [":app:compileDebugKotlin", "--no-parallel"], root)
+    runner(gradle + [":app:compileSideloadDebugKotlin", "--no-parallel"], root)
     seeded_jar = seed_termux_unit_test_r_jar(root)
     print(f"Seeded Termux unit-test R.jar: {seeded_jar}", flush=True)
     runner(
@@ -300,7 +300,7 @@ def run_gate(
             ":app:termuxTestDebugUnitTest",
             *PURE_JVM_TEST_TASKS,
             "-x",
-            ":app:processDebugResources",
+            ":app:processSideloadDebugResources",
             "--no-parallel",
         ],
         root,

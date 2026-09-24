@@ -673,6 +673,9 @@ continues. RTK2go upload profiles force safety rules, and reconnect delays below
 10 seconds are rejected. High-rate RTCM upload and long sessions can quickly
 consume mobile data and can hit public caster quotas.
 
+CRC-invalid candidate frames are not written to the upload RTCM3 file or sent
+to the caster. Their bytes are retained as Base64 in `events.jsonl` for audit.
+
 A fixed base must not start directly from a temporary-base recording. The base
 coordinate must be accepted first. The V1 UI rejects starts where manual
 coordinates and imported `base-position.json` are both supplied.

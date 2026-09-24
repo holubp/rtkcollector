@@ -18,6 +18,25 @@ Verification:
 - Automated: profile-store read/save/read and legacy migration tests.
 - Manual: Android profile editor and recording/upload smoke tests after migration.
 
+### SEC-NTRIP-TLS-002: Distribution And Service Intent Boundary
+
+Status: Normative
+
+Google Play builds MUST reject plaintext and unsafe TLS correction and source
+upload policies; sideload builds MAY allow them only under the explicit profile
+policy, including local acknowledgement for unsafe TLS. Before constructing a
+correction or upload request on recording start or update, the foreground
+service MUST require correctly typed host, port, mountpoint, transport mode,
+TLS verification and acknowledgement intent fields and validate the resulting
+security policy. Missing, mistyped or unknown values MUST fail closed.
+
+Verification:
+- Automated: `ActiveRecordingConfigTest` against each variant's generated
+  `BuildConfig`; `ServiceNtripIntentParserTest` and
+  `RecordingForegroundServiceTest`.
+- Build: both Google Play and sideload debug compile and unit-test tasks on a
+  full Android host.
+
 ### SEC-SECRETS-001: Session Metadata Excludes Secrets
 
 Status: Normative

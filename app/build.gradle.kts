@@ -205,6 +205,7 @@ tasks.register<org.gradle.api.tasks.testing.Test>("termuxTestDebugUnitTest") {
         excludeTestsMatching("org.rtkcollector.app.ui.dashboard.DashboardServiceMapperTest")
         excludeTestsMatching("org.rtkcollector.app.ui.imports.SettingsImportIntentReaderTest")
         excludeTestsMatching("org.rtkcollector.app.profile.NtripProfileStoreSecurityTest")
+        excludeTestsMatching("org.rtkcollector.app.recording.ServiceNtripIntentParserTest")
     }
 }
 

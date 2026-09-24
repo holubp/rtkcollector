@@ -155,6 +155,7 @@ import org.rtkcollector.core.workflow.RtklibSolutionDirection
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import java.time.Instant
+import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.atan2
@@ -187,6 +188,58 @@ internal fun <T> withValidatedServiceNtripPolicy(
     return construct(ntripSecurityPolicy(host, port, transport, verification, unsafeTlsAcknowledged, allowInsecure))
 }
 
+internal data class ServiceNtripIntentKeys(
+    val host: String,
+    val port: String,
+    val mountpoint: String,
+    val transportMode: String,
+    val tlsVerification: String,
+    val unsafeTlsAcknowledged: String,
+)
+
+internal val CORRECTION_NTRIP_INTENT_KEYS = ServiceNtripIntentKeys(
+    RecordingForegroundService.EXTRA_NTRIP_HOST,
+    RecordingForegroundService.EXTRA_NTRIP_PORT,
+    RecordingForegroundService.EXTRA_NTRIP_MOUNTPOINT,
+    RecordingForegroundService.EXTRA_NTRIP_TRANSPORT_MODE,
+    RecordingForegroundService.EXTRA_NTRIP_TLS_VERIFICATION,
+    RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED,
+)
+
+internal val UPLOAD_NTRIP_INTENT_KEYS = ServiceNtripIntentKeys(
+    RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_HOST,
+    RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PORT,
+    RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT,
+    RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE,
+    RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION,
+    RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED,
+)
+
+@Suppress("DEPRECATION")
+internal fun <T> withValidatedServiceNtripIntent(
+    intent: Intent,
+    keys: ServiceNtripIntentKeys,
+    allowInsecure: Boolean,
+    construct: (org.rtkcollector.core.correction.NtripEndpointSecurityPolicy, String) -> T,
+): T {
+    fun requiredString(key: String): String {
+        val value = intent.extras?.get(key)
+        require(value is String && value.isNotBlank()) { "NTRIP $key must be a non-empty string." }
+        return value
+    }
+    val host = requiredString(keys.host)
+    val mountpoint = requiredString(keys.mountpoint)
+    val port = intent.extras?.get(keys.port)
+    require(port is Int && port in 1..65535) { "NTRIP port must be an integer between 1 and 65535." }
+    val transportMode = requiredString(keys.transportMode)
+    val tlsVerification = requiredString(keys.tlsVerification)
+    val acknowledgement = intent.extras?.get(keys.unsafeTlsAcknowledged)
+    require(acknowledgement is Boolean) { "NTRIP unsafe TLS acknowledgement must be a boolean." }
+    return withValidatedServiceNtripPolicy(
+        host, port, transportMode, tlsVerification, acknowledgement, allowInsecure,
+    ) { policy -> construct(policy, mountpoint) }
+}
+
 internal fun routeBaseCasterUploadFrame(
     frame: Rtcm3Frame,
     uploaderActive: Boolean,
@@ -197,9 +250,8 @@ internal fun routeBaseCasterUploadFrame(
 ): Boolean? {
     if (!uploaderActive) return null
     if (frame.crcValid != true) {
-        appendAudit(frame.bytes)
         appendDroppedEvent(
-            """{"type":"base-caster-upload-frame-dropped","reason":"invalid-rtcm-crc","messageType":${frame.messageType ?: "null"},"frameBytes":${frame.bytes.size},"timestampMillis":$timestampMillis}""",
+            """{"type":"base-caster-upload-frame-dropped","reason":"invalid-rtcm-crc","messageType":${frame.messageType ?: "null"},"frameBytes":${frame.bytes.size},"frameBase64":"${Base64.getEncoder().encodeToString(frame.bytes)}","timestampMillis":$timestampMillis}""",
         )
         return false
     }
@@ -1577,29 +1629,12 @@ class RecordingForegroundService : Service() {
     }
 
     private fun ntripRuntimeConfig(intent: Intent): NtripRuntimeConfig? {
-        val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()
-        val mountpoint = intent.getStringExtra(EXTRA_NTRIP_MOUNTPOINT).orEmpty()
-        if (host.isBlank() || mountpoint.isBlank()) {
-            state = state.copy(
-                ntripState = "CONFIG_ERROR",
-                correctionsActive = false,
-                lastError = "NTRIP host and mountpoint are required before connecting.",
-                errorCategory = RecordingErrorCategory.NTRIP,
-                errorSeverity = RecordingErrorSeverity.DEGRADED,
-            )
-            broadcastState()
-            return null
-        }
         val request = runCatching {
-            withValidatedServiceNtripPolicy(
-                host,
-                validatePort(intent.getIntExtra(EXTRA_NTRIP_PORT, 2101)),
-                intent.getStringExtra(EXTRA_NTRIP_TRANSPORT_MODE),
-                intent.getStringExtra(EXTRA_NTRIP_TLS_VERIFICATION),
-                intent.takeIf { it.hasExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED) }
-                    ?.getBooleanExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, false),
+            withValidatedServiceNtripIntent(
+                intent,
+                CORRECTION_NTRIP_INTENT_KEYS,
                 BuildConfig.ALLOW_INSECURE_NTRIP,
-            ) { securityPolicy -> NtripRequest(
+            ) { securityPolicy, mountpoint -> NtripRequest(
                 policy = securityPolicy,
                 mountpoint = mountpoint,
                 credentials = intent.getStringExtra(EXTRA_NTRIP_USERNAME)?.takeIf { it.isNotBlank() }?.let { username ->
@@ -1625,17 +1660,6 @@ class RecordingForegroundService : Service() {
 
     private fun casterUploadRuntimeConfig(intent: Intent): NtripCasterUploadRuntimeConfig? {
         if (!intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_ENABLED, false)) {
-            return null
-        }
-        val host = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_HOST).orEmpty()
-        val mountpoint = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT).orEmpty()
-        if (host.isBlank() || mountpoint.isBlank()) {
-            state = state.copy(
-                lastError = "NTRIP caster upload host and mountpoint are required before connecting.",
-                errorCategory = RecordingErrorCategory.NTRIP,
-                errorSeverity = RecordingErrorSeverity.DEGRADED,
-            )
-            broadcastState()
             return null
         }
         val username = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_USERNAME).orEmpty()
@@ -1696,15 +1720,11 @@ class RecordingForegroundService : Service() {
             ),
         )
         val uploadRequest = runCatching {
-            withValidatedServiceNtripPolicy(
-                host,
-                validatePort(intent.getIntExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, 2101)),
-                intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE),
-                intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION),
-                intent.takeIf { it.hasExtra(EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED) }
-                    ?.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, false),
+            withValidatedServiceNtripIntent(
+                intent,
+                UPLOAD_NTRIP_INTENT_KEYS,
                 BuildConfig.ALLOW_INSECURE_NTRIP,
-            ) { securityPolicy -> NtripCasterUploadRequest(
+            ) { securityPolicy, mountpoint -> NtripCasterUploadRequest(
                 policy = securityPolicy,
                 mountpoint = mountpoint,
                 credentials = credentials,

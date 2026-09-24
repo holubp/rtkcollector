@@ -9,8 +9,29 @@ import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.correction.NtripTransportMode
 import org.rtkcollector.core.correction.NtripTlsVerification
 import org.rtkcollector.core.workflow.SessionArtifact
+import org.rtkcollector.app.BuildConfig
 
 class ActiveRecordingConfigTest {
+    @Test
+    fun `generated distribution flag enforces correction profile policy`() {
+        val plain = ActiveNtripConfig(true, "caster.example", 2101, "MOUNT", "", null, null, null, null, null,
+            transportMode = NtripTransportMode.PLAINTEXT)
+        when (BuildConfig.FLAVOR) {
+            "googlePlay" -> {
+                assertFalse(BuildConfig.ALLOW_INSECURE_NTRIP)
+                assertThrows(IllegalArgumentException::class.java) {
+                    plain.toCore(BuildConfig.ALLOW_INSECURE_NTRIP)
+                }
+            }
+            "sideload" -> {
+                assertTrue(BuildConfig.ALLOW_INSECURE_NTRIP)
+                assertEquals(NtripTransportMode.PLAINTEXT,
+                    plain.toCore(BuildConfig.ALLOW_INSECURE_NTRIP).transport)
+            }
+            else -> error("Unexpected distribution flavor ${BuildConfig.FLAVOR}")
+        }
+    }
+
     @Test
     fun `Google Play rejects plaintext and unsafe correction profiles`() {
         val plain = ActiveNtripConfig(true, "caster.example", 2101, "MOUNT", "", null, null, null, null, null,

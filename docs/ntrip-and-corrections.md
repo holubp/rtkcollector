@@ -122,7 +122,9 @@ Caster upload only sends RTCM frames extracted from the receiver RX stream after
 download correction input. Valid extracted frames are written to
 `base-caster-upload.rtcm3` and offered to a bounded non-blocking upload queue.
 If the queue is full, the frame is dropped for upload and the raw recording
-continues.
+continues. CRC-invalid candidates never enter the RTCM3 upload artifact or
+queue; `events.jsonl` records their exact bytes as Base64 in a dropped-frame
+event for audit.
 
 Before upload can start, workflow validation and command-profile sanity checks
 must confirm:

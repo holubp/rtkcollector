@@ -135,11 +135,14 @@ Status: Normative
 Base upload MUST send only valid RTCM3 frames extracted from `receiver-rx.raw` to
 the caster upload pipeline. Non-RTCM payloads, including OBSVM/OBSVMCMPB/BESTSAT
 and NMEA records, MUST NOT be uploaded. Validity is a precondition for upload;
-invalid RTCM must remain in `base-caster-upload.rtcm3` for audit and be marked
-as dropped from upload.
+invalid RTCM MUST NOT enter `base-caster-upload.rtcm3`. Its exact bytes MUST be
+recorded as Base64 in a dropped-frame event in `events.jsonl`, and it MUST NOT
+be offered to the upload queue. Valid frames remain in the upload audit even
+when the bounded queue drops them.
 
 Verification:
-- Automated: `NtripCasterUploadControllerTest` valid/invalid frame coverage.
+- Automated: `BaseCasterUploadFrameRouterTest` valid/invalid/queue-drop coverage
+  and `NtripCasterUploadControllerTest`.
 - Manual: replay session with mixed OBSVM/RTCM confirms only RTCM bytes are offered
   to upload.
 

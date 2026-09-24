@@ -25,8 +25,11 @@ jobs:
       - name: Test Android test-compilation gate
         run: python3 -m unittest discover -s tools -p 'test_check_android_test_compilation.py' -v
 
-      - name: Compile and run Android tests
-        run: python3 tools/check_android_test_compilation.py --mode standard
+      - name: Run repository pre-push gate
+        run: sh scripts/pre_push_check.sh
+
+      - name: Verify both NTRIP distribution variants
+        run: sh gradlew :app:testGooglePlayDebugUnitTest :app:testSideloadDebugUnitTest :app:compileGooglePlayDebugKotlin :app:compileSideloadDebugKotlin --no-parallel
 
       - name: Upload test reports
         if: always()

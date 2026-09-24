@@ -16,7 +16,11 @@ class AndroidTestCompilationGateTest(unittest.TestCase):
 
         self.assertNotIn("run: ./gradlew", workflow)
         self.assertIn("run: sh gradlew assembleDebug --no-parallel", workflow)
-        self.assertIn("python3 tools/check_android_test_compilation.py --mode standard", workflow)
+        self.assertIn("run: sh scripts/pre_push_check.sh", workflow)
+        self.assertIn(
+            "python3 tools/check_android_test_compilation.py --root \"$ROOT\" --mode auto",
+            (root / "scripts" / "pre_push_check.sh").read_text(encoding="utf-8"),
+        )
 
     def test_ci_runs_tests_before_native_assembly(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -24,12 +28,15 @@ class AndroidTestCompilationGateTest(unittest.TestCase):
             encoding="utf-8"
         )
 
-        test_step = workflow.index("- name: Compile and run Android tests")
+        test_step = workflow.index("- name: Run repository pre-push gate")
+        variant_step = workflow.index("- name: Verify both NTRIP distribution variants")
         report_step = workflow.index("- name: Upload test reports")
         provision_step = workflow.index("- name: Provision pinned RTKLIB-EX source")
         assemble_step = workflow.index("- name: Assemble debug bootstrap")
 
         self.assertLess(test_step, report_step)
+        self.assertLess(test_step, variant_step)
+        self.assertLess(variant_step, report_step)
         self.assertLess(report_step, provision_step)
         self.assertLess(test_step, provision_step)
         self.assertLess(provision_step, assemble_step)
@@ -37,6 +44,10 @@ class AndroidTestCompilationGateTest(unittest.TestCase):
         self.assertIn("**/build/test-results/**/*.xml", workflow)
         self.assertIn("third_party/rtklib-ex/snapshot.json", workflow)
         self.assertIn("tools/update_rtklib_ex.py", workflow)
+        self.assertIn(":app:testGooglePlayDebugUnitTest", workflow)
+        self.assertIn(":app:testSideloadDebugUnitTest", workflow)
+        self.assertIn(":app:compileGooglePlayDebugKotlin", workflow)
+        self.assertIn(":app:compileSideloadDebugKotlin", workflow)
         self.assertIn("--metadata \"$RUNNER_TEMP/rtklib-ex-snapshot.json\"", workflow)
 
     def test_auto_mode_detects_termux(self) -> None:

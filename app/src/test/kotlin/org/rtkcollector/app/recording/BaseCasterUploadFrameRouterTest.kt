@@ -28,8 +28,7 @@ class BaseCasterUploadFrameRouterTest {
         )
 
         assertEquals(false, offered)
-        assertEquals(1, audited.size)
-        assertArrayEquals(frameBytes, audited.single())
+        assertTrue(audited.isEmpty())
         assertFalse(uploadCalled)
         assertEquals(1, events.size)
         assertTrue(events.single().contains("\"type\":\"base-caster-upload-frame-dropped\""))
@@ -37,6 +36,7 @@ class BaseCasterUploadFrameRouterTest {
         assertTrue(events.single().contains("\"messageType\":1074"))
         assertTrue(events.single().contains("\"frameBytes\":8"))
         assertTrue(events.single().contains("\"timestampMillis\":1234"))
+        assertTrue(events.single().contains("\"frameBase64\":\"0wACQyAAAAA=\""))
     }
 
     @Test
@@ -87,5 +87,20 @@ class BaseCasterUploadFrameRouterTest {
 
         assertEquals(null, offered)
         assertTrue(actions.isEmpty())
+    }
+
+    @Test
+    fun `queue drop leaves valid frame in audit without marking its crc invalid`() {
+        val frameBytes = byteArrayOf(0xd3.toByte(), 0, 0, 1, 2, 3)
+        val audited = mutableListOf<ByteArray>()
+        val events = mutableListOf<String>()
+        val offered = routeBaseCasterUploadFrame(
+            Rtcm3Frame(frameBytes, 0, 1005, true), true, 99L,
+            audited::add, events::add,
+            { _, _ -> false },
+        )
+        assertEquals(false, offered)
+        assertArrayEquals(frameBytes, audited.single())
+        assertTrue(events.isEmpty())
     }
 }

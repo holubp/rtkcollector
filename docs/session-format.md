@@ -182,10 +182,11 @@ must use stream-based reads and writes because document URIs are not filesystem
 paths.
 
 Fixed-base and temporary-base workflows that upload generated RTCM to an
-external NTRIP caster write the exact bytes offered to the caster to
-`base-caster-upload.rtcm3`. It contains valid RTCM3 frames only, including
-frames that could not enter the bounded upload queue. CRC-invalid candidate
-frames are never written to this RTCM3 stream; a
+external NTRIP caster write valid extracted RTCM3 upload candidates to
+`base-caster-upload.rtcm3` before offering them to the bounded upload queue.
+The artifact can include queue-dropped candidates and therefore does not
+necessarily represent bytes offered to or sent to the caster. CRC-invalid
+candidate frames are never written to this RTCM3 stream; a
 `base-caster-upload-frame-dropped` entry in `events.jsonl` records the exact
 invalid bytes as `frameBase64` with the `invalid-rtcm-crc` reason. This file is separate from `receiver-rx.raw`,
 `tx-to-receiver.raw`, `correction-input.raw` and `rtcm-extracted.rtcm3` so that

@@ -120,7 +120,10 @@ only as HTTP Basic credentials in v2 mode.
 Caster upload only sends RTCM frames extracted from the receiver RX stream after
 `receiver-rx.raw` has already been written. Upload never reads from the NTRIP
 download correction input. Valid extracted frames are written to
-`base-caster-upload.rtcm3` and offered to a bounded non-blocking upload queue.
+`base-caster-upload.rtcm3` before they are offered to a bounded non-blocking
+upload queue. This artifact records valid RTCM upload candidates, including
+queue-dropped frames; it is not necessarily the bytes offered to or sent to the
+caster.
 If the queue is full, the frame is dropped for upload and the raw recording
 continues. CRC-invalid candidates never enter the RTCM3 upload artifact or
 queue; `events.jsonl` records their exact bytes as Base64 in a dropped-frame

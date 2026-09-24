@@ -240,6 +240,41 @@ internal fun <T> withValidatedServiceNtripIntent(
     ) { policy -> construct(policy, mountpoint) }
 }
 
+internal fun correctionNtripRequestFromIntent(intent: Intent, allowInsecure: Boolean): NtripRequest =
+    withValidatedServiceNtripIntent(intent, CORRECTION_NTRIP_INTENT_KEYS, allowInsecure) { policy, mountpoint ->
+        NtripRequest(
+            policy = policy,
+            mountpoint = mountpoint,
+            credentials = intent.getStringExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { username ->
+                    NtripCredentials(
+                        username = username,
+                        password = intent.getStringExtra(RecordingForegroundService.EXTRA_NTRIP_PASSWORD).orEmpty(),
+                    )
+                },
+        )
+    }
+
+internal fun uploadNtripRequestFromIntent(intent: Intent, allowInsecure: Boolean): NtripCasterUploadRequest =
+    withValidatedServiceNtripIntent(intent, UPLOAD_NTRIP_INTENT_KEYS, allowInsecure) { policy, mountpoint ->
+        val username = intent.getStringExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_USERNAME).orEmpty()
+        val password = intent.getStringExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PASSWORD).orEmpty()
+        NtripCasterUploadRequest(
+            policy = policy,
+            mountpoint = mountpoint,
+            credentials = if (username.isNotBlank() || password.isNotEmpty()) {
+                NtripCredentials(username = username, password = password)
+            } else {
+                null
+            },
+            protocolVersion = when (intent.getStringExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY)) {
+                "NTRIP_V1_ONLY" -> NtripProtocolVersion.NTRIP_V1
+                else -> NtripProtocolVersion.NTRIP_V2
+            },
+        )
+    }
+
 internal fun routeBaseCasterUploadFrame(
     frame: Rtcm3Frame,
     uploaderActive: Boolean,
@@ -1630,17 +1665,7 @@ class RecordingForegroundService : Service() {
 
     private fun ntripRuntimeConfig(intent: Intent): NtripRuntimeConfig? {
         val request = runCatching {
-            withValidatedServiceNtripIntent(
-                intent,
-                CORRECTION_NTRIP_INTENT_KEYS,
-                BuildConfig.ALLOW_INSECURE_NTRIP,
-            ) { securityPolicy, mountpoint -> NtripRequest(
-                policy = securityPolicy,
-                mountpoint = mountpoint,
-                credentials = intent.getStringExtra(EXTRA_NTRIP_USERNAME)?.takeIf { it.isNotBlank() }?.let { username ->
-                    NtripCredentials(username = username, password = intent.getStringExtra(EXTRA_NTRIP_PASSWORD).orEmpty())
-                },
-            ) }
+            correctionNtripRequestFromIntent(intent, BuildConfig.ALLOW_INSECURE_NTRIP)
         }.getOrElse {
             state = state.copy(
                 ntripState = "CONFIG_ERROR",
@@ -1661,13 +1686,6 @@ class RecordingForegroundService : Service() {
     private fun casterUploadRuntimeConfig(intent: Intent): NtripCasterUploadRuntimeConfig? {
         if (!intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_ENABLED, false)) {
             return null
-        }
-        val username = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_USERNAME).orEmpty()
-        val password = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_PASSWORD).orEmpty()
-        val credentials = if (username.isNotBlank() || password.isNotEmpty()) {
-            NtripCredentials(username = username, password = password)
-        } else {
-            null
         }
         val retryMode = when (
             intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_RETRY_MODE)?.uppercase()
@@ -1720,18 +1738,7 @@ class RecordingForegroundService : Service() {
             ),
         )
         val uploadRequest = runCatching {
-            withValidatedServiceNtripIntent(
-                intent,
-                UPLOAD_NTRIP_INTENT_KEYS,
-                BuildConfig.ALLOW_INSECURE_NTRIP,
-            ) { securityPolicy, mountpoint -> NtripCasterUploadRequest(
-                policy = securityPolicy,
-                mountpoint = mountpoint,
-                credentials = credentials,
-                protocolVersion = uploadProtocolVersion(
-                    intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY),
-                ),
-            ) }
+            uploadNtripRequestFromIntent(intent, BuildConfig.ALLOW_INSECURE_NTRIP)
         }.getOrElse {
             state = state.copy(
                 lastError = it.message ?: "NTRIP caster upload request is invalid.",
@@ -2579,12 +2586,6 @@ class RecordingForegroundService : Service() {
         require(value in 1..65535) { "NTRIP port must be between 1 and 65535." }
         return value
     }
-
-    private fun uploadProtocolVersion(policy: String?): NtripProtocolVersion =
-        when (policy) {
-            "NTRIP_V1_ONLY" -> NtripProtocolVersion.NTRIP_V1
-            else -> NtripProtocolVersion.NTRIP_V2
-        }
 
     private fun ntripDisplayUrl(intent: Intent): String {
         val host = intent.getStringExtra(EXTRA_NTRIP_HOST).orEmpty()

@@ -667,7 +667,9 @@ When caster upload is enabled, the selected command profile must emit minimum
 RTCM base data. The app rejects upload start if the command script has no
 base-position RTCM message or no MSM observation message. During recording,
 valid RTCM extracted from receiver RX is written to `base-caster-upload.rtcm3`
-and uploaded through a bounded background uploader. Caster outage or
+before being offered to a bounded background uploader. The file can include
+valid frames dropped by the upload queue, so it is not a record of bytes sent
+to the caster. Caster outage or
 authentication failure degrades only upload; `receiver-rx.raw` recording
 continues. RTK2go upload profiles force safety rules, and reconnect delays below
 10 seconds are rejected. High-rate RTCM upload and long sessions can quickly

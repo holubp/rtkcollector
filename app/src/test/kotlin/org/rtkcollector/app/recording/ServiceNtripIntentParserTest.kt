@@ -1,9 +1,8 @@
 package org.rtkcollector.app.recording
 
 import android.content.Intent
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -11,61 +10,53 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class ServiceNtripIntentParserTest {
     @Test
-    fun `valid correction and upload extras construct TLS requests`() {
-        for ((intent, keys) in listOf(
-            correctionIntent() to CORRECTION_NTRIP_INTENT_KEYS,
-            uploadIntent() to UPLOAD_NTRIP_INTENT_KEYS,
+    fun `real request factories reject malformed typed extras`() {
+        for ((valid, keys, construct) in listOf(
+            Triple(correctionIntent(), CORRECTION_NTRIP_INTENT_KEYS, { intent: Intent -> correctionNtripRequestFromIntent(intent, false).mountpoint }),
+            Triple(uploadIntent(), UPLOAD_NTRIP_INTENT_KEYS, { intent: Intent -> uploadNtripRequestFromIntent(intent, false).mountpoint }),
         )) {
-            var constructed = 0
-            val mountpoint = withValidatedServiceNtripIntent(intent, keys, false) { policy, mount ->
-                constructed++
-                assertEquals("caster.example", policy.endpoint.host)
-                mount
-            }
-            assertEquals("MOUNT", mountpoint)
-            assertEquals(1, constructed)
-        }
-    }
-
-    @Test
-    fun `start and update correction reject incomplete and mistyped endpoint extras before construction`() {
-        for (action in listOf("start", "update")) {
-            val valid = correctionIntent()
+            assertEquals("MOUNT", construct(valid))
             val malformed = listOf(
-                Intent(valid).apply { removeExtra(RecordingForegroundService.EXTRA_NTRIP_PORT) },
-                Intent(valid).putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, "2101"),
-                Intent(valid).apply { removeExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED) },
-                Intent(valid).putExtra(RecordingForegroundService.EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, "false"),
+                Intent(valid).apply { removeExtra(keys.host) },
+                Intent(valid).putExtra(keys.host, 42),
+                Intent(valid).putExtra(keys.host, " "),
+                Intent(valid).putExtra(keys.host, "bad host"),
+                Intent(valid).apply { removeExtra(keys.mountpoint) },
+                Intent(valid).putExtra(keys.mountpoint, 42),
+                Intent(valid).putExtra(keys.mountpoint, " "),
+                Intent(valid).apply { removeExtra(keys.port) },
+                Intent(valid).putExtra(keys.port, "2101"),
+                Intent(valid).putExtra(keys.port, 0),
+                Intent(valid).putExtra(keys.port, 65536),
+                Intent(valid).apply { removeExtra(keys.transportMode) },
+                Intent(valid).putExtra(keys.transportMode, 42),
+                Intent(valid).putExtra(keys.transportMode, "BOGUS"),
+                Intent(valid).putExtra(keys.transportMode, "PLAINTEXT"),
+                Intent(valid).apply { removeExtra(keys.tlsVerification) },
+                Intent(valid).putExtra(keys.tlsVerification, 42),
+                Intent(valid).putExtra(keys.tlsVerification, "BOGUS"),
+                Intent(valid).putExtra(keys.tlsVerification, "UNSAFE"),
+                Intent(valid).apply { removeExtra(keys.unsafeTlsAcknowledged) },
+                Intent(valid).putExtra(keys.unsafeTlsAcknowledged, "false"),
             )
             for (intent in malformed) {
-                var constructed = false
-                assertFailsWith<IllegalArgumentException>(action) {
-                    withValidatedServiceNtripIntent(intent, CORRECTION_NTRIP_INTENT_KEYS, false) { _, _ ->
-                        constructed = true
-                    }
-                }
-                assertFalse(constructed, action)
+                assertFailsWith<IllegalArgumentException> { construct(intent) }
             }
         }
     }
 
     @Test
-    fun `upload rejects incomplete and mistyped endpoint extras before construction`() {
-        val valid = uploadIntent()
-        val malformed = listOf(
-            Intent(valid).apply { removeExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PORT) },
-            Intent(valid).putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PORT, "2101"),
-            Intent(valid).apply { removeExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED) },
-            Intent(valid).putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, "false"),
-        )
-        for (intent in malformed) {
-            var constructed = false
+    fun `sideload unsafe TLS requires typed true acknowledgement for both requests`() {
+        for ((valid, keys, construct) in listOf(
+            Triple(correctionIntent(), CORRECTION_NTRIP_INTENT_KEYS, { intent: Intent -> correctionNtripRequestFromIntent(intent, true).mountpoint }),
+            Triple(uploadIntent(), UPLOAD_NTRIP_INTENT_KEYS, { intent: Intent -> uploadNtripRequestFromIntent(intent, true).mountpoint }),
+        )) {
+            val unsafe = Intent(valid).putExtra(keys.tlsVerification, "UNSAFE")
+            assertFailsWith<IllegalArgumentException> { construct(unsafe) }
+            assertEquals("MOUNT", construct(Intent(unsafe).putExtra(keys.unsafeTlsAcknowledged, true)))
             assertFailsWith<IllegalArgumentException> {
-                withValidatedServiceNtripIntent(intent, UPLOAD_NTRIP_INTENT_KEYS, false) { _, _ ->
-                    constructed = true
-                }
+                construct(Intent(unsafe).putExtra(keys.unsafeTlsAcknowledged, "true"))
             }
-            assertFalse(constructed)
         }
     }
 

@@ -23,7 +23,11 @@ internal object NtripTlsFixture {
         return SSLContext.getInstance("TLS").apply { init(null, managers.trustManagers, null) }.socketFactory
     }
 
-    class Server(private val count: Int = 1, private val handle: (SSLSocket) -> Unit) : AutoCloseable {
+    class Server(
+        private val count: Int = 1,
+        bindHost: String = "localhost",
+        private val handle: (SSLSocket) -> Unit,
+    ) : AutoCloseable {
         private val socket: SSLServerSocket
         private val done = CompletableFuture<Unit>()
         val port: Int get() = socket.localPort
@@ -38,7 +42,7 @@ internal object NtripTlsFixture {
                 init(keys, "test-only".toCharArray())
             }
             val context = SSLContext.getInstance("TLS").apply { init(managers.keyManagers, null, null) }
-            socket = context.serverSocketFactory.createServerSocket(0, 10, InetAddress.getByName("0.0.0.0")) as SSLServerSocket
+            socket = context.serverSocketFactory.createServerSocket(0, 10, InetAddress.getByName(bindHost)) as SSLServerSocket
             socket.soTimeout = 5_000
             Thread {
                 try {

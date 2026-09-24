@@ -198,20 +198,35 @@ interface NtripSocketConnector {
 
 class JavaNtripSocketConnector internal constructor(
     private val systemSocketFactory: SSLSocketFactory,
+    private val rawSocketFactory: () -> Socket = ::Socket,
 ) : NtripSocketConnector {
     constructor() : this(SSLSocketFactory.getDefault() as SSLSocketFactory)
     private fun connectPlaintext(host: String, port: Int): NtripSocket {
-        val socket = Socket().apply {
-            connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
-            soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
-        }
-        return object : NtripSocket {
-            override val input: InputStream = socket.getInputStream()
-            override val output: OutputStream = socket.getOutputStream()
+        val socket = connectTcp(host, port)
+        try {
+            return object : NtripSocket {
+                override val input: InputStream = socket.getInputStream()
+                override val output: OutputStream = socket.getOutputStream()
 
-            override fun close() {
-                socket.close()
+                override fun close() {
+                    socket.close()
+                }
             }
+        } catch (exception: Exception) {
+            socket.close()
+            throw exception
+        }
+    }
+
+    private fun connectTcp(host: String, port: Int): Socket {
+        val socket = rawSocketFactory()
+        try {
+            socket.connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
+            socket.soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
+            return socket
+        } catch (exception: Exception) {
+            socket.close()
+            throw exception
         }
     }
 
@@ -221,10 +236,7 @@ class JavaNtripSocketConnector internal constructor(
         if (policy.transport == NtripTransportMode.PLAINTEXT) {
             return connectPlaintext(host, port)
         }
-        val rawSocket = Socket().apply {
-            connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
-            soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
-        }
+        val rawSocket = connectTcp(host, port)
         try {
             val socket = (socketFactory(policy).createSocket(rawSocket, host, port, true) as SSLSocket).apply {
                 soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS

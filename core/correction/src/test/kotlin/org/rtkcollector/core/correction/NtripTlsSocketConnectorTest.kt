@@ -8,7 +8,11 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
+import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
+import java.net.SocketAddress
+import java.net.SocketException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
@@ -19,8 +23,42 @@ class NtripTlsSocketConnectorTest {
     private val trustedConnector get() = JavaNtripSocketConnector(NtripTlsFixture.trustedFactory())
 
     @Test
+    fun `failed raw TCP setup closes socket for either transport`() {
+        for (transport in NtripTransportMode.entries) {
+            for (failOnTimeout in listOf(false, true)) {
+                var closed = false
+                val rawSocket = object : Socket() {
+                    override fun connect(endpoint: SocketAddress?, timeout: Int) {
+                        if (!failOnTimeout) throw SocketException("connect failed")
+                    }
+
+                    override fun setSoTimeout(timeout: Int) {
+                        if (failOnTimeout) throw SocketException("timeout setup failed")
+                    }
+
+                    override fun close() {
+                        closed = true
+                        super.close()
+                    }
+                }
+                val connector = JavaNtripSocketConnector(NtripTlsFixture.trustedFactory()) { rawSocket }
+                val policy = if (transport == NtripTransportMode.TLS) {
+                    NtripEndpointSecurityPolicy.systemTrust("127.0.0.1", 2101)
+                } else {
+                    NtripEndpointSecurityPolicy(
+                        NtripEndpoint.parse("127.0.0.1", 2101), transport,
+                        NtripTlsVerification.SystemTrust, allowInsecure = true, unsafeAcknowledged = false,
+                    )
+                }
+                assertThrows(SocketException::class.java) { connector.connect(policy) }
+                assertTrue(closed, "$transport failOnTimeout=$failOnTimeout")
+            }
+        }
+    }
+
+    @Test
     fun `TLS handshake fails before an NTRIP request is written to a plaintext peer`() {
-        ServerSocket(0).use { server ->
+        ServerSocket(0, 10, InetAddress.getByName("127.0.0.1")).use { server ->
             val received = CompletableFuture<ByteArray>()
             val peer = Thread {
                 server.accept().use { socket ->
@@ -46,7 +84,7 @@ class NtripTlsSocketConnectorTest {
     @Test
     fun `trusted DNS and IP SANs negotiate TLS 1_2 or newer`() {
         for (host in listOf("localhost", "127.0.0.1")) {
-            NtripTlsFixture.Server { peer ->
+            NtripTlsFixture.Server(bindHost = host) { peer ->
                 peer.startHandshake()
                 assertTrue(peer.session.protocol in setOf("TLSv1.2", "TLSv1.3"))
                 val names = (peer.session as ExtendedSSLSession).requestedServerNames
@@ -64,7 +102,7 @@ class NtripTlsSocketConnectorTest {
 
     @Test
     fun `trusted certificate with wrong IP SAN is rejected`() {
-        NtripTlsFixture.Server { peer -> runCatching { peer.startHandshake() } }.use { server ->
+        NtripTlsFixture.Server(bindHost = "127.0.0.2") { peer -> runCatching { peer.startHandshake() } }.use { server ->
             assertThrows(Exception::class.java) {
                 trustedConnector.connect(NtripEndpointSecurityPolicy.systemTrust("127.0.0.2", server.port))
             }
@@ -74,7 +112,7 @@ class NtripTlsSocketConnectorTest {
 
     @Test
     fun `unsafe TLS requires local consent but still handshakes before returning`() {
-        NtripTlsFixture.Server { peer -> peer.startHandshake() }.use { server ->
+        NtripTlsFixture.Server(bindHost = "127.0.0.2") { peer -> peer.startHandshake() }.use { server ->
             val endpoint = NtripEndpoint.parse("127.0.0.2", server.port)
             assertThrows(IllegalArgumentException::class.java) {
                 NtripEndpointSecurityPolicy(
@@ -106,13 +144,24 @@ class NtripTlsSocketConnectorTest {
 
     @Test
     fun `failed TLS handshake never sends NTRIP bytes or falls back to plaintext`() {
-        ServerSocket(0).use { server ->
+        ServerSocket(0, 10, InetAddress.getByName("127.0.0.1")).use { server ->
             server.soTimeout = 2_000
             val received = CompletableFuture<ByteArray>()
             val peer = Thread {
                 server.accept().use { socket ->
                     socket.soTimeout = 2_000
-                    received.complete(socket.getInputStream().readNBytes(128))
+                    val bytes = ByteArrayOutputStream()
+                    val buffer = ByteArray(4096)
+                    try {
+                        while (true) {
+                            val count = socket.getInputStream().read(buffer)
+                            if (count < 0) break
+                            bytes.write(buffer, 0, count)
+                        }
+                    } catch (_: java.net.SocketTimeoutException) {
+                        // End the stalled handshake after collecting all bytes sent by the client.
+                    }
+                    received.complete(bytes.toByteArray())
                 }
             }.apply { isDaemon = true; start() }
             val policy = NtripEndpointSecurityPolicy.systemTrust("127.0.0.1", server.localPort)
@@ -123,11 +172,15 @@ class NtripTlsSocketConnectorTest {
             ).connectOnce()
             assertEquals(NtripFailureKind.CONNECT_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
             val bytes = received.get(3, TimeUnit.SECONDS)
+            assertTrue(bytes.size > 128, "the complete TLS greeting must exceed the old 128-byte prefix")
             assertEquals(0x16, bytes[0].toInt() and 0xff)
             assertEquals(0x03, bytes[1].toInt() and 0xff)
             val text = bytes.toString(Charsets.ISO_8859_1)
             assertFalse(text.contains("GET /"))
             assertFalse(text.contains("Authorization:"))
+            assertFalse(text.contains("user:secret"))
+            assertFalse(text.contains("dXNlcjpzZWNyZXQ="))
+            assertFalse(text.contains("\$GPGGA"))
             assertThrows(java.net.SocketTimeoutException::class.java) { server.accept().close() }
             peer.join(2_000)
         }

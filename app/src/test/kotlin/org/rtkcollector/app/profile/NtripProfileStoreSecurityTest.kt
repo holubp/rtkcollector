@@ -56,6 +56,49 @@ class NtripProfileStoreSecurityTest {
     }
 
     @Test
+    fun editorCanPersistFreshCorrectionConsentAfterSecurityEditButLaterEditClearsIt() {
+        reset()
+        val store = ProfileStores(context)
+        val original = store.ntripCasterProfiles().single()
+        val edited = original.copy(host = "caster.example", transportMode = NtripTransportMode.TLS,
+            tlsVerification = NtripTlsVerification.Unsafe, unsafeTlsAcknowledged = true)
+        store.saveNtripCasterProfiles(listOf(edited), freshlyAcknowledgedEditorProfileId = edited.id)
+        val saved = ProfileStores(context).ntripCasterProfiles().single()
+        assertTrue(saved.unsafeTlsAcknowledged)
+        assertEquals(NtripTlsVerification.Unsafe, saved.toCore(true).verification)
+        store.saveNtripCasterProfiles(listOf(saved.copy(host = "next.example")))
+        assertFalse(ProfileStores(context).ntripCasterProfiles().single().unsafeTlsAcknowledged)
+    }
+
+    @Test
+    fun editorCanPersistFreshUploadConsentAfterEndpointEditButLaterEditClearsIt() {
+        reset()
+        val store = ProfileStores(context)
+        val original = store.ntripCasterUploadProfiles().single()
+        val edited = original.copy(host = "upload.example", port = 2201,
+            tlsVerification = NtripTlsVerification.Unsafe, unsafeTlsAcknowledged = true)
+        store.saveNtripCasterUploadProfiles(listOf(edited), freshlyAcknowledgedEditorProfileId = edited.id)
+        val saved = ProfileStores(context).ntripCasterUploadProfiles().single()
+        assertTrue(saved.unsafeTlsAcknowledged)
+        assertEquals(NtripTlsVerification.Unsafe, saved.toCore(true).verification)
+        store.saveNtripCasterUploadProfiles(listOf(saved.copy(port = 2202)))
+        assertFalse(ProfileStores(context).ntripCasterUploadProfiles().single().unsafeTlsAcknowledged)
+    }
+
+    @Test
+    fun plaintextEditorSelectionCanBeSavedAsCoreValidPolicy() {
+        reset()
+        val store = ProfileStores(context)
+        val original = store.ntripCasterProfiles().single()
+        val edited = original.copy(host = "caster.example", transportMode = NtripTransportMode.PLAINTEXT,
+            tlsVerification = NtripTlsVerification.SystemTrust, unsafeTlsAcknowledged = false)
+        store.saveNtripCasterProfiles(listOf(edited))
+        val saved = ProfileStores(context).ntripCasterProfiles().single()
+        assertEquals(NtripTransportMode.PLAINTEXT, saved.toCore(true).transport)
+        assertEquals(NtripTlsVerification.SystemTrust, saved.toCore(true).verification)
+    }
+
+    @Test
     fun defaultCorrectionCustomCaIsRewrittenAndRemainsDisabled() {
         reset()
         seed("ntripCasterProfiles", JSONObject().put("id", "ntrip-caster-default")

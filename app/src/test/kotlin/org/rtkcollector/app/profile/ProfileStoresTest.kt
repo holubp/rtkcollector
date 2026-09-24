@@ -298,6 +298,30 @@ class ProfileStoresTest {
     }
 
     @Test
+    fun `fresh editor consent applies to final unsafe endpoint only`() {
+        val caster = NtripCasterProfile(
+            id = "caster", name = "Caster", host = "caster.example",
+            tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
+            unsafeTlsAcknowledged = true,
+        )
+        val upload = NtripCasterUploadProfile(
+            id = "upload", name = "Upload", host = "upload.example",
+            tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
+            unsafeTlsAcknowledged = true,
+        )
+        assertTrue(caster.clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
+            .unsafeTlsAcknowledged)
+        assertTrue(upload.clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
+            .unsafeTlsAcknowledged)
+        assertFalse(caster.copy(transportMode = org.rtkcollector.core.correction.NtripTransportMode.PLAINTEXT)
+            .clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
+            .unsafeTlsAcknowledged)
+        assertFalse(upload.copy(requiresTlsVerificationChoice = true)
+            .clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
+            .unsafeTlsAcknowledged)
+    }
+
+    @Test
     fun `reference lookup resolves solution policy profiles`() {
         val profile = SolutionPolicyProfile(
             id = "solution-rtklib",

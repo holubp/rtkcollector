@@ -80,6 +80,61 @@ class ProfileEditorModelsTest {
         assertEquals("base-user", changed["username"])
         assertEquals("source-password", changed["password"])
         assertEquals("false", changed["unsafeTlsAcknowledged"])
+        assertEquals(NtripTlsVerification.SystemTrust.storageValue, changed["tlsVerification"])
+    }
+
+    @Test
+    fun `plaintext editor disables unsafe verification and preserves core valid selection`() {
+        val fields = ntripSecurityEditorFields(
+            NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust, false, true,
+        )
+        val verification = fields.first { it.key == "tlsVerification" }
+        assertFalse(verification.optionItems.first { it.value == NtripTlsVerification.Unsafe.storageValue }.enabled)
+
+        val changed = updatedNtripSecurityEditorValues(
+            mapOf("transportMode" to "PLAINTEXT", "tlsVerification" to NtripTlsVerification.SystemTrust.storageValue),
+            "tlsVerification", NtripTlsVerification.Unsafe.storageValue,
+        )
+        assertEquals(NtripTlsVerification.SystemTrust.storageValue, changed["tlsVerification"])
+    }
+
+    @Test
+    fun `opening stale plaintext unsafe profile shows normalized verification`() {
+        val fields = ntripSecurityEditorFields(
+            NtripTransportMode.PLAINTEXT, NtripTlsVerification.Unsafe, true, true,
+        )
+        assertEquals(NtripTlsVerification.SystemTrust.storageValue,
+            fields.first { it.key == "tlsVerification" }.value)
+        assertEquals("false", fields.first { it.key == "unsafeTlsAcknowledged" }.value)
+    }
+
+    @Test
+    fun `unsafe verification option follows transport changes in open editor`() {
+        val fromTls = ntripSecurityEditorFields(
+            NtripTransportMode.TLS, NtripTlsVerification.SystemTrust, false, true,
+        ).first { it.key == "tlsVerification" }
+        val plaintext = fromTls.withRuntimeProfileValidation(mapOf("transportMode" to "PLAINTEXT"))
+        assertFalse(plaintext.optionItems.first { it.value == NtripTlsVerification.Unsafe.storageValue }.enabled)
+
+        val fromPlaintext = ntripSecurityEditorFields(
+            NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust, false, true,
+        ).first { it.key == "tlsVerification" }
+        val tls = fromPlaintext.withRuntimeProfileValidation(mapOf("transportMode" to "TLS"))
+        assertTrue(tls.optionItems.first { it.value == NtripTlsVerification.Unsafe.storageValue }.enabled)
+    }
+
+    @Test
+    fun `fresh unsafe acknowledgement survives until a later endpoint edit`() {
+        val changed = updatedNtripSecurityEditorValues(
+            mapOf("host" to "old.example", "transportMode" to "TLS",
+                "tlsVerification" to NtripTlsVerification.Unsafe.storageValue,
+                "unsafeTlsAcknowledged" to "true"),
+            "host", "new.example",
+        )
+        assertEquals("false", changed["unsafeTlsAcknowledged"])
+        val acknowledged = updatedNtripSecurityEditorValues(changed, "unsafeTlsAcknowledged", "true")
+        assertEquals("true", acknowledged["unsafeTlsAcknowledged"])
+        assertEquals("false", updatedNtripSecurityEditorValues(acknowledged, "port", "2201")["unsafeTlsAcknowledged"])
     }
 
     @Test

@@ -1,5 +1,8 @@
 package org.rtkcollector.app.profile
 
+import org.rtkcollector.core.correction.NtripTlsVerification
+import org.rtkcollector.core.correction.NtripTransportMode
+
 internal object ProfileStoreMigrations {
     fun commandProfiles(
         profiles: List<CommandProfile>,
@@ -119,12 +122,14 @@ private fun String.blankOldNone(): String =
 
 internal fun NtripCasterProfile.clearUnsafeAcknowledgementUnlessUnchanged(
     persisted: NtripCasterProfile?,
+    freshlyAcknowledgedInEditor: Boolean = false,
 ): NtripCasterProfile =
-    if (!requiresTlsVerificationChoice && persisted != null &&
-        host == persisted.host &&
-        port == persisted.port &&
-        transportMode == persisted.transportMode &&
-        tlsVerification == persisted.tlsVerification
+    if (!requiresTlsVerificationChoice && (
+        (freshlyAcknowledgedInEditor && transportMode == NtripTransportMode.TLS &&
+            tlsVerification == NtripTlsVerification.Unsafe) ||
+        (persisted != null && host == persisted.host && port == persisted.port &&
+            transportMode == persisted.transportMode && tlsVerification == persisted.tlsVerification)
+        )
     ) {
         this
     } else {
@@ -133,12 +138,14 @@ internal fun NtripCasterProfile.clearUnsafeAcknowledgementUnlessUnchanged(
 
 internal fun NtripCasterUploadProfile.clearUnsafeAcknowledgementUnlessUnchanged(
     persisted: NtripCasterUploadProfile?,
+    freshlyAcknowledgedInEditor: Boolean = false,
 ): NtripCasterUploadProfile =
-    if (!requiresTlsVerificationChoice && persisted != null &&
-        host == persisted.host &&
-        port == persisted.port &&
-        transportMode == persisted.transportMode &&
-        tlsVerification == persisted.tlsVerification
+    if (!requiresTlsVerificationChoice && (
+        (freshlyAcknowledgedInEditor && transportMode == NtripTransportMode.TLS &&
+            tlsVerification == NtripTlsVerification.Unsafe) ||
+        (persisted != null && host == persisted.host && port == persisted.port &&
+            transportMode == persisted.transportMode && tlsVerification == persisted.tlsVerification)
+        )
     ) {
         this
     } else {

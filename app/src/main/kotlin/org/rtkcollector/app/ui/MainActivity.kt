@@ -4585,15 +4585,16 @@ private fun ProfileStores.saveProfileEditorData(
                     val transportMode = values.optional("transportMode")?.let { value ->
                         runCatching { NtripTransportMode.valueOf(value) }.getOrDefault(profile.transportMode)
                     } ?: profile.transportMode
-                    val tlsVerification = values.optional("tlsVerification")?.let { value ->
+                    val selectedTlsVerification = values.optional("tlsVerification")?.let { value ->
                         runCatching { ntripTlsVerificationFromStorage(value) }.getOrDefault(profile.tlsVerification)
                     } ?: profile.tlsVerification
+                    val tlsVerification = if (transportMode == NtripTransportMode.PLAINTEXT) {
+                        NtripTlsVerification.SystemTrust
+                    } else {
+                        selectedTlsVerification
+                    }
                     val host = values.optional("host").orEmpty()
                     val port = values.optional("port")?.toIntOrNull() ?: 2101
-                    val securityChanged = host != profile.host ||
-                        port != profile.port ||
-                        transportMode != profile.transportMode ||
-                        tlsVerification != profile.tlsVerification
                     profile.copy(
                         name = values.required("name"),
                         host = host,
@@ -4603,7 +4604,6 @@ private fun ProfileStores.saveProfileEditorData(
                         transportMode = transportMode,
                         tlsVerification = tlsVerification,
                         unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
-                            !securityChanged &&
                             transportMode == NtripTransportMode.TLS &&
                             tlsVerification == NtripTlsVerification.Unsafe,
                         requiresTlsVerificationChoice = false,
@@ -4620,6 +4620,9 @@ private fun ProfileStores.saveProfileEditorData(
                     profile
                 }
             },
+            freshlyAcknowledgedEditorProfileId = target.id.takeIf {
+                values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse()
+            },
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
         }
@@ -4633,15 +4636,16 @@ private fun ProfileStores.saveProfileEditorData(
                     val transportMode = values.optional("transportMode")?.let { value ->
                         runCatching { NtripTransportMode.valueOf(value) }.getOrDefault(profile.transportMode)
                     } ?: profile.transportMode
-                    val tlsVerification = values.optional("tlsVerification")?.let { value ->
+                    val selectedTlsVerification = values.optional("tlsVerification")?.let { value ->
                         runCatching { ntripTlsVerificationFromStorage(value) }.getOrDefault(profile.tlsVerification)
                     } ?: profile.tlsVerification
+                    val tlsVerification = if (transportMode == NtripTransportMode.PLAINTEXT) {
+                        NtripTlsVerification.SystemTrust
+                    } else {
+                        selectedTlsVerification
+                    }
                     val host = values.optional("host").orEmpty()
                     val port = values.optional("port")?.toIntOrNull() ?: 2101
-                    val securityChanged = host != profile.host ||
-                        port != profile.port ||
-                        transportMode != profile.transportMode ||
-                        tlsVerification != profile.tlsVerification
                     profile.copy(
                         name = values.required("name"),
                         host = host,
@@ -4652,7 +4656,6 @@ private fun ProfileStores.saveProfileEditorData(
                         transportMode = transportMode,
                         tlsVerification = tlsVerification,
                         unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
-                            !securityChanged &&
                             transportMode == NtripTransportMode.TLS &&
                             tlsVerification == NtripTlsVerification.Unsafe,
                         requiresTlsVerificationChoice = false,
@@ -4694,6 +4697,9 @@ private fun ProfileStores.saveProfileEditorData(
                 } else {
                     profile
                 }
+            },
+            freshlyAcknowledgedEditorProfileId = target.id.takeIf {
+                values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse()
             },
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))

@@ -38,10 +38,13 @@ mountpoint. The app sends NTRIP credentials to that caster when credentials are
 configured. If GGA upload is enabled, the app may send the receiver-derived
 rover position to the selected caster for NTRIP/VRS operation.
 
-Many NTRIP casters use ordinary TCP. In that mode credentials, source-upload
-authentication and optional GGA data are not protected by TLS. Do not treat
-NTRIP data as encrypted in transit unless a future release explicitly implements
-and uses TLS transport for the selected caster endpoint.
+Google Play builds connect to NTRIP casters only over TLS with Android system
+trust and hostname verification. The configured caster port is unchanged by
+this policy. Sideload builds also permit explicitly selected ordinary TCP and
+acknowledged unsafe TLS for compatibility; ordinary TCP does not encrypt
+credentials, source-upload authentication or optional GGA data, while unsafe
+TLS does not verify the caster identity. A failed TLS connection does not fall
+back to ordinary TCP.
 
 RtkCollector does not operate an app backend service for sessions, credentials
 or telemetry.

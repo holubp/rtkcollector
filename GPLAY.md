@@ -40,20 +40,16 @@ Before starting, resolve these repository-specific prerequisites:
    is a separate Play requirement; do not assume that a store-listing link is
    sufficient.
 
-### Publication Blocker: Cleartext NTRIP
+### NTRIP Transport Gate
 
-The current repository documents cleartext NTRIP TCP. NTRIP authentication
-credentials and a VRS GGA position are personal or sensitive user data in
-transit. Google Play requires modern cryptography for that data. Do **not**
-submit a build while a cleartext NTRIP correction-download or source-upload
-workflow can transmit credentials or GGA.
-
-Resolve this in the app before publication by either implementing and requiring
-TLS for every NTRIP network route, or by removing/disable-gating cleartext NTRIP
-from the Play build. Update `PRIVACY.md`, `SECURITY.md`, the formal publication
-specification, the Data safety answers, and the in-app disclosure to match the
-implemented result. A Data safety disclosure cannot make insecure transmission
-acceptable.
+The Google Play variant enforces TLS with Android system trust and hostname
+verification for correction, sourcetable and source-upload routes. Explicit
+plaintext and acknowledged unsafe TLS remain available only in sideload builds
+for compatibility with older or private casters. A TLS handshake failure must
+never fall back to plaintext. Do not submit until the exact Play build has
+passed full-host flavor tests, real TLS correction and source-upload checks,
+signed-AAB validation and Data safety review. A Data safety disclosure cannot
+make insecure transmission acceptable.
 
 ## 1. Create And Verify The Developer Account
 
@@ -161,12 +157,12 @@ private key material into the project.
 
 ## 4. Build And Verify The Signed AAB
 
-1. In the same Android Studio wizard, select the `release` build variant, enter
-   the upload-key details, and generate the signed bundle.
+1. In the same Android Studio wizard, select the `googlePlayRelease` build
+   variant, enter the upload-key details, and generate the signed bundle.
 2. Record the resulting file, normally:
 
    ```text
-   app/build/outputs/bundle/release/app-release.aab
+   app/build/outputs/bundle/googlePlayRelease/app-googlePlay-release.aab
    ```
 
 3. Run the project release-bundle check **before signing** as a build-input and
@@ -176,14 +172,14 @@ private key material into the project.
    .\gradlew.bat validateGooglePlayReleaseBundle
    ```
 
-   This task may build an unsigned default release AAB. It does **not** verify
+   This task may build an unsigned Google Play release AAB. It does **not** verify
    the upload-key-signed artifact from the Android Studio wizard.
 4. Verify the exact signed AAB recorded in Step 2. With a trusted local
    `bundletool` JAR, run the following against that exact path, then retain the
    output:
 
    ```powershell
-   $bundle = Resolve-Path app/build/outputs/bundle/release/app-release.aab
+   $bundle = Resolve-Path app/build/outputs/bundle/googlePlayRelease/app-googlePlay-release.aab
    jarsigner -verify -verbose -certs $bundle
    java -jar <path-to-bundletool.jar> validate --bundle=$bundle
    java -jar <path-to-bundletool.jar> dump manifest --bundle=$bundle
@@ -233,8 +229,8 @@ use the Internal testing track, to test the same Play-delivery path.
    - app icon, feature graphic, category, contact email, and support URL;
    - the public privacy-policy URL from the preconditions above.
 5. Do not promise survey-grade accuracy, universal receiver compatibility,
-   encrypted NTRIP transport, or phone-internal-GNSS support. The listing must
-   match the actual release build and the experimental-hardware limitations.
+   encryption for sideload compatibility modes, or phone-internal-GNSS support.
+   The listing must match the actual release build and hardware limitations.
 
 ## 6. Complete App Content And Data Safety
 
@@ -251,7 +247,7 @@ For this app, explicitly review these facts in the current Data safety form:
 | USB receiver identifiers and configuration | Stored locally in settings/session metadata for functionality. |
 | Session ZIPs and settings backups | Shared only when the user explicitly invokes Android sharing. Plaintext-password export is opt-in. |
 | Analytics, ads, crash reporting | None are intentionally included; re-check the final dependency graph. |
-| Network security | Publication is blocked until every supported NTRIP route carrying credentials or GGA uses TLS, or such routes are absent from the Play build. |
+| Network security | Google Play routes require TLS with system trust and hostname verification; sideload-only plaintext/unsafe options are excluded. Real caster and shipped-bundle validation remain publication gates. |
 
 Treat transmission to an external NTRIP provider as **collection** in Data
 Safety whenever the user enables it, including when the provider is a third

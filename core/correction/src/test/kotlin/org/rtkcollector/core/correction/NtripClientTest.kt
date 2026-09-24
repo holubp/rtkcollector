@@ -17,6 +17,48 @@ import java.util.concurrent.TimeUnit
 
 class NtripClientTest {
     @Test
+    fun `sourcetable TLS failure does not expose handshake material`() {
+        val markers = listOf(
+            "sourcetable-password-marker", "Basic c291cmNldGFibGU=",
+            "GET / HTTP/1.1", "certificate-bytes-marker", "private-key-marker",
+        )
+        val connector = object : NtripSocketConnector {
+            override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket =
+                throw javax.net.ssl.SSLHandshakeException(markers.joinToString(" "))
+        }
+        val client = NtripSourcetableClient(
+            NtripSourcetableRequest(
+                NtripEndpointSecurityPolicy.systemTrust("localhost", 2101),
+                NtripCredentials("user", markers[0]),
+            ),
+            connector,
+        )
+        val exposed = assertThrows(Exception::class.java) { client.fetch() }.toString()
+        markers.forEach { assertFalse(exposed.contains(it)) }
+    }
+
+    @Test
+    fun `hostile caster status never enters correction failure or state`() {
+        val secret = "correction-password-marker"
+        val basicToken = java.util.Base64.getEncoder()
+            .encodeToString("user:$secret".toByteArray(Charsets.UTF_8))
+        val markers = listOf(
+            secret, basicToken,
+            "GET /PRIVATE HTTP/1.1", "certificate-bytes-marker", "private-key-marker",
+        )
+        val response = "HTTP/1.1 403 " + markers.joinToString(" ") + "\r\n\r\n"
+        val socket = FakeNtripSocket(response.toByteArray())
+        val connector = FakeNtripSocketConnector(socket)
+        val statuses = mutableListOf<CorrectionStatus>()
+        val request = NtripRequest("caster.example", 2101, "PRIVATE",
+            NtripCredentials("user", secret))
+        val failure = (NtripClient(request, connector).connectOnce(onState = statuses::add)
+            as NtripConnectionResult.Failure).failure
+        val exposed = failure.message + failure.cause + statuses.mapNotNull(CorrectionStatus::lastError).joinToString()
+        markers.forEach { assertFalse(exposed.contains(it)) }
+    }
+
+    @Test
     fun `default stream request user agent is accepted by strict ntrip casters`() {
         val request = NtripRequest(
             host = "caster.example",

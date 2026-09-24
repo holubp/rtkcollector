@@ -31,9 +31,10 @@ Declare the following data handling based on current V1 behaviour:
 
 Security practice declarations:
 
-- Encryption in transit: do not claim universal encryption while cleartext NTRIP
-  TCP is supported. Claim encrypted transit only for TLS caster connections once
-  implemented and selected.
+- Encryption in transit: the Google Play variant permits NTRIP only over TLS
+  with Android system trust and hostname verification. Plaintext and unsafe TLS
+  are sideload-only compatibility options, not Play distribution behavior.
+  Verify the exact shipped variant before making Play Console claims.
 - Data deletion: users can delete local sessions and archives in the app.
 - No advertising or analytics SDKs are included.
 
@@ -72,11 +73,16 @@ correction bytes.
 Before upload:
 
 1. Run `git diff --check`.
-2. Run `sh gradlew :app:compileDebugKotlin` in Termux or `./gradlew :app:compileDebugKotlin` on a desktop host.
-3. Run `./gradlew test` on a host where Android Gradle plugin native tools run.
-4. Build a signed release AAB on Windows Android Studio or CI.
+2. Run both `:app:compileGooglePlayDebugKotlin` and
+   `:app:compileSideloadDebugKotlin` sequentially on a supported host.
+3. Run both flavor unit-test suites on a host where Android Gradle plugin
+   native tools run.
+4. Build a signed Google Play AAB with `:app:bundleGooglePlayRelease` on
+   Windows Android Studio or CI; never submit a sideload bundle.
 5. Install the release build on at least one Android 13+ device and verify
    notification permission flow before Play upload.
-6. Verify a plain rover recording, rover + NTRIP recording, session ZIP share and settings backup import/export.
+6. Verify a plain rover recording, rover + NTRIP recording, session ZIP share
+   and settings backup import/export. Include real TLS correction intake and
+   TLS source upload with compatible casters.
 7. Confirm `third-party-licenses.md`, `../PRIVACY.md`, `../SECURITY.md` and
    Play Data safety answers match the shipped build.

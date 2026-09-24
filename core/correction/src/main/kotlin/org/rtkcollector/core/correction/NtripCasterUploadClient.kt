@@ -148,9 +148,8 @@ class NtripCasterUploadClient(
                 return NtripCasterUploadResult.Failure(
                     NtripCasterUploadFailure(
                         kind = NtripCasterUploadFailureKind.CONNECT_FAILED,
-                        message = it.message ?: "NTRIP caster upload connection failed.",
+                        message = "NTRIP caster upload connection failed.",
                         state = NtripConnectionState.CONNECTING,
-                        cause = it,
                     ),
                 )
             }
@@ -162,9 +161,8 @@ class NtripCasterUploadClient(
                 return NtripCasterUploadResult.Failure(
                     NtripCasterUploadFailure(
                         kind = NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE,
-                        message = it.message ?: "NTRIP caster upload request is invalid.",
+                        message = "NTRIP caster upload request is invalid.",
                         state = NtripConnectionState.AUTHENTICATING,
-                        cause = it,
                     ),
                 )
             }
@@ -199,7 +197,7 @@ class NtripCasterUploadClient(
                     NtripCasterUploadResult.Failure(
                         NtripCasterUploadFailure(
                             kind = failureKind,
-                            message = it.message ?: "NTRIP caster upload stream failed.",
+                            message = "NTRIP caster upload stream failed.",
                             state = if (cancelled.get()) NtripConnectionState.STOPPED else NtripConnectionState.STREAMING,
                             stopReason = (it as? NtripCasterUploadSafetyException)?.stopReason
                                 ?: if (it is NtripCasterUploadNoDataException) {
@@ -207,7 +205,6 @@ class NtripCasterUploadClient(
                                 } else {
                                     null
                                 },
-                            cause = it,
                         ),
                     )
                 },
@@ -247,24 +244,9 @@ class NtripCasterUploadClient(
         }
         return NtripCasterUploadFailure(
             kind = kind,
-            message = "NTRIP caster upload rejected source upload request: ${redactResponseLine(response)}",
+            message = "NTRIP caster upload rejected source upload request.",
             state = NtripConnectionState.AUTHENTICATING,
         )
-    }
-
-    private fun redactResponseLine(response: String): String {
-        val secrets = request.credentials?.let { credentials ->
-            listOf(
-                credentials.password,
-                credentials.username,
-                uploadBasicAuthToken(credentials),
-            )
-        }.orEmpty()
-            .filter(String::isNotBlank)
-            .sortedByDescending(String::length)
-        return secrets.fold(response.take(MAX_RESPONSE_MESSAGE_CHARACTERS)) { redacted, secret ->
-            redacted.replace(secret, REDACTED_VALUE)
-        }
     }
 
     private fun stoppedFailure(): NtripCasterUploadResult.Failure =
@@ -278,8 +260,6 @@ class NtripCasterUploadClient(
 
     private companion object {
         val HTTP_200_STATUS = Regex("""HTTP/1\.[01] 200(?:\s+.+)?""", RegexOption.IGNORE_CASE)
-        const val MAX_RESPONSE_MESSAGE_CHARACTERS = 512
-        const val REDACTED_VALUE = "[redacted]"
     }
 }
 

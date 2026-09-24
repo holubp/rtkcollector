@@ -338,7 +338,7 @@ class NtripCasterUploadClientTest {
     }
 
     @Test
-    fun `rejected response redacts reflected source password`() {
+    fun `rejected response does not echo reflected source password`() {
         val client = NtripCasterUploadClient(
             defaultRequest(
                 mountpoint = "UM980BASE",
@@ -355,8 +355,31 @@ class NtripCasterUploadClientTest {
         val failure = (result as NtripCasterUploadResult.Failure).failure
         assertEquals(NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE, failure.kind)
         assertFalse(failure.message.contains("pass123"))
-        assertTrue(failure.message.contains("[redacted]"))
-        assertTrue(failure.message.contains("/UM980BASE"))
+        assertTrue(failure.message.contains("rejected"))
+    }
+
+    @Test
+    fun `hostile caster response and TLS failure do not expose upload secrets`() {
+        val secret = "upload-password-marker"
+        val token = java.util.Base64.getEncoder()
+            .encodeToString("user:$secret".toByteArray(Charsets.UTF_8))
+        val requestBytes = "POST /PRIVATE HTTP/1.1"
+        val certificate = "certificate-bytes-marker"
+        val privateKey = "private-key-marker"
+        val markers = listOf(secret, token, requestBytes, certificate, privateKey)
+        val request = defaultRequest(credentials = NtripCredentials("user", secret))
+        val response = "HTTP/1.1 403 " + markers.joinToString(" ") + "\r\n\r\n"
+        val responseFailure = (NtripCasterUploadClient(
+            request, FakeUploadConnector(FakeUploadSocket(response.toByteArray())),
+        ).connectOnce { error("must not write") } as NtripCasterUploadResult.Failure).failure
+        val exception = javax.net.ssl.SSLHandshakeException(markers.joinToString(" "))
+        val connector = object : NtripSocketConnector {
+            override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = throw exception
+        }
+        val handshakeFailure = (NtripCasterUploadClient(request, connector)
+            .connectOnce { error("must not write") } as NtripCasterUploadResult.Failure).failure
+        val exposed = responseFailure.message + responseFailure.cause + handshakeFailure.message + handshakeFailure.cause
+        markers.forEach { assertFalse(exposed.contains(it)) }
     }
 
     @Test

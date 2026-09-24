@@ -187,6 +187,40 @@ class NtripTlsSocketConnectorTest {
     }
 
     @Test
+    fun `TLS handshake failure exposes no exception secrets in correction status`() {
+        val secret = "handshake-password-marker"
+        val token = java.util.Base64.getEncoder()
+            .encodeToString("user:$secret".toByteArray(Charsets.UTF_8))
+        val requestBytes = "GET /PRIVATE HTTP/1.1"
+        val certificate = java.util.Base64.getEncoder().encodeToString(
+            javaClass.getResourceAsStream("/tls/localhost.crt")!!.use { it.readBytes() },
+        ).take(48)
+        val keyStore = java.security.KeyStore.getInstance("PKCS12").apply {
+            NtripTlsSocketConnectorTest::class.java.getResourceAsStream("/tls/localhost.p12")!!.use {
+                load(it, "test-only".toCharArray())
+            }
+        }
+        val privateKey = java.util.Base64.getEncoder().encodeToString(
+            keyStore.getKey(keyStore.aliases().nextElement(), "test-only".toCharArray()).encoded,
+        ).take(48)
+        val exception = javax.net.ssl.SSLHandshakeException(
+            listOf(secret, token, requestBytes, certificate, privateKey).joinToString(" "),
+        )
+        val connector = object : NtripSocketConnector {
+            override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = throw exception
+        }
+        val statuses = mutableListOf<CorrectionStatus>()
+        val result = NtripClient(
+            NtripRequest(NtripEndpointSecurityPolicy.systemTrust("localhost", 2101), "PRIVATE",
+                NtripCredentials("user", secret)),
+            connector,
+        ).connectOnce(onState = statuses::add)
+        val failure = (result as NtripConnectionResult.Failure).failure
+        val exposed = statuses.mapNotNull(CorrectionStatus::lastError).joinToString() + failure.message + failure.cause
+        listOf(secret, token, requestBytes, certificate, privateKey).forEach { assertFalse(exposed.contains(it)) }
+    }
+
+    @Test
     fun `v2 response fallback retains identical TLS policy on both connections`() {
         val frames = mutableListOf<String>()
         NtripTlsFixture.Server(2) { peer ->

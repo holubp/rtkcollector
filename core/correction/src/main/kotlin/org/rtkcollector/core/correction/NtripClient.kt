@@ -2,6 +2,7 @@ package org.rtkcollector.core.correction
 
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
@@ -148,15 +149,19 @@ class NtripSourcetableClient(
     private val connector: NtripSocketConnector = JavaNtripSocketConnector(),
 ) {
     fun fetch(): NtripSourcetableResult {
-        val socket = connector.connect(request.policy)
-        return socket.use {
-            socket.output.write(request.render().toByteArray(Charsets.US_ASCII))
-            socket.output.flush()
-            val rawText = socket.input.readSourcetableBytes(MAX_SOURCETABLE_BYTES).toString(Charsets.ISO_8859_1)
-            NtripSourcetableResult(
-                mountpoints = NtripSourcetableParser.mountpoints(rawText),
-                rawText = rawText,
-            )
+        try {
+            val socket = connector.connect(request.policy)
+            return socket.use {
+                socket.output.write(request.render().toByteArray(Charsets.US_ASCII))
+                socket.output.flush()
+                val rawText = socket.input.readSourcetableBytes(MAX_SOURCETABLE_BYTES).toString(Charsets.ISO_8859_1)
+                NtripSourcetableResult(
+                    mountpoints = NtripSourcetableParser.mountpoints(rawText),
+                    rawText = rawText,
+                )
+            }
+        } catch (_: Exception) {
+            throw IOException("NTRIP sourcetable fetch failed")
         }
     }
 
@@ -370,7 +375,6 @@ class NtripClient(
                 kind = NtripFailureKind.CONNECT_FAILED,
                 state = NtripConnectionState.CONNECTING,
                 message = "Failed to connect to NTRIP caster ${activeRequest.host}:${activeRequest.port}",
-                cause = exception,
                 onState = onState,
             )
         }
@@ -407,8 +411,7 @@ class NtripClient(
                 failure(
                     kind = NtripFailureKind.STREAM_FAILED,
                     state = NtripConnectionState.STREAMING,
-                    message = exception.message ?: "NTRIP stream failed",
-                    cause = exception,
+                    message = "NTRIP stream failed",
                     onState = onState,
                 )
             } finally {
@@ -549,17 +552,23 @@ class NtripClient(
             firstLine.startsWith("HTTP/", ignoreCase = true) && firstLine.contains(" 401 ") -> NtripFailure(
                 kind = NtripFailureKind.AUTHENTICATION_FAILED,
                 state = NtripConnectionState.AUTHENTICATING,
-                message = "NTRIP caster rejected credentials: $firstLine",
+                message = "NTRIP caster rejected credentials",
             )
             firstLine.startsWith("HTTP/", ignoreCase = true) && firstLine.contains(" 403 ") -> NtripFailure(
                 kind = NtripFailureKind.AUTHORIZATION_FAILED,
                 state = NtripConnectionState.AUTHENTICATING,
-                message = "NTRIP caster denied access to mountpoint: $firstLine",
+                message = "NTRIP caster denied access to mountpoint",
             )
             else -> NtripFailure(
                 kind = NtripFailureKind.UNSUPPORTED_RESPONSE,
                 state = NtripConnectionState.AUTHENTICATING,
-                message = "NTRIP caster response is not ICY 200 or HTTP 200: $firstLine",
+                message = if (firstLine.startsWith("HTTP/", ignoreCase = true) && firstLine.contains(" 505 ")) {
+                    "NTRIP caster response is not ICY 200 or HTTP 200 (HTTP 505)"
+                } else if (firstLine.contains("Version", ignoreCase = true)) {
+                    "NTRIP caster response indicates protocol Version incompatibility"
+                } else {
+                    "NTRIP caster response is not ICY 200 or HTTP 200"
+                },
             )
         }
     }
@@ -667,7 +676,7 @@ class NtripClient(
     private fun NtripRequest.shouldTryCompatibilityFallback(failure: NtripFailure): Boolean =
         protocolVersion == NtripProtocolVersion.NTRIP_V2 &&
             failure.kind == NtripFailureKind.UNSUPPORTED_RESPONSE &&
-            (failure.message.contains(" 505 ") || failure.message.contains("Version", ignoreCase = true))
+            (failure.message.contains("(HTTP 505)") || failure.message.contains("protocol Version incompatibility"))
 
     private fun NtripFailure.isRetryable(): Boolean =
         kind !in setOf(

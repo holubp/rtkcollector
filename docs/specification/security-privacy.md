@@ -37,6 +37,28 @@ Verification:
 - Build: both Google Play and sideload debug compile and unit-test tasks on a
   full Android host.
 
+### SEC-NTRIP-TLS-003: Verified Endpoint And Redacted Transport Failures
+
+Status: Normative
+
+Correction download, sourcetable fetch, source upload and protocol retries MUST
+use the same validated canonical endpoint and security policy. TLS MUST use
+system trust and hostname verification by default, accept only TLS 1.2 or newer,
+and complete its handshake before sending any NTRIP request, credential, GGA or
+RTCM byte. A failed handshake MUST NOT fall back to plaintext. Sideload-only
+unsafe TLS requires local acknowledgement. Connection, handshake, stream and
+caster-response failures exposed through status, diagnostics or session events
+MUST NOT include passwords, Basic tokens, raw request frames, certificate bytes
+or private-key material. These failures MUST remain advisory to receiver raw
+capture.
+
+Verification:
+- Automated: `NtripTransportSecurityTest`, `NtripTlsSocketConnectorTest`,
+  `NtripClientTest`, `NtripCasterUploadClientTest`, and
+  `CasterUploadEventJsonTest`.
+- Manual: real TLS correction and source-upload sessions with compatible
+  casters; confirm receiver raw capture continues after TLS failure.
+
 ### SEC-SECRETS-001: Session Metadata Excludes Secrets
 
 Status: Normative
@@ -172,7 +194,10 @@ Status: Normative
 
 Runtime diagnostics and performance monitoring MUST be disabled by default.
 When enabled, diagnostic records MUST redact NTRIP passwords, authorization
-headers, tokens and credential-like fields before writing or sharing.
+headers, tokens and credential-like fields before writing or sharing. TLS and
+caster failure paths MUST not pass untrusted response text or exception content
+that could contain raw requests, certificate or private-key material into
+diagnostics or session events.
 
 Verification:
 - Automated: diagnostics redaction and disabled-state tests.

@@ -37,14 +37,17 @@ Traceability:
 
 Status: Normative
 
-The app MUST NOT claim universal encryption in transit while any shipped
-enabled workflow sends NTRIP credentials, GGA positions, corrections or source
-upload data over ordinary cleartext TCP. If TLS support exists, Play Data
-safety wording MUST distinguish TLS-capable profiles from cleartext profiles.
+The Google Play build MUST permit correction download, sourcetable fetch and
+source upload only over TLS with system trust and hostname verification. It
+MUST reject imported, stale or programmatically selected plaintext and unsafe
+TLS profiles before network access. Sideload-only plaintext/unsafe compatibility
+MUST NOT be represented as Play build behavior. Data safety answers MUST match
+the exact shipped `googlePlayRelease` AAB and its optional NTRIP transmissions.
 
 Rationale:
-NTRIP deployments commonly use cleartext TCP, and false encryption claims would
-be a publication compliance failure.
+NTRIP deployments commonly use cleartext TCP, but that compatibility is not
+available in the Google Play variant. False encryption claims or an incorrect
+release variant would be a publication compliance failure.
 
 Applies to:
 - NTRIP correction download.
@@ -52,13 +55,15 @@ Applies to:
 - Play Data safety answers.
 
 Verification:
-- Review: NTRIP transport code and profile options match the disclosure.
-- Manual: Play Data safety answers do not overclaim encryption for cleartext
-  profiles.
+- Automated/build: both flavor unit tests and compiles on a full Android host;
+  inspect the exact `:app:bundleGooglePlayRelease` artifact and policy paths.
+- Manual: verify TLS correction intake and source upload with real compatible
+  casters; compare Play Data safety answers with that shipped build.
 
 Traceability:
 - Source: `docs/ntrip-and-corrections.md`.
 - Source: `docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md`.
+- Source: `docs/superpowers/specs/2026-09-23-ntrip-tls-design.md`.
 
 ## Permissions And Manifest
 

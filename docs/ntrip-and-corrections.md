@@ -151,12 +151,23 @@ always-on upload from metered links.
 
 ## Transport Security
 
-NTRIP Basic authentication over ordinary TCP exposes credentials to the caster
-path in cleartext. RtkCollector must label cleartext NTRIP behaviour clearly and
-must not claim encrypted transit in Play Data safety disclosures while cleartext
-NTRIP correction download or source upload is supported. GGA upload, when
-enabled, sends receiver-derived position to the configured caster and must be
-disclosed as optional location transmission.
+New correction and source-upload profiles default to TLS with Android system
+trust and hostname verification. The configured caster port remains in use;
+TLS does not imply a fixed port. Use a caster endpoint whose certificate is
+trusted by the device and whose DNS name or IP address matches the certificate.
+Custom CA import is unsupported. Certificate, hostname and handshake failures
+are reported as NTRIP connection failures without sending credentials, GGA or
+RTCM before a successful handshake. There is no plaintext retry after a TLS
+failure. Correction and upload failures remain advisory to receiver raw capture.
+
+Google Play builds accept only TLS with system trust for correction download,
+sourcetable fetch and source upload. Sideload builds retain explicit plaintext
+compatibility for older casters and an explicitly acknowledged unsafe TLS mode.
+Unsafe TLS skips certificate/hostname verification and must not be used for
+sensitive data. Legacy plaintext profiles stay explicit; legacy Custom-CA
+profiles are disabled until a supported verification mode is selected. GGA
+upload, when enabled, sends receiver-derived position to the configured caster
+and must be disclosed as optional location transmission.
 
 Upload state, uploaded bytes, dropped bytes, bitrate, RTCM frame rates (total and
 per-message type), and final status are exposed through the service state and

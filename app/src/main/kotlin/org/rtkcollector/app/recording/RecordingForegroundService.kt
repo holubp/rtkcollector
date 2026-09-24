@@ -256,10 +256,18 @@ internal fun correctionNtripRequestFromIntent(intent: Intent, allowInsecure: Boo
         )
     }
 
+@Suppress("DEPRECATION")
 internal fun uploadNtripRequestFromIntent(intent: Intent, allowInsecure: Boolean): NtripCasterUploadRequest =
     withValidatedServiceNtripIntent(intent, UPLOAD_NTRIP_INTENT_KEYS, allowInsecure) { policy, mountpoint ->
         val username = intent.getStringExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_USERNAME).orEmpty()
         val password = intent.getStringExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PASSWORD).orEmpty()
+        val protocolPolicy = intent.extras?.get(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY)
+        require(protocolPolicy is String) { "NTRIP caster upload protocol policy must be a string." }
+        val protocolVersion = when (protocolPolicy) {
+            "NTRIP_V1_ONLY" -> NtripProtocolVersion.NTRIP_V1
+            "NTRIP_V2_ONLY" -> NtripProtocolVersion.NTRIP_V2
+            else -> throw IllegalArgumentException("NTRIP caster upload protocol policy is invalid.")
+        }
         NtripCasterUploadRequest(
             policy = policy,
             mountpoint = mountpoint,
@@ -268,10 +276,7 @@ internal fun uploadNtripRequestFromIntent(intent: Intent, allowInsecure: Boolean
             } else {
                 null
             },
-            protocolVersion = when (intent.getStringExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY)) {
-                "NTRIP_V1_ONLY" -> NtripProtocolVersion.NTRIP_V1
-                else -> NtripProtocolVersion.NTRIP_V2
-            },
+            protocolVersion = protocolVersion,
         )
     }
 

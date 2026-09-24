@@ -3,6 +3,7 @@ package org.rtkcollector.app.recording
 import android.content.Intent
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import org.rtkcollector.core.correction.NtripProtocolVersion
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -60,6 +61,34 @@ class ServiceNtripIntentParserTest {
         }
     }
 
+    @Test
+    fun `upload request rejects absent mistyped or unknown protocol policy`() {
+        val valid = uploadIntent()
+        assertEquals(
+            NtripProtocolVersion.NTRIP_V2,
+            uploadNtripRequestFromIntent(valid, false).protocolVersion,
+        )
+        val malformed = listOf(
+            Intent(valid).apply {
+                removeExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY)
+            },
+            Intent(valid).putExtra(
+                RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY,
+                2,
+            ),
+            Intent(valid).putExtra(
+                RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY,
+                "NTRIP_V3_ONLY",
+            ),
+        )
+
+        for (intent in malformed) {
+            assertFailsWith<IllegalArgumentException> {
+                uploadNtripRequestFromIntent(intent, false)
+            }
+        }
+    }
+
     private fun correctionIntent() = Intent().apply {
         putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, "caster.example")
         putExtra(RecordingForegroundService.EXTRA_NTRIP_PORT, 2101)
@@ -76,5 +105,6 @@ class ServiceNtripIntentParserTest {
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE, "TLS")
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION, "SYSTEM_TRUST")
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, false)
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY, "NTRIP_V2_ONLY")
     }
 }

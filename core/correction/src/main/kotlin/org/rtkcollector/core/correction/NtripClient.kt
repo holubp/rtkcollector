@@ -27,7 +27,7 @@ enum class NtripProtocolVersion {
     NTRIP_V1,
 }
 
-const val DEFAULT_NTRIP_USER_AGENT: String = "NTRIP RtkCollector/1.0-RC2"
+const val DEFAULT_NTRIP_USER_AGENT: String = "NTRIP RtkCollector/1.0-RC3"
 
 data class NtripRequest(
     val policy: NtripEndpointSecurityPolicy,

@@ -7,7 +7,7 @@ plugins {
 
 allprojects {
     group = "org.rtkcollector"
-    version = "1.0-RC2"
+    version = "1.0-RC3"
 }
 
 subprojects {

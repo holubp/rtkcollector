@@ -47,9 +47,17 @@ class NtripCasterUploadControllerTest {
     @Test
     fun `fixed retry uses configured delay of at least ten seconds`() {
         val delays = Collections.synchronizedList(mutableListOf<Long>())
+        val expectedRetriesScheduled = CountDownLatch(1)
+        val holdRetryWorker = CountDownLatch(1)
         val controller = NtripCasterUploadController(
             uploadOnce = { _, _, _ -> retryableFailure() },
-            delay = { delays += it },
+            delay = { retryDelayMillis ->
+                delays += retryDelayMillis
+                if (delays.size == 3) {
+                    expectedRetriesScheduled.countDown()
+                    holdRetryWorker.await()
+                }
+            },
         )
 
         controller.start(
@@ -63,8 +71,8 @@ class NtripCasterUploadControllerTest {
                 ),
             ),
         )
-        waitUntil { delays.size >= 3 }
-        controller.stop()
+        assertTrue(expectedRetriesScheduled.await(2, TimeUnit.SECONDS))
+        assertTrue(controller.stop())
 
         assertEquals(listOf(10_000L, 10_000L, 10_000L), delays.take(3))
         assertEquals(10_000L, controller.snapshot().currentRetryDelayMillis)
@@ -73,9 +81,17 @@ class NtripCasterUploadControllerTest {
     @Test
     fun `adaptive retry backs off to configured maximum`() {
         val delays = Collections.synchronizedList(mutableListOf<Long>())
+        val expectedRetriesScheduled = CountDownLatch(1)
+        val holdRetryWorker = CountDownLatch(1)
         val controller = NtripCasterUploadController(
             uploadOnce = { _, _, _ -> retryableFailure() },
-            delay = { delays += it },
+            delay = { retryDelayMillis ->
+                delays += retryDelayMillis
+                if (delays.size == 4) {
+                    expectedRetriesScheduled.countDown()
+                    holdRetryWorker.await()
+                }
+            },
         )
 
         controller.start(
@@ -90,8 +106,8 @@ class NtripCasterUploadControllerTest {
                 ),
             ),
         )
-        waitUntil { delays.size >= 4 }
-        controller.stop()
+        assertTrue(expectedRetriesScheduled.await(2, TimeUnit.SECONDS))
+        assertTrue(controller.stop())
 
         assertEquals(listOf(10_000L, 20_000L, 25_000L, 25_000L), delays.take(4))
     }

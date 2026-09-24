@@ -46,6 +46,16 @@ class ActiveRecordingConfigCasterUploadTest {
     }
 
     @Test
+    fun `legacy upload protocol policy becomes explicit v2 at runtime`() {
+        val config = activeConfig(
+            workflowId = "fixed-base",
+            hasAcceptedBaseCoordinate = true,
+        )
+
+        assertEquals("NTRIP_V2_ONLY", config.casterUpload.protocolPolicy)
+    }
+
+    @Test
     fun `active caster upload config carries retry and safety policy`() {
         val config = activeConfig(
             workflowId = "fixed-base",

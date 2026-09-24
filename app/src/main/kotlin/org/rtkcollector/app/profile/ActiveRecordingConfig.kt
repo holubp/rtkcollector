@@ -237,7 +237,14 @@ data class ActiveRecordingConfig(
                 username = casterUploadOverride?.username ?: ntripCasterUploadProfile?.username.orEmpty(),
                 secretRef = casterUploadSecretRef.takeIf(String::isNotBlank),
                 password = casterUploadPassword,
-                protocolPolicy = ntripCasterUploadProfile?.protocolPolicy ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+                protocolPolicy = when (
+                    val policy = ntripCasterUploadProfile?.protocolPolicy
+                        ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
+                ) {
+                    "NTRIP_V1_ONLY", "NTRIP_V2_ONLY" -> policy
+                    "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY" -> "NTRIP_V2_ONLY"
+                    else -> throw IllegalArgumentException("NTRIP caster upload protocol policy is invalid.")
+                },
                 retryMode = ntripCasterUploadProfile?.retryMode ?: NtripCasterUploadRetryMode.ADAPTIVE,
                 fixedReconnectDelaySeconds = ntripCasterUploadProfile?.fixedReconnectDelaySeconds ?: 10,
                 adaptiveInitialDelaySeconds = ntripCasterUploadProfile?.adaptiveInitialDelaySeconds ?: 10,

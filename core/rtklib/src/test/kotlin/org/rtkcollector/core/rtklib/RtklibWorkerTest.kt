@@ -152,8 +152,9 @@ class RtklibWorkerTest {
 
     @Test
     fun `worker does not write outputs disabled by config`() {
-        val nmea = ByteArrayOutputStream()
-        val pos = ByteArrayOutputStream()
+        val nmea = StringBuilder()
+        val pos = StringBuilder()
+        val nmeaWritten = CountDownLatch(1)
         val backend = FakeBackend(
             output = RtklibNativeOutputBatch(
                 nmeaLines = listOf("\$GPGGA,fixture"),
@@ -165,17 +166,24 @@ class RtklibWorkerTest {
             backendFactory = object : RtklibBackendFactory {
                 override fun create(): RtklibBackend = backend
             },
-            outputWriters = RtklibOutputWriters(nmea, pos),
+            outputWriters = RtklibOutputWriters.fromCallbacks(
+                appendNmeaLine = {
+                    nmea.append(it)
+                    nmeaWritten.countDown()
+                },
+                appendPosLine = pos::append,
+            ),
         )
         val config = validConfig().copy(outputNmea = true, outputPos = false)
 
         assertTrue(worker.start(config).started)
         assertTrue(worker.offerRoverBytes(byteArrayOf(1, 2, 3), 10L).accepted)
         assertTrue(backend.await())
+        assertTrue(nmeaWritten.await(2, TimeUnit.SECONDS))
         worker.stop()
 
-        assertEquals("\$GPGGA,fixture\n", nmea.toString(Charsets.US_ASCII.name()))
-        assertEquals("", pos.toString(Charsets.US_ASCII.name()))
+        assertEquals("\$GPGGA,fixture\n", nmea.toString())
+        assertEquals("", pos.toString())
         assertEquals(1, worker.snapshot().outputNmeaLines)
         assertEquals(0, worker.snapshot().outputPosLines)
     }

@@ -68,6 +68,16 @@ class ServiceNtripIntentParserTest {
             NtripProtocolVersion.NTRIP_V2,
             uploadNtripRequestFromIntent(valid, false).protocolVersion,
         )
+        assertEquals(
+            NtripProtocolVersion.NTRIP_V1,
+            uploadNtripRequestFromIntent(
+                Intent(valid).putExtra(
+                    RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY,
+                    "NTRIP_V1_ONLY",
+                ),
+                false,
+            ).protocolVersion,
+        )
         val malformed = listOf(
             Intent(valid).apply {
                 removeExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY)

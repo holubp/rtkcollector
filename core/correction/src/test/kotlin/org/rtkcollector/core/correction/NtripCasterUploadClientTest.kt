@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.IOException
 import java.net.ServerSocket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
@@ -380,6 +381,58 @@ class NtripCasterUploadClientTest {
             .connectOnce { error("must not write") } as NtripCasterUploadResult.Failure).failure
         val exposed = responseFailure.message + responseFailure.cause + handshakeFailure.message + handshakeFailure.cause
         markers.forEach { assertFalse(exposed.contains(it)) }
+    }
+
+    @Test
+    fun `upload transport exceptions are sanitized and active socket is cleared`() {
+        val markers = listOf(
+            "upload-password-marker", "POST /PRIVATE HTTP/1.1",
+            "certificate-bytes-marker", "private-key-marker",
+        )
+        val hostile = IOException(markers.joinToString(" "))
+        for (stage in listOf("write", "flush", "read", "stream", "close")) {
+            var closes = 0
+            val socket = object : NtripSocket {
+                override val input: InputStream = object : ByteArrayInputStream("HTTP/1.1 200 OK\r\n".toByteArray()) {
+                    override fun read(): Int {
+                        if (stage == "read") throw hostile
+                        return super.read()
+                    }
+                }
+                override val output: OutputStream = object : ByteArrayOutputStream() {
+                    override fun write(b: ByteArray, off: Int, len: Int) {
+                        if (stage == "write" || stage == "stream" && size() > 0) throw hostile
+                        super.write(b, off, len)
+                    }
+                    override fun flush() {
+                        if (stage == "flush") throw hostile
+                    }
+                }
+                override fun close() {
+                    closes++
+                    if (stage == "close") throw hostile
+                }
+            }
+            val client = NtripCasterUploadClient(
+                defaultRequest(credentials = NtripCredentials("user", markers[0])),
+                FakeUploadConnector(socket),
+            )
+            val result = assertDoesNotThrow<NtripCasterUploadResult> {
+                client.connectOnce { it.write(byteArrayOf(0xD3.toByte())) }
+            }
+            val failure = (result as NtripCasterUploadResult.Failure).failure
+            assertEquals(
+                if (stage == "stream" || stage == "close") NtripCasterUploadFailureKind.STREAM_FAILED
+                else NtripCasterUploadFailureKind.CONNECT_FAILED,
+                failure.kind,
+                stage,
+            )
+            markers.forEach { assertFalse(failure.message.contains(it), stage) }
+            assertEquals(null, failure.cause, stage)
+            assertEquals(1, closes, stage)
+            client.cancel()
+            assertEquals(1, closes, "$stage left active socket set")
+        }
     }
 
     @Test

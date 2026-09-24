@@ -267,13 +267,24 @@ class NtripCasterUploadController(
         policy: NtripCasterUploadPolicy,
         failure: NtripCasterUploadFailure,
     ) {
+        val safeMessage = when (failure.kind) {
+            NtripCasterUploadFailureKind.AUTHENTICATION_FAILED -> "NTRIP caster upload authentication failed."
+            NtripCasterUploadFailureKind.AUTHORIZATION_FAILED -> "NTRIP caster upload authorization failed."
+            NtripCasterUploadFailureKind.NO_RTCM_DATA -> "No RTCM data uploaded before watchdog timeout."
+            NtripCasterUploadFailureKind.SAFETY_STOP -> "Caster upload safety policy stopped streaming."
+            NtripCasterUploadFailureKind.CANCELLED -> "NTRIP caster upload was cancelled."
+            NtripCasterUploadFailureKind.CONNECT_FAILED -> "NTRIP caster upload connection failed."
+            NtripCasterUploadFailureKind.EMPTY_RESPONSE -> "NTRIP caster upload returned an empty response."
+            NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE -> "NTRIP caster upload rejected source upload request."
+            NtripCasterUploadFailureKind.STREAM_FAILED -> "NTRIP caster upload stream failed."
+        }
         when (failure.kind) {
             NtripCasterUploadFailureKind.AUTHENTICATION_FAILED,
             NtripCasterUploadFailureKind.AUTHORIZATION_FAILED,
             -> {
-                lastError.set(failure.message)
+                lastError.set(safeMessage)
                 currentRetryDelayMillis.set(null)
-                emitEvent("auth_stop", failure.message)
+                emitEvent("auth_stop", safeMessage)
                 state.set("AUTH_ERROR")
                 running = false
             }
@@ -283,7 +294,7 @@ class NtripCasterUploadController(
                 currentRetryDelayMillis.set(null)
                 val reason = failure.stopReason ?: NtripCasterUploadStopReason.BITRATE_LIMIT
                 stopReason.set(reason.name)
-                emitEvent("safety_stop", failure.message)
+                emitEvent("safety_stop", safeMessage)
                 state.set("STOPPED")
                 running = false
             }
@@ -298,14 +309,14 @@ class NtripCasterUploadController(
                 if (failure.kind == NtripCasterUploadFailureKind.NO_RTCM_DATA) {
                     lastError.set(null)
                     stopReason.set(NtripCasterUploadStopReason.NO_RTCM_DATA.name)
-                    emitEvent("no_data", failure.message)
-                    emitEvent("safety_stop", failure.message)
+                    emitEvent("no_data", safeMessage)
+                    emitEvent("safety_stop", safeMessage)
                     currentRetryDelayMillis.set(null)
                     state.set("STOPPED")
                     running = false
                     return
                 } else {
-                    lastError.set(failure.message)
+                    lastError.set(safeMessage)
                 }
                 val failures = consecutiveFailures.incrementAndGet().toInt()
                 if (
@@ -426,25 +437,22 @@ class NtripCasterUploadController(
         when (throwable) {
             is NtripCasterUploadNoDataException -> NtripCasterUploadFailure(
                 kind = NtripCasterUploadFailureKind.NO_RTCM_DATA,
-                message = throwable.message ?: "No RTCM data uploaded before watchdog timeout.",
+                message = "No RTCM data uploaded before watchdog timeout.",
                 state = NtripConnectionState.STREAMING,
                 stopReason = NtripCasterUploadStopReason.NO_RTCM_DATA,
-                cause = throwable,
             )
 
             is NtripCasterUploadSafetyException -> NtripCasterUploadFailure(
                 kind = NtripCasterUploadFailureKind.SAFETY_STOP,
-                message = throwable.message ?: "Caster upload safety policy stopped streaming.",
+                message = "Caster upload safety policy stopped streaming.",
                 state = NtripConnectionState.STREAMING,
                 stopReason = throwable.stopReason,
-                cause = throwable,
             )
 
             else -> NtripCasterUploadFailure(
                 kind = NtripCasterUploadFailureKind.STREAM_FAILED,
-                message = throwable.message ?: "NTRIP caster upload stream failed.",
+                message = "NTRIP caster upload stream failed.",
                 state = NtripConnectionState.STREAMING,
-                cause = throwable,
             )
         }
 

@@ -155,68 +155,85 @@ class NtripCasterUploadClient(
             }
 
         activeSocket = socket
-        return socket.use {
-            onState(NtripConnectionState.AUTHENTICATING)
-            val renderedRequest = runCatching { request.render() }.getOrElse {
-                return NtripCasterUploadResult.Failure(
-                    NtripCasterUploadFailure(
-                        kind = NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE,
-                        message = "NTRIP caster upload request is invalid.",
-                        state = NtripConnectionState.AUTHENTICATING,
-                    ),
-                )
-            }
-            socket.output.write(renderedRequest.toByteArray(Charsets.US_ASCII))
-            socket.output.flush()
-            val response = socket.input.readResponseStatusLine()
-            classifyResponse(response)?.let { failure ->
-                return NtripCasterUploadResult.Failure(failure)
-            }
-            if (cancelled.get()) {
-                onState(NtripConnectionState.STOPPED)
-                return stoppedFailure()
-            }
-            onState(NtripConnectionState.STREAMING)
-            val streamedOutput = when (request.protocolVersion) {
-                NtripProtocolVersion.NTRIP_V1 -> socket.output
-                NtripProtocolVersion.NTRIP_V2 -> ChunkedTransferOutputStream(socket.output)
-            }
-            val counting = CountingOutputStream(streamedOutput)
-            runCatching {
-                writeRtcmBytes(counting)
-                counting.flush()
-            }.fold(
-                onSuccess = { NtripCasterUploadResult.Completed(counting.bytesWritten) },
-                onFailure = {
-                    val failureKind = when {
-                        cancelled.get() -> NtripCasterUploadFailureKind.CANCELLED
-                        it is NtripCasterUploadNoDataException -> NtripCasterUploadFailureKind.NO_RTCM_DATA
-                        it is NtripCasterUploadSafetyException -> NtripCasterUploadFailureKind.SAFETY_STOP
-                        else -> NtripCasterUploadFailureKind.STREAM_FAILED
-                    }
-                    NtripCasterUploadResult.Failure(
+        var phase = NtripConnectionState.CONNECTING
+        try {
+            return socket.use {
+                phase = NtripConnectionState.AUTHENTICATING
+                onState(phase)
+                val renderedRequest = runCatching { request.render() }.getOrElse {
+                    return NtripCasterUploadResult.Failure(
                         NtripCasterUploadFailure(
-                            kind = failureKind,
-                            message = "NTRIP caster upload stream failed.",
-                            state = if (cancelled.get()) NtripConnectionState.STOPPED else NtripConnectionState.STREAMING,
-                            stopReason = (it as? NtripCasterUploadSafetyException)?.stopReason
-                                ?: if (it is NtripCasterUploadNoDataException) {
-                                    NtripCasterUploadStopReason.NO_RTCM_DATA
-                                } else {
-                                    null
-                                },
+                            kind = NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE,
+                            message = "NTRIP caster upload request is invalid.",
+                            state = NtripConnectionState.AUTHENTICATING,
                         ),
                     )
-                },
+                }
+                socket.output.write(renderedRequest.toByteArray(Charsets.US_ASCII))
+                socket.output.flush()
+                val response = socket.input.readResponseStatusLine()
+                classifyResponse(response)?.let { failure ->
+                    return NtripCasterUploadResult.Failure(failure)
+                }
+                if (cancelled.get()) {
+                    onState(NtripConnectionState.STOPPED)
+                    return stoppedFailure()
+                }
+                phase = NtripConnectionState.STREAMING
+                onState(phase)
+                val streamedOutput = when (request.protocolVersion) {
+                    NtripProtocolVersion.NTRIP_V1 -> socket.output
+                    NtripProtocolVersion.NTRIP_V2 -> ChunkedTransferOutputStream(socket.output)
+                }
+                val counting = CountingOutputStream(streamedOutput)
+                runCatching {
+                    writeRtcmBytes(counting)
+                    counting.flush()
+                }.fold(
+                    onSuccess = { NtripCasterUploadResult.Completed(counting.bytesWritten) },
+                    onFailure = {
+                        val failureKind = when {
+                            cancelled.get() -> NtripCasterUploadFailureKind.CANCELLED
+                            it is NtripCasterUploadNoDataException -> NtripCasterUploadFailureKind.NO_RTCM_DATA
+                            it is NtripCasterUploadSafetyException -> NtripCasterUploadFailureKind.SAFETY_STOP
+                            else -> NtripCasterUploadFailureKind.STREAM_FAILED
+                        }
+                        NtripCasterUploadResult.Failure(
+                            NtripCasterUploadFailure(
+                                kind = failureKind,
+                                message = "NTRIP caster upload stream failed.",
+                                state = if (cancelled.get()) NtripConnectionState.STOPPED else NtripConnectionState.STREAMING,
+                                stopReason = (it as? NtripCasterUploadSafetyException)?.stopReason
+                                    ?: if (it is NtripCasterUploadNoDataException) {
+                                        NtripCasterUploadStopReason.NO_RTCM_DATA
+                                    } else {
+                                        null
+                                    },
+                            ),
+                        )
+                    },
+                )
+            }
+        } catch (_: Exception) {
+            return NtripCasterUploadResult.Failure(
+                NtripCasterUploadFailure(
+                    kind = if (cancelled.get()) NtripCasterUploadFailureKind.CANCELLED
+                        else if (phase == NtripConnectionState.STREAMING) NtripCasterUploadFailureKind.STREAM_FAILED
+                        else NtripCasterUploadFailureKind.CONNECT_FAILED,
+                    message = if (cancelled.get()) "NTRIP caster upload was cancelled."
+                        else if (phase == NtripConnectionState.STREAMING) "NTRIP caster upload stream failed."
+                        else "NTRIP caster upload connection failed.",
+                    state = if (cancelled.get()) NtripConnectionState.STOPPED else phase,
+                ),
             )
-        }.also {
+        } finally {
             activeSocket = null
         }
     }
 
     fun cancel() {
         cancelled.set(true)
-        activeSocket?.close()
+        runCatching { activeSocket?.close() }
     }
 
     private fun classifyResponse(response: String): NtripCasterUploadFailure? {

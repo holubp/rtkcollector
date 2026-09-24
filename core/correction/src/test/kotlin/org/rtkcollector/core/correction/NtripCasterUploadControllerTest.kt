@@ -100,30 +100,56 @@ class NtripCasterUploadControllerTest {
     fun `auth failure stops immediately without retry`() {
         val attempts = AtomicInteger()
         val eventKinds = Collections.synchronizedList(mutableListOf<String>())
+        val eventMessages = Collections.synchronizedList(mutableListOf<String>())
+        val hostileMessage = "Authorization: Basic secret POST /PRIVATE HTTP/1.1 certificate-marker private-key-marker"
         val controller = NtripCasterUploadController(
             uploadOnce = { _, _, _ ->
                 attempts.incrementAndGet()
                 NtripCasterUploadResult.Failure(
                     NtripCasterUploadFailure(
                         kind = NtripCasterUploadFailureKind.AUTHORIZATION_FAILED,
-                        message = "Forbidden",
+                        message = hostileMessage,
                         state = NtripConnectionState.AUTHENTICATING,
                     ),
                 )
             },
             delay = {},
-            eventSink = { eventKinds += it.kind },
+            eventSink = {
+                eventKinds += it.kind
+                eventMessages += it.message
+            },
         )
 
         controller.start(runtimeConfig())
         waitUntil { controller.snapshot().state == "AUTH_ERROR" }
 
         assertEquals(1, attempts.get())
-        assertEquals("Forbidden", controller.snapshot().lastError)
+        assertEquals("NTRIP caster upload authorization failed.", controller.snapshot().lastError)
+        assertFalse(eventMessages.joinToString().contains(hostileMessage))
         assertFalse(eventKinds.contains("retry_scheduled"))
         assertTrue(eventKinds.contains("connect_attempt"))
         assertTrue(eventKinds.contains("auth_stop"))
         assertTrue(eventKinds.contains("final_summary"))
+    }
+
+    @Test
+    fun `unexpected upload exception text cannot reach controller status or events`() {
+        val markers = listOf("password-marker", "POST /PRIVATE HTTP/1.1", "certificate-marker", "private-key-marker")
+        val events = Collections.synchronizedList(mutableListOf<NtripCasterUploadEvent>())
+        val controller = NtripCasterUploadController(
+            uploadOnce = { _, _, _ -> throw IOException(markers.joinToString(" ")) },
+            delay = {},
+            eventSink = { events += it },
+        )
+        controller.start(runtimeConfig(policy = NtripCasterUploadPolicy(
+            retry = NtripCasterUploadRetryPolicy(stopAfterConsecutiveFailures = 1),
+        )))
+        waitUntil { controller.snapshot().stopReason == NtripCasterUploadStopReason.RETRY_LIMIT.name }
+        controller.stop()
+
+        val exposed = controller.snapshot().lastError.orEmpty() + events.joinToString { it.message }
+        markers.forEach { assertFalse(exposed.contains(it)) }
+        assertTrue(controller.snapshot().lastError.orEmpty().contains("stream failed"))
     }
 
     @Test

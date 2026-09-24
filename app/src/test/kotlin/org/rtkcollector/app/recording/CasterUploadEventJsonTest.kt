@@ -5,8 +5,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.rtkcollector.core.correction.NtripCasterUploadEvent
 import org.rtkcollector.core.correction.NtripCasterUploadClient
+import org.rtkcollector.core.correction.NtripCasterUploadController
 import org.rtkcollector.core.correction.NtripCasterUploadRequest
 import org.rtkcollector.core.correction.NtripCasterUploadResult
+import org.rtkcollector.core.correction.NtripCasterUploadRuntimeConfig
+import org.rtkcollector.core.correction.NtripCasterUploadPolicy
+import org.rtkcollector.core.correction.NtripCasterUploadRetryPolicy
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSocket
@@ -14,9 +18,53 @@ import org.rtkcollector.core.correction.NtripSocketConnector
 import org.rtkcollector.app.diagnostics.redactDiagnosticText
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.util.Collections
 import javax.net.ssl.SSLHandshakeException
 
 class CasterUploadEventJsonTest {
+    @Test
+    fun `upload read exception stays out of controller status and persisted events`() {
+        val markers = listOf(
+            "event-password-marker", "POST /PRIVATE HTTP/1.1",
+            "certificate-bytes-marker", "private-key-marker",
+        )
+        val socket = object : NtripSocket {
+            override val input = object : InputStream() {
+                override fun read(): Int = throw IOException(markers.joinToString(" "))
+            }
+            override val output = ByteArrayOutputStream()
+            override fun close() = Unit
+        }
+        val connector = object : NtripSocketConnector {
+            override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = socket
+        }
+        val events = Collections.synchronizedList(mutableListOf<NtripCasterUploadEvent>())
+        val controller = NtripCasterUploadController(
+            uploadOnce = { config, onState, write ->
+                NtripCasterUploadClient(config.request, connector).connectOnce(onState, write)
+            },
+            delay = {},
+            eventSink = { events += it },
+        )
+        controller.start(NtripCasterUploadRuntimeConfig(
+            request = NtripCasterUploadRequest(
+                NtripEndpointSecurityPolicy.systemTrust("localhost", 2101), "PRIVATE",
+                NtripCredentials("user", markers[0]),
+            ),
+            policy = NtripCasterUploadPolicy(
+                retry = NtripCasterUploadRetryPolicy(stopAfterConsecutiveFailures = 1),
+            ),
+        ))
+        val deadline = System.nanoTime() + 2_000_000_000L
+        while (controller.snapshot().stopReason == null && System.nanoTime() < deadline) Thread.sleep(10)
+        controller.stop()
+        val exposed = controller.snapshot().lastError.orEmpty() + events.joinToString { casterUploadEventJson(it) }
+        markers.forEach { assertFalse(exposed.contains(it)) }
+        assertTrue(exposed.contains("connection failed"))
+    }
+
     @Test
     fun `persisted caster failure event omits reflected TLS and request material`() {
         val secret = "event-password-marker"

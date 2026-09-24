@@ -196,7 +196,10 @@ interface NtripSocketConnector {
     fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket
 }
 
-class JavaNtripSocketConnector : NtripSocketConnector {
+class JavaNtripSocketConnector internal constructor(
+    private val systemSocketFactory: SSLSocketFactory,
+) : NtripSocketConnector {
+    constructor() : this(SSLSocketFactory.getDefault() as SSLSocketFactory)
     private fun connectPlaintext(host: String, port: Int): NtripSocket {
         val socket = Socket().apply {
             connect(InetSocketAddress(host, port), DEFAULT_CONNECT_TIMEOUT_MILLIS)
@@ -225,13 +228,19 @@ class JavaNtripSocketConnector : NtripSocketConnector {
         try {
             val socket = (socketFactory(policy).createSocket(rawSocket, host, port, true) as SSLSocket).apply {
                 soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
+                enabledProtocols = supportedProtocols.filter { protocol ->
+                    protocol == "TLSv1.2" || protocol == "TLSv1.3"
+                }.also { require(it.isNotEmpty()) { "TLS 1.2 or newer is unavailable" } }.toTypedArray()
                 sslParameters = sslParameters.apply {
                     if (policy.verification != NtripTlsVerification.Unsafe) {
                         endpointIdentificationAlgorithm = "HTTPS"
                     }
-                    policy.endpoint.sniName?.let { serverNames = listOf(SNIHostName(it)) }
+                    serverNames = policy.endpoint.sniName?.let { listOf(SNIHostName(it)) } ?: emptyList()
                 }
                 startHandshake()
+                require(session.protocol == "TLSv1.2" || session.protocol == "TLSv1.3") {
+                    "NTRIP TLS negotiated an unsupported protocol"
+                }
             }
             return object : NtripSocket {
                 override val input: InputStream = socket.inputStream
@@ -248,7 +257,7 @@ class JavaNtripSocketConnector : NtripSocketConnector {
     }
 
     private fun socketFactory(policy: NtripEndpointSecurityPolicy): SSLSocketFactory = when (policy.verification) {
-        NtripTlsVerification.SystemTrust -> SSLSocketFactory.getDefault() as SSLSocketFactory
+        NtripTlsVerification.SystemTrust -> systemSocketFactory
         NtripTlsVerification.Unsafe -> SSLContext.getInstance("TLS").apply {
             init(null, arrayOf<TrustManager>(UnsafeTrustManager), SecureRandom())
         }.socketFactory

@@ -13,6 +13,9 @@ Legacy Custom-CA profiles MUST be rewritten without raw certificate bytes and MU
 retain a disabled verification-choice state across persistence. Acknowledgement alone
 MUST NOT enable such a profile. Connecting requires an explicit supported TLS
 verification choice; unsafe TLS also requires fresh local acknowledgement.
+The profile editor MUST preserve this guard when unrelated fields are saved,
+and sourcetable refresh MUST validate the currently displayed transport and
+verification choice rather than silently using an older stored policy.
 
 Verification:
 - Automated: profile-store read/save/read and legacy migration tests.

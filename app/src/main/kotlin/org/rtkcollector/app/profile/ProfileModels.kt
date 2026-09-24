@@ -232,6 +232,20 @@ data class NtripCasterProfile(
         copy(transportMode = NtripTransportMode.TLS, tlsVerification = verification,
             unsafeTlsAcknowledged = false, requiresTlsVerificationChoice = false)
 
+    fun securityForEditorRefresh(values: Map<String, String>, allowInsecure: Boolean): NtripEndpointSecurityPolicy {
+        val mode = NtripTransportMode.valueOf(values["transportMode"] ?: transportMode.name)
+        val verification = ntripTlsVerificationFromStorage(values["tlsVerification"] ?: tlsVerification.storageValue)
+        return copy(
+            host = values["host"]?.trim() ?: host,
+            port = values["port"]?.toIntOrNull() ?: port,
+            transportMode = mode,
+            tlsVerification = verification,
+            unsafeTlsAcknowledged = values["unsafeTlsAcknowledged"] == "true",
+            requiresTlsVerificationChoice = requiresTlsVerificationChoice &&
+                values["requiresTlsVerificationChoice"] != "false",
+        ).toCore(allowInsecure)
+    }
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)

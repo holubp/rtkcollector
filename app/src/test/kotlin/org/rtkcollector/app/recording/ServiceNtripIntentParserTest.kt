@@ -68,16 +68,23 @@ class ServiceNtripIntentParserTest {
             NtripProtocolVersion.NTRIP_V2,
             uploadNtripRequestFromIntent(valid, false).protocolVersion,
         )
-        assertEquals(
-            NtripProtocolVersion.NTRIP_V1,
-            uploadNtripRequestFromIntent(
+        val v1 = uploadNtripRequestFromIntent(
                 Intent(valid).putExtra(
                     RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY,
                     "NTRIP_V1_ONLY",
                 ),
                 false,
-            ).protocolVersion,
-        )
+            )
+        assertEquals(NtripProtocolVersion.NTRIP_V1, v1.protocolVersion)
+        assertEquals("SOURCE source-password /MOUNT", v1.render().lineSequence().first())
+        assertFailsWith<IllegalArgumentException> {
+            uploadNtripRequestFromIntent(
+                Intent(valid)
+                    .putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY, "NTRIP_V1_ONLY")
+                    .putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PASSWORD, ""),
+                false,
+            )
+        }
         val malformed = listOf(
             Intent(valid).apply {
                 removeExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY)
@@ -116,5 +123,6 @@ class ServiceNtripIntentParserTest {
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION, "SYSTEM_TRUST")
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, false)
         putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY, "NTRIP_V2_ONLY")
+        putExtra(RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_PASSWORD, "source-password")
     }
 }

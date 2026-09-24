@@ -231,6 +231,7 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
+                        ntripSecurityDisclosure = state.activeNtripSecurityDisclosure(),
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -260,6 +261,7 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
+                        ntripSecurityDisclosure = state.activeNtripSecurityDisclosure(),
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -452,6 +454,7 @@ private fun CompactDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    ntripSecurityDisclosure: String?,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -482,6 +485,7 @@ private fun CompactDashboard(
         DashboardAlerts(
             displayedError = displayedError,
             recordingReliabilityWarning = recordingReliabilityWarning,
+            ntripSecurityDisclosure = ntripSecurityDisclosure,
             onCopyError = onCopyError,
         )
         DashboardCards(
@@ -522,6 +526,7 @@ private fun RailDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    ntripSecurityDisclosure: String?,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -589,6 +594,7 @@ private fun RailDashboard(
             DashboardAlerts(
                 displayedError = displayedError,
                 recordingReliabilityWarning = recordingReliabilityWarning,
+                ntripSecurityDisclosure = ntripSecurityDisclosure,
                 onCopyError = onCopyError,
             )
             DashboardCards(
@@ -613,14 +619,16 @@ private fun RailDashboard(
 private fun DashboardAlerts(
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    ntripSecurityDisclosure: String?,
     onCopyError: () -> Unit,
 ) {
     val warning = recordingReliabilityWarning?.takeIf { it.isNotBlank() }
-    if (displayedError == null && warning == null) return
+    if (displayedError == null && warning == null && ntripSecurityDisclosure == null) return
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
         warning?.let { RecordingReliabilityWarningStrip(text = it) }
+        ntripSecurityDisclosure?.let { RecordingReliabilityWarningStrip(text = it) }
     }
 }
 

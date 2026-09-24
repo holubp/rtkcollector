@@ -39,6 +39,10 @@ by the caster.
 Fetching caster mountpoints must update the cached list only. The current
 mountpoint text changes only when the user types a new value or explicitly
 selects an item from the fetched list.
+Refresh uses the transport and TLS verification currently selected in the
+editor. It does not save an edited endpoint or password; save the profile to
+retain those changes. Legacy custom-CA profiles require an explicit supported
+TLS verification choice before refresh or recording.
 
 The last active NTRIP mountpoint profile may be remembered for selector
 convenience, but it must not be silently assigned to a settings set. A built-in

@@ -162,7 +162,8 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             lastError = lastError,
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
-        )
+        ).copy(ntripSecurityDisclosure = intent.getStringExtra(
+            RecordingForegroundService.EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE))
     } else {
         DashboardState.planned(
             workflow = status.workflow,

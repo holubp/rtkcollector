@@ -10,6 +10,13 @@ import org.rtkcollector.core.correction.NtripTransportMode
 
 class ProfileEditorModelsTest {
     @Test
+    fun `migrated custom CA remains guarded until verification is explicitly selected`() {
+        val initial = mapOf("requiresTlsVerificationChoice" to "true", "transportMode" to "TLS",
+            "tlsVerification" to "UNSAFE")
+        assertEquals("true", updatedNtripSecurityEditorValues(initial, "name", "Renamed")["requiresTlsVerificationChoice"])
+        assertEquals("false", updatedNtripSecurityEditorValues(initial, "tlsVerification", "SYSTEM_TRUST")["requiresTlsVerificationChoice"])
+    }
+    @Test
     fun `command profile editor exposes persistent write action with warning text`() {
         val action = persistentReceiverWriteAction(onClick = {})
 

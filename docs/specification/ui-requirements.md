@@ -79,6 +79,10 @@ inside the Home dashboard content, after the setup controls and before the
 monitoring cards in compact layouts. In rail layouts they MUST share the alert
 area directly above the monitoring cards. Such warnings MUST NOT be rendered
 above or displace the app title and icon.
+While NTRIP correction download or source upload is active, the dashboard MUST
+persistently disclose the distribution variant and each active route's TLS or
+plaintext policy. Unsafe TLS and plaintext MUST be identified explicitly; this
+disclosure MUST survive routine state updates and Activity recreation.
 
 Verification:
 - Review: `HomeDashboard` owns reliability-warning placement in both compact

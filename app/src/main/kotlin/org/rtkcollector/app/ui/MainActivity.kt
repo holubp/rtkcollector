@@ -2709,7 +2709,6 @@ fun RtkCollectorApp(
                                                     context = context,
                                                     targetId = target.id,
                                                     values = values,
-                                                    savePassword = secretStore::putPassword,
                                                     profileStore = profileStore,
                                                     onSuccess = { count ->
                                                         refreshProfileUi()
@@ -2734,7 +2733,6 @@ fun RtkCollectorApp(
                                                     casterProfileId = values["casterProfileId"].orEmpty(),
                                                     profileStore = profileStore,
                                                     passwordLookup = secretStore::getPassword,
-                                                    savePassword = secretStore::putPassword,
                                                     onSuccess = { count ->
                                                         refreshProfileUi()
                                                         Toast.makeText(context, "Fetched $count mountpoints.", Toast.LENGTH_LONG).show()
@@ -3309,7 +3307,6 @@ private fun refreshNtripCasterMountpoints(
     context: Context,
     targetId: String,
     values: Map<String, String>,
-    savePassword: (String, String) -> Unit,
     profileStore: ProfileStores,
     onSuccess: (Int) -> Unit,
     onFailure: (String) -> Unit,
@@ -3331,8 +3328,11 @@ private fun refreshNtripCasterMountpoints(
         onFailure("NTRIP caster profile no longer exists.")
         return
     }
-    val secretId = ntripCasterSecretId(targetId)
-    savePassword(secretId, password)
+    val policy = runCatching { existing.securityForEditorRefresh(values, BuildConfig.ALLOW_INSECURE_NTRIP) }
+        .getOrElse { error ->
+            onFailure(error.message ?: "NTRIP TLS policy is invalid.")
+            return
+        }
     val resolvedPassword = password
     val credentials = username.takeIf(String::isNotBlank)?.let {
         NtripCredentials(username = it, password = resolvedPassword)
@@ -3343,12 +3343,7 @@ private fun refreshNtripCasterMountpoints(
             runCatching {
                 NtripSourcetableClient(
                     NtripSourcetableRequest(
-                        policy = existing.copy(
-                            host = host,
-                            port = port,
-                            unsafeTlsAcknowledged = existing.unsafeTlsAcknowledged &&
-                                existing.host == host && existing.port == port,
-                        ).toCore(BuildConfig.ALLOW_INSECURE_NTRIP),
+                        policy = policy,
                         credentials = credentials,
                     ),
                 ).fetch()
@@ -3357,10 +3352,6 @@ private fun refreshNtripCasterMountpoints(
                     val updatedProfiles = profileStore.ntripCasterProfiles().map { profile ->
                         if (profile.id == targetId) {
                             profile.copy(
-                                host = host,
-                                port = port,
-                                username = username,
-                                secretId = secretId,
                                 sourcetableMountpoints = result.mountpoints,
                             ).also(NtripCasterProfile::validate)
                         } else {
@@ -3385,7 +3376,6 @@ private fun refreshNtripCasterMountpointsForProfileId(
     casterProfileId: String,
     profileStore: ProfileStores,
     passwordLookup: (String) -> String?,
-    savePassword: (String, String) -> Unit,
     onSuccess: (Int) -> Unit,
     onFailure: (String) -> Unit,
 ) {
@@ -3406,8 +3396,11 @@ private fun refreshNtripCasterMountpointsForProfileId(
             "port" to profile.port.toString(),
             "username" to profile.username,
             "password" to password,
+            "transportMode" to profile.transportMode.name,
+            "tlsVerification" to profile.tlsVerification.storageValue,
+            "unsafeTlsAcknowledged" to profile.unsafeTlsAcknowledged.toString(),
+            "requiresTlsVerificationChoice" to profile.requiresTlsVerificationChoice.toString(),
         ),
-        savePassword = savePassword,
         profileStore = profileStore,
         onSuccess = onSuccess,
         onFailure = onFailure,
@@ -4135,7 +4128,9 @@ private fun ProfileStores.profileEditorData(
                         profile.tlsVerification,
                         profile.unsafeTlsAcknowledged,
                         BuildConfig.ALLOW_INSECURE_NTRIP,
+                        profile.requiresTlsVerificationChoice,
                     ).toTypedArray(),
+                    EditableProfileField("requiresTlsVerificationChoice", "", profile.requiresTlsVerificationChoice.toString(), hidden = true),
                     EditableProfileField("username", "Username", profile.username),
                     EditableProfileField("password", "Password", storedPassword, secret = true),
                     EditableProfileField(
@@ -4167,7 +4162,9 @@ private fun ProfileStores.profileEditorData(
                         profile.tlsVerification,
                         profile.unsafeTlsAcknowledged,
                         BuildConfig.ALLOW_INSECURE_NTRIP,
+                        profile.requiresTlsVerificationChoice,
                     ).toTypedArray(),
+                    EditableProfileField("requiresTlsVerificationChoice", "", profile.requiresTlsVerificationChoice.toString(), hidden = true),
                     EditableProfileField("mountpoint", "Mountpoint", profile.mountpoint),
                     EditableProfileField(
                         "username",
@@ -4606,7 +4603,8 @@ private fun ProfileStores.saveProfileEditorData(
                         unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
                             transportMode == NtripTransportMode.TLS &&
                             tlsVerification == NtripTlsVerification.Unsafe,
-                        requiresTlsVerificationChoice = false,
+                        requiresTlsVerificationChoice = profile.requiresTlsVerificationChoice &&
+                            values.optional("requiresTlsVerificationChoice") != "false",
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
                             "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
                         },
@@ -4658,7 +4656,8 @@ private fun ProfileStores.saveProfileEditorData(
                         unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
                             transportMode == NtripTransportMode.TLS &&
                             tlsVerification == NtripTlsVerification.Unsafe,
-                        requiresTlsVerificationChoice = false,
+                        requiresTlsVerificationChoice = profile.requiresTlsVerificationChoice &&
+                            values.optional("requiresTlsVerificationChoice") != "false",
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
                             "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
                         },

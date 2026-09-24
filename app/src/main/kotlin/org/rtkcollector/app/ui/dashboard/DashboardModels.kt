@@ -25,7 +25,9 @@ data class DashboardState(
     val lastError: String? = null,
     val errorCategory: String = "NONE",
     val errorSeverity: String = "NONE",
+    val ntripSecurityDisclosure: String? = null,
 ) {
+    fun activeNtripSecurityDisclosure(): String? = ntripSecurityDisclosure.takeIf { isRecording }
     fun withPlannedConfiguration(planned: DashboardState): DashboardState =
         if (isRecording) {
             this

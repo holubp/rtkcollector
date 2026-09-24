@@ -14,6 +14,33 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class DashboardServiceMapperTest {
     @Test
+    fun `active dashboard retains transport disclosure from service state`() {
+        val intent = Intent().apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE,
+                "Correction download: unsafe TLS (sideload only)")
+        }
+        val state = dashboardStateFromRecordingIntent(intent)
+        assertEquals("Correction download: unsafe TLS (sideload only)", state.ntripSecurityDisclosure)
+        assertEquals(null, state.copy(isRecording = false).activeNtripSecurityDisclosure())
+    }
+
+    @Test
+    fun `transport disclosure identifies sideload unsafe and plaintext routes`() {
+        val unsafe = org.rtkcollector.core.correction.NtripEndpointSecurityPolicy(
+            org.rtkcollector.core.correction.NtripEndpoint.parse("caster.example", 2101),
+            org.rtkcollector.core.correction.NtripTransportMode.TLS,
+            org.rtkcollector.core.correction.NtripTlsVerification.Unsafe, true, true)
+        val plain = org.rtkcollector.core.correction.NtripEndpointSecurityPolicy(
+            org.rtkcollector.core.correction.NtripEndpoint.parse("upload.example", 2101),
+            org.rtkcollector.core.correction.NtripTransportMode.PLAINTEXT,
+            org.rtkcollector.core.correction.NtripTlsVerification.SystemTrust, true, false)
+        val disclosure = ntripSecurityDisclosure(unsafe, plain, true)
+        assertTrue(disclosure.orEmpty().contains("sideload", ignoreCase = true))
+        assertTrue(disclosure.orEmpty().contains("unsafe TLS", ignoreCase = true))
+        assertTrue(disclosure.orEmpty().contains("plaintext", ignoreCase = true))
+    }
+    @Test
     fun `failed service state exposes last error on planned dashboard`() {
         val intent = Intent()
             .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)

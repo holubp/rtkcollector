@@ -71,6 +71,32 @@ class NtripCasterProfileSecurityTest {
     }
 
     @Test
+    fun `refresh uses unsaved editor security and rejects unresolved custom CA`() {
+        val profile = NtripCasterProfile(id = "caster", name = "Caster", host = "old.example")
+        val editor = mapOf("host" to "new.example", "port" to "443", "transportMode" to "TLS",
+            "tlsVerification" to "SYSTEM_TRUST", "unsafeTlsAcknowledged" to "false")
+        assertEquals("new.example", profile.securityForEditorRefresh(editor, false).endpoint.host)
+        assertEquals(443, profile.securityForEditorRefresh(editor, false).endpoint.port)
+        assertEquals(NtripTransportMode.TLS, profile.securityForEditorRefresh(editor, false).transport)
+
+        val migrated = profile.copy(tlsVerification = NtripTlsVerification.Unsafe,
+            requiresTlsVerificationChoice = true)
+        assertFailsWith<IllegalArgumentException> {
+            migrated.securityForEditorRefresh(editor, true)
+        }
+        assertEquals(NtripTlsVerification.SystemTrust,
+            migrated.securityForEditorRefresh(editor + ("requiresTlsVerificationChoice" to "false"), true).verification)
+    }
+
+    @Test
+    fun `active configs retain migrated verification guard`() {
+        assertFailsWith<IllegalArgumentException> {
+            ActiveNtripConfig(true, "caster.example", 2101, "MOUNT", "", null, null, null, null, null,
+                requiresTlsVerificationChoice = true).toCore(true)
+        }
+    }
+
+    @Test
     fun `service policy decoding rejects invalid and unacknowledged modes`() {
         assertEquals(NtripTransportMode.TLS,
             ntripSecurityPolicyFromStorage("caster.example", 2101, null, null, false, false).transport)

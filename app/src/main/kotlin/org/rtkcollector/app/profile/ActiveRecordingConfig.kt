@@ -62,6 +62,7 @@ data class ActiveRecordingConfig(
             require(rtklib.validationErrors.isEmpty()) { rtklib.validationErrors.joinToString(" ") }
         }
         if (ntrip.enabled) {
+            require(!ntrip.requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." }
             require(ntrip.host.isNotBlank()) { "NTRIP host is required for ${workflowName}." }
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
             require(ntrip.mountpoint.isNotBlank()) { "NTRIP mountpoint is required for ${workflowName}." }
@@ -73,6 +74,7 @@ data class ActiveRecordingConfig(
             }
         }
         if (casterUpload.enabled) {
+            require(!casterUpload.requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." }
             require(casterUpload.host.isNotBlank()) { "NTRIP caster upload host is required for ${workflowName}." }
             require(casterUpload.port in 1..65535) { "NTRIP caster upload port must be 1..65535." }
             require(casterUpload.mountpoint.isNotBlank()) { "NTRIP caster upload mountpoint is required for ${workflowName}." }
@@ -203,6 +205,7 @@ data class ActiveRecordingConfig(
                 unsafeTlsAcknowledged = ntripCasterProfile?.let {
                     it.unsafeTlsAcknowledged && ntripHost == it.host && ntripPort == it.port
                 } == true,
+                requiresTlsVerificationChoice = ntripCasterProfile?.requiresTlsVerificationChoice == true,
             )
 
             val profileOwnedUploadSecretRef = ntripCasterUploadProfile
@@ -262,6 +265,7 @@ data class ActiveRecordingConfig(
                 unsafeTlsAcknowledged = ntripCasterUploadProfile?.let {
                     it.unsafeTlsAcknowledged && uploadHost == it.host && uploadPort == it.port
                 } == true,
+                requiresTlsVerificationChoice = ntripCasterUploadProfile?.requiresTlsVerificationChoice == true,
             )
             val resolvedModeCommands = commandProfile.runtimeScript.commandLines()
                 .ifEmpty { modeCommands }
@@ -405,9 +409,11 @@ data class ActiveCasterUploadConfig(
     val transportMode: NtripTransportMode = NtripTransportMode.TLS,
     val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
     val unsafeTlsAcknowledged: Boolean = false,
+    val requiresTlsVerificationChoice: Boolean = false,
 ) {
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
+            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
 }
 
 data class ActiveNtripConfig(
@@ -424,11 +430,13 @@ data class ActiveNtripConfig(
     val transportMode: NtripTransportMode = NtripTransportMode.TLS,
     val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
     val unsafeTlsAcknowledged: Boolean = false,
+    val requiresTlsVerificationChoice: Boolean = false,
 ) {
     val isConfigured: Boolean get() = host.isNotBlank() && mountpoint.isNotBlank()
 
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
+            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
 }
 
 data class ActiveRecordingOutputConfig(

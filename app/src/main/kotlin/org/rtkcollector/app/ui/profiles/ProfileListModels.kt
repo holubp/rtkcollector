@@ -97,6 +97,7 @@ data class EditableProfileField(
     val danger: Boolean = false,
     val visibleWhenUnsafeTls: Boolean = false,
     val unsafeTlsAvailable: Boolean = false,
+    val hidden: Boolean = false,
 ) {
     val hasError: Boolean get() = !errorText.isNullOrBlank()
     val hasHelper: Boolean get() = !helperText.isNullOrBlank()
@@ -107,6 +108,7 @@ fun ntripSecurityEditorFields(
     tlsVerification: NtripTlsVerification,
     unsafeTlsAcknowledged: Boolean,
     allowInsecure: Boolean,
+    requiresTlsVerificationChoice: Boolean = false,
 ): List<EditableProfileField> = listOf(
     EditableProfileField(
         key = "transportMode",
@@ -152,12 +154,15 @@ fun ntripSecurityEditorFields(
                 },
             ),
         ),
-        helperText = if (allowInsecure) {
+        helperText = if (requiresTlsVerificationChoice) {
+            "Legacy custom CA is no longer supported. Choose a TLS verification mode before connecting."
+        } else if (allowInsecure) {
             "Unsafe TLS requires a separate acknowledgement."
         } else {
             "Unsafe TLS is available only in sideload builds."
         },
         unsafeTlsAvailable = allowInsecure,
+        danger = requiresTlsVerificationChoice,
     ),
     EditableProfileField(
         key = "unsafeTlsAcknowledged",
@@ -178,6 +183,9 @@ fun updatedNtripSecurityEditorValues(
     value: String,
 ): Map<String, String> {
     var updated = values + (key to value)
+    if (key == "tlsVerification" && values["transportMode"] == NtripTransportMode.TLS.name) {
+        updated += "requiresTlsVerificationChoice" to "false"
+    }
     if (key in setOf("host", "port", "transportMode", "tlsVerification")) {
         updated += "unsafeTlsAcknowledged" to "false"
     }

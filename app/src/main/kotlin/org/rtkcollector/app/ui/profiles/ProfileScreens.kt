@@ -602,6 +602,7 @@ fun ProfileEditorScreen(
     var pendingDestructiveAction by remember { mutableStateOf<ProfileEditorAction?>(null) }
     val runtimeFields = data.fields
         .map { field -> field.withRuntimeProfileValidation(values) }
+        .filterNot { it.hidden }
         .filter { field -> field.isVisibleIn(values) }
         .map { field -> if (data.readOnly) field.copy(readOnly = true) else field }
     val editorCanSave = !data.readOnly && canSaveProfileEditor(runtimeFields)

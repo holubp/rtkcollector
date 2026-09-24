@@ -29,6 +29,7 @@ import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.SatelliteTelemetryCapability
 import org.rtkcollector.app.profile.ntripSecurityPolicy
+import org.rtkcollector.app.ui.dashboard.ntripSecurityDisclosure
 import org.rtkcollector.app.profile.validateUm980OutputFrequenciesForStart
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
@@ -328,6 +329,7 @@ class RecordingForegroundService : Service() {
     private var activeUsbPid: Int? = null
     @Volatile private var ntripController: NtripRuntimeController? = null
     @Volatile private var activeNtripRuntimeConfig: NtripRuntimeConfig? = null
+    @Volatile private var activeCasterUploadSecurityPolicy: org.rtkcollector.core.correction.NtripEndpointSecurityPolicy? = null
     private var casterUploadController: NtripCasterUploadController? = null
     private var rtklibWorker: RtklibWorker? = null
     private var lastRtklibStatusWriteMillis: Long = 0L
@@ -440,6 +442,7 @@ class RecordingForegroundService : Service() {
         )
         activeSatelliteTelemetryObserved = false
         activeNtripRuntimeConfig = null
+        activeCasterUploadSecurityPolicy = null
         routineStateBroadcastRateLimiter.reset()
         recordingHealthMonitor.reset(SystemClock.elapsedRealtime())
         state = state.copy(
@@ -627,6 +630,7 @@ class RecordingForegroundService : Service() {
             activeEventSink = eventSink
             startRtklibWorkerIfEnabled(intent, sessionWriters)
             val casterUploadConfig = casterUploadRuntimeConfig(intent)
+            activeCasterUploadSecurityPolicy = casterUploadConfig?.request?.policy
             val uploadController = casterUploadConfig?.let {
                 NtripCasterUploadController(
                     eventSink = { event -> sessionWriters.appendCasterUploadEvent(event) },
@@ -2460,6 +2464,7 @@ class RecordingForegroundService : Service() {
         activeTargetBaud = 230400
         ntripController = null
         activeNtripRuntimeConfig = null
+        activeCasterUploadSecurityPolicy = null
         ntripReconnectRequested.set(false)
         casterUploadController = null
         rtklibWorker = null
@@ -2985,6 +2990,10 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_SETTINGS_RECORDING_OUTPUT_PROFILE_LABEL, state.settingsRecordingOutputProfileLabel)
                 putExtra(EXTRA_STATE_SETTINGS_STORAGE_PROFILE_LABEL, state.settingsStorageProfileLabel)
                 putExtra(EXTRA_STATE_NTRIP, state.ntripState)
+                putExtra(EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE, if (state.running) {
+                    ntripSecurityDisclosure(activeNtripRuntimeConfig?.request?.policy,
+                        activeCasterUploadSecurityPolicy, BuildConfig.ALLOW_INSECURE_NTRIP)
+                } else null)
                 putExtra(EXTRA_STATE_NTRIP_URL, state.ntripUrl)
                 putExtra(EXTRA_STATE_NTRIP_TRANSFERRED, state.ntripTransferred)
                 putExtra(EXTRA_STATE_NTRIP_RATES, state.ntripRates)
@@ -4287,6 +4296,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_NMEA_BYTES = "nmeaBytes"
         const val EXTRA_STATE_SESSION_TOTAL_BYTES = "sessionTotalBytes"
         const val EXTRA_STATE_NTRIP = "ntripState"
+        const val EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE = "ntripSecurityDisclosure"
         const val EXTRA_STATE_NTRIP_URL = "ntripUrl"
         const val EXTRA_STATE_NTRIP_TRANSFERRED = "ntripTransferred"
         const val EXTRA_STATE_NTRIP_RATES = "ntripRates"

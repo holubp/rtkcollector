@@ -245,6 +245,53 @@ class NtripCasterUploadClientTest {
     }
 
     @Test
+    fun `tls selected socket preserves exact v1 source header bytes`() {
+        val socket = FakeUploadSocket("ICY 200 OK\r\n\r\n".toByteArray())
+        val connector = TlsInjectedUploadConnector(socket)
+        val request = defaultRequest(
+            credentials = NtripCredentials("retained-user", "pass123"),
+            protocolVersion = NtripProtocolVersion.NTRIP_V1,
+        )
+
+        NtripCasterUploadClient(request, connector).connectOnce { }
+
+        assertEquals(NtripTransportMode.TLS, connector.connectedPolicy?.transport)
+        assertEquals(
+            "SOURCE pass123 /BASE\r\n" +
+                "Source-Agent: RtkCollectorTest/1\r\n\r\n",
+            socket.outputText(),
+        )
+    }
+
+    @Test
+    fun `tls selected socket preserves v2 chunked post bytes`() {
+        val socket = FakeUploadSocket("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
+        val connector = TlsInjectedUploadConnector(socket)
+        val request = defaultRequest(
+            credentials = NtripCredentials("base01", "pass123"),
+            protocolVersion = NtripProtocolVersion.NTRIP_V2,
+        )
+
+        NtripCasterUploadClient(request, connector).connectOnce { output ->
+            output.write(byteArrayOf(0xD3.toByte(), 0x00, 0x01))
+        }
+
+        assertEquals(NtripTransportMode.TLS, connector.connectedPolicy?.transport)
+        assertEquals(
+            "POST /BASE HTTP/1.1\r\n" +
+                "Host: caster.example:2101\r\n" +
+                "User-Agent: RtkCollectorTest/1\r\n" +
+                "Ntrip-Version: Ntrip/2.0\r\n" +
+                "Connection: close\r\n" +
+                "Content-Type: gnss/data\r\n" +
+                "Transfer-Encoding: chunked\r\n" +
+                "Authorization: Basic YmFzZTAxOnBhc3MxMjM=\r\n\r\n" +
+                "3\r\n\u00d3\u0000\u0001\r\n",
+            socket.outputText(),
+        )
+    }
+
+    @Test
     fun `v1 source upload rejects non icy accepted response`() {
         val client = NtripCasterUploadClient(
             defaultRequest(protocolVersion = NtripProtocolVersion.NTRIP_V1),
@@ -418,6 +465,15 @@ class NtripCasterUploadClientTest {
 
     private class FakeUploadConnector(private val socket: NtripSocket) : NtripSocketConnector {
         override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = socket
+    }
+
+    private class TlsInjectedUploadConnector(private val socket: NtripSocket) : NtripSocketConnector {
+        var connectedPolicy: NtripEndpointSecurityPolicy? = null
+
+        override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket {
+            connectedPolicy = policy
+            return socket
+        }
     }
 
     private open class FakeUploadSocket(inputBytes: ByteArray) : NtripSocket {

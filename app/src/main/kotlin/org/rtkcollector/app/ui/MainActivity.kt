@@ -128,6 +128,7 @@ import org.rtkcollector.app.profile.effectiveStorageProfileRef
 import org.rtkcollector.app.profile.effectiveUsbBaudProfileRef
 import org.rtkcollector.app.profile.ntripCasterUploadSecretId
 import org.rtkcollector.app.profile.ntripCasterSecretId
+import org.rtkcollector.app.profile.ntripTlsVerificationFromStorage
 import org.rtkcollector.app.profile.readSettingsImportText
 import org.rtkcollector.app.profile.renameProfile
 import org.rtkcollector.app.profile.requireProfileReference
@@ -207,6 +208,7 @@ import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.app.ui.profiles.ProfileSelectorDialog
 import org.rtkcollector.app.ui.profiles.RefreshNtripCasterMountpointsLabel
 import org.rtkcollector.app.ui.profiles.SuspectInvalidMountpointWarning
+import org.rtkcollector.app.ui.profiles.ntripSecurityEditorFields
 import org.rtkcollector.app.ui.profiles.persistentBaudWriteAction
 import org.rtkcollector.app.ui.profiles.persistentReceiverWriteAction
 import org.rtkcollector.app.ui.profiles.profileDeleteActionLabel
@@ -225,6 +227,8 @@ import org.rtkcollector.receiver.unicore.Um980RuntimeCommandValidator
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripSourcetableClient
 import org.rtkcollector.core.correction.NtripSourcetableRequest
+import org.rtkcollector.core.correction.NtripTlsVerification
+import org.rtkcollector.core.correction.NtripTransportMode
 import org.rtkcollector.core.rtklib.RtklibNativeBridge
 import org.rtkcollector.core.rtklib.RtklibPostprocessMode
 import org.rtkcollector.app.share.isSettingsBackupCacheFile
@@ -4126,6 +4130,12 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("host", "Host", profile.host),
                     EditableProfileField("port", "Port", profile.port.toString()),
+                    *ntripSecurityEditorFields(
+                        profile.transportMode,
+                        profile.tlsVerification,
+                        profile.unsafeTlsAcknowledged,
+                        BuildConfig.ALLOW_INSECURE_NTRIP,
+                    ).toTypedArray(),
                     EditableProfileField("username", "Username", profile.username),
                     EditableProfileField("password", "Password", storedPassword, secret = true),
                     EditableProfileField(
@@ -4152,6 +4162,12 @@ private fun ProfileStores.profileEditorData(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("host", "Host", profile.host),
                     EditableProfileField("port", "Port", profile.port.toString()),
+                    *ntripSecurityEditorFields(
+                        profile.transportMode,
+                        profile.tlsVerification,
+                        profile.unsafeTlsAcknowledged,
+                        BuildConfig.ALLOW_INSECURE_NTRIP,
+                    ).toTypedArray(),
                     EditableProfileField("mountpoint", "Mountpoint", profile.mountpoint),
                     EditableProfileField(
                         "username",
@@ -4566,12 +4582,31 @@ private fun ProfileStores.saveProfileEditorData(
                     val password = values.optional("password").orEmpty()
                     val secretId = ntripCasterSecretId(target.id)
                     savePassword(secretId, password)
+                    val transportMode = values.optional("transportMode")?.let { value ->
+                        runCatching { NtripTransportMode.valueOf(value) }.getOrDefault(profile.transportMode)
+                    } ?: profile.transportMode
+                    val tlsVerification = values.optional("tlsVerification")?.let { value ->
+                        runCatching { ntripTlsVerificationFromStorage(value) }.getOrDefault(profile.tlsVerification)
+                    } ?: profile.tlsVerification
+                    val host = values.optional("host").orEmpty()
+                    val port = values.optional("port")?.toIntOrNull() ?: 2101
+                    val securityChanged = host != profile.host ||
+                        port != profile.port ||
+                        transportMode != profile.transportMode ||
+                        tlsVerification != profile.tlsVerification
                     profile.copy(
                         name = values.required("name"),
-                        host = values.optional("host").orEmpty(),
-                        port = values.optional("port")?.toIntOrNull() ?: 2101,
+                        host = host,
+                        port = port,
                         username = values.optional("username").orEmpty(),
                         secretId = secretId,
+                        transportMode = transportMode,
+                        tlsVerification = tlsVerification,
+                        unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
+                            !securityChanged &&
+                            transportMode == NtripTransportMode.TLS &&
+                            tlsVerification == NtripTlsVerification.Unsafe,
+                        requiresTlsVerificationChoice = false,
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
                             "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
                         },
@@ -4595,13 +4630,32 @@ private fun ProfileStores.saveProfileEditorData(
                     val password = values.optional("password").orEmpty()
                     val secretId = ntripCasterUploadSecretId(target.id)
                     savePassword(secretId, password)
+                    val transportMode = values.optional("transportMode")?.let { value ->
+                        runCatching { NtripTransportMode.valueOf(value) }.getOrDefault(profile.transportMode)
+                    } ?: profile.transportMode
+                    val tlsVerification = values.optional("tlsVerification")?.let { value ->
+                        runCatching { ntripTlsVerificationFromStorage(value) }.getOrDefault(profile.tlsVerification)
+                    } ?: profile.tlsVerification
+                    val host = values.optional("host").orEmpty()
+                    val port = values.optional("port")?.toIntOrNull() ?: 2101
+                    val securityChanged = host != profile.host ||
+                        port != profile.port ||
+                        transportMode != profile.transportMode ||
+                        tlsVerification != profile.tlsVerification
                     profile.copy(
                         name = values.required("name"),
-                        host = values.optional("host").orEmpty(),
-                        port = values.optional("port")?.toIntOrNull() ?: 2101,
+                        host = host,
+                        port = port,
                         mountpoint = values.optional("mountpoint").orEmpty(),
                         username = values.optional("username").orEmpty(),
                         secretId = secretId,
+                        transportMode = transportMode,
+                        tlsVerification = tlsVerification,
+                        unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
+                            !securityChanged &&
+                            transportMode == NtripTransportMode.TLS &&
+                            tlsVerification == NtripTlsVerification.Unsafe,
+                        requiresTlsVerificationChoice = false,
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
                             "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
                         },

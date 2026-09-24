@@ -167,6 +167,55 @@ class NtripClientTest {
     }
 
     @Test
+    fun `tls selected socket receives exact correction request bytes`() {
+        val socket = FakeNtripSocket("ICY 200 OK\r\n\r\n".toByteArray())
+        val connector = TlsInjectedNtripSocketConnector(socket)
+        val request = NtripRequest(
+            policy = NtripEndpointSecurityPolicy.systemTrust("caster.example", 2101),
+            mountpoint = "MOUNT",
+            credentials = NtripCredentials("rover", "secret"),
+            userAgent = "NTRIP RtkCollector/test",
+        )
+
+        NtripClient(request, connector).connectOnce()
+
+        assertEquals(NtripTransportMode.TLS, connector.connectedPolicy?.transport)
+        assertEquals(
+            "GET /MOUNT HTTP/1.1\r\n" +
+                "Host: caster.example:2101\r\n" +
+                "User-Agent: NTRIP RtkCollector/test\r\n" +
+                "Ntrip-Version: Ntrip/2.0\r\n" +
+                "Connection: close\r\n" +
+                "Authorization: Basic cm92ZXI6c2VjcmV0\r\n\r\n",
+            socket.outputText(),
+        )
+    }
+
+    @Test
+    fun `tls selected socket receives exact sourcetable request bytes`() {
+        val socket = FakeNtripSocket("SOURCETABLE 200 OK\r\n\r\nENDSOURCETABLE\r\n".toByteArray())
+        val connector = TlsInjectedNtripSocketConnector(socket)
+        val request = NtripSourcetableRequest(
+            policy = NtripEndpointSecurityPolicy.systemTrust("caster.example", 2101),
+            credentials = NtripCredentials("rover", "secret"),
+            userAgent = "NTRIP RtkCollector/test",
+        )
+
+        NtripSourcetableClient(request, connector).fetch()
+
+        assertEquals(NtripTransportMode.TLS, connector.connectedPolicy?.transport)
+        assertEquals(
+            "GET / HTTP/1.1\r\n" +
+                "Host: caster.example:2101\r\n" +
+                "User-Agent: NTRIP RtkCollector/test\r\n" +
+                "Ntrip-Version: Ntrip/2.0\r\n" +
+                "Connection: close\r\n" +
+                "Authorization: Basic cm92ZXI6c2VjcmV0\r\n\r\n",
+            socket.outputText(),
+        )
+    }
+
+    @Test
     fun `request rejects crlf in rendered host mountpoint and user agent fields`() {
         assertThrows(IllegalArgumentException::class.java) {
             NtripEndpoint.parse("caster.example\r\nX-Bad: yes", 2101)
@@ -464,6 +513,15 @@ class NtripClientTest {
 
     private class FakeNtripSocketConnector(private val socket: NtripSocket) : NtripSocketConnector {
         override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket = socket
+    }
+
+    private class TlsInjectedNtripSocketConnector(private val socket: NtripSocket) : NtripSocketConnector {
+        var connectedPolicy: NtripEndpointSecurityPolicy? = null
+
+        override fun connect(policy: NtripEndpointSecurityPolicy): NtripSocket {
+            connectedPolicy = policy
+            return socket
+        }
     }
 
     private class BlockingNtripSocket : NtripSocket {

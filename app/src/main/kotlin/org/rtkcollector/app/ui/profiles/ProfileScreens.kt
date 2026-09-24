@@ -602,6 +602,7 @@ fun ProfileEditorScreen(
     var pendingDestructiveAction by remember { mutableStateOf<ProfileEditorAction?>(null) }
     val runtimeFields = data.fields
         .map { field -> field.withRuntimeProfileValidation(values) }
+        .filter { field -> field.isVisibleIn(values) }
         .map { field -> if (data.readOnly) field.copy(readOnly = true) else field }
     val editorCanSave = !data.readOnly && canSaveProfileEditor(runtimeFields)
     val savedFingerprint = remember(data.fields) {
@@ -791,11 +792,15 @@ fun ProfileEditorScreen(
                         Checkbox(
                             checked = field.value.equals("true", ignoreCase = true),
                             onCheckedChange = { checked ->
-                                values = values + (field.key to checked.toString())
+                                values = updatedNtripSecurityEditorValues(values, field.key, checked.toString())
                             },
                             enabled = !field.readOnly,
                         )
-                        Text(field.label, modifier = Modifier.weight(1f))
+                        Text(
+                            field.label,
+                            modifier = Modifier.weight(1f),
+                            color = if (field.danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                     ProfileFieldError(field)
                 } else if (field.readOnlyList.isNotEmpty()) {
@@ -847,11 +852,19 @@ fun ProfileEditorScreen(
                         ) {
                             optionItems.forEach { option ->
                                 DropdownMenuItem(
-                                    text = { Text(option.label) },
+                                    text = {
+                                        Column {
+                                            Text(option.label)
+                                            option.disabledExplanation?.takeIf { !option.enabled }?.let { explanation ->
+                                                Text(explanation, style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    },
                                     onClick = {
-                                        values = values + (field.key to option.value)
+                                        values = updatedNtripSecurityEditorValues(values, field.key, option.value)
                                         expandedOptions = expandedOptions - field.key
                                     },
+                                    enabled = option.enabled,
                                 )
                             }
                         }
@@ -864,7 +877,7 @@ fun ProfileEditorScreen(
                             ScriptTextField(
                                 value = field.value,
                                 onValueChange = { value ->
-                                    values = values + (field.key to value)
+                                    values = updatedNtripSecurityEditorValues(values, field.key, value)
                                 },
                                 readOnly = field.readOnly,
                                 isError = field.hasError,
@@ -873,7 +886,7 @@ fun ProfileEditorScreen(
                             ProfileSingleLineTextField(
                                 value = field.value,
                                 onValueChange = { value ->
-                                    values = values + (field.key to value)
+                                    values = updatedNtripSecurityEditorValues(values, field.key, value)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 readOnly = field.readOnly,

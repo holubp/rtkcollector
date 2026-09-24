@@ -4,6 +4,9 @@ import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.effectiveCommandProfileRef
 import org.rtkcollector.app.profile.effectiveNtripMountpointProfileRef
 import org.rtkcollector.app.profile.effectiveStorageProfileRef
+import org.rtkcollector.app.profile.storageValue
+import org.rtkcollector.core.correction.NtripTlsVerification
+import org.rtkcollector.core.correction.NtripTransportMode
 
 enum class ProfileRowTone {
     DEFAULT,
@@ -91,9 +94,89 @@ data class EditableProfileField(
     val helperText: String? = null,
     val sourceUploadUsername: Boolean = false,
     val casterUploadSafety: Boolean = false,
+    val danger: Boolean = false,
+    val visibleWhenUnsafeTls: Boolean = false,
 ) {
     val hasError: Boolean get() = !errorText.isNullOrBlank()
     val hasHelper: Boolean get() = !helperText.isNullOrBlank()
+}
+
+fun ntripSecurityEditorFields(
+    transportMode: NtripTransportMode,
+    tlsVerification: NtripTlsVerification,
+    unsafeTlsAcknowledged: Boolean,
+    allowInsecure: Boolean,
+): List<EditableProfileField> = listOf(
+    EditableProfileField(
+        key = "transportMode",
+        label = "Transport",
+        value = transportMode.name,
+        optionItems = listOf(
+            EditableProfileOption(NtripTransportMode.TLS.name, "TLS"),
+            EditableProfileOption(
+                NtripTransportMode.PLAINTEXT.name,
+                if (allowInsecure) "Plaintext" else "Plaintext (sideload only)",
+                enabled = allowInsecure,
+                disabledExplanation = "Google Play requires TLS with system trust.",
+            ),
+        ),
+        helperText = if (allowInsecure) {
+            "Plaintext sends NTRIP data without TLS."
+        } else {
+            "Google Play requires TLS with system trust; plaintext is available only in sideload builds."
+        },
+    ),
+    EditableProfileField(
+        key = "tlsVerification",
+        label = "TLS verification",
+        value = tlsVerification.storageValue,
+        optionItems = listOf(
+            EditableProfileOption(NtripTlsVerification.SystemTrust.storageValue, "System trust"),
+            EditableProfileOption(
+                NtripTlsVerification.Unsafe.storageValue,
+                if (allowInsecure) {
+                    "Unsafe: accept any certificate / ignore hostname"
+                } else {
+                    "Unsafe TLS (sideload only)"
+                },
+                enabled = allowInsecure,
+                disabledExplanation = "Unsafe TLS is available only in sideload builds.",
+            ),
+        ),
+        helperText = if (allowInsecure) {
+            "Unsafe TLS requires a separate acknowledgement."
+        } else {
+            "Unsafe TLS is available only in sideload builds."
+        },
+    ),
+    EditableProfileField(
+        key = "unsafeTlsAcknowledged",
+        label = "I understand unsafe TLS accepts any certificate and ignores hostname verification",
+        value = unsafeTlsAcknowledged.toString(),
+        boolean = true,
+        readOnly = !allowInsecure,
+        helperText = "This accepts any certificate and ignores hostname verification. The acknowledgement is required for the current endpoint and is cleared when endpoint or security settings change.",
+        danger = true,
+        visibleWhenUnsafeTls = true,
+    ),
+)
+
+fun updatedNtripSecurityEditorValues(
+    values: Map<String, String>,
+    key: String,
+    value: String,
+): Map<String, String> {
+    var updated = values + (key to value)
+    if (key in setOf("host", "port", "transportMode", "tlsVerification")) {
+        updated += "unsafeTlsAcknowledged" to "false"
+    }
+    if (
+        updated["transportMode"] != NtripTransportMode.TLS.name ||
+        updated["tlsVerification"] != NtripTlsVerification.Unsafe.storageValue
+    ) {
+        updated += "unsafeTlsAcknowledged" to "false"
+    }
+    return updated
 }
 
 fun EditableProfileField.withRuntimeProfileValidation(values: Map<String, String>): EditableProfileField {
@@ -113,6 +196,12 @@ fun EditableProfileField.withRuntimeProfileValidation(values: Map<String, String
         else -> copy(value = currentValue)
     }
 }
+
+fun EditableProfileField.isVisibleIn(values: Map<String, String>): Boolean =
+    !visibleWhenUnsafeTls || (
+        values["transportMode"] == NtripTransportMode.TLS.name &&
+            values["tlsVerification"] == NtripTlsVerification.Unsafe.storageValue
+        )
 
 fun canSaveProfileEditor(fields: List<EditableProfileField>): Boolean =
     fields.none { it.hasError }
@@ -141,7 +230,7 @@ private fun EditableProfileField.withRuntimeSourceUploadUsernameState(
             label = "Username (not used for NTRIP v1 source upload)",
             value = currentValue,
             readOnly = true,
-            helperText = "Kept for switching back to v2; not sent in the v1 SOURCE request.",
+            helperText = "Retained for switching back to v2; not sent in the v1 SOURCE request.",
         )
     } else {
         copy(
@@ -198,4 +287,6 @@ data class ProfileEditorAction(
 data class EditableProfileOption(
     val value: String,
     val label: String,
+    val enabled: Boolean = true,
+    val disabledExplanation: String? = null,
 )

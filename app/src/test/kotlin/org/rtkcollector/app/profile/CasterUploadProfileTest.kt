@@ -43,6 +43,25 @@ class CasterUploadProfileTest {
     }
 
     @Test
+    fun `legacy custom CA upload is disabled and endpoint derivation clears acknowledgement`() {
+        val profile = NtripCasterUploadProfile.fromJson(
+            JSONObject()
+                .put("id", "upload")
+                .put("name", "Upload")
+                .put("host", "private.example")
+                .put("tlsVerification", "CUSTOM_CA")
+                .put("customCaCertificateDer", "private-certificate-bytes")
+                .put("unsafeTlsAcknowledged", true),
+        )
+
+        assertEquals(NtripTlsVerification.Unsafe, profile.tlsVerification)
+        assertFalse(profile.unsafeTlsAcknowledged)
+        assertFailsWith<IllegalArgumentException> { profile.toCore(allowInsecure = true) }
+        assertEquals("UNSAFE", profile.toJson().getString("tlsVerification"))
+        assertFalse(profile.toJson().has("customCaCertificateDer"))
+    }
+
+    @Test
     fun `caster upload profile defaults to adaptive retry and disabled manual safety`() {
         val profile = NtripCasterUploadProfile(id = "upload", name = "Upload")
 
@@ -139,11 +158,14 @@ class CasterUploadProfileTest {
             id = "source",
             name = "Source",
             secretId = "old-secret",
+            tlsVerification = NtripTlsVerification.Unsafe,
+            unsafeTlsAcknowledged = true,
         ).copyProfile(id = "copy", name = "Copy")
 
         assertEquals("copy", copy.id)
         assertEquals("Copy", copy.name)
         assertEquals("ntrip-caster-upload-profile:copy", copy.secretId)
+        assertFalse(copy.unsafeTlsAcknowledged)
     }
 
     @Test

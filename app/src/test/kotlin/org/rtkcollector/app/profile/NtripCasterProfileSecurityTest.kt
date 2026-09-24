@@ -47,6 +47,32 @@ class NtripCasterProfileSecurityTest {
     }
 
     @Test
+    fun `legacy custom CA profile is disabled without retaining certificate bytes`() {
+        val profile = NtripCasterProfile.fromJson(
+            JSONObject()
+                .put("id", "caster")
+                .put("name", "Caster")
+                .put("host", "private.example")
+                .put("port", 2201)
+                .put("tlsVerification", "CUSTOM_CA")
+                .put("customCaCertificateDer", "private-certificate-bytes")
+                .put("unsafeTlsAcknowledged", true),
+        )
+
+        assertEquals("private.example", profile.host)
+        assertEquals(2201, profile.port)
+        assertEquals(NtripTlsVerification.Unsafe, profile.tlsVerification)
+        assertFalse(profile.unsafeTlsAcknowledged)
+        assertFailsWith<IllegalArgumentException> { profile.toCore(allowInsecure = true) }
+        val persisted = profile.toJson()
+        assertEquals("UNSAFE", persisted.getString("tlsVerification"))
+        assertFalse(persisted.has("customCaCertificateDer"))
+        assertFalse(persisted.toString().contains("private-certificate-bytes"))
+    }
+
+    @Test
+
+    @Test
     fun `service policy decoding rejects invalid and unacknowledged modes`() {
         assertEquals(NtripTransportMode.TLS,
             ntripSecurityPolicyFromStorage("caster.example", 2101, null, null, false, false).transport)

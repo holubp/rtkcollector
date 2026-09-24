@@ -30,11 +30,31 @@ internal object ProfileStoreMigrations {
     ): List<NtripCasterProfile> =
         profiles.map { profile ->
             if (profile.id == ProfileStores.DEFAULT_NTRIP_CASTER_PROFILE_ID) {
-                profile.copy(isProtected = false)
+                profile.copy(isProtected = false, unsafeTlsAcknowledged = false)
+            } else if (profile.needsSecurityPersistenceMigration) {
+                profile.copy(
+                    unsafeTlsAcknowledged = false,
+                    needsSecurityPersistenceMigration = false,
+                )
             } else {
                 profile
             }
         }.withMissingDefaults(defaults, NtripCasterProfile::id)
+
+    fun ntripCasterUploadProfiles(
+        profiles: List<NtripCasterUploadProfile>,
+        defaults: List<NtripCasterUploadProfile>,
+    ): List<NtripCasterUploadProfile> =
+        profiles.map { profile ->
+            if (profile.needsSecurityPersistenceMigration) {
+                profile.copy(
+                    unsafeTlsAcknowledged = false,
+                    needsSecurityPersistenceMigration = false,
+                )
+            } else {
+                profile
+            }
+        }.withMissingDefaults(defaults, NtripCasterUploadProfile::id)
 
     fun ntripMountpointProfiles(
         profiles: List<NtripMountpointProfile>,
@@ -101,6 +121,34 @@ internal object ProfileStoreMigrations {
 
 private fun String.blankOldNone(): String =
     if (equals("NONE", ignoreCase = true)) "" else this
+
+internal fun NtripCasterProfile.clearUnsafeAcknowledgementUnlessUnchanged(
+    persisted: NtripCasterProfile?,
+): NtripCasterProfile =
+    if (persisted != null &&
+        host == persisted.host &&
+        port == persisted.port &&
+        transportMode == persisted.transportMode &&
+        tlsVerification == persisted.tlsVerification
+    ) {
+        this
+    } else {
+        copy(unsafeTlsAcknowledged = false)
+    }
+
+internal fun NtripCasterUploadProfile.clearUnsafeAcknowledgementUnlessUnchanged(
+    persisted: NtripCasterUploadProfile?,
+): NtripCasterUploadProfile =
+    if (persisted != null &&
+        host == persisted.host &&
+        port == persisted.port &&
+        transportMode == persisted.transportMode &&
+        tlsVerification == persisted.tlsVerification
+    ) {
+        this
+    } else {
+        copy(unsafeTlsAcknowledged = false)
+    }
 
 private fun String.normalizedProfileName(): String =
     trim().lowercase().replace(Regex("\\s+"), " ")

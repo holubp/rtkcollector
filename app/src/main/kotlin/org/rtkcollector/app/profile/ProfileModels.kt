@@ -38,18 +38,38 @@ enum class NtripCasterUploadRetryMode {
 
 private val RTK2GO_HOSTS = setOf("rtk2go.com", "www.rtk2go.com")
 
-private fun JSONObject.ntripTransportMode(): NtripTransportMode =
-    if (has("transportMode")) NtripTransportMode.valueOf(getString("transportMode"))
-    else NtripTransportMode.PLAINTEXT
+private data class StoredNtripSecurity(
+    val transportMode: NtripTransportMode,
+    val tlsVerification: NtripTlsVerification,
+    val unsafeTlsAcknowledged: Boolean,
+    val needsSecurityPersistenceMigration: Boolean,
+)
+
+private fun JSONObject.storedNtripSecurity(): StoredNtripSecurity {
+    val storedVerification = optString("tlsVerification", "SYSTEM_TRUST")
+    val legacyCustomCa = storedVerification.equals("CUSTOM_CA", ignoreCase = true)
+    val transportMode = when {
+        legacyCustomCa -> NtripTransportMode.TLS
+        has("transportMode") -> NtripTransportMode.valueOf(getString("transportMode"))
+        else -> NtripTransportMode.PLAINTEXT
+    }
+    val tlsVerification = when {
+        legacyCustomCa -> NtripTlsVerification.Unsafe
+        else -> ntripTlsVerificationFromStorage(storedVerification)
+    }
+    return StoredNtripSecurity(
+        transportMode = transportMode,
+        tlsVerification = tlsVerification,
+        unsafeTlsAcknowledged = !legacyCustomCa && optBoolean("unsafeTlsAcknowledged", false),
+        needsSecurityPersistenceMigration = legacyCustomCa,
+    )
+}
 
 fun ntripTlsVerificationFromStorage(value: String): NtripTlsVerification = when (value) {
     "SYSTEM_TRUST" -> NtripTlsVerification.SystemTrust
     "UNSAFE" -> NtripTlsVerification.Unsafe
     else -> throw IllegalArgumentException("NTRIP TLS verification is invalid.")
 }
-
-private fun JSONObject.ntripTlsVerification(): NtripTlsVerification =
-    ntripTlsVerificationFromStorage(optString("tlsVerification", "SYSTEM_TRUST"))
 
 val NtripTlsVerification.storageValue: String
     get() = when (this) {
@@ -185,6 +205,8 @@ data class NtripCasterProfile(
     val transportMode: NtripTransportMode = NtripTransportMode.TLS,
     val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
     val unsafeTlsAcknowledged: Boolean = false,
+    /** Causes one canonical rewrite after decoding a legacy Custom-CA JSON value. */
+    val needsSecurityPersistenceMigration: Boolean = false,
     val sourcetableMountpoints: List<String> = emptyList(),
     val isProtected: Boolean = false,
 ) {
@@ -217,20 +239,24 @@ data class NtripCasterProfile(
         .putStringList("sourcetableMountpoints", sourcetableMountpoints)
 
     companion object {
-        fun fromJson(json: JSONObject): NtripCasterProfile = NtripCasterProfile(
-            id = json.getString("id"),
-            name = json.getString("name"),
-            isProtected = json.optProtectedFlag(),
-            host = json.optString("host", ""),
-            port = json.optInt("port", 2101),
-            username = json.optString("username", ""),
-            secretId = json.optString("secretId", ""),
-            protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
-            transportMode = json.ntripTransportMode(),
-            tlsVerification = json.ntripTlsVerification(),
-            unsafeTlsAcknowledged = json.optBoolean("unsafeTlsAcknowledged", false),
-            sourcetableMountpoints = json.optStringList("sourcetableMountpoints"),
-        ).also(NtripCasterProfile::validate)
+        fun fromJson(json: JSONObject): NtripCasterProfile {
+            val security = json.storedNtripSecurity()
+            return NtripCasterProfile(
+                id = json.getString("id"),
+                name = json.getString("name"),
+                isProtected = json.optProtectedFlag(),
+                host = json.optString("host", ""),
+                port = json.optInt("port", 2101),
+                username = json.optString("username", ""),
+                secretId = json.optString("secretId", ""),
+                protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
+                transportMode = security.transportMode,
+                tlsVerification = security.tlsVerification,
+                unsafeTlsAcknowledged = security.unsafeTlsAcknowledged,
+                needsSecurityPersistenceMigration = security.needsSecurityPersistenceMigration,
+                sourcetableMountpoints = json.optStringList("sourcetableMountpoints"),
+            ).also(NtripCasterProfile::validate)
+        }
     }
 }
 
@@ -251,6 +277,8 @@ data class NtripCasterUploadProfile(
     val transportMode: NtripTransportMode = NtripTransportMode.TLS,
     val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
     val unsafeTlsAcknowledged: Boolean = false,
+    /** Causes one canonical rewrite after decoding a legacy Custom-CA JSON value. */
+    val needsSecurityPersistenceMigration: Boolean = false,
     val retryMode: NtripCasterUploadRetryMode = NtripCasterUploadRetryMode.ADAPTIVE,
     val fixedReconnectDelaySeconds: Int = 10,
     val adaptiveInitialDelaySeconds: Int = 10,
@@ -340,31 +368,35 @@ data class NtripCasterUploadProfile(
             "NTRIP_V1_ONLY",
         )
 
-        fun fromJson(json: JSONObject): NtripCasterUploadProfile = NtripCasterUploadProfile(
-            id = json.getString("id"),
-            name = json.getString("name"),
-            isProtected = json.optProtectedFlag(),
-            host = json.optString("host", ""),
-            port = json.optInt("port", 2101),
-            mountpoint = json.optString("mountpoint", ""),
-            username = json.optString("username", ""),
-            secretId = json.optString("secretId", ""),
-            protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
-            transportMode = json.ntripTransportMode(),
-            tlsVerification = json.ntripTlsVerification(),
-            unsafeTlsAcknowledged = json.optBoolean("unsafeTlsAcknowledged", false),
-            retryMode = NtripCasterUploadRetryMode.fromStorageValue(json.optString("retryMode", "")),
-            fixedReconnectDelaySeconds = json.optInt("fixedReconnectDelaySeconds", 10),
-            adaptiveInitialDelaySeconds = json.optInt("adaptiveInitialDelaySeconds", 10),
-            adaptiveMaxDelaySeconds = json.optInt("adaptiveMaxDelaySeconds", 300),
-            stopAfterFailuresEnabled = json.optBoolean("stopAfterFailuresEnabled", true),
-            stopAfterConsecutiveFailures = json.optInt("stopAfterConsecutiveFailures", 5),
-            safetyRulesEnabled = json.optBoolean("safetyRulesEnabled", false),
-            safetyMaxBitrateKbps = json.optInt("safetyMaxBitrateKbps", 35),
-            safetyBitrateWindowSeconds = json.optInt("safetyBitrateWindowSeconds", 60),
-            safetyMaxSessionUploadMb = json.optInt("safetyMaxSessionUploadMb", 500),
-            enabledByDefault = json.optBoolean("enabledByDefault", false),
-        ).also(NtripCasterUploadProfile::validate)
+        fun fromJson(json: JSONObject): NtripCasterUploadProfile {
+            val security = json.storedNtripSecurity()
+            return NtripCasterUploadProfile(
+                id = json.getString("id"),
+                name = json.getString("name"),
+                isProtected = json.optProtectedFlag(),
+                host = json.optString("host", ""),
+                port = json.optInt("port", 2101),
+                mountpoint = json.optString("mountpoint", ""),
+                username = json.optString("username", ""),
+                secretId = json.optString("secretId", ""),
+                protocolPolicy = json.optString("protocolPolicy", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"),
+                transportMode = security.transportMode,
+                tlsVerification = security.tlsVerification,
+                unsafeTlsAcknowledged = security.unsafeTlsAcknowledged,
+                needsSecurityPersistenceMigration = security.needsSecurityPersistenceMigration,
+                retryMode = NtripCasterUploadRetryMode.fromStorageValue(json.optString("retryMode", "")),
+                fixedReconnectDelaySeconds = json.optInt("fixedReconnectDelaySeconds", 10),
+                adaptiveInitialDelaySeconds = json.optInt("adaptiveInitialDelaySeconds", 10),
+                adaptiveMaxDelaySeconds = json.optInt("adaptiveMaxDelaySeconds", 300),
+                stopAfterFailuresEnabled = json.optBoolean("stopAfterFailuresEnabled", true),
+                stopAfterConsecutiveFailures = json.optInt("stopAfterConsecutiveFailures", 5),
+                safetyRulesEnabled = json.optBoolean("safetyRulesEnabled", false),
+                safetyMaxBitrateKbps = json.optInt("safetyMaxBitrateKbps", 35),
+                safetyBitrateWindowSeconds = json.optInt("safetyBitrateWindowSeconds", 60),
+                safetyMaxSessionUploadMb = json.optInt("safetyMaxSessionUploadMb", 500),
+                enabledByDefault = json.optBoolean("enabledByDefault", false),
+            ).also(NtripCasterUploadProfile::validate)
+        }
     }
 }
 

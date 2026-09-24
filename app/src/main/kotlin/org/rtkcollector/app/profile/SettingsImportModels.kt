@@ -276,7 +276,11 @@ private fun remapImportedNtripGraph(
             profileOwnedSecretId = ntripCasterSecretId(profile.id),
             legacySecretId = profile.secretId,
         )?.let { password -> remappedPasswords[newSecretId] = password }
-        profile.copy(id = newProfileId, secretId = newSecretId)
+        profile.copy(
+            id = newProfileId,
+            secretId = newSecretId,
+            unsafeTlsAcknowledged = false,
+        )
     }
     val uploadProfiles = if (uploadFamilyIncluded) {
         backup.ntripCasterUploadProfiles.map { profile ->
@@ -288,7 +292,11 @@ private fun remapImportedNtripGraph(
                 profileOwnedSecretId = ntripCasterUploadSecretId(profile.id),
                 legacySecretId = profile.secretId,
             )?.let { password -> remappedPasswords[newSecretId] = password }
-            profile.copy(id = newProfileId, secretId = newSecretId)
+            profile.copy(
+                id = newProfileId,
+                secretId = newSecretId,
+                unsafeTlsAcknowledged = false,
+            )
         }
     } else {
         backup.ntripCasterUploadProfiles

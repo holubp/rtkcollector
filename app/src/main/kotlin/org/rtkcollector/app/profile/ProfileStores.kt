@@ -41,20 +41,26 @@ class ProfileStores(context: Context) {
         )
 
     fun saveNtripCasterProfiles(profiles: List<NtripCasterProfile>) =
-        writeProfiles("ntripCasterProfiles", profiles.onEach(NtripCasterProfile::validate).map(NtripCasterProfile::toJson))
+        writeProfiles(
+            "ntripCasterProfiles",
+            clearChangedNtripCasterAcknowledgements(profiles).onEach(NtripCasterProfile::validate)
+                .map(NtripCasterProfile::toJson),
+        )
 
     fun ntripCasterUploadProfiles(): List<NtripCasterUploadProfile> =
         readProfiles(
             key = "ntripCasterUploadProfiles",
             defaults = ::defaultNtripCasterUploadProfiles,
             decode = NtripCasterUploadProfile::fromJson,
+            migrate = ProfileStoreMigrations::ntripCasterUploadProfiles,
             encode = NtripCasterUploadProfile::toJson,
         )
 
     fun saveNtripCasterUploadProfiles(profiles: List<NtripCasterUploadProfile>) =
         writeProfiles(
             "ntripCasterUploadProfiles",
-            profiles.onEach(NtripCasterUploadProfile::validate).map(NtripCasterUploadProfile::toJson),
+            clearChangedNtripCasterUploadAcknowledgements(profiles).onEach(NtripCasterUploadProfile::validate)
+                .map(NtripCasterUploadProfile::toJson),
         )
 
     fun ntripMountpointProfiles(): List<NtripMountpointProfile> =
@@ -280,6 +286,24 @@ class ProfileStores(context: Context) {
 
     private fun writeProfiles(key: String, jsonObjects: List<org.json.JSONObject>) {
         preferences.edit().putString(key, profileJson(jsonObjects) { it }).apply()
+    }
+
+    private fun clearChangedNtripCasterAcknowledgements(
+        profiles: List<NtripCasterProfile>,
+    ): List<NtripCasterProfile> {
+        val persisted = ntripCasterProfiles().associateBy(NtripCasterProfile::id)
+        return profiles.map { candidate ->
+            candidate.clearUnsafeAcknowledgementUnlessUnchanged(persisted[candidate.id])
+        }
+    }
+
+    private fun clearChangedNtripCasterUploadAcknowledgements(
+        profiles: List<NtripCasterUploadProfile>,
+    ): List<NtripCasterUploadProfile> {
+        val persisted = ntripCasterUploadProfiles().associateBy(NtripCasterUploadProfile::id)
+        return profiles.map { candidate ->
+            candidate.clearUnsafeAcknowledgementUnlessUnchanged(persisted[candidate.id])
+        }
     }
 
     private fun <T> profileJson(profiles: List<T>, encode: (T) -> org.json.JSONObject): String =

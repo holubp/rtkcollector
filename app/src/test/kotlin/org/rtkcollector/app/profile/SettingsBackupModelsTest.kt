@@ -49,6 +49,52 @@ class SettingsBackupModelsTest {
     }
 
     @Test
+    fun `backup retains only supported TLS fields and import clears local acknowledgement`() {
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(),
+            usbBaudProfiles = emptyList(),
+            ntripCasterProfiles = listOf(
+                NtripCasterProfile(
+                    id = "caster", name = "Caster", host = "caster.example",
+                    tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
+                    unsafeTlsAcknowledged = true,
+                ),
+            ),
+            ntripCasterUploadProfiles = listOf(
+                NtripCasterUploadProfile(
+                    id = "upload", name = "Upload", host = "upload.example",
+                    tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
+                    unsafeTlsAcknowledged = true,
+                ),
+            ),
+            ntripMountpointProfiles = emptyList(),
+            recordingPolicyProfiles = emptyList(),
+            storageProfiles = emptyList(),
+            settingsSets = emptyList(),
+            selectedSettingsSetId = null,
+            selectedWorkflowId = null,
+            lastActiveNtripMountpointProfileId = null,
+            passwordsBySecretId = emptyMap(),
+            options = SettingsSetExportOptions(),
+        )
+
+        val json = backup.toJson()
+        val casterJson = json.getJSONArray("ntripCasterProfiles").getJSONObject(0)
+        setOf("transportMode", "tlsVerification", "unsafeTlsAcknowledged").forEach { key ->
+            assertTrue(casterJson.has(key))
+        }
+        assertFalse(json.toString().contains("customCa", ignoreCase = true))
+
+        val imported = settingsBackupImportPlan(
+            backup = SettingsBackupFile.fromJson(json),
+            persistedSafTreeUrisWithWriteAccess = emptySet(),
+            idFactory = SettingsImportIdFactory { "$it-imported" },
+        ).backup
+        assertFalse(imported.ntripCasterProfiles.single().unsafeTlsAcknowledged)
+        assertFalse(imported.ntripCasterUploadProfiles.single().unsafeTlsAcknowledged)
+    }
+
+    @Test
     fun `export excludes plaintext passwords by default`() {
         val backup = SettingsBackupFile.fromProfiles(
             commandProfiles = emptyList(),

@@ -231,9 +231,70 @@ class ProfileStoresTest {
             id = "source",
             name = "Source",
             secretId = ntripCasterSecretId("source"),
+            tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
+            unsafeTlsAcknowledged = true,
         ).copyProfile(id = "copy", name = "Copy")
 
         assertEquals("ntrip-caster-profile:copy", copied.secretId)
+        assertFalse(copied.unsafeTlsAcknowledged)
+    }
+
+    @Test
+    fun `NTRIP profile migration clears acknowledgement and persists disabled legacy custom CA`() {
+        val migratedCaster = ProfileStoreMigrations.ntripCasterProfiles(
+            profiles = listOf(
+                NtripCasterProfile.fromJson(
+                    JSONObject()
+                        .put("id", "caster")
+                        .put("name", "Caster")
+                        .put("host", "private.example")
+                        .put("tlsVerification", "CUSTOM_CA")
+                        .put("customCaCertificateDer", "certificate-bytes")
+                        .put("unsafeTlsAcknowledged", true),
+                ),
+            ),
+            defaults = emptyList(),
+        ).single()
+        val migratedUpload = ProfileStoreMigrations.ntripCasterUploadProfiles(
+            profiles = listOf(
+                NtripCasterUploadProfile.fromJson(
+                    JSONObject()
+                        .put("id", "upload")
+                        .put("name", "Upload")
+                        .put("tlsVerification", "CUSTOM_CA")
+                        .put("unsafeTlsAcknowledged", true),
+                ),
+            ),
+            defaults = emptyList(),
+        ).single()
+
+        assertFalse(migratedCaster.unsafeTlsAcknowledged)
+        assertEquals("UNSAFE", migratedCaster.toJson().getString("tlsVerification"))
+        assertFalse(migratedCaster.toJson().has("customCaCertificateDer"))
+        assertFalse(migratedUpload.unsafeTlsAcknowledged)
+    }
+
+    @Test
+    fun `persisted NTRIP acknowledgement clears after endpoint or security change`() {
+        val storedCaster = NtripCasterProfile(
+            id = "caster", name = "Caster", host = "caster.example",
+            tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
+            unsafeTlsAcknowledged = true,
+        )
+        val storedUpload = NtripCasterUploadProfile(
+            id = "upload", name = "Upload", host = "upload.example",
+            tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
+            unsafeTlsAcknowledged = true,
+        )
+
+        assertFalse(storedCaster.copy(host = "other.example").clearUnsafeAcknowledgementUnlessUnchanged(storedCaster)
+            .unsafeTlsAcknowledged)
+        assertFalse(storedCaster.copy(tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.SystemTrust)
+            .clearUnsafeAcknowledgementUnlessUnchanged(storedCaster).unsafeTlsAcknowledged)
+        assertFalse(storedUpload.copy(port = 2201).clearUnsafeAcknowledgementUnlessUnchanged(storedUpload)
+            .unsafeTlsAcknowledged)
+        assertFalse(storedUpload.copy(transportMode = org.rtkcollector.core.correction.NtripTransportMode.PLAINTEXT)
+            .clearUnsafeAcknowledgementUnlessUnchanged(storedUpload).unsafeTlsAcknowledged)
     }
 
     @Test

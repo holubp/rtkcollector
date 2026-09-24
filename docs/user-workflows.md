@@ -102,19 +102,22 @@ with a predefined mountpoint. The Home dashboard `Upload` selector has an
 explicit `Off` row; choose a source-upload profile only for base workflows that
 should publish RTCM.
 
-The seven Home setup selectors can be folded under `Active setup`. The app
-remembers that choice. It expands the section automatically when the selected
-workflow has an incomplete setup, such as a missing required NTRIP mountpoint
-or storage folder, or an enabled upload that is unavailable for the selected
-workflow. After the issue is fixed, the section returns to the user's
-remembered expanded or folded state.
+The Home `Active setup` area contains seven configuration selectors plus a
+`Sessions` shortcut. All eight buttons fold together. In the two-column
+layout, `Storage` and `Sessions` share the final row. `Sessions` opens
+`Recent sessions and sharing`. The app remembers the folding choice. It
+expands the section automatically when the selected workflow has an incomplete
+setup, such as a missing required NTRIP mountpoint or storage folder, or an
+enabled upload that is unavailable for the selected workflow. After the issue
+is fixed, the section returns to the user's remembered expanded or folded
+state.
 
 ## Screenshots To Capture
 
 The user guide and Play listing would benefit from these screenshots:
 
 1. Home screen before recording, showing Device, Settings, Workflow,
-   Mountpoint, Profiles, Upload and Storage selectors.
+   Mountpoint, Profiles, Upload, Storage and Sessions actions.
 2. USB permission/device selection flow.
 3. Plain rover recording in progress, with Position/Fix/Files cards visible.
 4. Rover with NTRIP recording in progress, with NTRIP state and correction byte
@@ -201,12 +204,12 @@ UM980/N4, the generated `MODE BASE` command uses MSL altitude. Ellipsoidal
 height and geoid separation remain recorded metadata for review, dashboard
 display and mock-location semantics.
 
-The Files card shows the active session location and recorded byte counts. In
-Menu, a dedicated `Sessions` group appears directly below `Active setup` and
-contains `Recent sessions and sharing`. It lists recordings in the configured
-app-private storage with latest sessions first and separates the current
-session, completed recordings and archived recordings. Active recordings
-cannot be shared, archived, restored or deleted from this screen.
+The Files card shows the active session location and recorded byte counts. Open
+recent sessions from the Home `Sessions` shortcut, or from Menu > Sessions >
+`Recent sessions and sharing`. It lists recordings in the configured app-private
+storage with latest sessions first and separates the current session, completed
+recordings and archived recordings. Active recordings cannot be shared,
+archived, restored or deleted from this screen.
 
 Android mock-location output is a recording-scoped option. When enabled, the
 foreground recording service publishes the current best fresh RtkCollector

@@ -336,6 +336,9 @@ fun RtkCollectorApp(
     onExternalIntentConsumed: () -> Unit = {},
 ) {
     var screen by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf(AppScreen.HOME) }
+    var sessionBrowserEntryPoint by rememberSaveable(stateSaver = SessionBrowserEntryPointSaver) {
+        mutableStateOf(SessionBrowserEntryPoint.SETTINGS)
+    }
     val context = LocalContext.current
     val diagnosticsSettings = remember(context) { DiagnosticsSettings(context) }
     val diagnosticsStore = remember(context) { DiagnosticsStore(context.filesDir) }
@@ -470,6 +473,11 @@ fun RtkCollectorApp(
             settingsSets = settingsSets,
             selectedSettingsSetId = selectedSettingsSetId,
         )
+    }
+    fun openSessions(entryPoint: SessionBrowserEntryPoint) {
+        sessionBrowserEntryPoint = entryPoint
+        refreshSessions()
+        screen = AppScreen.SESSIONS
     }
     fun runSessionTask(label: String, category: DiagnosticCategory = DiagnosticCategory.APP, task: () -> Unit) {
         zipProgressText = "$label..."
@@ -1023,7 +1031,11 @@ fun RtkCollectorApp(
         )
     }
     BackHandler(enabled = screen != AppScreen.HOME) {
-        screen = screen.backScreen(profileEditorTarget)
+        screen = if (screen == AppScreen.SESSIONS) {
+            sessionBrowserEntryPoint.returnScreen()
+        } else {
+            screen.backScreen(profileEditorTarget)
+        }
     }
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
@@ -1409,6 +1421,7 @@ fun RtkCollectorApp(
                                     dashboardSelector = DashboardSelector.STORAGE
                                 }
                             },
+                            onSessions = { openSessions(SessionBrowserEntryPoint.HOME) },
                             coordinateAveraging = state.position.serviceCoordinateAveragingState(),
                             onStartCoordinateAveraging = { _, _ ->
                                 if (!state.isRecording) {
@@ -1505,10 +1518,7 @@ fun RtkCollectorApp(
                         onRtklibProfiles = { screen = AppScreen.RTKLIB_PROFILES },
                         onSolutionPolicy = { screen = AppScreen.SOLUTION_POLICIES },
                         onStorage = { screen = AppScreen.STORAGE },
-                        onSessions = {
-                            refreshSessions()
-                            screen = AppScreen.SESSIONS
-                        },
+                        onSessions = { openSessions(SessionBrowserEntryPoint.SETTINGS) },
                         onExportSettings = {
                             includePlaintextPasswordsInBackup = false
                             showSettingsExportDialog = true
@@ -2451,7 +2461,7 @@ fun RtkCollectorApp(
                             .setPrimaryClip(ClipData.newPlainText("RtkCollector session path", path))
                         Toast.makeText(context, "Session path copied", Toast.LENGTH_SHORT).show()
                     },
-                    onBack = { screen = AppScreen.SETTINGS },
+                    onBack = { screen = sessionBrowserEntryPoint.returnScreen() },
                 )
                 AppScreen.APP_DIAGNOSTICS -> {
                     @Suppress("UNUSED_VARIABLE")
@@ -5051,7 +5061,7 @@ private fun List<RecordingSettingsSet>.referenceProfile(kind: ProfileKind, id: S
         }
     }
 
-private enum class AppScreen {
+internal enum class AppScreen {
     HOME,
     SATELLITE_MONITOR,
     CASTER_UPLOAD_MONITOR,
@@ -5084,6 +5094,22 @@ private val AppScreenSaver: Saver<AppScreen, String> = Saver(
     restore = { name ->
         runCatching { AppScreen.valueOf(name) }.getOrDefault(AppScreen.HOME)
     },
+)
+
+internal enum class SessionBrowserEntryPoint {
+    HOME,
+    SETTINGS,
+}
+
+internal fun SessionBrowserEntryPoint.returnScreen(): AppScreen =
+    when (this) {
+        SessionBrowserEntryPoint.HOME -> AppScreen.HOME
+        SessionBrowserEntryPoint.SETTINGS -> AppScreen.SETTINGS
+    }
+
+internal val SessionBrowserEntryPointSaver: Saver<SessionBrowserEntryPoint, String> = Saver(
+    save = { it.name },
+    restore = { name -> runCatching { SessionBrowserEntryPoint.valueOf(name) }.getOrDefault(SessionBrowserEntryPoint.SETTINGS) },
 )
 
 private val SELECTABLE_BAUD_RATES = listOf(

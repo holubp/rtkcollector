@@ -72,9 +72,9 @@ class DashboardLayoutModelsTest {
     }
 
     @Test
-    fun `default setup strip includes mountpoint selector`() {
+    fun `default setup strip includes sessions shortcut after storage`() {
         assertEquals(
-            listOf("Device", "Settings", "Workflow", "Mountpoint", "Profiles", "Upload", "Storage"),
+            listOf("Device", "Settings", "Workflow", "Mountpoint", "Profiles", "Upload", "Storage", "Sessions"),
             defaultDashboardSetupItems.map { it.label },
         )
     }

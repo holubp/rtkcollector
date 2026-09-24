@@ -246,11 +246,24 @@ class DashboardStateTest {
                 DashboardSetupItem.INIT_PROFILES,
                 DashboardSetupItem.UPLOAD,
                 DashboardSetupItem.STORAGE,
+                DashboardSetupItem.SESSIONS,
             ),
             defaultDashboardSetupItems,
         )
+        assertEquals(
+            listOf(DashboardSetupItem.STORAGE, DashboardSetupItem.SESSIONS),
+            defaultDashboardSetupItems.chunked(2).last(),
+        )
         assertEquals("Mountpoint", DashboardSetupItem.MOUNTPOINT.label)
         assertEquals("Profiles", DashboardSetupItem.INIT_PROFILES.label)
+    }
+
+    @Test
+    fun `sessions shortcut stays enabled without setup warning semantics`() {
+        val status = validDashboardStatus()
+
+        assertNull(status.setupWarningReason(DashboardSetupItem.SESSIONS))
+        assertTrue(status.isSetupItemEnabled(DashboardSetupItem.SESSIONS))
     }
 
     private fun validDashboardStatus(): DashboardStatus = DashboardStatus(

@@ -219,6 +219,7 @@ internal enum class DashboardSetupItem(val label: String) {
     INIT_PROFILES("Profiles"),
     UPLOAD("Upload"),
     STORAGE("Storage"),
+    SESSIONS("Sessions"),
 }
 
 internal val defaultDashboardSetupItems: List<DashboardSetupItem> = listOf(
@@ -229,6 +230,7 @@ internal val defaultDashboardSetupItems: List<DashboardSetupItem> = listOf(
     DashboardSetupItem.INIT_PROFILES,
     DashboardSetupItem.UPLOAD,
     DashboardSetupItem.STORAGE,
+    DashboardSetupItem.SESSIONS,
 )
 
 internal fun effectiveDashboardSetupExpanded(
@@ -279,6 +281,7 @@ internal fun DashboardStatus.setupWarningReason(item: DashboardSetupItem): Strin
             storage.isMissingDashboardValue() -> "Storage profile is missing"
             else -> null
         }
+        DashboardSetupItem.SESSIONS -> null
     }
 
 internal fun String.isMissingDashboardValue(): Boolean {

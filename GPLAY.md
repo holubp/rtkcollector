@@ -52,6 +52,17 @@ passed full-host flavor tests, real TLS correction and source-upload checks,
 signed-AAB validation and Data safety review. Do not claim all NTRIP transfers
 are encrypted when the user may select plaintext.
 
+**Play policy blocker:** Google's [User Data policy](https://support.google.com/googleplay/android-developer/answer/10144311)
+includes authentication information and device location among personal and
+sensitive data and requires modern cryptography for their transmission. The
+[Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469)
+requires the encryption declaration to cover all applicable off-device data.
+RC4's optional plaintext credentials/GGA may therefore prevent Play approval;
+answering "No" to encryption does not itself waive the User Data policy.
+Do not submit the Play AAB until this policy conflict is resolved through
+authoritative Play review or a changed Play transport policy. This does not
+affect the RC4 source or debug-sideload release.
+
 ## 1. Create And Verify The Developer Account
 
 1. Go to [Play Console](https://play.google.com/console/) using the Google

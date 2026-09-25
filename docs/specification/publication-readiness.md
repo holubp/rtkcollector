@@ -43,6 +43,12 @@ verification. Imported or stale unsafe TLS profiles MUST be blocked until the us
 selects a supported transport. The app MUST never downgrade failed TLS to plaintext.
 Data safety answers MUST reflect that the shipped `googlePlayRelease` AAB can send
 credentials and optional GGA position without encryption when plaintext is selected.
+Because [Google Play's User Data policy](https://support.google.com/googleplay/android-developer/answer/10144311)
+requires modern cryptography for personal
+and sensitive data in transit, Play publication MUST remain blocked until the
+plaintext-credential/GGA policy conflict is resolved by an authoritative Play
+decision or a separately approved change of the Play transport contract. An
+accurate Data safety declaration alone MUST NOT be treated as policy clearance.
 
 Rationale:
 NTRIP deployments commonly use cleartext TCP. False blanket encryption claims

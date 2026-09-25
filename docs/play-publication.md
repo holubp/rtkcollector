@@ -36,6 +36,10 @@ Security practice declarations:
   variant and exposes credentials and optional GGA position. Invalid TLS is not
   supported and failed TLS never downgrades. Do not claim all NTRIP data is
   encrypted; verify the exact shipped variant before Play Console declarations.
+  Google Play's [User Data policy](https://support.google.com/googleplay/android-developer/answer/10144311)
+  requires modern cryptography when transmitting authentication information or
+  device location. Resolve this RC4 plaintext publication risk before submission;
+  an accurate Data safety answer alone may not satisfy the policy.
 - Data deletion: users can delete local sessions and archives in the app.
 - No advertising or analytics SDKs are included.
 

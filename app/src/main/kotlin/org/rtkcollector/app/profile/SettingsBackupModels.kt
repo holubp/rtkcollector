@@ -102,12 +102,16 @@ data class SettingsBackupFile(
                 selectedSettingsSetId = selectedSettingsSetId,
                 selectedWorkflowId = selectedWorkflowId,
                 lastActiveNtripMountpointProfileId = lastActiveNtripMountpointProfileId,
-                plaintextPasswordsBySecretId = if (options.includePlaintextPasswords) {
-                    passwordsBySecretId
-                } else {
-                    emptyMap()
-                },
-            )
+                plaintextPasswordsBySecretId = emptyMap(),
+            ).let { backup ->
+                backup.copy(
+                    plaintextPasswordsBySecretId = if (options.includePlaintextPasswords) {
+                        passwordsBySecretId.filterKeys(backup.referencedNtripSecretIds()::contains)
+                    } else {
+                        emptyMap()
+                    },
+                )
+            }
 
         fun fromJson(json: JSONObject): SettingsBackupFile {
             require(json.optInt("formatVersion", 0) == CURRENT_FORMAT_VERSION) {
@@ -159,3 +163,29 @@ private fun JSONObject.putNullable(key: String, value: String?): JSONObject =
 
 private fun JSONObject.optNullableString(key: String): String? =
     if (has(key) && !isNull(key)) optString(key).takeIf(String::isNotBlank) else null
+
+/**
+ * RC2 stored caster passwords using this endpoint-derived key before the
+ * profile-owned secret-id migration. It is accepted only when it exactly
+ * corresponds to an imported caster profile and is re-keyed during import.
+ */
+internal fun legacyNtripCasterSecretId(profile: NtripCasterProfile): String =
+    "ntrip:${profile.host}:${profile.id}:${profile.username}"
+
+internal fun SettingsBackupFile.referencedNtripSecretIds(): Set<String> = buildSet {
+    ntripCasterProfiles.forEach { profile ->
+        add(ntripCasterSecretId(profile.id))
+        add(legacyNtripCasterSecretId(profile))
+        profile.secretId.takeIf(String::isNotBlank)?.let(::add)
+    }
+    if (SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD in includedProfileFamilies) {
+        ntripCasterUploadProfiles.forEach { profile ->
+            add(ntripCasterUploadSecretId(profile.id))
+            profile.secretId.takeIf(String::isNotBlank)?.let(::add)
+        }
+    }
+    settingsSets.forEach { settingsSet ->
+        settingsSet.overrides.ntripCaster?.secretId?.takeIf(String::isNotBlank)?.let(::add)
+        settingsSet.overrides.ntripCasterUpload?.secretId?.takeIf(String::isNotBlank)?.let(::add)
+    }
+}

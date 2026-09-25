@@ -144,4 +144,59 @@ class SettingsBackupModelsTest {
         assertEquals("", parsed.plaintextPasswordsBySecretId["upload-secret"])
         assertTrue(backup.toJson().toString().contains("plaintextPasswords"))
     }
+
+    @Test
+    fun `plaintext export excludes orphaned secret store entries`() {
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(),
+            usbBaudProfiles = emptyList(),
+            ntripCasterProfiles = listOf(
+                NtripCasterProfile(id = "caster", name = "Caster", secretId = "secret"),
+            ),
+            ntripCasterUploadProfiles = emptyList(),
+            ntripMountpointProfiles = emptyList(),
+            recordingPolicyProfiles = emptyList(),
+            storageProfiles = emptyList(),
+            settingsSets = emptyList(),
+            selectedSettingsSetId = null,
+            selectedWorkflowId = null,
+            lastActiveNtripMountpointProfileId = null,
+            passwordsBySecretId = mapOf(
+                "secret" to "profile-password",
+                "ntrip:euref-ip.net:TUBO00CZE0:pholub" to "orphaned-password",
+            ),
+            options = SettingsSetExportOptions(includePlaintextPasswords = true),
+        )
+
+        assertEquals(mapOf("secret" to "profile-password"), backup.plaintextPasswordsBySecretId)
+    }
+
+    @Test
+    fun `plaintext export retains matching legacy RC2 caster secret`() {
+        val profile = NtripCasterProfile(
+            id = "TUBO00CZE0",
+            name = "EUREF TUBO",
+            host = "euref-ip.net",
+            username = "pholub",
+            secretId = ntripCasterSecretId("TUBO00CZE0"),
+        )
+        val legacySecretId = legacyNtripCasterSecretId(profile)
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(),
+            usbBaudProfiles = emptyList(),
+            ntripCasterProfiles = listOf(profile),
+            ntripCasterUploadProfiles = emptyList(),
+            ntripMountpointProfiles = emptyList(),
+            recordingPolicyProfiles = emptyList(),
+            storageProfiles = emptyList(),
+            settingsSets = emptyList(),
+            selectedSettingsSetId = null,
+            selectedWorkflowId = null,
+            lastActiveNtripMountpointProfileId = null,
+            passwordsBySecretId = mapOf(legacySecretId to "legacy-password"),
+            options = SettingsSetExportOptions(includePlaintextPasswords = true),
+        )
+
+        assertEquals(mapOf(legacySecretId to "legacy-password"), backup.plaintextPasswordsBySecretId)
+    }
 }

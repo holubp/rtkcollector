@@ -389,6 +389,92 @@ class SettingsImportModelsTest {
     }
 
     @Test
+    fun `legacy RC2 caster password is accepted and rekeyed`() {
+        val legacySecretId = "ntrip:euref-ip.net:caster:pholub"
+        val backup = sampleBackup(includePassword = false).copy(
+            ntripCasterProfiles = listOf(
+                NtripCasterProfile(
+                    id = "caster",
+                    name = "EUREF",
+                    host = "euref-ip.net",
+                    username = "pholub",
+                    secretId = ntripCasterSecretId("caster"),
+                ),
+            ),
+            plaintextPasswordsBySecretId = mapOf(legacySecretId to "rc2-password"),
+        )
+
+        val result = validateSettingsImportJson(backup.toJson().toString())
+
+        assertTrue(result is SettingsImportValidationResult.Valid)
+        val imported = settingsBackupImportPlan(
+            backup = result.backup,
+            persistedSafTreeUrisWithWriteAccess = emptySet(),
+            idFactory = deterministicIdFactory(),
+        ).backup
+        val importedSecretId = imported.ntripCasterProfiles.single().secretId
+        assertEquals("rc2-password", imported.plaintextPasswordsBySecretId[importedSecretId])
+        assertFalse(imported.plaintextPasswordsBySecretId.containsKey(legacySecretId))
+    }
+
+    @Test
+    fun `canonical caster password takes precedence over matching legacy RC2 password`() {
+        val profile = NtripCasterProfile(
+            id = "caster",
+            name = "EUREF",
+            host = "euref-ip.net",
+            username = "pholub",
+            secretId = ntripCasterSecretId("caster"),
+        )
+        val backup = sampleBackup(includePassword = false).copy(
+            ntripCasterProfiles = listOf(profile),
+            plaintextPasswordsBySecretId = mapOf(
+                ntripCasterSecretId(profile.id) to "canonical-password",
+                legacyNtripCasterSecretId(profile) to "legacy-password",
+            ),
+        )
+
+        val result = validateSettingsImportJson(backup.toJson().toString())
+
+        assertTrue(result is SettingsImportValidationResult.Valid)
+        val imported = settingsBackupImportPlan(
+            backup = result.backup,
+            persistedSafTreeUrisWithWriteAccess = emptySet(),
+            idFactory = deterministicIdFactory(),
+        ).backup
+        assertEquals(
+            "canonical-password",
+            imported.plaintextPasswordsBySecretId[imported.ntripCasterProfiles.single().secretId],
+        )
+    }
+
+    @Test
+    fun `near matching legacy RC2 caster password is rejected`() {
+        val json = sampleBackup(includePassword = false).copy(
+            ntripCasterProfiles = listOf(
+                NtripCasterProfile(
+                    id = "caster",
+                    name = "EUREF",
+                    host = "euref-ip.net",
+                    username = "pholub",
+                    secretId = ntripCasterSecretId("caster"),
+                ),
+            ),
+            plaintextPasswordsBySecretId = mapOf(
+                "ntrip:euref-ip.net:other-caster:pholub" to "secret-password",
+            ),
+        ).toJson()
+
+        val result = validateSettingsImportJson(json.toString())
+
+        assertTrue(result is SettingsImportValidationResult.Invalid)
+        assertEquals(
+            "Plaintext NTRIP password references unknown secret 'ntrip:euref-ip.net:other-caster:pholub'.",
+            result.message,
+        )
+    }
+
+    @Test
     fun `import plan rekeys represented profiles and disarms old secret references`() {
         val localSecrets = mutableMapOf(
             ntripCasterSecretId("caster") to "local-caster-password",

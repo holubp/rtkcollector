@@ -274,7 +274,7 @@ private fun remapImportedNtripGraph(
         profilePassword(
             passwords = backup.plaintextPasswordsBySecretId,
             profileOwnedSecretId = ntripCasterSecretId(profile.id),
-            legacySecretId = profile.secretId,
+            legacySecretIds = listOf(profile.secretId, legacyNtripCasterSecretId(profile)),
         )?.let { password -> remappedPasswords[newSecretId] = password }
         profile.copy(
             id = newProfileId,
@@ -290,7 +290,7 @@ private fun remapImportedNtripGraph(
             profilePassword(
                 passwords = backup.plaintextPasswordsBySecretId,
                 profileOwnedSecretId = ntripCasterUploadSecretId(profile.id),
-                legacySecretId = profile.secretId,
+                legacySecretIds = listOf(profile.secretId),
             )?.let { password -> remappedPasswords[newSecretId] = password }
             profile.copy(
                 id = newProfileId,
@@ -429,11 +429,12 @@ private fun ProfileReference?.remapProfileReference(
 private fun profilePassword(
     passwords: Map<String, String>,
     profileOwnedSecretId: String,
-    legacySecretId: String,
+    legacySecretIds: List<String>,
 ): String? {
     if (profileOwnedSecretId in passwords) return passwords.getValue(profileOwnedSecretId)
-    if (legacySecretId.isNotBlank() && legacySecretId in passwords) return passwords.getValue(legacySecretId)
-    return null
+    return legacySecretIds
+        .firstOrNull { secretId -> secretId.isNotBlank() && secretId in passwords }
+        ?.let(passwords::getValue)
 }
 
 private fun NtripCasterUploadOverride.hasEffectiveEndpointOrCredentialOverride(): Boolean =
@@ -442,23 +443,6 @@ private fun NtripCasterUploadOverride.hasEffectiveEndpointOrCredentialOverride()
         mountpoint != null ||
         username != null ||
         secretId != null
-
-private fun SettingsBackupFile.referencedNtripSecretIds(): Set<String> = buildSet {
-    ntripCasterProfiles.forEach { profile ->
-        add(ntripCasterSecretId(profile.id))
-        profile.secretId.takeIf(String::isNotBlank)?.let(::add)
-    }
-    if (SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD in includedProfileFamilies) {
-        ntripCasterUploadProfiles.forEach { profile ->
-            add(ntripCasterUploadSecretId(profile.id))
-            profile.secretId.takeIf(String::isNotBlank)?.let(::add)
-        }
-    }
-    settingsSets.forEach { settingsSet ->
-        settingsSet.overrides.ntripCaster?.secretId?.takeIf(String::isNotBlank)?.let(::add)
-        settingsSet.overrides.ntripCasterUpload?.secretId?.takeIf(String::isNotBlank)?.let(::add)
-    }
-}
 
 private fun validateBackupReferences(backup: SettingsBackupFile): String? {
     duplicateId("command profile", backup.commandProfiles.map { it.id })?.let { return it }

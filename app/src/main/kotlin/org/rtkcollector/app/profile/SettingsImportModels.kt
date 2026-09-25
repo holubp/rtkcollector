@@ -274,7 +274,8 @@ private fun remapImportedNtripGraph(
         profilePassword(
             passwords = backup.plaintextPasswordsBySecretId,
             profileOwnedSecretId = ntripCasterSecretId(profile.id),
-            legacySecretIds = listOf(profile.secretId, legacyNtripCasterSecretId(profile)),
+            legacySecretIds = listOf(profile.secretId, legacyNtripCasterSecretId(profile)) +
+                backup.legacyNtripMountpointSecretIds(profile),
         )?.let { password -> remappedPasswords[newSecretId] = password }
         profile.copy(
             id = newProfileId,

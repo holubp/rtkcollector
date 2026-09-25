@@ -172,10 +172,29 @@ private fun JSONObject.optNullableString(key: String): String? =
 internal fun legacyNtripCasterSecretId(profile: NtripCasterProfile): String =
     "ntrip:${profile.host}:${profile.id}:${profile.username}"
 
+/**
+ * Earlier RC2 backups keyed a caster password by its selected mountpoint.
+ * Accept this only when the mountpoint remains explicitly bound to the caster.
+ */
+internal fun legacyNtripMountpointSecretId(
+    profile: NtripCasterProfile,
+    mountpoint: NtripMountpointProfile,
+): String = "ntrip:${profile.host}:${mountpoint.mountpoint}:${profile.username}"
+
+internal fun SettingsBackupFile.legacyNtripMountpointSecretIds(
+    profile: NtripCasterProfile,
+): List<String> = ntripMountpointProfiles
+    .asSequence()
+    .filter { it.casterProfileId == profile.id }
+    .map { mountpoint -> legacyNtripMountpointSecretId(profile, mountpoint) }
+    .distinct()
+    .toList()
+
 internal fun SettingsBackupFile.referencedNtripSecretIds(): Set<String> = buildSet {
     ntripCasterProfiles.forEach { profile ->
         add(ntripCasterSecretId(profile.id))
         add(legacyNtripCasterSecretId(profile))
+        addAll(legacyNtripMountpointSecretIds(profile))
         profile.secretId.takeIf(String::isNotBlank)?.let(::add)
     }
     if (SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD in includedProfileFamilies) {

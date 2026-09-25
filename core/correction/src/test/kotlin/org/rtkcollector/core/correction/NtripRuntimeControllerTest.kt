@@ -12,6 +12,30 @@ import java.util.concurrent.atomic.AtomicReference
 
 class NtripRuntimeControllerTest {
     @Test
+    fun `TLS failure retains distinct terminal state and raw recording remains active`() {
+        val states = mutableListOf<NtripRuntimeSnapshot>()
+        val terminal = CountDownLatch(1)
+        val controller = NtripRuntimeController(
+            clientFactory = {
+                FakeRuntimeClient(NtripConnectionResult.Failure(NtripFailure(
+                    kind = NtripFailureKind.TLS_FAILED,
+                    state = NtripConnectionState.CONNECTING,
+                    message = "NTRIP TLS certificate verification failed.",
+                )))
+            },
+            emit = { snapshot ->
+                states += snapshot
+                if (snapshot.state == NtripRuntimeState.TLS_ERROR) terminal.countDown()
+            },
+        )
+        controller.start(NtripRuntimeConfig(defaultRequest()))
+        assertTrue(terminal.await(2, TimeUnit.SECONDS))
+        assertTrue(states.last().rawRecordingActive)
+        assertFalse(states.last().correctionsActive)
+        assertTrue(states.last().message.orEmpty().contains("TLS"))
+    }
+
+    @Test
     fun `auth error stops ntrip attempt but leaves recording active`() {
         val states = mutableListOf<NtripRuntimeSnapshot>()
         val terminal = CountDownLatch(1)

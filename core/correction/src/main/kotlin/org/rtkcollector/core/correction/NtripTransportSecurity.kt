@@ -7,6 +7,7 @@ import java.util.Locale
 
 enum class NtripTransportMode { TLS, PLAINTEXT }
 
+/** Unsafe is retained only to decode old profiles; it is never a usable connection policy. */
 enum class NtripTlsVerification { SystemTrust, Unsafe }
 
 /** A parsed authority. Host is unbracketed for DNS/TCP and bracketed only in HTTP Host. */
@@ -65,7 +66,7 @@ class NtripEndpoint private constructor(
     }
 }
 
-/** Constructed before any NTRIP request or socket; invalid distribution states cannot be represented. */
+/** Constructed before any NTRIP request or socket. */
 data class NtripEndpointSecurityPolicy(
     val endpoint: NtripEndpoint,
     val transport: NtripTransportMode,
@@ -76,11 +77,10 @@ data class NtripEndpointSecurityPolicy(
     init {
         when (transport) {
             NtripTransportMode.PLAINTEXT -> {
-                require(allowInsecure) { "Plaintext NTRIP is unavailable in this build" }
                 require(verification == NtripTlsVerification.SystemTrust) { "Plaintext cannot select TLS verification" }
             }
-            NtripTransportMode.TLS -> if (verification == NtripTlsVerification.Unsafe) {
-                require(allowInsecure && unsafeAcknowledged) { "Unsafe TLS needs local sideload acknowledgement" }
+            NtripTransportMode.TLS -> require(verification == NtripTlsVerification.SystemTrust) {
+                "Unsafe TLS is no longer supported. Choose system-trusted TLS or explicit plaintext in profile settings."
             }
         }
     }

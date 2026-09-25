@@ -102,6 +102,7 @@ fun normalizeSourceUploadMountpoint(value: String): String {
 
 enum class NtripCasterUploadFailureKind {
     CONNECT_FAILED,
+    TLS_FAILED,
     CANCELLED,
     EMPTY_RESPONSE,
     AUTHENTICATION_FAILED,
@@ -144,11 +145,12 @@ class NtripCasterUploadClient(
         }
         onState(NtripConnectionState.CONNECTING)
         val socket = runCatching { connector.connect(request.policy) }
-            .getOrElse {
+            .getOrElse { error ->
                 return NtripCasterUploadResult.Failure(
                     NtripCasterUploadFailure(
-                        kind = NtripCasterUploadFailureKind.CONNECT_FAILED,
-                        message = "NTRIP caster upload connection failed.",
+                        kind = if (ntripTlsFailureMessage(error) != null) NtripCasterUploadFailureKind.TLS_FAILED
+                            else NtripCasterUploadFailureKind.CONNECT_FAILED,
+                        message = ntripTlsFailureMessage(error) ?: "NTRIP caster upload connection failed.",
                         state = NtripConnectionState.CONNECTING,
                     ),
                 )

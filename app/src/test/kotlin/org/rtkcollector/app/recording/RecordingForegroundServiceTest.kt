@@ -14,7 +14,6 @@ class RecordingForegroundServiceTest {
             Triple("BOGUS", "SYSTEM_TRUST", false),
             Triple("TLS", "BOGUS", false),
             Triple("TLS", "SYSTEM_TRUST", null),
-            Triple("PLAINTEXT", "SYSTEM_TRUST", false),
             Triple("TLS", "UNSAFE", true),
         )
         for ((mode, verification, acknowledgement) in invalid) {

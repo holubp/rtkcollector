@@ -38,7 +38,7 @@ class NtripProfileStoreSecurityTest {
     }
 
     @Test
-    fun defaultCorrectionUnsafeConsentSurvivesStoreReadSaveRead() {
+    fun defaultCorrectionUnsafeConsentIsNotPersisted() {
         reset()
         val store = ProfileStores(context)
         val initial = store.ntripCasterProfiles().single()
@@ -48,15 +48,15 @@ class NtripProfileStoreSecurityTest {
         )))
         assertFalse(store.ntripCasterProfiles().single().unsafeTlsAcknowledged)
         store.saveNtripCasterProfiles(listOf(store.ntripCasterProfiles().single().copy(unsafeTlsAcknowledged = true)))
-        assertTrue(store.ntripCasterProfiles().single().unsafeTlsAcknowledged)
-        assertTrue(ProfileStores(context).ntripCasterProfiles().single().unsafeTlsAcknowledged)
-        assertTrue(persisted("ntripCasterProfiles").getBoolean("unsafeTlsAcknowledged"))
+        assertFalse(store.ntripCasterProfiles().single().unsafeTlsAcknowledged)
+        assertFalse(ProfileStores(context).ntripCasterProfiles().single().unsafeTlsAcknowledged)
+        assertFalse(persisted("ntripCasterProfiles").getBoolean("unsafeTlsAcknowledged"))
         store.saveNtripCasterProfiles(listOf(store.ntripCasterProfiles().single().copy(host = "other.example")))
         assertFalse(ProfileStores(context).ntripCasterProfiles().single().unsafeTlsAcknowledged)
     }
 
     @Test
-    fun editorCanPersistFreshCorrectionConsentAfterSecurityEditButLaterEditClearsIt() {
+    fun correctionEditorCannotPersistUnsafeTlsConsent() {
         reset()
         val store = ProfileStores(context)
         val original = store.ntripCasterProfiles().single()
@@ -64,14 +64,14 @@ class NtripProfileStoreSecurityTest {
             tlsVerification = NtripTlsVerification.Unsafe, unsafeTlsAcknowledged = true)
         store.saveNtripCasterProfiles(listOf(edited), freshlyAcknowledgedEditorProfileId = edited.id)
         val saved = ProfileStores(context).ntripCasterProfiles().single()
-        assertTrue(saved.unsafeTlsAcknowledged)
-        assertEquals(NtripTlsVerification.Unsafe, saved.toCore(true).verification)
+        assertFalse(saved.unsafeTlsAcknowledged)
+        assertDisabled { saved.toCore(true) }
         store.saveNtripCasterProfiles(listOf(saved.copy(host = "next.example")))
         assertFalse(ProfileStores(context).ntripCasterProfiles().single().unsafeTlsAcknowledged)
     }
 
     @Test
-    fun editorCanPersistFreshUploadConsentAfterEndpointEditButLaterEditClearsIt() {
+    fun uploadEditorCannotPersistUnsafeTlsConsent() {
         reset()
         val store = ProfileStores(context)
         val created = NtripCasterUploadProfile(
@@ -86,8 +86,8 @@ class NtripProfileStoreSecurityTest {
             tlsVerification = NtripTlsVerification.Unsafe, unsafeTlsAcknowledged = true)
         store.saveNtripCasterUploadProfiles(listOf(edited), freshlyAcknowledgedEditorProfileId = edited.id)
         val saved = ProfileStores(context).ntripCasterUploadProfiles().single()
-        assertTrue(saved.unsafeTlsAcknowledged)
-        assertEquals(NtripTlsVerification.Unsafe, saved.toCore(true).verification)
+        assertFalse(saved.unsafeTlsAcknowledged)
+        assertDisabled { saved.toCore(true) }
         store.saveNtripCasterUploadProfiles(listOf(saved.copy(port = 2202)))
         assertFalse(ProfileStores(context).ntripCasterUploadProfiles().single().unsafeTlsAcknowledged)
     }
@@ -101,8 +101,8 @@ class NtripProfileStoreSecurityTest {
             tlsVerification = NtripTlsVerification.SystemTrust, unsafeTlsAcknowledged = false)
         store.saveNtripCasterProfiles(listOf(edited))
         val saved = ProfileStores(context).ntripCasterProfiles().single()
-        assertEquals(NtripTransportMode.PLAINTEXT, saved.toCore(true).transport)
-        assertEquals(NtripTlsVerification.SystemTrust, saved.toCore(true).verification)
+        assertEquals(NtripTransportMode.PLAINTEXT, saved.toCore(false).transport)
+        assertEquals(NtripTlsVerification.SystemTrust, saved.toCore(false).verification)
     }
 
     @Test
@@ -128,7 +128,7 @@ class NtripProfileStoreSecurityTest {
     }
 
     @Test
-    fun uploadCustomCaMigrationAndFreshUnsafeConsentRoundTrip() {
+    fun uploadCustomCaMigrationRequiresExplicitSafeTransportSelection() {
         reset()
         seed("ntripCasterUploadProfiles", JSONObject().put("id", "upload")
             .put("name", "Upload").put("host", "private.example")
@@ -141,13 +141,8 @@ class NtripProfileStoreSecurityTest {
         assertFalse(store.ntripCasterUploadProfiles().single().unsafeTlsAcknowledged)
         assertDisabled { store.ntripCasterUploadProfiles().single().toCore(true) }
         store.saveNtripCasterUploadProfiles(listOf(store.ntripCasterUploadProfiles().single()
-            .chooseTlsVerification(NtripTlsVerification.Unsafe)))
-        assertFalse(store.ntripCasterUploadProfiles().single().unsafeTlsAcknowledged)
-        store.saveNtripCasterUploadProfiles(listOf(store.ntripCasterUploadProfiles().single()
-            .copy(unsafeTlsAcknowledged = true)))
-        assertEquals(NtripTlsVerification.Unsafe,
-            ProfileStores(context).ntripCasterUploadProfiles().single().toCore(true).verification)
-        store.saveNtripCasterUploadProfiles(listOf(store.ntripCasterUploadProfiles().single().copy(port = 2201)))
-        assertFalse(ProfileStores(context).ntripCasterUploadProfiles().single().unsafeTlsAcknowledged)
+            .chooseTlsVerification(NtripTlsVerification.SystemTrust)))
+        assertEquals(NtripTlsVerification.SystemTrust,
+            ProfileStores(context).ntripCasterUploadProfiles().single().toCore(false).verification)
     }
 }

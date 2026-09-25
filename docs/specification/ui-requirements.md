@@ -79,16 +79,30 @@ inside the Home dashboard content, after the setup controls and before the
 monitoring cards in compact layouts. In rail layouts they MUST share the alert
 area directly above the monitoring cards. Such warnings MUST NOT be rendered
 above or displace the app title and icon.
-While NTRIP correction download or source upload is active, the dashboard MUST
-persistently disclose the distribution variant and each active route's TLS or
-plaintext policy. Unsafe TLS and plaintext MUST be identified explicitly; this
-disclosure MUST survive routine state updates and Activity recreation.
 
 Verification:
 - Review: `HomeDashboard` owns reliability-warning placement in both compact
   and rail layouts.
 - Manual: enable battery optimisation, start recording and inspect phone
   portrait and landscape layouts.
+
+### UI-NTRIP-001: Transport Metadata Does Not Masquerade As Status
+
+Status: Normative
+
+The dashboard MUST keep transport metadata separate from operational status and
+errors. A selected plaintext route MUST show a compact accessible `PLAINTEXT`
+tag near its correction or upload profile, without an error banner or popup.
+The profile editor MUST show a persistent warning near plaintext credentials,
+mentioning GGA position when GGA upload is enabled. Normal TLS or build-variant
+descriptions MUST NOT populate the operational error/status area. These UI states
+MUST survive routine updates and Activity recreation.
+
+Verification:
+- Automated: `DashboardServiceMapperTest`, `NtripSecurityDisclosureTest` and
+  `ProfileEditorModelsTest`.
+- Manual: inspect selected TLS and plaintext profiles before and during a
+  recording, including a plaintext caster with GGA upload enabled.
 
 ### UI-SATMON-001: Compact Satellite Card Uses Main Engine
 

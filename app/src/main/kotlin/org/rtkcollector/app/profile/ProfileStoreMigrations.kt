@@ -1,7 +1,5 @@
 package org.rtkcollector.app.profile
 
-import org.rtkcollector.core.correction.NtripTlsVerification
-import org.rtkcollector.core.correction.NtripTransportMode
 
 internal object ProfileStoreMigrations {
     fun commandProfiles(
@@ -124,33 +122,13 @@ internal fun NtripCasterProfile.clearUnsafeAcknowledgementUnlessUnchanged(
     persisted: NtripCasterProfile?,
     freshlyAcknowledgedInEditor: Boolean = false,
 ): NtripCasterProfile =
-    if (!requiresTlsVerificationChoice && (
-        (freshlyAcknowledgedInEditor && transportMode == NtripTransportMode.TLS &&
-            tlsVerification == NtripTlsVerification.Unsafe) ||
-        (persisted != null && host == persisted.host && port == persisted.port &&
-            transportMode == persisted.transportMode && tlsVerification == persisted.tlsVerification)
-        )
-    ) {
-        this
-    } else {
-        copy(unsafeTlsAcknowledged = false)
-    }
+    copy(unsafeTlsAcknowledged = false)
 
 internal fun NtripCasterUploadProfile.clearUnsafeAcknowledgementUnlessUnchanged(
     persisted: NtripCasterUploadProfile?,
     freshlyAcknowledgedInEditor: Boolean = false,
 ): NtripCasterUploadProfile =
-    if (!requiresTlsVerificationChoice && (
-        (freshlyAcknowledgedInEditor && transportMode == NtripTransportMode.TLS &&
-            tlsVerification == NtripTlsVerification.Unsafe) ||
-        (persisted != null && host == persisted.host && port == persisted.port &&
-            transportMode == persisted.transportMode && tlsVerification == persisted.tlsVerification)
-        )
-    ) {
-        this
-    } else {
-        copy(unsafeTlsAcknowledged = false)
-    }
+    copy(unsafeTlsAcknowledged = false)
 
 private fun String.normalizedProfileName(): String =
     trim().lowercase().replace(Regex("\\s+"), " ")

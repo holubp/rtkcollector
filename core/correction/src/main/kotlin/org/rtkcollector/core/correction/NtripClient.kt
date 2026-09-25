@@ -10,12 +10,8 @@ import java.net.Socket
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SNIHostName
-import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
-import java.security.SecureRandom
 
 data class NtripCredentials(
     val username: String,
@@ -27,7 +23,7 @@ enum class NtripProtocolVersion {
     NTRIP_V1,
 }
 
-const val DEFAULT_NTRIP_USER_AGENT: String = "NTRIP RtkCollector/1.0-RC3"
+const val DEFAULT_NTRIP_USER_AGENT: String = "NTRIP RtkCollector/1.0-RC4"
 
 data class NtripRequest(
     val policy: NtripEndpointSecurityPolicy,
@@ -160,8 +156,8 @@ class NtripSourcetableClient(
                     rawText = rawText,
                 )
             }
-        } catch (_: Exception) {
-            throw IOException("NTRIP sourcetable fetch failed")
+        } catch (exception: Exception) {
+            throw IOException(ntripTlsFailureMessage(exception) ?: "NTRIP sourcetable fetch failed", exception)
         }
     }
 
@@ -243,15 +239,13 @@ class JavaNtripSocketConnector internal constructor(
         }
         val rawSocket = connectTcp(host, port)
         try {
-            val socket = (socketFactory(policy).createSocket(rawSocket, host, port, true) as SSLSocket).apply {
+            val socket = (systemSocketFactory.createSocket(rawSocket, host, port, true) as SSLSocket).apply {
                 soTimeout = DEFAULT_SOCKET_TIMEOUT_MILLIS
                 enabledProtocols = supportedProtocols.filter { protocol ->
                     protocol == "TLSv1.2" || protocol == "TLSv1.3"
                 }.also { require(it.isNotEmpty()) { "TLS 1.2 or newer is unavailable" } }.toTypedArray()
                 sslParameters = sslParameters.apply {
-                    if (policy.verification != NtripTlsVerification.Unsafe) {
-                        endpointIdentificationAlgorithm = "HTTPS"
-                    }
+                    endpointIdentificationAlgorithm = "HTTPS"
                     serverNames = policy.endpoint.sniName?.let { listOf(SNIHostName(it)) } ?: emptyList()
                 }
                 startHandshake()
@@ -273,19 +267,6 @@ class JavaNtripSocketConnector internal constructor(
         }
     }
 
-    private fun socketFactory(policy: NtripEndpointSecurityPolicy): SSLSocketFactory = when (policy.verification) {
-        NtripTlsVerification.SystemTrust -> systemSocketFactory
-        NtripTlsVerification.Unsafe -> SSLContext.getInstance("TLS").apply {
-            init(null, arrayOf<TrustManager>(UnsafeTrustManager), SecureRandom())
-        }.socketFactory
-    }
-
-    private data object UnsafeTrustManager : X509TrustManager {
-        override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-        override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = emptyArray()
-    }
-
     private companion object {
         const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 15_000
         const val DEFAULT_SOCKET_TIMEOUT_MILLIS = 15_000
@@ -304,6 +285,7 @@ data class NtripReconnectPolicy(
 
 enum class NtripFailureKind {
     CONNECT_FAILED,
+    TLS_FAILED,
     CANCELLED,
     EMPTY_RESPONSE,
     SOURCETABLE_RESPONSE,
@@ -372,9 +354,11 @@ class NtripClient(
             connector.connect(activeRequest.policy)
         } catch (exception: Exception) {
             return failure(
-                kind = NtripFailureKind.CONNECT_FAILED,
+                kind = if (ntripTlsFailureMessage(exception) != null) NtripFailureKind.TLS_FAILED
+                    else NtripFailureKind.CONNECT_FAILED,
                 state = NtripConnectionState.CONNECTING,
-                message = "Failed to connect to NTRIP caster ${activeRequest.host}:${activeRequest.port}",
+                message = ntripTlsFailureMessage(exception)
+                    ?: "Failed to connect to NTRIP caster ${activeRequest.host}:${activeRequest.port}",
                 onState = onState,
             )
         }
@@ -681,6 +665,7 @@ class NtripClient(
     private fun NtripFailure.isRetryable(): Boolean =
         kind !in setOf(
             NtripFailureKind.CANCELLED,
+            NtripFailureKind.TLS_FAILED,
             NtripFailureKind.AUTHENTICATION_FAILED,
             NtripFailureKind.AUTHORIZATION_FAILED,
         )

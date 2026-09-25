@@ -197,7 +197,7 @@ class NtripCasterUploadClientTest {
                     protocolVersion = NtripProtocolVersion.NTRIP_V1,
                     policy = NtripEndpointSecurityPolicy(NtripEndpoint.parse("127.0.0.1", caster.port),
                         NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust,
-                        allowInsecure = true, unsafeAcknowledged = false),
+                        allowInsecure = false, unsafeAcknowledged = false),
                 ),
             )
 

@@ -10,8 +10,9 @@ requirements live under `docs/specification/`.
 | `docs/user-workflows.md` | `workflows.md`, `ui-requirements.md` | User workflow semantics and UI obligations. |
 | `docs/session-format.md` | `session-artifacts.md`, `security-privacy.md` | Session artifact separation and secret redaction. |
 | `docs/ntrip-and-corrections.md` | `functional-requirements.md`, `security-privacy.md` | Correction intake/routing, auth and secrets. |
-| `docs/superpowers/specs/2026-09-23-ntrip-tls-design.md` | `security-privacy.md`, `publication-readiness.md`, `verification-matrix.md` | Validated TLS policy, distribution boundary and release evidence. |
-| `docs/superpowers/plans/2026-09-23-ntrip-tls-completion.md` | `security-privacy.md`, `publication-readiness.md`, `verification-matrix.md` | Implementation and evidence checklist; full-host and field gates remain open. |
+| `docs/superpowers/specs/2026-09-23-ntrip-tls-design.md` | `security-privacy.md`, `publication-readiness.md`, `verification-matrix.md` | Historical design, superseded by RC4 for plaintext and unsafe TLS policy. |
+| `docs/superpowers/plans/2026-09-23-ntrip-tls-completion.md` | `security-privacy.md`, `publication-readiness.md`, `verification-matrix.md` | Historical plan, superseded by RC4. |
+| `docs/superpowers/plans/2026-09-25-ntrip-rc4.md` | `security-privacy.md`, `publication-readiness.md`, `ui-requirements.md`, `verification-matrix.md` | Current RC4 transport, migration, UI and release checklist. |
 | `docs/android-background-operation.md` | `android-runtime.md` | Foreground-service and background recording requirements. |
 | `docs/superpowers/specs/2026-06-08-integrated-v1-usability-and-um980-telemetry-design.md` | `receiver-behaviour.md`, `ui-requirements.md` | Dashboard, profiles and UM980 telemetry. |
 | `docs/superpowers/plans/2026-06-11-um980-rtk-monitoring-and-editor-input.md` | `receiver-behaviour.md`, `verification-matrix.md` | RTK/PPP separation and UM980 monitoring. |

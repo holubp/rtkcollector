@@ -42,14 +42,15 @@ Before starting, resolve these repository-specific prerequisites:
 
 ### NTRIP Transport Gate
 
-The Google Play variant enforces TLS with Android system trust and hostname
-verification for correction, sourcetable and source-upload routes. Explicit
-plaintext and acknowledged unsafe TLS remain available only in sideload builds
-for compatibility with older or private casters. A TLS handshake failure must
-never fall back to plaintext. Do not submit until the exact Play build has
+Both variants default to TLS with Android system trust and hostname verification
+for correction, sourcetable and source-upload routes. Users can explicitly select
+plaintext NTRIP/TCP in either variant; this exposes credentials and optional GGA
+position. Invalid/untrusted TLS is unsupported and TLS failure never falls back
+to plaintext. Play Data safety answers must describe this optional transmission
+accurately. Do not submit until the exact Play build has
 passed full-host flavor tests, real TLS correction and source-upload checks,
-signed-AAB validation and Data safety review. A Data safety disclosure cannot
-make insecure transmission acceptable.
+signed-AAB validation and Data safety review. Do not claim all NTRIP transfers
+are encrypted when the user may select plaintext.
 
 ## 1. Create And Verify The Developer Account
 
@@ -247,7 +248,7 @@ For this app, explicitly review these facts in the current Data safety form:
 | USB receiver identifiers and configuration | Stored locally in settings/session metadata for functionality. |
 | Session ZIPs and settings backups | Shared only when the user explicitly invokes Android sharing. Plaintext-password export is opt-in. |
 | Analytics, ads, crash reporting | None are intentionally included; re-check the final dependency graph. |
-| Network security | Google Play routes require TLS with system trust and hostname verification; sideload-only plaintext/unsafe options are excluded. Real caster and shipped-bundle validation remain publication gates. |
+| Network security | TLS uses normal system trust and hostname verification; explicit plaintext is available in both variants and exposes credentials and optional GGA position. Invalid TLS is unsupported. Real caster and shipped-bundle validation remain publication gates. |
 
 Treat transmission to an external NTRIP provider as **collection** in Data
 Safety whenever the user enables it, including when the provider is a third

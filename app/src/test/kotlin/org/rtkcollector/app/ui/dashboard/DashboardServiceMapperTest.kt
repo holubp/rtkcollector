@@ -9,36 +9,52 @@ import org.junit.runner.RunWith
 import org.rtkcollector.app.recording.RecordingErrorCategory
 import org.rtkcollector.app.recording.RecordingErrorSeverity
 import org.rtkcollector.app.recording.RecordingForegroundService
+import org.rtkcollector.core.correction.NtripTransportMode
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class DashboardServiceMapperTest {
     @Test
-    fun `active dashboard retains transport disclosure from service state`() {
+    fun `active dashboard retains transport metadata without an error`() {
         val intent = Intent().apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
-            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE,
-                "Correction download: unsafe TLS (sideload only)")
+            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP, "STREAMING")
+            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_TRANSPORT_MODE, "PLAINTEXT")
+            putExtra(RecordingForegroundService.EXTRA_STATE_UPLOAD_TRANSPORT_MODE, "TLS")
         }
         val state = dashboardStateFromRecordingIntent(intent)
-        assertEquals("Correction download: unsafe TLS (sideload only)", state.ntripSecurityDisclosure)
-        assertEquals(null, state.copy(isRecording = false).activeNtripSecurityDisclosure())
+        assertEquals(NtripTransportMode.PLAINTEXT, state.correctionTransport)
+        assertEquals(NtripTransportMode.TLS, state.uploadTransport)
+        assertEquals("Connected", state.ntrip.status)
+        assertEquals(null, state.lastError)
     }
 
     @Test
-    fun `transport disclosure identifies sideload unsafe and plaintext routes`() {
-        val unsafe = org.rtkcollector.core.correction.NtripEndpointSecurityPolicy(
-            org.rtkcollector.core.correction.NtripEndpoint.parse("caster.example", 2101),
-            org.rtkcollector.core.correction.NtripTransportMode.TLS,
-            org.rtkcollector.core.correction.NtripTlsVerification.Unsafe, true, true)
-        val plain = org.rtkcollector.core.correction.NtripEndpointSecurityPolicy(
-            org.rtkcollector.core.correction.NtripEndpoint.parse("upload.example", 2101),
-            org.rtkcollector.core.correction.NtripTransportMode.PLAINTEXT,
-            org.rtkcollector.core.correction.NtripTlsVerification.SystemTrust, true, false)
-        val disclosure = ntripSecurityDisclosure(unsafe, plain, true)
-        assertTrue(disclosure.orEmpty().contains("sideload", ignoreCase = true))
-        assertTrue(disclosure.orEmpty().contains("unsafe TLS", ignoreCase = true))
-        assertTrue(disclosure.orEmpty().contains("plaintext", ignoreCase = true))
+    fun `TLS streaming and TLS failure are operational states rather than transport warnings`() {
+        val connected = dashboardStateFromRecordingIntent(Intent().apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP, "STREAMING")
+            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_TRANSPORT_MODE, "TLS")
+        })
+        assertEquals("Connected", connected.ntrip.status)
+        assertEquals(null, connected.lastError)
+
+        val failed = dashboardStateFromRecordingIntent(Intent().apply {
+            putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)
+            putExtra(RecordingForegroundService.EXTRA_STATE_NTRIP, "TLS_ERROR")
+            putExtra(RecordingForegroundService.EXTRA_STATE_ERROR, "NTRIP TLS certificate verification failed.")
+        })
+        assertEquals("TLS failure", failed.ntrip.status)
+        assertTrue(failed.lastError.orEmpty().contains("TLS"))
+    }
+
+    @Test
+    fun `absent transport metadata is not an operational problem`() {
+        val state = dashboardStateFromRecordingIntent(Intent().putExtra(
+            RecordingForegroundService.EXTRA_STATE_RUNNING, true))
+        assertEquals(null, state.correctionTransport)
+        assertEquals(null, state.uploadTransport)
+        assertEquals(null, state.lastError)
     }
     @Test
     fun `failed service state exposes last error on planned dashboard`() {

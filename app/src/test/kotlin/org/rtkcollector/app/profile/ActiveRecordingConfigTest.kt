@@ -9,40 +9,27 @@ import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.correction.NtripTransportMode
 import org.rtkcollector.core.correction.NtripTlsVerification
 import org.rtkcollector.core.workflow.SessionArtifact
-import org.rtkcollector.app.BuildConfig
 
 class ActiveRecordingConfigTest {
     @Test
-    fun `generated distribution flag enforces correction profile policy`() {
+    fun `both distributions accept explicitly selected plaintext correction`() {
         val plain = ActiveNtripConfig(true, "caster.example", 2101, "MOUNT", "", null, null, null, null, null,
             transportMode = NtripTransportMode.PLAINTEXT)
-        when (BuildConfig.FLAVOR) {
-            "googlePlay" -> {
-                assertFalse(BuildConfig.ALLOW_INSECURE_NTRIP)
-                assertThrows(IllegalArgumentException::class.java) {
-                    plain.toCore(BuildConfig.ALLOW_INSECURE_NTRIP)
-                }
-            }
-            "sideload" -> {
-                assertTrue(BuildConfig.ALLOW_INSECURE_NTRIP)
-                assertEquals(NtripTransportMode.PLAINTEXT,
-                    plain.toCore(BuildConfig.ALLOW_INSECURE_NTRIP).transport)
-            }
-            else -> error("Unexpected distribution flavor ${BuildConfig.FLAVOR}")
-        }
+        assertEquals(NtripTransportMode.PLAINTEXT, plain.toCore(false).transport)
+        assertEquals(NtripTransportMode.PLAINTEXT, plain.toCore(true).transport)
     }
 
     @Test
-    fun `Google Play rejects plaintext and unsafe correction profiles`() {
+    fun `both distributions reject unsafe correction TLS`() {
         val plain = ActiveNtripConfig(true, "caster.example", 2101, "MOUNT", "", null, null, null, null, null,
             transportMode = NtripTransportMode.PLAINTEXT)
-        assertThrows(IllegalArgumentException::class.java) { plain.toCore(allowInsecure = false) }
+        assertEquals(NtripTransportMode.PLAINTEXT, plain.toCore(allowInsecure = false).transport)
         assertEquals(NtripTransportMode.PLAINTEXT, plain.toCore(allowInsecure = true).transport)
 
         val unsafe = plain.copy(transportMode = NtripTransportMode.TLS,
             tlsVerification = NtripTlsVerification.Unsafe, unsafeTlsAcknowledged = true)
         assertThrows(IllegalArgumentException::class.java) { unsafe.toCore(allowInsecure = false) }
-        assertEquals(NtripTlsVerification.Unsafe, unsafe.toCore(allowInsecure = true).verification)
+        assertThrows(IllegalArgumentException::class.java) { unsafe.toCore(allowInsecure = true) }
         assertThrows(IllegalArgumentException::class.java) {
             unsafe.copy(unsafeTlsAcknowledged = false).toCore(allowInsecure = true)
         }

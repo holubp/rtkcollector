@@ -173,7 +173,7 @@ class NtripCasterUploadController(
                 worker = null
             }
             activeSession.compareAndSet(session, null)
-            if (state.get() != "AUTH_ERROR") {
+            if (state.get() != "AUTH_ERROR" && state.get() != "TLS_ERROR") {
                 state.set("STOPPED")
             }
         }
@@ -240,7 +240,7 @@ class NtripCasterUploadController(
         } finally {
             activeSession.set(null)
             try {
-                if (state.get() != "AUTH_ERROR" && state.get() != "STOPPED") {
+                if (state.get() != "AUTH_ERROR" && state.get() != "TLS_ERROR" && state.get() != "STOPPED") {
                     state.set("STOPPED")
                 }
                 emitFinalSummaryIfNeeded()
@@ -274,11 +274,20 @@ class NtripCasterUploadController(
             NtripCasterUploadFailureKind.SAFETY_STOP -> "Caster upload safety policy stopped streaming."
             NtripCasterUploadFailureKind.CANCELLED -> "NTRIP caster upload was cancelled."
             NtripCasterUploadFailureKind.CONNECT_FAILED -> "NTRIP caster upload connection failed."
+            NtripCasterUploadFailureKind.TLS_FAILED -> failure.message
             NtripCasterUploadFailureKind.EMPTY_RESPONSE -> "NTRIP caster upload returned an empty response."
             NtripCasterUploadFailureKind.UNSUPPORTED_RESPONSE -> "NTRIP caster upload rejected source upload request."
             NtripCasterUploadFailureKind.STREAM_FAILED -> "NTRIP caster upload stream failed."
         }
         when (failure.kind) {
+            NtripCasterUploadFailureKind.TLS_FAILED -> {
+                lastError.set(safeMessage)
+                currentRetryDelayMillis.set(null)
+                emitEvent("tls_stop", safeMessage)
+                state.set("TLS_ERROR")
+                running = false
+            }
+
             NtripCasterUploadFailureKind.AUTHENTICATION_FAILED,
             NtripCasterUploadFailureKind.AUTHORIZATION_FAILED,
             -> {

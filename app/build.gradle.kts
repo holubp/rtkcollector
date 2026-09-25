@@ -58,9 +58,8 @@ android {
         applicationId = "org.rtkcollector.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0-RC3"
-        buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "false")
+        versionCode = 4
+        versionName = "1.0-RC4"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -98,11 +97,9 @@ android {
     productFlavors {
         create("googlePlay") {
             dimension = "distribution"
-            buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "false")
         }
         create("sideload") {
             dimension = "distribution"
-            buildConfigField("boolean", "ALLOW_INSECURE_NTRIP", "true")
         }
     }
 }

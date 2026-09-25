@@ -2,6 +2,7 @@ package org.rtkcollector.app.ui.dashboard
 
 import android.content.Intent
 import org.rtkcollector.app.recording.RecordingForegroundService
+import org.rtkcollector.core.correction.NtripTransportMode
 
 fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val running = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
@@ -96,7 +97,9 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     )
     val ntrip = NtripCardState(
         url = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_URL) ?: "n/a",
-        status = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP) ?: "n/a",
+        status = displayCorrectionNtripStatus(
+            intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP),
+        ),
         lastUpdated = displayCorrectionLastUpdatedAt(
             positiveLongExtra(intent, RecordingForegroundService.EXTRA_STATE_CORRECTION_LAST_UPDATED_AT),
         ),
@@ -162,8 +165,12 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             lastError = lastError,
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
-        ).copy(ntripSecurityDisclosure = intent.getStringExtra(
-            RecordingForegroundService.EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE))
+        ).copy(
+            correctionTransport = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_TRANSPORT_MODE)
+                ?.let { runCatching { NtripTransportMode.valueOf(it) }.getOrNull() },
+            uploadTransport = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UPLOAD_TRANSPORT_MODE)
+                ?.let { runCatching { NtripTransportMode.valueOf(it) }.getOrNull() },
+        )
     } else {
         DashboardState.planned(
             workflow = status.workflow,
@@ -280,6 +287,19 @@ private fun casterUploadRetryPolicyLabel(intent: Intent): String {
         (if (limit == 1) "" else "s")
 }
 
+private fun displayCorrectionNtripStatus(value: String?): String = when (value?.uppercase()) {
+    "STREAMING" -> "Connected"
+    "CONNECTING", "RESOLVING" -> "Connecting"
+    "AUTHENTICATING" -> "Authenticating"
+    "RECONNECT_WAIT" -> "Retrying"
+    "AUTH_ERROR" -> "Auth failure"
+    "TLS_ERROR" -> "TLS failure"
+    "NETWORK_ERROR" -> "Connection failed"
+    "STOPPED" -> "Disconnected"
+    "DISABLED" -> "Off"
+    else -> value ?: "n/a"
+}
+
 private fun displayCasterUploadStatus(value: String): String =
     when (value.uppercase()) {
         "CONNECTING" -> "Connecting"
@@ -288,6 +308,7 @@ private fun displayCasterUploadStatus(value: String): String =
         "RECONNECT_WAIT" -> "Retrying"
         "DEGRADED" -> "Degraded"
         "AUTH_ERROR" -> "Auth error"
+        "TLS_ERROR" -> "TLS failure"
         "STOPPED" -> "Stopped"
         "IDLE" -> "Configured"
         else -> value.lowercase().replaceFirstChar(Char::uppercaseChar)

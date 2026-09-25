@@ -7,6 +7,7 @@ import org.rtkcollector.app.profile.StorageProfileOverride
 import org.rtkcollector.app.profile.effectiveBaseCasterUploadEnabled
 import org.rtkcollector.app.profile.effectiveNtripCasterUploadProfileRef
 import org.rtkcollector.app.ui.profiles.ProfileListRow
+import org.rtkcollector.core.correction.NtripTransportMode
 
 data class DashboardState(
     val isRecording: Boolean,
@@ -25,9 +26,9 @@ data class DashboardState(
     val lastError: String? = null,
     val errorCategory: String = "NONE",
     val errorSeverity: String = "NONE",
-    val ntripSecurityDisclosure: String? = null,
+    val correctionTransport: NtripTransportMode? = null,
+    val uploadTransport: NtripTransportMode? = null,
 ) {
-    fun activeNtripSecurityDisclosure(): String? = ntripSecurityDisclosure.takeIf { isRecording }
     fun withPlannedConfiguration(planned: DashboardState): DashboardState =
         if (isRecording) {
             this
@@ -40,6 +41,8 @@ data class DashboardState(
                 mockGps = planned.mockGps,
                 casterUpload = planned.casterUpload,
                 satelliteMonitor = planned.satelliteMonitor,
+                correctionTransport = planned.correctionTransport,
+                uploadTransport = planned.uploadTransport,
             )
         }
 
@@ -77,6 +80,8 @@ data class DashboardState(
             lastError: String? = null,
             errorCategory: String = "NONE",
             errorSeverity: String = "NONE",
+            correctionTransport: NtripTransportMode? = null,
+            uploadTransport: NtripTransportMode? = null,
         ): DashboardState =
             DashboardState(
                 isRecording = false,
@@ -115,6 +120,8 @@ data class DashboardState(
                 lastError = lastError,
                 errorCategory = errorCategory,
                 errorSeverity = errorSeverity,
+                correctionTransport = correctionTransport,
+                uploadTransport = uploadTransport,
             )
 
         fun running(

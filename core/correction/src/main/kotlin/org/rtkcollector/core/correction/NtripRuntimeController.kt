@@ -12,6 +12,7 @@ enum class NtripRuntimeState {
     RECONNECT_WAIT,
     STOPPED,
     AUTH_ERROR,
+    TLS_ERROR,
     NETWORK_ERROR,
 }
 
@@ -316,6 +317,12 @@ class NtripRuntimeController(
                 )
                 NtripFailureKind.CANCELLED -> NtripRuntimeSnapshot(
                     state = NtripRuntimeState.STOPPED,
+                    rawRecordingActive = true,
+                    correctionsActive = false,
+                    message = failure.message,
+                )
+                NtripFailureKind.TLS_FAILED -> NtripRuntimeSnapshot(
+                    state = NtripRuntimeState.TLS_ERROR,
                     rawRecordingActive = true,
                     correctionsActive = false,
                     message = failure.message,

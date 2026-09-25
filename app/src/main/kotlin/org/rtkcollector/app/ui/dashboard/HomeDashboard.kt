@@ -68,6 +68,7 @@ import org.rtkcollector.app.ui.common.HelpOverlay
 import org.rtkcollector.app.ui.common.HelpTopic
 import org.rtkcollector.app.ui.common.TidyColors
 import org.rtkcollector.app.ui.common.TidyMetricRow
+import org.rtkcollector.core.correction.NtripTransportMode
 import kotlinx.coroutines.delay
 
 private val CompactSetupTileHeight = 46.dp
@@ -83,7 +84,7 @@ private val RtklibDashboardCardHeight = 206.dp
 private val SatelliteDashboardCardHeight = 150.dp
 private const val SatelliteMonitorCompactFrequencyColumns = 3
 private val CorrectionsDashboardCardHeight = 292.dp
-private val CasterUploadDashboardCardHeight = 188.dp
+private val CasterUploadDashboardCardHeight = 208.dp
 private val RecordingDashboardCardHeight = 162.dp
 private val SetupProfilesDashboardCardHeight = 160.dp
 
@@ -233,7 +234,6 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
-                        ntripSecurityDisclosure = state.activeNtripSecurityDisclosure(),
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -264,7 +264,6 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
-                        ntripSecurityDisclosure = state.activeNtripSecurityDisclosure(),
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -458,7 +457,6 @@ private fun CompactDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
-    ntripSecurityDisclosure: String?,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -490,7 +488,6 @@ private fun CompactDashboard(
         DashboardAlerts(
             displayedError = displayedError,
             recordingReliabilityWarning = recordingReliabilityWarning,
-            ntripSecurityDisclosure = ntripSecurityDisclosure,
             onCopyError = onCopyError,
         )
         DashboardCards(
@@ -532,7 +529,6 @@ private fun RailDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
-    ntripSecurityDisclosure: String?,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -601,7 +597,6 @@ private fun RailDashboard(
             DashboardAlerts(
                 displayedError = displayedError,
                 recordingReliabilityWarning = recordingReliabilityWarning,
-                ntripSecurityDisclosure = ntripSecurityDisclosure,
                 onCopyError = onCopyError,
             )
             DashboardCards(
@@ -626,16 +621,14 @@ private fun RailDashboard(
 private fun DashboardAlerts(
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
-    ntripSecurityDisclosure: String?,
     onCopyError: () -> Unit,
 ) {
     val warning = recordingReliabilityWarning?.takeIf { it.isNotBlank() }
-    if (displayedError == null && warning == null && ntripSecurityDisclosure == null) return
+    if (displayedError == null && warning == null) return
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
         warning?.let { RecordingReliabilityWarningStrip(text = it) }
-        ntripSecurityDisclosure?.let { RecordingReliabilityWarningStrip(text = it) }
     }
 }
 
@@ -1009,6 +1002,7 @@ private fun DashboardCards(
                         if (state.casterUpload.enabled) {
                             CasterUploadCard(
                                 state = state.casterUpload,
+                                transport = state.uploadTransport,
                                 onOpenDetails = onCasterUploadDetails,
                                 onHelp = onHelp,
                             )
@@ -1055,6 +1049,7 @@ private fun DashboardCards(
                 if (state.casterUpload.enabled) {
                     CasterUploadCard(
                         state = state.casterUpload,
+                        transport = state.uploadTransport,
                         onOpenDetails = onCasterUploadDetails,
                         onHelp = onHelp,
                     )
@@ -1636,6 +1631,7 @@ private fun CorrectionsCard(
         MajorValue(state.ntrip.status)
         Metric("Caster / mountpoint", state.ntrip.url)
         Metric("Mountpoint", state.status.mountpoint)
+        PlaintextNtripTag(state.correctionTransport)
         Metric("Station ID", state.ntrip.stationId)
         Metric("Base position", state.ntrip.baseLatLon)
         DashedSeparator()
@@ -1650,6 +1646,7 @@ private fun CorrectionsCard(
 @Composable
 private fun CasterUploadCard(
     state: CasterUploadCardState,
+    transport: NtripTransportMode?,
     onOpenDetails: () -> Unit,
     onHelp: (HelpTopic) -> Unit,
 ) {
@@ -1662,6 +1659,7 @@ private fun CasterUploadCard(
     ) {
         MajorValue(state.statusLabel)
         Metric("Mountpoint", state.mountpointLabel.ifBlank { "n/a" })
+        PlaintextNtripTag(transport)
         Metric("Uploaded", state.uploadedLabel)
         Metric("Bitrate", state.bitrateLabel)
         Metric("RTCM", state.totalRtcmHzLabel)
@@ -1673,6 +1671,26 @@ private fun CasterUploadCard(
         Metric("Dropped", state.droppedLabel)
         state.stopReasonLabel?.let { Metric("Stop", it) }
         state.lastErrorLabel?.let { Metric("Error", it) }
+    }
+}
+
+@Composable
+private fun PlaintextNtripTag(transport: NtripTransportMode?) {
+    if (transport != NtripTransportMode.PLAINTEXT) return
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.extraSmall,
+        modifier = Modifier.semantics {
+            contentDescription = "Plaintext NTRIP. Credentials are transmitted without encryption."
+        },
+    ) {
+        Text(
+            text = transport.plaintextTag().orEmpty(),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+        )
     }
 }
 

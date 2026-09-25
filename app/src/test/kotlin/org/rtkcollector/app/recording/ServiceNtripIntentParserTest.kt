@@ -32,7 +32,6 @@ class ServiceNtripIntentParserTest {
                 Intent(valid).apply { removeExtra(keys.transportMode) },
                 Intent(valid).putExtra(keys.transportMode, 42),
                 Intent(valid).putExtra(keys.transportMode, "BOGUS"),
-                Intent(valid).putExtra(keys.transportMode, "PLAINTEXT"),
                 Intent(valid).apply { removeExtra(keys.tlsVerification) },
                 Intent(valid).putExtra(keys.tlsVerification, 42),
                 Intent(valid).putExtra(keys.tlsVerification, "BOGUS"),
@@ -47,14 +46,18 @@ class ServiceNtripIntentParserTest {
     }
 
     @Test
-    fun `sideload unsafe TLS requires typed true acknowledgement for both requests`() {
+    fun `service accepts explicit plaintext and rejects unsafe TLS in both distributions`() {
         for ((valid, keys, construct) in listOf(
             Triple(correctionIntent(), CORRECTION_NTRIP_INTENT_KEYS, { intent: Intent -> correctionNtripRequestFromIntent(intent, true).mountpoint }),
             Triple(uploadIntent(), UPLOAD_NTRIP_INTENT_KEYS, { intent: Intent -> uploadNtripRequestFromIntent(intent, true).mountpoint }),
         )) {
+            val plaintext = Intent(valid).putExtra(keys.transportMode, "PLAINTEXT")
+            assertEquals("MOUNT", construct(plaintext))
             val unsafe = Intent(valid).putExtra(keys.tlsVerification, "UNSAFE")
             assertFailsWith<IllegalArgumentException> { construct(unsafe) }
-            assertEquals("MOUNT", construct(Intent(unsafe).putExtra(keys.unsafeTlsAcknowledged, true)))
+            assertFailsWith<IllegalArgumentException> {
+                construct(Intent(unsafe).putExtra(keys.unsafeTlsAcknowledged, true))
+            }
             assertFailsWith<IllegalArgumentException> {
                 construct(Intent(unsafe).putExtra(keys.unsafeTlsAcknowledged, "true"))
             }

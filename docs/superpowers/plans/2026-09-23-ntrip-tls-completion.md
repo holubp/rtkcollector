@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver secure TLS NTRIP correction download and source upload for Google Play, with plaintext and explicitly accepted unsafe TLS restricted to sideload builds.
+> Historical plan, superseded for RC4 by `2026-09-25-ntrip-rc4.md`. Its Play-only TLS and unsafe-TLS proposals are not supported behavior.
+
+**Original goal:** Deliver secure TLS NTRIP correction download and source upload for Google Play, with plaintext and explicitly accepted unsafe TLS restricted to sideload builds.
 
 **Architecture:** Core correction owns a single validated `NtripEndpointSecurityPolicy`, endpoint parsing, socket security and NTRIP v1/v2 framing. Every correction, sourcetable and upload route, including retries, uses that policy. App profiles persist only transport, verification and local unsafe acknowledgement; distribution validation runs at policy construction and service ingress. Custom CA support is deliberately absent.
 

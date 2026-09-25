@@ -1,6 +1,5 @@
 package org.rtkcollector.app.profile
 
-import org.rtkcollector.app.BuildConfig
 import org.rtkcollector.core.correction.DEFAULT_NTRIP_USER_AGENT
 import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSourceUploadRequest
@@ -62,11 +61,11 @@ data class ActiveRecordingConfig(
             require(rtklib.validationErrors.isEmpty()) { rtklib.validationErrors.joinToString(" ") }
         }
         if (ntrip.enabled) {
-            require(!ntrip.requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." }
+            require(!ntrip.requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." }
             require(ntrip.host.isNotBlank()) { "NTRIP host is required for ${workflowName}." }
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
             require(ntrip.mountpoint.isNotBlank()) { "NTRIP mountpoint is required for ${workflowName}." }
-            ntrip.toCore(BuildConfig.ALLOW_INSECURE_NTRIP)
+            ntrip.toCore(false)
         }
         if (storage.kind == "SAF_TREE") {
             require(!storage.treeUri.isNullOrBlank()) {
@@ -74,11 +73,11 @@ data class ActiveRecordingConfig(
             }
         }
         if (casterUpload.enabled) {
-            require(!casterUpload.requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." }
+            require(!casterUpload.requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." }
             require(casterUpload.host.isNotBlank()) { "NTRIP caster upload host is required for ${workflowName}." }
             require(casterUpload.port in 1..65535) { "NTRIP caster upload port must be 1..65535." }
             require(casterUpload.mountpoint.isNotBlank()) { "NTRIP caster upload mountpoint is required for ${workflowName}." }
-            casterUpload.toCore(BuildConfig.ALLOW_INSECURE_NTRIP)
+            casterUpload.toCore(false)
             normalizeSourceUploadMountpoint(casterUpload.mountpoint)
             if (casterUpload.protocolPolicy == "NTRIP_V1_ONLY") {
                 NtripSourceUploadRequest(
@@ -413,7 +412,7 @@ data class ActiveCasterUploadConfig(
 ) {
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
-            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
+            .also { require(!requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." } }
 }
 
 data class ActiveNtripConfig(
@@ -436,7 +435,7 @@ data class ActiveNtripConfig(
 
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
-            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
+            .also { require(!requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." } }
 }
 
 data class ActiveRecordingOutputConfig(

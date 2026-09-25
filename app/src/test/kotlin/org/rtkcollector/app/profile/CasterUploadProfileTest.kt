@@ -20,9 +20,22 @@ class CasterUploadProfileTest {
     }
 
     @Test
-    fun `legacy upload JSON remains explicit plaintext`() {
+    fun `unmarked legacy upload JSON is blocked until explicit transport selection`() {
         val profile = NtripCasterUploadProfile.fromJson(JSONObject().put("id", "upload").put("name", "Upload"))
         assertEquals("PLAINTEXT", profile.toJson().getString("transportMode"))
+        assertTrue(profile.requiresTlsVerificationChoice)
+        assertFailsWith<IllegalArgumentException> { profile.toCore(allowInsecure = false) }
+    }
+
+    @Test
+    fun `explicit stored plaintext upload remains usable`() {
+        val profile = NtripCasterUploadProfile.fromJson(JSONObject()
+            .put("id", "plain")
+            .put("name", "Plain upload")
+            .put("host", "caster.example")
+            .put("transportMode", "PLAINTEXT"))
+        assertFalse(profile.requiresTlsVerificationChoice)
+        assertEquals(NtripTransportMode.PLAINTEXT, profile.toCore(allowInsecure = false).transport)
     }
 
     @Test
@@ -34,9 +47,9 @@ class CasterUploadProfileTest {
             unsafeTlsAcknowledged = true,
         )
         val restored = NtripCasterUploadProfile.fromJson(profile.toJson())
-        assertEquals(profile, restored)
+        assertEquals(profile.copy(unsafeTlsAcknowledged = false, needsSecurityPersistenceMigration = true, requiresTlsVerificationChoice = true), restored)
         assertFailsWith<IllegalArgumentException> { restored.toCore(allowInsecure = false) }
-        assertEquals(NtripTlsVerification.Unsafe, restored.toCore(allowInsecure = true).verification)
+        assertFailsWith<IllegalArgumentException> { restored.toCore(allowInsecure = true) }
         assertFailsWith<IllegalArgumentException> {
             restored.copy(unsafeTlsAcknowledged = false).toCore(allowInsecure = true)
         }

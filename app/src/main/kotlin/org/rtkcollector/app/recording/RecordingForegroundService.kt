@@ -29,7 +29,6 @@ import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.SatelliteTelemetryCapability
 import org.rtkcollector.app.profile.ntripSecurityPolicy
-import org.rtkcollector.app.ui.dashboard.ntripSecurityDisclosure
 import org.rtkcollector.app.profile.validateUm980OutputFrequenciesForStart
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
@@ -1539,7 +1538,8 @@ class RecordingForegroundService : Service() {
     }
 
     private fun handleNtripSnapshot(snapshot: NtripRuntimeSnapshot) {
-        val ntripProblem = snapshot.state == NtripRuntimeState.AUTH_ERROR || snapshot.state == NtripRuntimeState.NETWORK_ERROR
+        val ntripProblem = snapshot.state == NtripRuntimeState.AUTH_ERROR ||
+            snapshot.state == NtripRuntimeState.TLS_ERROR || snapshot.state == NtripRuntimeState.NETWORK_ERROR
         state = state.copy(
             ntripState = snapshot.state.name,
             ntripTransferred = bytesDisplay(activeRecorder?.correctionInputBytes ?: state.correctionInputBytes),
@@ -1674,7 +1674,7 @@ class RecordingForegroundService : Service() {
 
     private fun ntripRuntimeConfig(intent: Intent): NtripRuntimeConfig? {
         val request = runCatching {
-            correctionNtripRequestFromIntent(intent, BuildConfig.ALLOW_INSECURE_NTRIP)
+            correctionNtripRequestFromIntent(intent, false)
         }.getOrElse {
             state = state.copy(
                 ntripState = "CONFIG_ERROR",
@@ -1747,7 +1747,7 @@ class RecordingForegroundService : Service() {
             ),
         )
         val uploadRequest = runCatching {
-            uploadNtripRequestFromIntent(intent, BuildConfig.ALLOW_INSECURE_NTRIP)
+            uploadNtripRequestFromIntent(intent, false)
         }.getOrElse {
             state = state.copy(
                 lastError = it.message ?: "NTRIP caster upload request is invalid.",
@@ -2990,10 +2990,10 @@ class RecordingForegroundService : Service() {
                 putExtra(EXTRA_STATE_SETTINGS_RECORDING_OUTPUT_PROFILE_LABEL, state.settingsRecordingOutputProfileLabel)
                 putExtra(EXTRA_STATE_SETTINGS_STORAGE_PROFILE_LABEL, state.settingsStorageProfileLabel)
                 putExtra(EXTRA_STATE_NTRIP, state.ntripState)
-                putExtra(EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE, if (state.running) {
-                    ntripSecurityDisclosure(activeNtripRuntimeConfig?.request?.policy,
-                        activeCasterUploadSecurityPolicy, BuildConfig.ALLOW_INSECURE_NTRIP)
-                } else null)
+                putExtra(EXTRA_STATE_NTRIP_TRANSPORT_MODE,
+                    activeNtripRuntimeConfig?.request?.policy?.transport?.name)
+                putExtra(EXTRA_STATE_UPLOAD_TRANSPORT_MODE,
+                    activeCasterUploadSecurityPolicy?.transport?.name)
                 putExtra(EXTRA_STATE_NTRIP_URL, state.ntripUrl)
                 putExtra(EXTRA_STATE_NTRIP_TRANSFERRED, state.ntripTransferred)
                 putExtra(EXTRA_STATE_NTRIP_RATES, state.ntripRates)
@@ -4296,7 +4296,8 @@ class RecordingForegroundService : Service() {
         const val EXTRA_STATE_NMEA_BYTES = "nmeaBytes"
         const val EXTRA_STATE_SESSION_TOTAL_BYTES = "sessionTotalBytes"
         const val EXTRA_STATE_NTRIP = "ntripState"
-        const val EXTRA_STATE_NTRIP_SECURITY_DISCLOSURE = "ntripSecurityDisclosure"
+        const val EXTRA_STATE_NTRIP_TRANSPORT_MODE = "ntripTransportMode"
+        const val EXTRA_STATE_UPLOAD_TRANSPORT_MODE = "uploadTransportMode"
         const val EXTRA_STATE_NTRIP_URL = "ntripUrl"
         const val EXTRA_STATE_NTRIP_TRANSFERRED = "ntripTransferred"
         const val EXTRA_STATE_NTRIP_RATES = "ntripRates"

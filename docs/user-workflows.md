@@ -500,6 +500,22 @@ User flow:
 The receiver's internal RTK float/fix solution is separate from any future
 Android-side solution engine.
 
+### NTRIP Transport
+
+TLS with normal Android certificate trust and hostname verification is the
+recommended default for correction download, caster sourcetable retrieval and
+base source upload. A compatible caster may instead use explicitly selected
+plaintext NTRIP/TCP in either Google Play or sideload builds. The profile editor
+warns that plaintext sends credentials without encryption, and also GGA position
+when GGA upload is enabled. The Home screen identifies the selected plaintext
+route with a compact tag; this is configuration information, not an error.
+Invalid or untrusted TLS is not supported. A failed TLS connection never retries
+as plaintext. To use plaintext, select it deliberately in the profile settings.
+Profiles saved before transport was an explicit setting require that one-time
+choice before connecting; existing explicit choices are preserved.
+EUREF port 443 is a known-good system-trusted TLS test endpoint; no special
+EUREF behavior is required in the app.
+
 ### UM980 In-Device RTK Monitoring
 
 For UM980/N4 V1 rover use, RtkCollector runs the NTRIP client externally and

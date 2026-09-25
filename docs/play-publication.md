@@ -5,7 +5,7 @@ It must be reviewed before every Play release.
 
 ## Current Intended Release Status
 
-The current source candidate is `1.0-RC3`. Its GitHub source release may be
+The current source candidate is `1.0-RC4`. Its GitHub source release may be
 published before APK/AAB artifacts are attached. It is not ready for Play upload
 until the signed release build and manual checks below have passed.
 
@@ -31,10 +31,11 @@ Declare the following data handling based on current V1 behaviour:
 
 Security practice declarations:
 
-- Encryption in transit: the Google Play variant permits NTRIP only over TLS
-  with Android system trust and hostname verification. Plaintext and unsafe TLS
-  are sideload-only compatibility options, not Play distribution behavior.
-  Verify the exact shipped variant before making Play Console claims.
+- Encryption in transit: TLS uses Android system trust and hostname verification
+  and is recommended. Explicit plaintext is also available in the Google Play
+  variant and exposes credentials and optional GGA position. Invalid TLS is not
+  supported and failed TLS never downgrades. Do not claim all NTRIP data is
+  encrypted; verify the exact shipped variant before Play Console declarations.
 - Data deletion: users can delete local sessions and archives in the app.
 - No advertising or analytics SDKs are included.
 

@@ -19,7 +19,7 @@ external NTRIP caster, but the app still does not administer or host a caster.
 Some strict casters reject generic application-style `User-Agent` values even
 when credentials and mountpoint are correct. Default stream and sourcetable
 requests must identify RtkCollector as an NTRIP client, for example
-`User-Agent: NTRIP RtkCollector/1.0-RC3`, while still sending
+`User-Agent: NTRIP RtkCollector/1.0-RC4`, while still sending
 `Ntrip-Version: Ntrip/2.0` for V2 requests.
 
 ## Caster And Mountpoint Profiles
@@ -164,12 +164,12 @@ are reported as NTRIP connection failures without sending credentials, GGA or
 RTCM before a successful handshake. There is no plaintext retry after a TLS
 failure. Correction and upload failures remain advisory to receiver raw capture.
 
-Google Play builds accept only TLS with system trust for correction download,
-sourcetable fetch and source upload. Sideload builds retain explicit plaintext
-compatibility for older casters and an explicitly acknowledged unsafe TLS mode.
-Unsafe TLS skips certificate/hostname verification and must not be used for
-sensitive data. Legacy plaintext profiles stay explicit; legacy Custom-CA
-profiles are disabled until a supported verification mode is selected. GGA
+Both Google Play and sideload builds support explicitly selected plaintext TCP
+for correction download, sourcetable fetch and source upload. Plaintext sends
+NTRIP credentials and optional GGA position without encryption. Invalid or
+untrusted TLS is not supported. Legacy plaintext and TLS choices remain explicit;
+legacy unsafe TLS and Custom-CA profiles are disabled until the user chooses
+normal TLS or plaintext. GGA
 upload, when enabled, sends receiver-derived position to the configured caster
 and must be disclosed as optional location transmission.
 

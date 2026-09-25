@@ -122,6 +122,11 @@ The app architecture is designed as a service-first receiver data pipeline:
 Current Android V1 implements USB receiver capture plus NTRIP correction
 intake/routing. Bluetooth, TCP and file replay remain architecture boundaries,
 not current Android publication claims unless explicitly implemented and tested.
+NTRIP caster profiles default to system-trusted TLS; explicitly selected
+plaintext NTRIP/TCP is also supported for correction download, sourcetable
+retrieval and base upload in both distribution variants. Plaintext exposes
+credentials and optional GGA position to the network. Invalid TLS is not
+accepted, and failed TLS never falls back to plaintext.
 
 The capture path must not depend on the Android Activity lifecycle, Compose,
 NTRIP availability or parser success.

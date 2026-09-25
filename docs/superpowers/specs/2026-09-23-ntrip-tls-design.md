@@ -1,5 +1,7 @@
 # NTRIP TLS Transport Design
 
+> Historical design, superseded for RC4 by `docs/superpowers/plans/2026-09-25-ntrip-rc4.md` and the current `docs/specification/security-privacy.md`. Its old Play-only TLS and unsafe-TLS proposals are not supported behavior.
+
 ## Purpose
 
 Add secure NTRIP transport for rover correction intake and base caster source

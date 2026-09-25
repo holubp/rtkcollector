@@ -49,21 +49,25 @@ private data class StoredNtripSecurity(
 private fun JSONObject.storedNtripSecurity(): StoredNtripSecurity {
     val storedVerification = optString("tlsVerification", "SYSTEM_TRUST")
     val legacyCustomCa = storedVerification.equals("CUSTOM_CA", ignoreCase = true)
+    val missingTransportChoice = !has("transportMode")
     val transportMode = when {
         legacyCustomCa -> NtripTransportMode.TLS
-        has("transportMode") -> NtripTransportMode.valueOf(getString("transportMode"))
+        !missingTransportChoice -> NtripTransportMode.valueOf(getString("transportMode"))
         else -> NtripTransportMode.PLAINTEXT
     }
     val tlsVerification = when {
         legacyCustomCa -> NtripTlsVerification.Unsafe
         else -> ntripTlsVerificationFromStorage(storedVerification)
     }
+    val obsoleteVerification = tlsVerification == NtripTlsVerification.Unsafe
     return StoredNtripSecurity(
         transportMode = transportMode,
         tlsVerification = tlsVerification,
-        unsafeTlsAcknowledged = !legacyCustomCa && optBoolean("unsafeTlsAcknowledged", false),
-        needsSecurityPersistenceMigration = legacyCustomCa,
-        requiresTlsVerificationChoice = legacyCustomCa || optBoolean("requiresTlsVerificationChoice", false),
+        unsafeTlsAcknowledged = false,
+        needsSecurityPersistenceMigration = legacyCustomCa || missingTransportChoice ||
+            (obsoleteVerification && optBoolean("unsafeTlsAcknowledged", false)),
+        requiresTlsVerificationChoice = missingTransportChoice || obsoleteVerification ||
+            optBoolean("requiresTlsVerificationChoice", false),
     )
 }
 
@@ -226,10 +230,12 @@ data class NtripCasterProfile(
 
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
-            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
+            .also { require(!requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." } }
 
     fun chooseTlsVerification(verification: NtripTlsVerification): NtripCasterProfile =
-        copy(transportMode = NtripTransportMode.TLS, tlsVerification = verification,
+        copy(transportMode = NtripTransportMode.TLS, tlsVerification = verification.also {
+            require(it == NtripTlsVerification.SystemTrust) { "Only system-trusted TLS is supported." }
+        },
             unsafeTlsAcknowledged = false, requiresTlsVerificationChoice = false)
 
     fun securityForEditorRefresh(values: Map<String, String>, allowInsecure: Boolean): NtripEndpointSecurityPolicy {
@@ -354,10 +360,12 @@ data class NtripCasterUploadProfile(
 
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
-            .also { require(!requiresTlsVerificationChoice) { "Choose a supported TLS verification mode before connecting." } }
+            .also { require(!requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." } }
 
     fun chooseTlsVerification(verification: NtripTlsVerification): NtripCasterUploadProfile =
-        copy(transportMode = NtripTransportMode.TLS, tlsVerification = verification,
+        copy(transportMode = NtripTransportMode.TLS, tlsVerification = verification.also {
+            require(it == NtripTlsVerification.SystemTrust) { "Only system-trusted TLS is supported." }
+        },
             unsafeTlsAcknowledged = false, requiresTlsVerificationChoice = false)
 
     fun toJson(): JSONObject = JSONObject()

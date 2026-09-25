@@ -68,7 +68,7 @@ class NtripClientTest {
 
         val rendered = request.render()
 
-        assertTrue(rendered.contains("User-Agent: NTRIP RtkCollector/1.0-RC3\r\n"))
+        assertTrue(rendered.contains("User-Agent: NTRIP RtkCollector/1.0-RC4\r\n"))
         assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
     }
 
@@ -81,7 +81,7 @@ class NtripClientTest {
 
         val rendered = request.render()
 
-        assertTrue(rendered.contains("User-Agent: NTRIP RtkCollector/1.0-RC3\r\n"))
+        assertTrue(rendered.contains("User-Agent: NTRIP RtkCollector/1.0-RC4\r\n"))
         assertTrue(rendered.contains("Ntrip-Version: Ntrip/2.0\r\n"))
     }
 

@@ -37,17 +37,16 @@ Traceability:
 
 Status: Normative
 
-The Google Play build MUST permit correction download, sourcetable fetch and
-source upload only over TLS with system trust and hostname verification. It
-MUST reject imported, stale or programmatically selected plaintext and unsafe
-TLS profiles before network access. Sideload-only plaintext/unsafe compatibility
-MUST NOT be represented as Play build behavior. Data safety answers MUST match
-the exact shipped `googlePlayRelease` AAB and its optional NTRIP transmissions.
+Both build variants MUST permit explicitly selected plaintext correction download,
+sourcetable fetch and source upload. TLS MUST use normal system trust and hostname
+verification. Imported or stale unsafe TLS profiles MUST be blocked until the user
+selects a supported transport. The app MUST never downgrade failed TLS to plaintext.
+Data safety answers MUST reflect that the shipped `googlePlayRelease` AAB can send
+credentials and optional GGA position without encryption when plaintext is selected.
 
 Rationale:
-NTRIP deployments commonly use cleartext TCP, but that compatibility is not
-available in the Google Play variant. False encryption claims or an incorrect
-release variant would be a publication compliance failure.
+NTRIP deployments commonly use cleartext TCP. False blanket encryption claims
+or an incorrect release variant would be a publication compliance failure.
 
 Applies to:
 - NTRIP correction download.

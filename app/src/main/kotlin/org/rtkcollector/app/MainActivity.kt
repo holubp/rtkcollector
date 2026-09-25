@@ -689,7 +689,7 @@ class MainActivity : Activity() {
                                 port = port,
                                 unsafeTlsAcknowledged = selected.unsafeTlsAcknowledged &&
                                     selected.host == host && selected.port == port,
-                            ).toCore(BuildConfig.ALLOW_INSECURE_NTRIP),
+                            ).toCore(false),
                             credentials = credentials,
                         ),
                     ).fetch()

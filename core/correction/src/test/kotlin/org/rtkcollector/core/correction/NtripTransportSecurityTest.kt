@@ -15,10 +15,9 @@ class NtripTransportSecurityTest {
     }
 
     @Test
-    fun `plaintext needs sideload capability and system trust marker`() {
-        assertThrows(IllegalArgumentException::class.java) {
-            policy("caster.example", NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust)
-        }
+    fun `explicit plaintext works in either build and cannot select TLS verification`() {
+        assertEquals(NtripTransportMode.PLAINTEXT,
+            policy("caster.example", NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust).transport)
         assertEquals(NtripTransportMode.PLAINTEXT,
             policy("caster.example", NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust,
                 allowInsecure = true).transport)
@@ -29,7 +28,7 @@ class NtripTransportSecurityTest {
     }
 
     @Test
-    fun `unsafe TLS needs sideload capability and local acknowledgement`() {
+    fun `unsafe TLS is rejected even with former sideload capability and consent`() {
         assertThrows(IllegalArgumentException::class.java) {
             policy("caster.example", NtripTransportMode.TLS, NtripTlsVerification.Unsafe,
                 unsafeAcknowledged = true)
@@ -38,9 +37,10 @@ class NtripTransportSecurityTest {
             policy("caster.example", NtripTransportMode.TLS, NtripTlsVerification.Unsafe,
                 allowInsecure = true)
         }
-        assertEquals(NtripTlsVerification.Unsafe,
+        assertThrows(IllegalArgumentException::class.java) {
             policy("caster.example", NtripTransportMode.TLS, NtripTlsVerification.Unsafe,
-                allowInsecure = true, unsafeAcknowledged = true).verification)
+                allowInsecure = true, unsafeAcknowledged = true)
+        }
     }
 
     @Test

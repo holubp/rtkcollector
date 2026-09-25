@@ -298,7 +298,7 @@ class ProfileStoresTest {
     }
 
     @Test
-    fun `fresh editor consent applies to final unsafe endpoint only`() {
+    fun `former unsafe consent is always cleared`() {
         val caster = NtripCasterProfile(
             id = "caster", name = "Caster", host = "caster.example",
             tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
@@ -309,9 +309,9 @@ class ProfileStoresTest {
             tlsVerification = org.rtkcollector.core.correction.NtripTlsVerification.Unsafe,
             unsafeTlsAcknowledged = true,
         )
-        assertTrue(caster.clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
+        assertFalse(caster.clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
             .unsafeTlsAcknowledged)
-        assertTrue(upload.clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
+        assertFalse(upload.clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)
             .unsafeTlsAcknowledged)
         assertFalse(caster.copy(transportMode = org.rtkcollector.core.correction.NtripTransportMode.PLAINTEXT)
             .clearUnsafeAcknowledgementUnlessUnchanged(null, freshlyAcknowledgedInEditor = true)

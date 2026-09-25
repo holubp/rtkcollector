@@ -23,6 +23,32 @@ class NtripTlsSocketConnectorTest {
     private val trustedConnector get() = JavaNtripSocketConnector(NtripTlsFixture.trustedFactory())
 
     @Test
+    fun `explicit plaintext fetches a sourcetable over TCP`() {
+        ServerSocket(0, 10, InetAddress.getByName("127.0.0.1")).use { server ->
+            val request = CompletableFuture<String>()
+            val peer = Thread {
+                server.accept().use { socket ->
+                    socket.soTimeout = 2_000
+                    val firstLine = socket.getInputStream().bufferedReader(Charsets.US_ASCII).readLine()
+                    request.complete(firstLine)
+                    socket.getOutputStream().write(
+                        "SOURCETABLE 200 OK\r\nSTR;BASE;RTCM 3.2\r\nENDSOURCETABLE\r\n"
+                            .toByteArray(Charsets.US_ASCII),
+                    )
+                }
+            }.apply { isDaemon = true; start() }
+            val policy = NtripEndpointSecurityPolicy(
+                NtripEndpoint.parse("127.0.0.1", server.localPort),
+                NtripTransportMode.PLAINTEXT, NtripTlsVerification.SystemTrust,
+                allowInsecure = false, unsafeAcknowledged = false,
+            )
+            assertEquals(listOf("BASE"), NtripSourcetableClient(NtripSourcetableRequest(policy)).fetch().mountpoints)
+            assertEquals("GET / HTTP/1.1", request.get(2, TimeUnit.SECONDS))
+            peer.join(2_000)
+        }
+    }
+
+    @Test
     fun `failed raw TCP setup closes socket for either transport`() {
         for (transport in NtripTransportMode.entries) {
             for (failOnTimeout in listOf(false, true)) {
@@ -111,21 +137,22 @@ class NtripTlsSocketConnectorTest {
     }
 
     @Test
-    fun `unsafe TLS requires local consent but still handshakes before returning`() {
-        NtripTlsFixture.Server(bindHost = "127.0.0.2") { peer -> peer.startHandshake() }.use { server ->
-            val endpoint = NtripEndpoint.parse("127.0.0.2", server.port)
-            assertThrows(IllegalArgumentException::class.java) {
-                NtripEndpointSecurityPolicy(
-                    endpoint, NtripTransportMode.TLS, NtripTlsVerification.Unsafe,
-                    allowInsecure = true, unsafeAcknowledged = false,
-                )
+    fun `certificate absent from system trust is rejected`() {
+        NtripTlsFixture.Server(bindHost = "localhost") { peer -> runCatching { peer.startHandshake() } }.use { server ->
+            assertThrows(Exception::class.java) {
+                JavaNtripSocketConnector().connect(NtripEndpointSecurityPolicy.systemTrust("localhost", server.port))
             }
-            val authorized = NtripEndpointSecurityPolicy(
-                endpoint, NtripTransportMode.TLS, NtripTlsVerification.Unsafe,
-                allowInsecure = true, unsafeAcknowledged = true,
-            )
-            JavaNtripSocketConnector().connect(authorized).use { }
             server.await()
+        }
+    }
+
+    @Test
+    fun `unsafe TLS cannot construct a socket policy`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            NtripEndpointSecurityPolicy(
+                NtripEndpoint.parse("caster.example", 443), NtripTransportMode.TLS,
+                NtripTlsVerification.Unsafe, allowInsecure = true, unsafeAcknowledged = true,
+            )
         }
     }
 
@@ -170,7 +197,7 @@ class NtripTlsSocketConnectorTest {
                 trustedConnector,
                 NtripReconnectPolicy(maxAttempts = 1),
             ).connectOnce()
-            assertEquals(NtripFailureKind.CONNECT_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
+            assertEquals(NtripFailureKind.TLS_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
             val bytes = received.get(3, TimeUnit.SECONDS)
             assertTrue(bytes.size > 128, "the complete TLS greeting must exceed the old 128-byte prefix")
             assertEquals(0x16, bytes[0].toInt() and 0xff)
@@ -218,6 +245,8 @@ class NtripTlsSocketConnectorTest {
         val failure = (result as NtripConnectionResult.Failure).failure
         val exposed = statuses.mapNotNull(CorrectionStatus::lastError).joinToString() + failure.message + failure.cause
         listOf(secret, token, requestBytes, certificate, privateKey).forEach { assertFalse(exposed.contains(it)) }
+        assertEquals(NtripFailureKind.TLS_FAILED, failure.kind)
+        assertTrue(failure.message.contains("TLS handshake"))
     }
 
     @Test

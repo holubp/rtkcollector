@@ -19,7 +19,7 @@ class ActiveRecordingConfigCasterUploadTest {
         )
 
         assertEquals(NtripTransportMode.PLAINTEXT, config.casterUpload.toCore(allowInsecure = true).transport)
-        assertThrows(IllegalArgumentException::class.java) { config.casterUpload.toCore(allowInsecure = false) }
+        assertEquals(NtripTransportMode.PLAINTEXT, config.casterUpload.toCore(allowInsecure = false).transport)
     }
 
     @Test

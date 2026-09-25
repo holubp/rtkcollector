@@ -26,7 +26,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import org.rtkcollector.app.BuildConfig
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -251,8 +250,6 @@ private const val SETTINGS_BACKUP_CACHE_TTL_MILLIS = 30L * 60L * 1000L
 private const val PERSISTENT_RECEIVER_COMMAND_DELAY_MILLIS = 100L
 private const val PERSISTENT_RECEIVER_SAVE_OK_TIMEOUT_MILLIS = 3_000L
 private const val DEVICE_CONSOLE_PERMISSION_REQUIRED = "USB permission is required before opening the device console."
-private const val NTRIP_CLEARTEXT_TRANSPORT_WARNING =
-    "NTRIP may use cleartext TCP; credentials and GGA/source data are not universally encrypted."
 private val persistentReceiverWriteInProgress = AtomicBoolean(false)
 
 internal fun tryStartRecordingServiceStateQuery(startService: () -> Unit): Boolean =
@@ -3338,7 +3335,7 @@ private fun refreshNtripCasterMountpoints(
         onFailure("NTRIP caster profile no longer exists.")
         return
     }
-    val policy = runCatching { existing.securityForEditorRefresh(values, BuildConfig.ALLOW_INSECURE_NTRIP) }
+    val policy = runCatching { existing.securityForEditorRefresh(values, false) }
         .getOrElse { error ->
             onFailure(error.message ?: "NTRIP TLS policy is invalid.")
             return
@@ -4128,7 +4125,6 @@ private fun ProfileStores.profileEditorData(
             val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
             ProfileEditorData(
                 title = "Edit NTRIP caster",
-                warningText = NTRIP_CLEARTEXT_TRANSPORT_WARNING,
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("host", "Host", profile.host),
@@ -4137,8 +4133,11 @@ private fun ProfileStores.profileEditorData(
                         profile.transportMode,
                         profile.tlsVerification,
                         profile.unsafeTlsAcknowledged,
-                        BuildConfig.ALLOW_INSECURE_NTRIP,
+                        false,
                         profile.requiresTlsVerificationChoice,
+                        ggaUploadEnabled = ntripMountpointProfiles().any {
+                            it.casterProfileId == profile.id && it.ggaUploadPolicy.isNotBlank()
+                        },
                     ).toTypedArray(),
                     EditableProfileField("requiresTlsVerificationChoice", "", profile.requiresTlsVerificationChoice.toString(), hidden = true),
                     EditableProfileField("username", "Username", profile.username),
@@ -4162,7 +4161,6 @@ private fun ProfileStores.profileEditorData(
             val storedPassword = profile.secretId.takeIf(String::isNotBlank)?.let(passwordLookup).orEmpty()
             ProfileEditorData(
                 title = "Edit NTRIP caster upload",
-                warningText = NTRIP_CLEARTEXT_TRANSPORT_WARNING,
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField("host", "Host", profile.host),
@@ -4171,7 +4169,7 @@ private fun ProfileStores.profileEditorData(
                         profile.transportMode,
                         profile.tlsVerification,
                         profile.unsafeTlsAcknowledged,
-                        BuildConfig.ALLOW_INSECURE_NTRIP,
+                        false,
                         profile.requiresTlsVerificationChoice,
                     ).toTypedArray(),
                     EditableProfileField("requiresTlsVerificationChoice", "", profile.requiresTlsVerificationChoice.toString(), hidden = true),
@@ -4280,7 +4278,6 @@ private fun ProfileStores.profileEditorData(
                 ?.let { "Mountpoint is not in the selected caster sourcetable." }
             ProfileEditorData(
                 title = "Edit NTRIP mountpoint",
-                warningText = NTRIP_CLEARTEXT_TRANSPORT_WARNING,
                 fields = listOf(
                     EditableProfileField("name", "Name", profile.name),
                     EditableProfileField(
@@ -4610,9 +4607,7 @@ private fun ProfileStores.saveProfileEditorData(
                         secretId = secretId,
                         transportMode = transportMode,
                         tlsVerification = tlsVerification,
-                        unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
-                            transportMode == NtripTransportMode.TLS &&
-                            tlsVerification == NtripTlsVerification.Unsafe,
+                        unsafeTlsAcknowledged = false,
                         requiresTlsVerificationChoice = profile.requiresTlsVerificationChoice &&
                             values.optional("requiresTlsVerificationChoice") != "false",
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
@@ -4627,9 +4622,6 @@ private fun ProfileStores.saveProfileEditorData(
                 } else {
                     profile
                 }
-            },
-            freshlyAcknowledgedEditorProfileId = target.id.takeIf {
-                values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse()
             },
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
@@ -4663,9 +4655,7 @@ private fun ProfileStores.saveProfileEditorData(
                         secretId = secretId,
                         transportMode = transportMode,
                         tlsVerification = tlsVerification,
-                        unsafeTlsAcknowledged = values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse() &&
-                            transportMode == NtripTransportMode.TLS &&
-                            tlsVerification == NtripTlsVerification.Unsafe,
+                        unsafeTlsAcknowledged = false,
                         requiresTlsVerificationChoice = profile.requiresTlsVerificationChoice &&
                             values.optional("requiresTlsVerificationChoice") != "false",
                         protocolPolicy = values.optional("protocolPolicy").orEmpty().ifBlank {
@@ -4706,9 +4696,6 @@ private fun ProfileStores.saveProfileEditorData(
                 } else {
                     profile
                 }
-            },
-            freshlyAcknowledgedEditorProfileId = target.id.takeIf {
-                values.optional("unsafeTlsAcknowledged").toBooleanStrictOrFalse()
             },
         ).also {
             return updateSettingsSetReferenceNames(settingsSets, target.kind, target.id, values.required("name"))
@@ -6245,6 +6232,8 @@ private fun ProfileStores.plannedDashboardState(
         uploadAvailable = selectedWorkflowId == WORKFLOW_FIXED_BASE || selectedWorkflowId == WORKFLOW_BASE_CALIBRATION,
         mountpointRequired = mountpointRequired,
         uploadEnabled = casterUploadRequested,
+        correctionTransport = ntripResolution?.caster?.transportMode.takeIf { mountpointRequired },
+        uploadTransport = casterUploadProfile?.transportMode.takeIf { casterUploadRequested },
         settingsSetResolved = selected != null,
         workflowResolved = selectedWorkflowId != null && WORKFLOW_MODE_OPTIONS.any { it.value == selectedWorkflowId },
         mountpointConfigurationResolved = mountpointConfigurationResolved,
@@ -6489,7 +6478,8 @@ private fun NtripCasterProfile.profileRow(isSelected: Boolean = false): ProfileL
         isProtected = isProtected,
         hasLocalOverrides = false,
         isSelected = isSelected,
-        summary = "$host:$port · $protocolPolicy",
+        summary = listOfNotNull("$host:$port", protocolPolicy,
+            "\u26A0 PLAINTEXT".takeIf { transportMode == NtripTransportMode.PLAINTEXT }).joinToString(" · "),
     )
 
 private fun NtripCasterUploadProfile.profileRow(isSelected: Boolean = false): ProfileListRow =
@@ -6502,6 +6492,7 @@ private fun NtripCasterUploadProfile.profileRow(isSelected: Boolean = false): Pr
         summary = listOf(
             "${host.ifBlank { "host not set" }}:$port/${mountpoint.ifBlank { "mountpoint not set" }}",
             protocolPolicy,
+            "\u26A0 PLAINTEXT".takeIf { transportMode == NtripTransportMode.PLAINTEXT },
             if (enabledByDefault) "enabled by default" else null,
         ).filterNotNull().joinToString(" · "),
     )
@@ -6523,7 +6514,11 @@ private fun NtripMountpointProfile.profileRow(
         isProtected = isProtected,
         hasLocalOverrides = false,
         isSelected = isSelected,
-        summary = listOf(caster?.name ?: casterProfileId, mountpoint.ifBlank { "mountpoint not set" }).joinToString(" · "),
+        summary = listOfNotNull(
+            caster?.name ?: casterProfileId,
+            mountpoint.ifBlank { "mountpoint not set" },
+            "\u26A0 PLAINTEXT".takeIf { caster?.transportMode == NtripTransportMode.PLAINTEXT },
+        ).joinToString(" · "),
         warningText = if (suspect) SuspectInvalidMountpointWarning else null,
     )
 }

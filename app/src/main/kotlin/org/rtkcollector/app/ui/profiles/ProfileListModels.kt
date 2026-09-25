@@ -95,8 +95,7 @@ data class EditableProfileField(
     val sourceUploadUsername: Boolean = false,
     val casterUploadSafety: Boolean = false,
     val danger: Boolean = false,
-    val visibleWhenUnsafeTls: Boolean = false,
-    val unsafeTlsAvailable: Boolean = false,
+    val plaintextGgaUploadEnabled: Boolean = false,
     val hidden: Boolean = false,
 ) {
     val hasError: Boolean get() = !errorText.isNullOrBlank()
@@ -109,6 +108,7 @@ fun ntripSecurityEditorFields(
     unsafeTlsAcknowledged: Boolean,
     allowInsecure: Boolean,
     requiresTlsVerificationChoice: Boolean = false,
+    ggaUploadEnabled: Boolean = false,
 ): List<EditableProfileField> = listOf(
     EditableProfileField(
         key = "transportMode",
@@ -116,64 +116,23 @@ fun ntripSecurityEditorFields(
         value = transportMode.name,
         optionItems = listOf(
             EditableProfileOption(NtripTransportMode.TLS.name, "TLS"),
-            EditableProfileOption(
-                NtripTransportMode.PLAINTEXT.name,
-                if (allowInsecure) "Plaintext" else "Plaintext (sideload only)",
-                enabled = allowInsecure,
-                disabledExplanation = "Google Play requires TLS with system trust.",
-            ),
+            EditableProfileOption(NtripTransportMode.PLAINTEXT.name, "Plaintext"),
         ),
-        helperText = if (allowInsecure) {
-            "Plaintext sends NTRIP data without TLS."
-        } else {
-            "Google Play requires TLS with system trust; plaintext is available only in sideload builds."
-        },
+        helperText = "TLS uses system trust and hostname verification.",
+        plaintextGgaUploadEnabled = ggaUploadEnabled,
+        danger = requiresTlsVerificationChoice,
     ),
     EditableProfileField(
         key = "tlsVerification",
         label = "TLS verification",
-        value = if (transportMode == NtripTransportMode.PLAINTEXT) {
-            NtripTlsVerification.SystemTrust.storageValue
-        } else {
-            tlsVerification.storageValue
-        },
-        optionItems = listOf(
-            EditableProfileOption(NtripTlsVerification.SystemTrust.storageValue, "System trust"),
-            EditableProfileOption(
-                NtripTlsVerification.Unsafe.storageValue,
-                if (allowInsecure) {
-                    "Unsafe: accept any certificate / ignore hostname"
-                } else {
-                    "Unsafe TLS (sideload only)"
-                },
-                enabled = allowInsecure && transportMode == NtripTransportMode.TLS,
-                disabledExplanation = if (transportMode == NtripTransportMode.PLAINTEXT) {
-                    "TLS verification is unavailable for plaintext."
-                } else {
-                    "Unsafe TLS is available only in sideload builds."
-                },
-            ),
-        ),
+        value = tlsVerification.storageValue,
+        readOnly = true,
         helperText = if (requiresTlsVerificationChoice) {
-            "Legacy custom CA is no longer supported. Choose a TLS verification mode before connecting."
-        } else if (allowInsecure) {
-            "Unsafe TLS requires a separate acknowledgement."
+            "This legacy transport needs an explicit choice. Choose TLS or Plaintext above before connecting."
         } else {
-            "Unsafe TLS is available only in sideload builds."
+            "TLS always validates the certificate and hostname."
         },
-        unsafeTlsAvailable = allowInsecure,
         danger = requiresTlsVerificationChoice,
-    ),
-    EditableProfileField(
-        key = "unsafeTlsAcknowledged",
-        label = "I understand unsafe TLS accepts any certificate and ignores hostname verification",
-        value = (unsafeTlsAcknowledged && transportMode == NtripTransportMode.TLS &&
-            tlsVerification == NtripTlsVerification.Unsafe).toString(),
-        boolean = true,
-        readOnly = !allowInsecure,
-        helperText = "This accepts any certificate and ignores hostname verification. The acknowledgement is required for the current endpoint and is cleared when endpoint or security settings change.",
-        danger = true,
-        visibleWhenUnsafeTls = true,
     ),
 )
 
@@ -183,20 +142,15 @@ fun updatedNtripSecurityEditorValues(
     value: String,
 ): Map<String, String> {
     var updated = values + (key to value)
-    if (key == "tlsVerification" && values["transportMode"] == NtripTransportMode.TLS.name) {
+    if (key == "transportMode") {
+        updated += "tlsVerification" to NtripTlsVerification.SystemTrust.storageValue
         updated += "requiresTlsVerificationChoice" to "false"
     }
     if (key in setOf("host", "port", "transportMode", "tlsVerification")) {
         updated += "unsafeTlsAcknowledged" to "false"
     }
-    if (updated["transportMode"] == NtripTransportMode.PLAINTEXT.name) {
-        updated += "tlsVerification" to NtripTlsVerification.SystemTrust.storageValue
-    }
-    if (
-        updated["transportMode"] != NtripTransportMode.TLS.name ||
-        updated["tlsVerification"] != NtripTlsVerification.Unsafe.storageValue
-    ) {
-        updated += "unsafeTlsAcknowledged" to "false"
+    if (key == "tlsVerification" && value == NtripTlsVerification.SystemTrust.storageValue) {
+        updated += "requiresTlsVerificationChoice" to "false"
     }
     return updated
 }
@@ -204,6 +158,16 @@ fun updatedNtripSecurityEditorValues(
 fun EditableProfileField.withRuntimeProfileValidation(values: Map<String, String>): EditableProfileField {
     val currentValue = values[key] ?: value
     return when (key) {
+        "transportMode" -> copy(
+            value = currentValue,
+            helperText = when {
+                currentValue == NtripTransportMode.PLAINTEXT.name && plaintextGgaUploadEnabled ->
+                    "\u26A0 Plaintext \u2014 credentials and GGA position are sent unencrypted."
+                currentValue == NtripTransportMode.PLAINTEXT.name ->
+                    "\u26A0 Plaintext \u2014 NTRIP username/password are sent unencrypted."
+                else -> "TLS uses system trust and hostname verification."
+            },
+        )
         "mountpoint" -> withRuntimeMountpointValidation(values, currentValue)
         "username" -> if (sourceUploadUsername) {
             withRuntimeSourceUploadUsernameState(values, currentValue)
@@ -215,33 +179,10 @@ fun EditableProfileField.withRuntimeProfileValidation(values: Map<String, String
         } else {
             copy(value = currentValue)
         }
-        "tlsVerification" -> copy(
-            value = currentValue,
-            optionItems = optionItems.map { option ->
-                if (option.value != NtripTlsVerification.Unsafe.storageValue) {
-                    option
-                } else {
-                    val tlsSelected = values["transportMode"] == NtripTransportMode.TLS.name
-                    option.copy(
-                        enabled = unsafeTlsAvailable && tlsSelected,
-                        disabledExplanation = if (!tlsSelected) {
-                            "TLS verification is unavailable for plaintext."
-                        } else {
-                            "Unsafe TLS is available only in sideload builds."
-                        },
-                    )
-                }
-            },
-        )
+        "tlsVerification" -> copy(value = currentValue)
         else -> copy(value = currentValue)
     }
 }
-
-fun EditableProfileField.isVisibleIn(values: Map<String, String>): Boolean =
-    !visibleWhenUnsafeTls || (
-        values["transportMode"] == NtripTransportMode.TLS.name &&
-            values["tlsVerification"] == NtripTlsVerification.Unsafe.storageValue
-        )
 
 fun canSaveProfileEditor(fields: List<EditableProfileField>): Boolean =
     fields.none { it.hasError }

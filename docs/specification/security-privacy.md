@@ -2,20 +2,21 @@
 
 ## Secrets
 
-### SEC-NTRIP-TLS-001: Local Unsafe Consent And Legacy Custom-CA Migration
+### SEC-NTRIP-TLS-001: Explicit Transport And Legacy Unsafe Migration
 
 Status: Normative
 
-An unchanged, locally acknowledged TLS/unsafe correction or upload profile MAY retain
-its acknowledgement across store reads and saves, including the editable default
-correction profile. Endpoint or security changes and profile copies MUST clear it.
-Legacy Custom-CA profiles MUST be rewritten without raw certificate bytes and MUST
-retain a disabled verification-choice state across persistence. Acknowledgement alone
-MUST NOT enable such a profile. Connecting requires an explicit supported TLS
-verification choice; unsafe TLS also requires fresh local acknowledgement.
-The profile editor MUST preserve this guard when unrelated fields are saved,
-and sourcetable refresh MUST validate the currently displayed transport and
-verification choice rather than silently using an older stored policy.
+Correction and source-upload profiles MUST select TLS with normal system trust
+(the default) or explicit plaintext TCP. Both choices MUST work in Google Play
+and sideload builds. Existing explicit choices MUST be preserved. Legacy unsafe
+TLS and Custom-CA profiles MUST remain disabled until the user explicitly chooses
+normal TLS or plaintext; they MUST NOT silently migrate to either. No local
+acknowledgement may enable invalid TLS. The editor MUST preserve the migration
+guard on unrelated saves, and sourcetable refresh MUST validate the displayed
+transport rather than silently using an older stored policy.
+Profiles predating explicit transport selection MUST also remain blocked until
+the user chooses TLS or plaintext; their previous implicit plaintext value is
+only a display hint and MUST NOT silently authorize a connection.
 
 Verification:
 - Automated: profile-store read/save/read and legacy migration tests.
@@ -25,9 +26,8 @@ Verification:
 
 Status: Normative
 
-Google Play builds MUST reject plaintext and unsafe TLS correction and source
-upload policies; sideload builds MAY allow them only under the explicit profile
-policy, including local acknowledgement for unsafe TLS. Before constructing a
+Both build variants MUST accept explicitly selected plaintext and system-trusted
+TLS policies and reject unsupported/unsafe TLS policies. Before constructing a
 correction or upload request on recording start or update, the foreground
 service MUST require correctly typed host, port, mountpoint, transport mode,
 TLS verification and acknowledgement intent fields and validate the resulting
@@ -46,10 +46,10 @@ Status: Normative
 
 Correction download, sourcetable fetch, source upload and protocol retries MUST
 use the same validated canonical endpoint and security policy. TLS MUST use
-system trust and hostname verification by default, accept only TLS 1.2 or newer,
+system trust and hostname verification, accept only TLS 1.2 or newer,
 and complete its handshake before sending any NTRIP request, credential, GGA or
-RTCM byte. A failed handshake MUST NOT fall back to plaintext. Sideload-only
-unsafe TLS requires local acknowledgement. Connection, handshake, stream and
+RTCM byte. A failed handshake MUST NOT fall back to plaintext. There MUST be no
+trust-all or hostname-verification bypass path. Connection, handshake, stream and
 caster-response failures exposed through status, diagnostics or session events
 MUST NOT include passwords, Basic tokens, raw request frames, certificate bytes
 or private-key material. These failures MUST remain advisory to receiver raw

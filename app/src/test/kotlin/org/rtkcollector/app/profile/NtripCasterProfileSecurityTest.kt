@@ -10,7 +10,7 @@ import org.rtkcollector.core.correction.NtripTransportMode
 
 class NtripCasterProfileSecurityTest {
     @Test
-    fun `new caster defaults to TLS and legacy JSON remains plaintext`() {
+    fun `new caster defaults to TLS and unmarked legacy plaintext requires selection`() {
         val fresh = NtripCasterProfile(id = "caster", name = "Caster", host = "caster.example")
         assertEquals(NtripTransportMode.TLS, fresh.transportMode)
         assertEquals(NtripTlsVerification.SystemTrust, fresh.tlsVerification)
@@ -22,8 +22,11 @@ class NtripCasterProfileSecurityTest {
         )
         assertEquals(NtripTransportMode.PLAINTEXT, legacy.transportMode)
         assertEquals("PLAINTEXT", legacy.toJson().getString("transportMode"))
+        assertEquals(true, legacy.requiresTlsVerificationChoice)
         assertFailsWith<IllegalArgumentException> { legacy.toCore(allowInsecure = false) }
-        assertEquals(NtripTransportMode.PLAINTEXT, legacy.toCore(allowInsecure = true).transport)
+        assertFailsWith<IllegalArgumentException> { legacy.toCore(allowInsecure = true) }
+        assertEquals(NtripTransportMode.PLAINTEXT,
+            NtripCasterProfile.fromJson(legacy.toJson()).copy(requiresTlsVerificationChoice = false).toCore(false).transport)
     }
 
     @Test
@@ -35,6 +38,17 @@ class NtripCasterProfileSecurityTest {
         assertFailsWith<IllegalArgumentException> {
             NtripCasterProfile.fromJson(JSONObject(json.toString()).put("tlsVerification", "BOGUS"))
         }
+    }
+
+    @Test
+    fun `explicit stored plaintext selection remains usable`() {
+        val profile = NtripCasterProfile.fromJson(JSONObject()
+            .put("id", "plain")
+            .put("name", "Plain caster")
+            .put("host", "caster.example")
+            .put("transportMode", "PLAINTEXT"))
+        assertFalse(profile.requiresTlsVerificationChoice)
+        assertEquals(NtripTransportMode.PLAINTEXT, profile.toCore(allowInsecure = false).transport)
     }
 
     @Test
@@ -102,9 +116,8 @@ class NtripCasterProfileSecurityTest {
             ntripSecurityPolicyFromStorage("caster.example", 2101, null, null, false, false).transport)
         assertEquals(NtripTransportMode.PLAINTEXT,
             ntripSecurityPolicyFromStorage("caster.example", 2101, "PLAINTEXT", "SYSTEM_TRUST", false, true).transport)
-        assertFailsWith<IllegalArgumentException> {
-            ntripSecurityPolicyFromStorage("caster.example", 2101, "PLAINTEXT", "SYSTEM_TRUST", false, false)
-        }
+        assertEquals(NtripTransportMode.PLAINTEXT,
+            ntripSecurityPolicyFromStorage("caster.example", 2101, "PLAINTEXT", "SYSTEM_TRUST", false, false).transport)
         assertFailsWith<IllegalArgumentException> {
             ntripSecurityPolicyFromStorage("caster.example", 2101, "TLS", "UNSAFE", false, true)
         }

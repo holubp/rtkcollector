@@ -177,18 +177,38 @@ internal fun legacyNtripCasterSecretId(profile: NtripCasterProfile): String =
  * Accept this only when the mountpoint remains explicitly bound to the caster.
  */
 internal fun legacyNtripMountpointSecretId(
-    profile: NtripCasterProfile,
+    host: String,
+    username: String,
     mountpoint: NtripMountpointProfile,
-): String = "ntrip:${profile.host}:${mountpoint.mountpoint}:${profile.username}"
+): String = "ntrip:$host:${mountpoint.mountpoint}:$username"
+
+private fun legacyNtripCasterHosts(profile: NtripCasterProfile): List<String> = buildList {
+    profile.host.takeIf(String::isNotBlank)?.let(::add)
+    legacyNtripSecretHost(profile.secretId, profile.username)?.let(::add)
+}.distinct()
+
+private fun legacyNtripSecretHost(secretId: String, username: String): String? {
+    val parts = secretId.split(':')
+    return parts.getOrNull(1)?.takeIf { host ->
+        parts.size == 4 &&
+            parts[0] == "ntrip" &&
+            host.isNotBlank() &&
+            parts[2].isNotBlank() &&
+            parts[3] == username
+    }
+}
 
 internal fun SettingsBackupFile.legacyNtripMountpointSecretIds(
     profile: NtripCasterProfile,
-): List<String> = ntripMountpointProfiles
-    .asSequence()
-    .filter { it.casterProfileId == profile.id }
-    .map { mountpoint -> legacyNtripMountpointSecretId(profile, mountpoint) }
+): List<String> = legacyNtripCasterHosts(profile)
+    .flatMap { host ->
+        ntripMountpointProfiles
+            .asSequence()
+            .filter { it.casterProfileId == profile.id }
+            .map { mountpoint -> legacyNtripMountpointSecretId(host, profile.username, mountpoint) }
+            .toList()
+    }
     .distinct()
-    .toList()
 
 internal fun SettingsBackupFile.referencedNtripSecretIds(): Set<String> = buildSet {
     ntripCasterProfiles.forEach { profile ->

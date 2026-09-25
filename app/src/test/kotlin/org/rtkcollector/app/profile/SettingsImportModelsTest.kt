@@ -459,6 +459,49 @@ class SettingsImportModelsTest {
     }
 
     @Test
+    fun `legacy RC2 mountpoint keyed password honors historical profile endpoint`() {
+        val profile = NtripCasterProfile(
+            id = "caster-1781686506572",
+            name = "EUREF",
+            host = "www.euref-ip.net",
+            username = "pholub",
+            secretId = "ntrip:euref-ip.net:caster:pholub",
+        )
+        val mountpoint = NtripMountpointProfile(
+            id = "tubo",
+            name = "TUBO",
+            casterProfileId = profile.id,
+            mountpoint = "TUBO00CZE0",
+        )
+        val legacySecretId = "ntrip:euref-ip.net:TUBO00CZE0:pholub"
+        val backup = sampleBackup(includePassword = false).copy(
+            ntripCasterProfiles = listOf(profile),
+            ntripMountpointProfiles = listOf(mountpoint),
+            settingsSets = listOf(
+                sampleSettingsSet().copy(
+                    ntripCasterProfileRef = ProfileReference(profile.id, profile.name),
+                    ntripMountpointProfileRef = ProfileReference(mountpoint.id, mountpoint.name),
+                ),
+            ),
+            lastActiveNtripMountpointProfileId = mountpoint.id,
+            plaintextPasswordsBySecretId = mapOf(legacySecretId to "rc2-password"),
+        )
+
+        val result = validateSettingsImportJson(backup.toJson().toString())
+
+        assertTrue(result is SettingsImportValidationResult.Valid, result.toString())
+        val imported = settingsBackupImportPlan(
+            backup = result.backup,
+            persistedSafTreeUrisWithWriteAccess = emptySet(),
+            idFactory = deterministicIdFactory(),
+        ).backup
+        assertEquals(
+            "rc2-password",
+            imported.plaintextPasswordsBySecretId[imported.ntripCasterProfiles.single().secretId],
+        )
+    }
+
+    @Test
     fun `legacy RC2 mountpoint keyed password is rejected when mountpoint belongs to another caster`() {
         val caster = NtripCasterProfile(
             id = "caster",

@@ -4,6 +4,41 @@ This file contains requirements for Google Play and similar public Android
 release channels. These requirements complement the runtime, security and
 workflow specifications; they do not weaken recording architecture rules.
 
+### RELEASE-SIGN-001: Stable Sideload Update Identity
+
+Status: Normative
+
+Published GitHub sideload APKs MUST use a persistent owner-provisioned signing
+key, independent of runner-generated Android debug certificates. Publication
+MUST fail if signing credentials or the pinned public certificate SHA-256 are
+absent, if signing/verification fails, or if the final APK does not have exactly
+one signer matching that pin. Source APK inputs and immutable source tags MUST
+remain unchanged. Current reviewed signing tooling MAY re-sign an APK rebuilt
+from an older approved source tag; its workflow commit and final certificate
+and checksum MUST be available for independent artifact verification.
+
+Private keystores/passwords MUST NOT enter Git, public release assets, logs or
+command arguments. Temporary decoded keystores MUST be removed on ordinary
+exits and catchable cancellation. Uncatchable termination (SIGKILL or host
+failure) MUST rely on destruction of the ephemeral runner; private signing
+material MUST NOT be retained in caches or uploaded as artifacts.
+The owner MUST have a recoverable independent backup before publication. There
+MUST NOT be a fallback to ephemeral signing or automatic key regeneration.
+Users changing signing identities MUST be warned that a reinstall is required
+and app-owned data must be exported first. Stable signing MUST NOT imply that a
+debug build is a production build or that Google Play key enrollment is done.
+
+Verification:
+- Automated: `tools/test_sign_sideload_apk.py`; clean-host CI.
+- Manual: downloaded checksum/signature match pinned public certificate across
+  independent CI runs; a higher-version APK updates on Android without data loss.
+- Owner: independently recoverable key backup before publication.
+
+Traceability:
+- Source: user decisions "start stable release key" (2026-09-26) and re-release
+  with stable key (2026-09-29).
+- Source: `docs/sideload-signing.md`.
+
 ## Publication Disclosure
 
 ### PLAY-DISCLOSURE-001: Privacy Policy And Play Checklist Are Release Sources

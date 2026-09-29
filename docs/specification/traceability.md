@@ -6,6 +6,7 @@ requirements live under `docs/specification/`.
 
 | Source | Formal spec destination | Notes |
 | --- | --- | --- |
+| `docs/sideload-signing.md`, `docs/superpowers/plans/2026-09-29-stable-sideload-signing.md` | `publication-readiness.md`, `verification-matrix.md` | Stable sideload signing, fail-closed publication and owner backup/update continuity checks. |
 | `docs/workflows.md` | `workflows.md` | Workflow concepts, lifecycle and validation. |
 | `docs/user-workflows.md` | `workflows.md`, `ui-requirements.md` | User workflow semantics and UI obligations. |
 | `docs/session-format.md` | `session-artifacts.md`, `security-privacy.md` | Session artifact separation and secret redaction. |

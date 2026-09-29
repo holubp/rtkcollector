@@ -1,5 +1,9 @@
 # RtkCollector
 
+For installing or updating GitHub APKs, see [Stable Sideload Signing](docs/sideload-signing.md).
+Changing from an earlier debug signing identity requires a reinstall; export
+settings and recordings outside app-owned storage first.
+
 RtkCollector is a GPL-3.0-or-later Android GNSS receiver companion for robust
 byte-exact receiver recording, NTRIP correction intake, correction routing,
 receiver control and temporary-base preparation workflows.

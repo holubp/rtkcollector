@@ -146,6 +146,12 @@ build intentionally fails if it cannot package the RTKLIB native library.
 
 ## 3. Create And Protect The Upload Key
 
+GitHub sideload signing uses a persistent distribution key; see
+[Stable Sideload Signing](docs/sideload-signing.md). This is not the Play upload
+key and does not automatically enroll a Play app-signing key. Decide whether
+Play should use that same distribution identity before initial enrollment;
+otherwise moving between sideload and Play installs requires a reinstall.
+
 Google Play App Signing is required for a new Play app. Google then signs
 the APKs delivered to users, while the local build uses a separate **upload
 key** to authenticate uploads.

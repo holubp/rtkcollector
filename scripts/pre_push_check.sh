@@ -18,6 +18,9 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT/tools${PYTHONPATH:+:$PYTHONPATH}" \
 echo "Checking formal specification consistency..."
 python3 tools/check_spec_requirements.py docs/specification
 
+echo "Checking stable sideload signing..."
+python3 -m unittest discover -s tools -p 'test_sign_sideload_apk.py' -v
+
 echo "Compiling Android test source sets and running feasible tests..."
 python3 tools/check_android_test_compilation.py --root "$ROOT" --mode auto
 

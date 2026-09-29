@@ -1,5 +1,9 @@
 # Verification Matrix
 
+| Requirement | Method | Evidence | Status | Notes |
+| --- | --- | --- | --- | --- |
+| `RELEASE-SIGN-001` | Automated + owner + device | `tools/test_sign_sideload_apk.py`; `release-debug-apk.yml`; `docs/sideload-signing.md` | In progress | Helper tests pass. Owner key backup/provisioning and clean-host release/signature continuity checks pending; no stable-key release is published. |
+
 | Requirement ID | Verification type | Evidence | Status | Notes |
 | --- | --- | --- | --- | --- |
 | `ARCH-RAW-001` | Automated + manual | Session writer tests; replay comparison | Needs review | Confirm current tests cover byte-for-byte replay. |

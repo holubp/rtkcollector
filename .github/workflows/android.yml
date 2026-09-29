@@ -51,3 +51,28 @@ jobs:
 
       - name: Assemble debug bootstrap
         run: sh gradlew assembleDebug --no-parallel
+
+      - name: Exercise APK signing with disposable CI identity
+        shell: bash
+        run: |
+          sdkmanager "build-tools;36.0.0" >/dev/null
+          SIGNING_TEST_DIR="$(mktemp -d)"
+          trap 'rm -rf "$SIGNING_TEST_DIR"' EXIT
+          export SIDELOAD_STORE_PASSWORD="$(openssl rand -hex 32)"
+          export SIDELOAD_KEY_PASSWORD="$SIDELOAD_STORE_PASSWORD"
+          export SIDELOAD_KEY_ALIAS="ci-test-only"
+          keytool -genkeypair -keystore "$SIGNING_TEST_DIR/test.p12" \
+            -storetype PKCS12 -alias "$SIDELOAD_KEY_ALIAS" -keyalg RSA \
+            -keysize 2048 -validity 1 -dname "CN=Disposable CI signing test" \
+            -storepass:env SIDELOAD_STORE_PASSWORD -keypass:env SIDELOAD_KEY_PASSWORD
+          keytool -exportcert -keystore "$SIGNING_TEST_DIR/test.p12" \
+            -alias "$SIDELOAD_KEY_ALIAS" -storepass:env SIDELOAD_STORE_PASSWORD \
+            -file "$SIGNING_TEST_DIR/certificate.der"
+          export SIDELOAD_KEYSTORE_BASE64="$(base64 -w 0 "$SIGNING_TEST_DIR/test.p12")"
+          export SIDELOAD_CERT_SHA256="$(sha256sum "$SIGNING_TEST_DIR/certificate.der" | cut -d ' ' -f 1)"
+          for ATTEMPT in 1 2; do
+            python3 tools/sign_sideload_apk.py \
+              app/build/outputs/apk/sideload/debug/app-sideload-debug.apk \
+              "$SIGNING_TEST_DIR/signed-$ATTEMPT.apk" \
+              --apksigner "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          done

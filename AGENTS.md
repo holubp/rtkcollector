@@ -281,6 +281,11 @@ Prefer the strongest feasible verification for the touched code:
 - Clean CI native builds must provision the exact RTKLIB-EX commit recorded in
   `third_party/rtklib-ex/snapshot.json`; the ignored local upstream checkout is
   not part of a Git clone and must never be assumed to exist.
+- GitHub sideload APK publication must use the persistent owner-provisioned key,
+  verify its pinned public certificate and fail if signing configuration is
+  absent. Do not publish runner-generated debug signatures as updateable release
+  artifacts. Private keys/passwords stay outside Git and require recoverable
+  owner backups before publication; see `docs/sideload-signing.md`.
 - Hardware-facing UM980 changes: document manual hardware smoke tests and the
   exact receiver/USB/baud assumptions.
 - UM980 live parsers must be byte-level for mixed NMEA, UM980 ASCII and UM980

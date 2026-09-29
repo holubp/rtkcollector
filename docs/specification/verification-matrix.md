@@ -2,7 +2,7 @@
 
 | Requirement | Method | Evidence | Status | Notes |
 | --- | --- | --- | --- | --- |
-| `RELEASE-SIGN-001` | Automated + owner + device | `tools/test_sign_sideload_apk.py`; `release-debug-apk.yml`; `docs/sideload-signing.md` | In progress | Helper tests pass. Owner key backup/provisioning and clean-host release/signature continuity checks pending; no stable-key release is published. |
+| `RELEASE-SIGN-001` | Automated + owner + device | `tools/test_sign_sideload_apk.py`; `release-debug-apk.yml`; `docs/sideload-signing.md` | In progress | Twelve helper tests and independent audit pass. Clean-host CI `36526770060` passed for `20d3a94`, including two real APK signing/verification passes with a disposable key. Permanent owner key backup/provisioning, independent release/signature continuity and device update checks remain pending; no stable-key release is published. |
 
 | Requirement ID | Verification type | Evidence | Status | Notes |
 | --- | --- | --- | --- | --- |

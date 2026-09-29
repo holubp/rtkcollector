@@ -27,6 +27,9 @@ signed with a Windows debug key or earlier ephemeral CI key. Export settings
 and recordings to a safe location outside app-owned storage first; uninstalling
 may delete app-owned sessions and preferences. Future APKs signed with the
 stable key can update in place. Never regenerate the key to solve a CI failure.
+Ordinary Windows Android Studio debug builds still use that machine's debug
+key. To update a stable-key installation from a local APK, sign that APK with
+the same dedicated keystore rather than the default Windows debug key.
 
 ## Owner Provisioning
 

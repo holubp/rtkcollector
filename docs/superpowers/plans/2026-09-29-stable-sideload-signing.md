@@ -7,7 +7,7 @@ Google Play key enrollment is not authorized by this request.
 
 - [x] Diagnose signing mismatch using RC3/RC4 certificate fingerprints.
 - [x] Add fail-closed, pinned-certificate signing helper and focused red/green tests.
-- [ ] Review workflow, docs and helper; pass full clean-host CI and push tooling.
+- [x] Review workflow, docs and helper; pass full clean-host CI and push tooling.
 - [ ] Owner selects generation/backup arrangement; generate or obtain key outside Git.
 - [ ] Owner verifies independently recoverable backup before publication.
 - [ ] Configure GitHub secrets and public fingerprint pin.
@@ -27,4 +27,7 @@ Independent fix audit passes for `726bd33`: both steady-state and subprocess
 launch cancellation probes terminate/reap the signer and remove decoded key
 material. CI `36526339395` passed the repository gate, both distribution checks
 and APK assembly, but the signing exercise failed because `sdkmanager` was not
-on PATH. Both workflows now use its explicit Android SDK path; rerun pending.
+on PATH. Both workflows now use its explicit Android SDK path. Rerun
+`36526770060` passed for `20d3a94`, including full repository/variant gates,
+APK assembly and two real signing/verification passes with a disposable key.
+Permanent key backup/provisioning and RC4 re-release remain pending.

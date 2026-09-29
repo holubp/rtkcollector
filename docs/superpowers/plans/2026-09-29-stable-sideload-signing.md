@@ -22,3 +22,9 @@ created. No stable-key APK has been published. Key backup/provisioning is pendin
 owner input. Build tests will run in GitHub CI per the owner's instruction.
 Routing: bounded changes inline; independent `gpt-6-sol` high review requested
 for secret/signing integrity. No Gradle builds run locally. Usage delta unknown.
+
+Independent fix audit passes for `726bd33`: both steady-state and subprocess
+launch cancellation probes terminate/reap the signer and remove decoded key
+material. CI `36526339395` passed the repository gate, both distribution checks
+and APK assembly, but the signing exercise failed because `sdkmanager` was not
+on PATH. Both workflows now use its explicit Android SDK path; rerun pending.

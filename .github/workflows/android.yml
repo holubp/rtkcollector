@@ -55,7 +55,7 @@ jobs:
       - name: Exercise APK signing with disposable CI identity
         shell: bash
         run: |
-          sdkmanager "build-tools;36.0.0" >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0" >/dev/null
           SIGNING_TEST_DIR="$(mktemp -d)"
           trap 'rm -rf "$SIGNING_TEST_DIR"' EXIT
           export SIDELOAD_STORE_PASSWORD="$(openssl rand -hex 32)"

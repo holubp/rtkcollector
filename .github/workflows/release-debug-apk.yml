@@ -52,6 +52,7 @@ jobs:
             tools/sign_sideload_apk.py
             tools/test_sign_sideload_apk.py
             .github/workflows/release-debug-apk.yml
+            .github/workflows/android.yml
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -87,7 +88,7 @@ jobs:
           SIDELOAD_CERT_SHA256: ${{ vars.SIDELOAD_CERT_SHA256 }}
         shell: bash
         run: |
-          sdkmanager "build-tools;36.0.0" >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0" >/dev/null
           mkdir -p release-assets
           ASSET="rtkcollector-${RELEASE_TAG}-sideload-debug.apk"
           python3 .release-tooling/tools/sign_sideload_apk.py \

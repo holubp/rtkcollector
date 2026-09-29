@@ -62,6 +62,9 @@ class SideloadSigningTest(unittest.TestCase):
         self.assertLess(workflow.index("Stage checksum"), workflow.index("Attach APK"))
         self.assertIn("ref: ${{ github.sha }}", workflow)
         self.assertIn(".release-tooling/tools/sign_sideload_apk.py", workflow)
+        self.assertIn('"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"', workflow)
+        bootstrap = (Path(__file__).resolve().parents[1] / ".github/workflows/android.yml").read_text()
+        self.assertIn('"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"', bootstrap)
 
     def sign(self):
         with patch.dict(os.environ, self.environment), patch("sign_sideload_apk.run_tool", self.runner):

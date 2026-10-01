@@ -154,6 +154,9 @@ marked with a lock symbol. The value shown there is the value used when recordin
 Start does not silently restore an older workflow choice. Copy an immutable
 settings set, or edit an editable one, to change its fixed values. The same
 rule applies to a fixed base-coordinate selection in the Base coordinates list.
+Fixing the NTRIP caster does not fix the mountpoint: the Home Mountpoint selector
+stays available, but lists only mountpoint profiles associated with that caster.
+To choose mountpoints from another caster, unlock the caster in the settings set.
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;

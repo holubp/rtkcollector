@@ -19,6 +19,7 @@ class DashboardStateTest {
             optionPolicies = SettingsSetOptionPolicies.defaults()
                 .withPolicy(ActiveSetupOptionKey.WORKFLOW, SettingsSetOptionPolicy.LOCKED)
                 .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.NTRIP_MOUNTPOINT, SettingsSetOptionPolicy.LOCKED)
                 .withPolicy(ActiveSetupOptionKey.RECEIVER_COMMAND, SettingsSetOptionPolicy.LOCKED)
                 .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD, SettingsSetOptionPolicy.LOCKED)
                 .withPolicy(ActiveSetupOptionKey.STORAGE, SettingsSetOptionPolicy.LOCKED),
@@ -37,6 +38,23 @@ class DashboardStateTest {
         }
         listOf(DashboardSetupItem.DEVICE, DashboardSetupItem.SETTINGS, DashboardSetupItem.SESSIONS)
             .forEach { item -> assertTrue(status.isSetupItemEnabled(item)) }
+    }
+
+    @Test
+    fun `fixed caster does not lock an editable mountpoint tile`() {
+        val casterFixed = RecordingSettingsSet.builtInRoverNtrip().copy(
+            optionPolicies = SettingsSetOptionPolicies.defaults()
+                .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER, SettingsSetOptionPolicy.LOCKED),
+        )
+        val mountpointFixed = casterFixed.copy(
+            optionPolicies = casterFixed.optionPolicies
+                .withPolicy(ActiveSetupOptionKey.NTRIP_MOUNTPOINT, SettingsSetOptionPolicy.LOCKED),
+        )
+
+        assertFalse(DashboardSetupItem.MOUNTPOINT in casterFixed.fixedDashboardSetupItems())
+        assertTrue(validDashboardStatus().copy(fixedSetupItems = casterFixed.fixedDashboardSetupItems())
+            .isSetupItemEnabled(DashboardSetupItem.MOUNTPOINT))
+        assertTrue(DashboardSetupItem.MOUNTPOINT in mountpointFixed.fixedDashboardSetupItems())
     }
 
     @Test

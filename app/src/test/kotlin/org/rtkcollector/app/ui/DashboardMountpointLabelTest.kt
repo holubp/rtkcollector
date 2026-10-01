@@ -1,6 +1,7 @@
 package org.rtkcollector.app.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.rtkcollector.app.profile.NtripCasterProfile
 import org.rtkcollector.app.profile.ActiveSetupOptionKey
@@ -13,8 +14,36 @@ import org.rtkcollector.app.profile.SettingsSetOptionPolicies
 import org.rtkcollector.app.profile.SettingsSetOptionPolicy
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
 import org.rtkcollector.app.profile.effectiveNtripCasterProfileRef
+import org.rtkcollector.app.profile.effectiveNtripMountpointProfileRef
 
 class DashboardMountpointLabelTest {
+    @Test
+    fun `fixed caster allows only its own mountpoints without changing caster`() {
+        val fixed = NtripCasterProfile(id = "fixed", name = "Fixed", host = "fixed.example.org")
+        val other = NtripCasterProfile(id = "other", name = "Other", host = "other.example.org")
+        val tubo = NtripMountpointProfile(id = "tubo", name = "TUBO", casterProfileId = "fixed", mountpoint = "TUBO")
+        val gope = NtripMountpointProfile(id = "gope", name = "GOPE", casterProfileId = "fixed", mountpoint = "GOPE")
+        val foreign = NtripMountpointProfile(id = "foreign", name = "Foreign", casterProfileId = "other", mountpoint = "FOREIGN")
+        val set = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterProfileRef = ProfileReference("fixed", "Fixed"),
+            ntripMountpointProfileRef = ProfileReference("tubo", "TUBO"),
+            optionPolicies = SettingsSetOptionPolicies.defaults()
+                .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER, SettingsSetOptionPolicy.LOCKED),
+        )
+
+        assertEquals(listOf("tubo", "gope"), set.selectableNtripMountpoints(listOf(tubo, gope, foreign)).map { it.id })
+        assertThrows(IllegalArgumentException::class.java) {
+            set.withSelectedNtripMountpoint(foreign, listOf(fixed, other))
+        }
+        val selected = set.withSelectedNtripMountpoint(gope, listOf(fixed, other))
+        assertEquals("gope", selected.effectiveNtripMountpointProfileRef()?.id)
+        assertEquals(null, selected.overrides.ntripCasterProfileRef)
+        assertEquals("fixed", selected.resolveNtripProfiles(listOf(fixed, other), listOf(gope)).caster?.id)
+        assertEquals(null, selected.resolveNtripProfiles(listOf(fixed, other), listOf(gope)).problem)
+        assertEquals("other", set.copy(
+            optionPolicies = SettingsSetOptionPolicies.defaults(),
+        ).withSelectedNtripMountpoint(foreign, listOf(fixed, other)).effectiveNtripCasterProfileRef()?.id)
+    }
     @Test
     fun `selected mountpoint label follows current settings set profile reference`() {
         val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(

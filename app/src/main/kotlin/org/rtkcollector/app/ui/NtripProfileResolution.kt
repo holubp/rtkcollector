@@ -7,6 +7,7 @@ import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.effectiveNtripCasterProfileRef
 import org.rtkcollector.app.profile.effectiveNtripMountpointProfileRef
+import org.rtkcollector.app.profile.effectiveForActiveSetup
 import org.rtkcollector.app.profile.isOptionLocked
 
 internal data class ResolvedNtripProfiles(
@@ -15,6 +16,39 @@ internal data class ResolvedNtripProfiles(
     val settingsSet: RecordingSettingsSet,
     val problem: String? = null,
 )
+
+internal fun RecordingSettingsSet.selectableNtripMountpoints(
+    mountpointProfiles: List<NtripMountpointProfile>,
+): List<NtripMountpointProfile> {
+    if (!isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER)) return mountpointProfiles
+    val fixedCasterId = effectiveForActiveSetup().effectiveNtripCasterProfileRef()?.id
+    return mountpointProfiles.filter { it.casterProfileId == fixedCasterId }
+}
+
+internal fun RecordingSettingsSet.withSelectedNtripMountpoint(
+    mountpoint: NtripMountpointProfile,
+    casterProfiles: List<NtripCasterProfile>,
+): RecordingSettingsSet {
+    require(!isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) {
+        "NTRIP mountpoint is fixed by the settings set."
+    }
+    require(!isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) ||
+        mountpoint.casterProfileId == effectiveForActiveSetup().effectiveNtripCasterProfileRef()?.id) {
+        "Selected mountpoint belongs to another caster; unlock the caster or choose a compatible mountpoint."
+    }
+    val casterRef = casterProfiles.firstOrNull { it.id == mountpoint.casterProfileId }?.let {
+        ProfileReference(it.id, it.name)
+    }
+    return copy(overrides = overrides.copy(
+        ntripCasterProfileRef = if (isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER)) {
+            overrides.ntripCasterProfileRef
+        } else {
+            casterRef
+        },
+        ntripMountpointProfileRef = ProfileReference(mountpoint.id, mountpoint.name),
+        ntripMountpoint = null,
+    ))
+}
 
 internal fun RecordingSettingsSet.resolveNtripProfiles(
     casterProfiles: List<NtripCasterProfile>,

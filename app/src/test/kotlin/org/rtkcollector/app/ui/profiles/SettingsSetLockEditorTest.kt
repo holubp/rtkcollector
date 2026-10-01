@@ -13,6 +13,18 @@ import org.rtkcollector.app.profile.SettingsSetOptionPolicy
 
 class SettingsSetLockEditorTest {
     @Test
+    fun `editor keeps caster fixed and mountpoint editable after save and reload`() {
+        val set = RecordingSettingsSet.builtInRoverNtrip().withSettingsSetLockSelections(
+            mapOf("fixedNTRIP_CASTER" to "true", "fixedNTRIP_MOUNTPOINT" to "false"),
+        )
+        val restored = RecordingSettingsSet.fromJson(set.toJson())
+        val fields = settingsSetLockFields(restored)
+
+        assertEquals("true", fields.first { it.key == "fixedNTRIP_CASTER" }.value)
+        assertEquals("false", fields.first { it.key == "fixedNTRIP_MOUNTPOINT" }.value)
+    }
+
+    @Test
     fun `editor exposes fixed flags for home selectors and other supported options`() {
         val set = RecordingSettingsSet.builtInRoverNtrip().copy(
             optionPolicies = SettingsSetOptionPolicies.defaults()

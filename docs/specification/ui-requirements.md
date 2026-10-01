@@ -263,6 +263,10 @@ indirect selection routes MUST NOT bypass the lock. A changeable workflow
 chosen after settings-set activation MUST remain the workflow used at Start;
 Start MUST NOT silently reapply the set's activation default. Changing or
 copying an editable settings set remains the way to change a fixed value.
+The Home `Mountpoint` selector represents the `NTRIP_MOUNTPOINT` policy only:
+a fixed caster alone MUST NOT lock it. When the caster is fixed, the selector
+MUST allow only mountpoint profiles belonging to that caster and MUST NOT
+change the caster through mountpoint selection.
 The active set's lock state MUST remain authoritative through a recording;
 switching, deleting or re-applying that set MUST NOT silently unlock live
 NTRIP or mock-location controls. A fixed base coordinate MUST have a stored

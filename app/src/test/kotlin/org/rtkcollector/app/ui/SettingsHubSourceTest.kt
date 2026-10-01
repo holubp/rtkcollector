@@ -32,4 +32,19 @@ class SettingsHubSourceTest {
         assertFalse(source.contains("settingsSetsWithRememberedMountpoint"))
         assertFalse(source.contains("withRememberedMountpointProfile"))
     }
+
+    @Test
+    fun `mountpoint management stays global while legacy selection is caster scoped`() {
+        val source = TestFiles.readString(
+            TestFiles.locateProjectPath("src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt"),
+        )
+        val management = source.substringAfter("AppScreen.NTRIP_MOUNTPOINT_PROFILES -> ProfileListScreen(")
+            .substringBefore("onSelect =")
+        val selection = source.substringAfter("AppScreen.MOUNTPOINT_SELECTOR -> ProfileListScreen(")
+            .substringBefore("onSelect =")
+
+        assertTrue(management.contains("rows = profileStore.ntripMountpointProfiles().map"))
+        assertFalse(management.contains("selectableNtripMountpoints"))
+        assertTrue(selection.contains("selectableNtripMountpoints"))
+    }
 }

@@ -274,9 +274,7 @@ internal fun DashboardStatus.setupItemLabel(item: DashboardSetupItem): String =
 
 internal fun RecordingSettingsSet.fixedDashboardSetupItems(): Set<DashboardSetupItem> = buildSet {
     if (isOptionLocked(ActiveSetupOptionKey.WORKFLOW)) add(DashboardSetupItem.WORKFLOW)
-    if (isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) ||
-        isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)
-    ) add(DashboardSetupItem.MOUNTPOINT)
+    if (isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) add(DashboardSetupItem.MOUNTPOINT)
     if (isOptionLocked(ActiveSetupOptionKey.RECEIVER_COMMAND)) add(DashboardSetupItem.INIT_PROFILES)
     if (isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD)) add(DashboardSetupItem.UPLOAD)
     if (isOptionLocked(ActiveSetupOptionKey.STORAGE)) add(DashboardSetupItem.STORAGE)

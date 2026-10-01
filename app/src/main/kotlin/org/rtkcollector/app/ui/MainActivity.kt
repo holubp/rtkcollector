@@ -578,6 +578,26 @@ fun RtkCollectorApp(
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         return true
     }
+    fun selectNtripMountpoint(profile: NtripMountpointProfile) {
+        runCatching {
+            val selectedSet = requireNotNull(settingsSets.firstOrNull { it.id == selectedSettingsSetId }) {
+                "Selected settings set was not found."
+            }
+            selectedSet.withSelectedNtripMountpoint(profile, profileStore.ntripCasterProfiles())
+        }.onSuccess { selectedSet ->
+            settingsSets = settingsSets.map { if (it.id == selectedSettingsSetId) selectedSet else it }
+            profileStore.saveSettingsSets(settingsSets)
+            profileStore.saveLastActiveNtripMountpointProfileId(profile.id)
+            refreshProfileUi(settingsSets)
+            if (state.isRecording) {
+                buildNtripUpdateIntent(context, settingsSets, selectedSettingsSetId, selectedWorkflowId)?.let {
+                    context.startService(it)
+                }
+            }
+        }.onFailure { error ->
+            Toast.makeText(context, error.message ?: "Cannot select NTRIP mountpoint.", Toast.LENGTH_LONG).show()
+        }
+    }
     fun isFixedBaseCoordinate(id: String): Boolean =
         settingsSets.any { set ->
             set.isOptionLocked(ActiveSetupOptionKey.BASE_COORDINATE) && set.basePositionProfileRef?.id == id
@@ -1435,7 +1455,7 @@ fun RtkCollectorApp(
                             },
                             onMenu = { screen = AppScreen.SETTINGS },
                             onNtrip = {
-                                if (!rejectFixedOption(ActiveSetupOptionKey.NTRIP_CASTER, ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) {
+                                if (!rejectFixedOption(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) {
                                     dashboardSelector = DashboardSelector.MOUNTPOINT
                                 }
                             },
@@ -1623,8 +1643,7 @@ fun RtkCollectorApp(
                     ),
                     onBack = { screen = AppScreen.SETTINGS },
                     onSave = { mountpoint ->
-                        if (startInProgress ||
-                            rejectFixedOption(ActiveSetupOptionKey.NTRIP_CASTER, ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) {
+                        if (startInProgress || rejectFixedOption(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) {
                             if (startInProgress) {
                                 Toast.makeText(context, "Wait for recording to start before changing setup.", Toast.LENGTH_LONG).show()
                             }
@@ -2199,38 +2218,22 @@ fun RtkCollectorApp(
                 )
                 AppScreen.MOUNTPOINT_SELECTOR -> ProfileListScreen(
                     title = "Select NTRIP mountpoint",
-                    rows = profileStore.ntripMountpointProfiles().map {
+                    rows = settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }
+                        ?.selectableNtripMountpoints(profileStore.ntripMountpointProfiles())
+                        .orEmpty().map {
                         it.profileRow(
                             casters = profileStore.ntripCasterProfiles(),
                             isSelected = it.id == settingsSets.firstOrNull { set -> set.id == selectedSettingsSetId }?.effectiveNtripMountpointProfileRef()?.id,
                         )
                     },
                     onSelect = { id ->
-                        if (rejectFixedOption(ActiveSetupOptionKey.NTRIP_CASTER, ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) {
+                        if (startInProgress || rejectFixedOption(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)) {
+                            if (startInProgress) {
+                                Toast.makeText(context, "Wait for recording to start before changing setup.", Toast.LENGTH_LONG).show()
+                            }
                             screen = AppScreen.HOME
                         } else {
-                        profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
-                            profileStore.saveLastActiveNtripMountpointProfileId(profile.id)
-                            val casterProfileRef = profileStore.ntripCasterProfiles().firstOrNull { it.id == profile.casterProfileId }?.let {
-                                ProfileReference(it.id, it.name)
-                            }
-                            settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                                set.copy(
-                                    overrides = set.overrides.copy(
-                                        ntripCasterProfileRef = casterProfileRef,
-                                        ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
-                                        ntripMountpoint = null,
-                                    ),
-                                )
-                            }
-                            profileStore.saveSettingsSets(settingsSets)
-                            refreshProfileUi(settingsSets)
-                            if (state.isRecording) {
-                                buildNtripUpdateIntent(context, settingsSets, selectedSettingsSetId, selectedWorkflowId)?.let {
-                                    context.startService(it)
-                                }
-                            }
-                        }
+                        profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let(::selectNtripMountpoint)
                         screen = AppScreen.HOME
                         }
                     },
@@ -2985,26 +2988,7 @@ fun RtkCollectorApp(
                             }
                             DashboardSelector.MOUNTPOINT -> {
                                 profileStore.ntripMountpointProfiles().firstOrNull { it.id == id }?.let { profile ->
-                                    profileStore.saveLastActiveNtripMountpointProfileId(profile.id)
-                                    val casterProfileRef = profileStore.ntripCasterProfiles().firstOrNull { it.id == profile.casterProfileId }?.let {
-                                        ProfileReference(it.id, it.name)
-                                    }
-                                    settingsSets = settingsSets.updateSelected(selectedSettingsSetId) { set ->
-                                        set.copy(
-                                            overrides = set.overrides.copy(
-                                                ntripCasterProfileRef = casterProfileRef,
-                                                ntripMountpointProfileRef = ProfileReference(profile.id, profile.name),
-                                                ntripMountpoint = null,
-                                            ),
-                                        )
-                                    }
-                                    profileStore.saveSettingsSets(settingsSets)
-                                    refreshProfileUi(settingsSets)
-                                    if (state.isRecording) {
-                                        buildNtripUpdateIntent(context, settingsSets, selectedSettingsSetId, selectedWorkflowId)?.let {
-                                            context.startService(it)
-                                        }
-                                    }
+                                    selectNtripMountpoint(profile)
                                 }
                             }
                             DashboardSelector.INIT_PROFILES -> {
@@ -5401,7 +5385,7 @@ private enum class DashboardSelector(val title: String) {
 
 private fun DashboardSelector.lockedOptionKeys(): List<ActiveSetupOptionKey> = when (this) {
     DashboardSelector.WORKFLOW -> listOf(ActiveSetupOptionKey.WORKFLOW)
-    DashboardSelector.MOUNTPOINT -> listOf(ActiveSetupOptionKey.NTRIP_CASTER, ActiveSetupOptionKey.NTRIP_MOUNTPOINT)
+    DashboardSelector.MOUNTPOINT -> listOf(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)
     DashboardSelector.INIT_PROFILES -> listOf(ActiveSetupOptionKey.RECEIVER_COMMAND)
     DashboardSelector.UPLOAD -> listOf(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD)
     DashboardSelector.STORAGE -> listOf(ActiveSetupOptionKey.STORAGE)
@@ -6906,7 +6890,9 @@ private fun dashboardSelectorRows(
                 isSelected = filter == deviceFilter,
             )
         }
-        DashboardSelector.MOUNTPOINT -> profileStore.ntripMountpointProfiles().map { profile ->
+        DashboardSelector.MOUNTPOINT -> (selectedSettingsSet
+            ?.selectableNtripMountpoints(profileStore.ntripMountpointProfiles())
+            ?: profileStore.ntripMountpointProfiles()).map { profile ->
             profile.profileRow(
                 casters = profileStore.ntripCasterProfiles(),
                 isSelected = profile.id == selectedSettingsSet?.effectiveForActiveSetup()

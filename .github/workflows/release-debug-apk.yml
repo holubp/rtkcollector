@@ -6,7 +6,7 @@ on:
       tag:
         description: Existing prerelease tag to build and receive the APK
         required: true
-        default: v1.0-RC5
+        default: v1.0-RC6
         type: string
 
 permissions:

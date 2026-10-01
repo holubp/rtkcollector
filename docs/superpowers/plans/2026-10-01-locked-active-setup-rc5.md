@@ -51,15 +51,25 @@
 
 - [x] Expose lock policy for applicable settings-set options without modifying protected built-ins; preserve imported policies on edit/save.
 - [x] Add editor persistence and import/restart regression tests.
-- [ ] Run `sh scripts/pre_push_check.sh` with the available Android SDK path and review the complete task diff.
-- [ ] Commit and push the reviewed change to `main`; require successful clean-host CI.
+- [x] Run `sh scripts/pre_push_check.sh` with the available Android SDK path and review the complete task diff.
+- [x] Commit and push the reviewed change to `main`; require successful clean-host CI.
 
 ### Task 4: Publish RC5
 
 **Files:** `app/build.gradle.kts`, `.github/workflows/release-debug-apk.yml`, `docs/releases/1.0-RC5.md`, status/evidence documentation.
 
 - [x] Bump to `versionCode = 5`, `versionName = "1.0-RC5"`; update release workflow default and release notes.
-- [ ] Tag the verified source as `v1.0-RC5` and create a prerelease after clean-host CI passes.
-- [ ] Dispatch the pinned stable-key GitHub release workflow; require success.
-- [ ] Download the public APK, checksum and signing receipt; independently verify APK checksum, one pinned signer, package/version and source/tooling commits.
-- [ ] Record final evidence, commit/push documentation, and keep on-device in-place upgrade testing explicit if not yet performed.
+- [x] Tag the verified source as `v1.0-RC5` and create a prerelease after clean-host CI passes.
+- [x] Dispatch the pinned stable-key GitHub release workflow; require success.
+- [x] Download the public APK, checksum and signing receipt; independently verify APK checksum, one pinned signer, package/version and source/tooling commits.
+- [x] Record final evidence, commit/push documentation, and keep on-device in-place upgrade testing explicit if not yet performed.
+
+## Release Evidence
+
+- Source/tag: `38c7c2a804c3a1a1507f5a70f9f16c477549509f`, `v1.0-RC5`.
+- Clean-host Android CI run `36910896005` and CodeQL run `36910892757`: passed.
+- Stable-key release run `36913195652`: passed; APK, checksum and signing receipt attached to the RC5 prerelease.
+- Downloaded APK SHA-256: `9aad1d534f2bc5a6aa7151de4a3592da4317ab884af2db373e6beafb94860214`; `sha256sum -c` passed.
+- Independent `apksigner verify --verbose --print-certs`: one signer, certificate SHA-256 `d8047f43b2748198ae69ff773be13d3aa11c8ac36159dd4e6768a3ac2db3e329` (the pinned RC4 signer).
+- Independent `apkanalyzer`: package `org.rtkcollector.app`, version name `1.0-RC5`, version code `5`. Signing receipt names the source and tooling commit above.
+- Not yet verified on device: RC4-to-RC5 in-place update, compact/rail Home visuals, and fixed-control behavior while an actual receiver is recording.

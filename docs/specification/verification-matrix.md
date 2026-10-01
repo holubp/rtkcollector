@@ -2,7 +2,7 @@
 
 | Requirement | Method | Evidence | Status | Notes |
 | --- | --- | --- | --- | --- |
-| `RELEASE-SIGN-001` | Automated + owner + device | `tools/test_sign_sideload_apk.py`; `release-debug-apk.yml`; `docs/sideload-signing.md` | In progress | Twelve helper tests and independent audit pass. Clean-host CI `36526770060` passed for `20d3a94`, including two real APK signing/verification passes with a disposable key. Permanent owner key backup/provisioning, independent release/signature continuity and device update checks remain pending; no stable-key release is published. |
+| `RELEASE-SIGN-001` | Automated + owner + device | `tools/test_sign_sideload_apk.py`; `release-debug-apk.yml`; `docs/sideload-signing.md`; RC4 release runs `36850174366`, `36850525062` | Implemented, not field-tested | Owner confirms independent key backup outside GitHub. Both release runs passed; independently downloaded APKs passed checksum and `apksigner` verification with the same pinned certificate `d8047f43b2748198ae69ff773be13d3aa11c8ac36159dd4e6768a3ac2db3e329`. Final RC4 APK SHA-256 is `e453ff4468027c166f3ec8c5d15f28a7bd277adb70a0c8d9fa287badc7363851`. Higher-version in-place device update remains untested; differently signed earlier installs require one reinstall. |
 
 | Requirement ID | Verification type | Evidence | Status | Notes |
 | --- | --- | --- | --- | --- |

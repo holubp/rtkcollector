@@ -184,6 +184,7 @@ fun HomeDashboard(
                 actions = {
                     MockGpsStatusChip(
                         state = state.mockGps,
+                        fixed = state.status.fixedMockGps,
                         onClick = onMockGps,
                     )
                     RecordingStateBadge(isRecording = state.isRecording, startInProgress = startInProgress)
@@ -340,14 +341,19 @@ private fun RecordingStateBadge(
 @Composable
 private fun MockGpsStatusChip(
     state: MockGpsDashboardState,
+    fixed: Boolean,
     onClick: () -> Unit,
 ) {
-    val background = if (state.enabled) {
+    val background = if (fixed) {
+        MaterialTheme.colorScheme.surfaceContainerLowest
+    } else if (state.enabled) {
         MaterialTheme.colorScheme.secondaryContainer
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
-    val foreground = if (state.enabled) {
+    val foreground = if (fixed) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else if (state.enabled) {
         MaterialTheme.colorScheme.onSecondaryContainer
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
@@ -359,19 +365,16 @@ private fun MockGpsStatusChip(
         modifier = Modifier
             .padding(end = 4.dp)
             .semantics {
-                role = Role.Button
-                contentDescription = state.label
+                if (!fixed) role = Role.Button
+                contentDescription = if (fixed) "${state.label}, fixed" else state.label
             }
-            .clickable(onClick = onClick),
+            .clickable(enabled = !fixed, onClick = onClick),
     ) {
-        Text(
-            text = state.label,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = foreground,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
+        Row(modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)) {
+            Text(state.label, style = MaterialTheme.typography.labelSmall, color = foreground,
+                fontWeight = FontWeight.SemiBold, maxLines = 1)
+            if (fixed) Text(" 🔒", style = MaterialTheme.typography.labelSmall, color = foreground)
+        }
     }
 }
 
@@ -409,6 +412,8 @@ private fun BottomActionBar(
                         action.kind == DashboardActionKind.USB_PERMISSION
                 }
                 .forEach { action ->
+                    val fixedNtrip = action.kind == DashboardActionKind.NTRIP &&
+                        DashboardSetupItem.MOUNTPOINT in state.status.fixedSetupItems
                     Button(
                         onClick = when (action.kind) {
                             DashboardActionKind.NTRIP -> onNtrip
@@ -416,9 +421,10 @@ private fun BottomActionBar(
                             else -> onPrimaryAction
                         },
                         colors = dashboardSecondaryButtonColors(),
+                        enabled = !fixedNtrip,
                     ) {
                         Text(
-                            text = action.label,
+                            text = if (fixedNtrip) "${action.label} 🔒" else action.label,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -573,6 +579,7 @@ private fun RailDashboard(
                             value = status.valueFor(item),
                             active = item == DashboardSetupItem.WORKFLOW,
                             enabled = enabled,
+                            fixed = item in status.fixedSetupItems,
                             warningReason = status.setupWarningReason(item),
                             modifier = Modifier.fillMaxWidth(),
                             onClick = when (item) {
@@ -709,6 +716,7 @@ private fun SetupStrip(
                                     label = item.label,
                                     value = status.valueFor(item),
                                     enabled = enabled,
+                                    fixed = item in status.fixedSetupItems,
                                     warningReason = status.setupWarningReason(item),
                                     modifier = Modifier.weight(1f),
                                     onClick = when (item) {
@@ -803,6 +811,7 @@ private fun SetupTile(
     value: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    fixed: Boolean = false,
     warningReason: String? = null,
     onClick: () -> Unit,
 ) {
@@ -829,11 +838,11 @@ private fun SetupTile(
         modifier = modifier
             .height(CompactSetupTileHeight)
             .semantics {
-                role = Role.Button
+                if (enabled) role = Role.Button
                 contentDescription = if (warning) {
-                    "$label: $value; $warningReason"
+                    "$label${if (fixed) ", fixed" else ""}: $value; $warningReason"
                 } else {
-                    "$label: $value"
+                    "$label${if (fixed) ", fixed" else ""}: $value"
                 }
             }
             .clickable(enabled = enabled, onClick = onClick),
@@ -845,17 +854,18 @@ private fun SetupTile(
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            Text(
-                text = label.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = when {
-                    warning && enabled -> MaterialTheme.colorScheme.onErrorContainer
-                    missing && enabled -> TidyColors.MissingText
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = label.uppercase(),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (fixed) Text("🔒", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(
                 text = value,
                 style = MaterialTheme.typography.labelMedium,
@@ -875,6 +885,7 @@ private fun SetupRailItem(
     active: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    fixed: Boolean = false,
     warningReason: String? = null,
     onClick: () -> Unit,
 ) {
@@ -901,11 +912,11 @@ private fun SetupRailItem(
         modifier = modifier
             .height(RailSetupItemHeight)
             .semantics {
-                role = Role.Button
+                if (enabled) role = Role.Button
                 contentDescription = if (warning) {
-                    "$label: $value; $warningReason"
+                    "$label${if (fixed) ", fixed" else ""}: $value; $warningReason"
                 } else {
-                    "$label: $value"
+                    "$label${if (fixed) ", fixed" else ""}: $value"
                 }
             }
             .clickable(enabled = enabled, onClick = onClick),
@@ -930,17 +941,18 @@ private fun SetupRailItem(
                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
                 verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
-                Text(
-                    text = label.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = when {
-                        warning && enabled -> MaterialTheme.colorScheme.onErrorContainer
-                        missing && enabled -> TidyColors.MissingText
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = label.uppercase(),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (fixed) Text("🔒", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Text(
                     text = value,
                     style = MaterialTheme.typography.labelMedium,

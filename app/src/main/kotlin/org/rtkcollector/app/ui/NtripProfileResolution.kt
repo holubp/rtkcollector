@@ -2,15 +2,18 @@ package org.rtkcollector.app.ui
 
 import org.rtkcollector.app.profile.NtripCasterProfile
 import org.rtkcollector.app.profile.NtripMountpointProfile
+import org.rtkcollector.app.profile.ActiveSetupOptionKey
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.effectiveNtripCasterProfileRef
 import org.rtkcollector.app.profile.effectiveNtripMountpointProfileRef
+import org.rtkcollector.app.profile.isOptionLocked
 
 internal data class ResolvedNtripProfiles(
     val caster: NtripCasterProfile?,
     val mountpoint: NtripMountpointProfile?,
     val settingsSet: RecordingSettingsSet,
+    val problem: String? = null,
 )
 
 internal fun RecordingSettingsSet.resolveNtripProfiles(
@@ -23,6 +26,15 @@ internal fun RecordingSettingsSet.resolveNtripProfiles(
         ?.let { id -> casterProfiles.firstOrNull { it.id == id } }
     val casterFromMountpoint = mountpoint?.casterProfileId
         ?.let { casterId -> casterProfiles.firstOrNull { it.id == casterId } }
+    if (mountpoint != null && isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER)) {
+        return ResolvedNtripProfiles(
+            caster = settingsCaster,
+            mountpoint = mountpoint,
+            settingsSet = this,
+            problem = "Locked NTRIP caster does not match the selected mountpoint."
+                .takeIf { settingsCaster != null && mountpoint.casterProfileId != settingsCaster.id },
+        )
+    }
     if (mountpoint != null) {
         val configuredCasters = casterProfiles.filter(NtripCasterProfile::isConfiguredForCorrectionStart)
         val casterMatchingMountpoint = configuredCasters.firstOrNull { caster ->

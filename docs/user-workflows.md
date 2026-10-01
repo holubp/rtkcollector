@@ -149,6 +149,11 @@ rover workflows, Upload is shown as not needed and is not a warning. Full
 profile creation and editing belongs in Menu. If a settings set name is followed
 by `+`, the active setup has local changes; use Re-apply in Menu to reset it to the
 saved settings set.
+When a settings set fixes an option, its Home selector is greyed out and
+marked with a lock symbol. The value shown there is the value used when recording starts;
+Start does not silently restore an older workflow choice. Copy an immutable
+settings set, or edit an editable one, to change its fixed values. The same
+rule applies to a fixed base-coordinate selection in the Base coordinates list.
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;

@@ -231,6 +231,9 @@ data class RecordingSettingsSet(
         recordingOutputProfileRef.validate()
         storageProfileRef.validate()
         basePositionProfileRef?.validate()
+        require(!isOptionLocked(ActiveSetupOptionKey.BASE_COORDINATE) || basePositionProfileRef != null) {
+            "A fixed base coordinate requires a selected coordinate reference."
+        }
         overrides.validate()
     }
 
@@ -344,6 +347,40 @@ fun RecordingSettingsSet.effectiveRecordingOutputProfileRef(): ProfileReference 
 
 fun RecordingSettingsSet.effectiveStorageProfileRef(): ProfileReference =
     overrides.storageProfileRef ?: storageProfileRef
+
+fun RecordingSettingsSet.isOptionLocked(key: ActiveSetupOptionKey): Boolean =
+    optionPolicies.policyFor(key) == SettingsSetOptionPolicy.LOCKED
+
+fun RecordingSettingsSet.effectiveBaseCoordinateId(selectedId: String?): String? =
+    if (isOptionLocked(ActiveSetupOptionKey.BASE_COORDINATE)) basePositionProfileRef?.id else selectedId
+
+fun RecordingSettingsSet.withAcceptedBaseCoordinate(id: String, name: String): RecordingSettingsSet =
+    if (isOptionLocked(ActiveSetupOptionKey.BASE_COORDINATE)) {
+        copy(basePositionProfileRef = ProfileReference(id, name))
+    } else {
+        this
+    }
+
+fun RecordingSettingsSet.effectiveForActiveSetup(): RecordingSettingsSet {
+    val activeOverrides = overrides.copy(
+        commandProfileRef = overrides.commandProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECEIVER_COMMAND) },
+        command = overrides.command.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECEIVER_COMMAND) },
+        usbBaudProfileRef = overrides.usbBaudProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.USB_BAUD) },
+        usbBaud = overrides.usbBaud.takeUnless { isOptionLocked(ActiveSetupOptionKey.USB_BAUD) },
+        ntripCasterProfileRef = overrides.ntripCasterProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) },
+        ntripCaster = overrides.ntripCaster.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) },
+        ntripMountpointProfileRef = overrides.ntripMountpointProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT) },
+        ntripMountpoint = overrides.ntripMountpoint.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT) },
+        ntripCasterUploadProfileRef = overrides.ntripCasterUploadProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) },
+        ntripCasterUpload = overrides.ntripCasterUpload.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) },
+        baseCasterUploadEnabled = overrides.baseCasterUploadEnabled.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) },
+        recordingOutputProfileRef = overrides.recordingOutputProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECORDING_OUTPUT) },
+        recordingOutput = overrides.recordingOutput.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECORDING_OUTPUT) },
+        storageProfileRef = overrides.storageProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.STORAGE) },
+        storage = overrides.storage.takeUnless { isOptionLocked(ActiveSetupOptionKey.STORAGE) },
+    )
+    return copy(overrides = activeOverrides)
+}
 
 fun RecordingSettingsSet.reapplied(): RecordingSettingsSet =
     copy(overrides = SettingsSetOverrides())

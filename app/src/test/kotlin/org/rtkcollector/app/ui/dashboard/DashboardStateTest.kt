@@ -7,8 +7,63 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.StorageProfileOverride
+import org.rtkcollector.app.profile.ActiveSetupOptionKey
+import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.SettingsSetOptionPolicies
+import org.rtkcollector.app.profile.SettingsSetOptionPolicy
 
 class DashboardStateTest {
+    @Test
+    fun `fixed settings disable only affected home controls`() {
+        val set = RecordingSettingsSet.builtInRoverNtrip().copy(
+            optionPolicies = SettingsSetOptionPolicies.defaults()
+                .withPolicy(ActiveSetupOptionKey.WORKFLOW, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.RECEIVER_COMMAND, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.STORAGE, SettingsSetOptionPolicy.LOCKED),
+        )
+        val status = validDashboardStatus().copy(fixedSetupItems = set.fixedDashboardSetupItems())
+
+        listOf(
+            DashboardSetupItem.WORKFLOW,
+            DashboardSetupItem.MOUNTPOINT,
+            DashboardSetupItem.INIT_PROFILES,
+            DashboardSetupItem.UPLOAD,
+            DashboardSetupItem.STORAGE,
+        ).forEach { item ->
+            assertFalse(status.isSetupItemEnabled(item))
+            assertTrue(status.setupItemLabel(item).contains("Fixed"))
+        }
+        listOf(DashboardSetupItem.DEVICE, DashboardSetupItem.SETTINGS, DashboardSetupItem.SESSIONS)
+            .forEach { item -> assertTrue(status.isSetupItemEnabled(item)) }
+    }
+
+    @Test
+    fun `running session retains its fixed controls until recording stops`() {
+        val running = DashboardState.planned(
+            workflow = "Rover",
+            mountpoint = "n/a",
+            initProfile = "Receiver",
+            storage = "App storage",
+            fixedMockGps = true,
+            fixedSetupItems = setOf(DashboardSetupItem.MOUNTPOINT),
+        ).copy(isRecording = true)
+        val planned = DashboardState.planned(
+            workflow = "Rover",
+            mountpoint = "n/a",
+            initProfile = "Receiver",
+            storage = "App storage",
+        )
+
+        assertTrue(running.withPlannedConfiguration(planned).status.fixedMockGps)
+        assertTrue(DashboardSetupItem.MOUNTPOINT in running.withPlannedConfiguration(planned).status.fixedSetupItems)
+        val serviceState = running.copy(status = validDashboardStatus())
+        val resumed = serviceState.withRecordingLocks(running, planned)
+        assertTrue(resumed.status.fixedMockGps)
+        assertTrue(DashboardSetupItem.MOUNTPOINT in resumed.status.fixedSetupItems)
+        assertTrue(serviceState.withRecordingLocks(planned, running).status.fixedMockGps)
+    }
     @Test
     fun `setup selectors default to expanded`() {
         assertTrue(DefaultDashboardSetupExpanded)

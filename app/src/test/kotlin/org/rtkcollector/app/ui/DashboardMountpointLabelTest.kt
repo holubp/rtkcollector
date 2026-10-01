@@ -3,12 +3,16 @@ package org.rtkcollector.app.ui
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.rtkcollector.app.profile.NtripCasterProfile
+import org.rtkcollector.app.profile.ActiveSetupOptionKey
 import org.rtkcollector.app.profile.NtripMountpointOverride
 import org.rtkcollector.app.profile.NtripMountpointProfile
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.SettingsSetOverrides
+import org.rtkcollector.app.profile.SettingsSetOptionPolicies
+import org.rtkcollector.app.profile.SettingsSetOptionPolicy
 import org.rtkcollector.app.profile.WorkflowApplicationPolicy
+import org.rtkcollector.app.profile.effectiveNtripCasterProfileRef
 
 class DashboardMountpointLabelTest {
     @Test
@@ -57,6 +61,27 @@ class DashboardMountpointLabelTest {
         assertEquals("new", resolved.caster?.id)
         assertEquals("new.example.org", resolved.caster?.host)
         assertEquals(ProfileReference("new", "New"), resolved.settingsSet.ntripCasterProfileRef)
+    }
+
+    @Test
+    fun `locked caster rejects mountpoint from another caster without switching`() {
+        val fixedCaster = NtripCasterProfile(id = "fixed", name = "Fixed", host = "fixed.example.org")
+        val otherCaster = NtripCasterProfile(id = "other", name = "Other", host = "other.example.org")
+        val mountpoint = NtripMountpointProfile(
+            id = "other-mount", name = "Other mount", casterProfileId = "other", mountpoint = "OTHER",
+        )
+        val set = RecordingSettingsSet.builtInRoverNtrip().copy(
+            ntripCasterProfileRef = ProfileReference("fixed", "Fixed"),
+            ntripMountpointProfileRef = ProfileReference("other-mount", "Other mount"),
+            optionPolicies = SettingsSetOptionPolicies.defaults()
+                .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER, SettingsSetOptionPolicy.LOCKED),
+        )
+
+        val resolved = set.resolveNtripProfiles(listOf(fixedCaster, otherCaster), listOf(mountpoint))
+
+        assertEquals("fixed", resolved.caster?.id)
+        assertEquals("fixed", resolved.settingsSet.effectiveNtripCasterProfileRef()?.id)
+        assertEquals("Locked NTRIP caster does not match the selected mountpoint.", resolved.problem)
     }
 
     @Test

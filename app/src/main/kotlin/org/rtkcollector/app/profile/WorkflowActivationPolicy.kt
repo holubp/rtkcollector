@@ -14,19 +14,20 @@ private val WORKFLOW_ACTIVATION_MODES = setOf(
     WorkflowActivationMode.LEAVE_CURRENT_INTACT,
 )
 
+fun canChangeActiveSetup(isRecording: Boolean, startInProgress: Boolean): Boolean =
+    !isRecording && !startInProgress
+
 fun RecordingSettingsSet.workflowActivationMode(): String =
-    when (workflowApplicationPolicy) {
-        WorkflowApplicationPolicy.LEAVE_INTACT -> WorkflowActivationMode.LEAVE_CURRENT_INTACT
-        WorkflowApplicationPolicy.LET_USER_SELECT -> WorkflowActivationMode.LET_USER_SELECT_BEFORE_START
-        else -> if (optionPolicies.policyFor(ActiveSetupOptionKey.WORKFLOW) == SettingsSetOptionPolicy.LOCKED) {
-            WorkflowActivationMode.SELECT_LOCKED
-        } else {
-            WorkflowActivationMode.SELECT_CHANGEABLE
-        }
+    when {
+        isOptionLocked(ActiveSetupOptionKey.WORKFLOW) -> WorkflowActivationMode.SELECT_LOCKED
+        workflowApplicationPolicy == WorkflowApplicationPolicy.LEAVE_INTACT -> WorkflowActivationMode.LEAVE_CURRENT_INTACT
+        workflowApplicationPolicy == WorkflowApplicationPolicy.LET_USER_SELECT -> WorkflowActivationMode.LET_USER_SELECT_BEFORE_START
+        else -> WorkflowActivationMode.SELECT_CHANGEABLE
     }
 
 fun RecordingSettingsSet.withWorkflowActivationMode(mode: String): RecordingSettingsSet {
     require(mode in WORKFLOW_ACTIVATION_MODES) { "Workflow activation mode is invalid." }
+    if (mode == workflowActivationMode()) return this
     val workflowApplicationPolicy = when (mode) {
         WorkflowActivationMode.LET_USER_SELECT_BEFORE_START -> WorkflowApplicationPolicy.LET_USER_SELECT
         WorkflowActivationMode.LEAVE_CURRENT_INTACT -> WorkflowApplicationPolicy.LEAVE_INTACT
@@ -48,4 +49,16 @@ fun RecordingSettingsSet.workflowIdAfterSettingsSetActivation(currentWorkflowId:
         WorkflowActivationMode.LET_USER_SELECT_BEFORE_START -> null
         WorkflowActivationMode.LEAVE_CURRENT_INTACT -> currentWorkflowId
         else -> workflowId.takeIf(String::isNotBlank) ?: currentWorkflowId
+    }
+
+fun RecordingSettingsSet.workflowIdForActiveSetup(selectedWorkflowId: String?): String? =
+    if (isOptionLocked(ActiveSetupOptionKey.WORKFLOW)) {
+        workflowId.takeIf(String::isNotBlank)
+    } else {
+        selectedWorkflowId?.takeIf(String::isNotBlank)
+            ?: if (workflowActivationMode() == WorkflowActivationMode.SELECT_CHANGEABLE) {
+                workflowId.takeIf(String::isNotBlank)
+            } else {
+                null
+            }
     }

@@ -4,6 +4,7 @@ import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.ProfileDeviceFilter
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.effectiveCommandProfileRef
+import org.rtkcollector.app.profile.effectiveForActiveSetup
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,7 +37,7 @@ object FixedBaseHandoffPlanner {
             .filter { it.workflowId == FIXED_BASE_WORKFLOW_ID }
             .filter { filter.matchesSettingsSet(it) }
             .mapNotNull { set ->
-                val commandProfile = commandsById[set.effectiveCommandProfileRef().id]
+                val commandProfile = commandsById[set.effectiveForActiveSetup().effectiveCommandProfileRef().id]
                 if (commandProfile == null || !FixedBaseCommandProfileSelection.hasModeBase(commandProfile)) {
                     null
                 } else {

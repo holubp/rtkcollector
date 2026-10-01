@@ -1,11 +1,13 @@
 package org.rtkcollector.app.ui.dashboard
 
 import org.rtkcollector.app.profile.NtripCasterUploadProfile
+import org.rtkcollector.app.profile.ActiveSetupOptionKey
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.StorageProfile
 import org.rtkcollector.app.profile.StorageProfileOverride
 import org.rtkcollector.app.profile.effectiveBaseCasterUploadEnabled
 import org.rtkcollector.app.profile.effectiveNtripCasterUploadProfileRef
+import org.rtkcollector.app.profile.isOptionLocked
 import org.rtkcollector.app.ui.profiles.ProfileListRow
 import org.rtkcollector.core.correction.NtripTransportMode
 
@@ -29,6 +31,15 @@ data class DashboardState(
     val correctionTransport: NtripTransportMode? = null,
     val uploadTransport: NtripTransportMode? = null,
 ) {
+    fun withRecordingLocks(previous: DashboardState, planned: DashboardState): DashboardState =
+        if (!isRecording) this else {
+            val source = if (previous.isRecording) previous.status else planned.status
+            copy(status = status.copy(
+                fixedSetupItems = source.fixedSetupItems,
+                fixedMockGps = source.fixedMockGps,
+            ))
+        }
+
     fun withPlannedConfiguration(planned: DashboardState): DashboardState =
         if (isRecording) {
             this
@@ -56,6 +67,8 @@ data class DashboardState(
             uploadAvailable: Boolean = true,
             mountpointRequired: Boolean = false,
             uploadEnabled: Boolean = false,
+            fixedSetupItems: Set<DashboardSetupItem> = emptySet(),
+            fixedMockGps: Boolean = false,
             settingsSetResolved: Boolean = true,
             workflowResolved: Boolean = true,
             mountpointConfigurationResolved: Boolean = true,
@@ -94,6 +107,8 @@ data class DashboardState(
                     uploadAvailable = uploadAvailable,
                     mountpointRequired = mountpointRequired,
                     uploadEnabled = uploadEnabled,
+                    fixedSetupItems = fixedSetupItems,
+                    fixedMockGps = fixedMockGps,
                     settingsSetResolved = settingsSetResolved,
                     workflowResolved = workflowResolved,
                     mountpointConfigurationResolved = mountpointConfigurationResolved,
@@ -177,6 +192,8 @@ data class DashboardStatus(
     val uploadAvailable: Boolean = true,
     val mountpointRequired: Boolean = false,
     val uploadEnabled: Boolean = false,
+    val fixedSetupItems: Set<DashboardSetupItem> = emptySet(),
+    val fixedMockGps: Boolean = false,
     val settingsSetResolved: Boolean = true,
     val workflowResolved: Boolean = true,
     val mountpointConfigurationResolved: Boolean = true,
@@ -218,7 +235,7 @@ internal fun shouldUseRailDashboard(
         availableWidthDp >= 640 &&
         availableWidthDp > availableHeightDp
 
-internal enum class DashboardSetupItem(val label: String) {
+enum class DashboardSetupItem(val label: String) {
     DEVICE("Device"),
     SETTINGS("Settings"),
     WORKFLOW("Workflow"),
@@ -249,7 +266,21 @@ internal fun DashboardStatus.requiresSetupAttention(): Boolean =
     defaultDashboardSetupItems.any { setupWarningReason(it) != null }
 
 internal fun DashboardStatus.isSetupItemEnabled(item: DashboardSetupItem): Boolean =
-    item != DashboardSetupItem.UPLOAD || uploadAvailable || uploadEnabled
+    item !in fixedSetupItems &&
+        (item != DashboardSetupItem.UPLOAD || uploadAvailable || uploadEnabled)
+
+internal fun DashboardStatus.setupItemLabel(item: DashboardSetupItem): String =
+    if (item in fixedSetupItems) "${item.label} · Fixed" else item.label
+
+internal fun RecordingSettingsSet.fixedDashboardSetupItems(): Set<DashboardSetupItem> = buildSet {
+    if (isOptionLocked(ActiveSetupOptionKey.WORKFLOW)) add(DashboardSetupItem.WORKFLOW)
+    if (isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) ||
+        isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT)
+    ) add(DashboardSetupItem.MOUNTPOINT)
+    if (isOptionLocked(ActiveSetupOptionKey.RECEIVER_COMMAND)) add(DashboardSetupItem.INIT_PROFILES)
+    if (isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD)) add(DashboardSetupItem.UPLOAD)
+    if (isOptionLocked(ActiveSetupOptionKey.STORAGE)) add(DashboardSetupItem.STORAGE)
+}
 
 internal fun DashboardStatus.setupWarningReason(item: DashboardSetupItem): String? =
     when (item) {

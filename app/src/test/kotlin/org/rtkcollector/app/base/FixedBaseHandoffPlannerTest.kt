@@ -8,6 +8,10 @@ import org.rtkcollector.app.profile.CommandProfile
 import org.rtkcollector.app.profile.ProfileDeviceFilter
 import org.rtkcollector.app.profile.ProfileReference
 import org.rtkcollector.app.profile.RecordingSettingsSet
+import org.rtkcollector.app.profile.ActiveSetupOptionKey
+import org.rtkcollector.app.profile.SettingsSetOptionPolicies
+import org.rtkcollector.app.profile.SettingsSetOptionPolicy
+import org.rtkcollector.app.profile.SettingsSetOverrides
 import java.util.Date
 
 class FixedBaseHandoffPlannerTest {
@@ -51,6 +55,27 @@ class FixedBaseHandoffPlannerTest {
         )
 
         assertFalse(candidates.single().requiresDerivedSettingsSet)
+    }
+
+    @Test
+    fun `locked command profile ignores a stale local override`() {
+        val set = fixedBaseSet("fixed", "base-command").copy(
+            optionPolicies = SettingsSetOptionPolicies.defaults().withPolicy(
+                ActiveSetupOptionKey.RECEIVER_COMMAND,
+                SettingsSetOptionPolicy.LOCKED,
+            ),
+            overrides = SettingsSetOverrides(commandProfileRef = ProfileReference("rover-command", "rover-command")),
+        )
+        val candidates = FixedBaseHandoffPlanner.eligibleSettingsSets(
+            settingsSets = listOf(set),
+            commandProfiles = listOf(
+                command("base-command", "MODE BASE 49 15 707"),
+                command("rover-command", "MODE ROVER SURVEY"),
+            ),
+            filter = ProfileDeviceFilter.ANY,
+        )
+
+        assertEquals("base-command", candidates.single().commandProfile?.id)
     }
 
     @Test

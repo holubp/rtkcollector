@@ -56,6 +56,54 @@ class SettingsSetModelsTest {
     }
 
     @Test
+    fun `locked active options ignore stale overrides without deleting them`() {
+        val original = RecordingSettingsSet.builtInRoverNtrip().copy(
+            optionPolicies = SettingsSetOptionPolicies.defaults()
+                .withPolicy(ActiveSetupOptionKey.RECEIVER_COMMAND, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.USB_BAUD, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.NTRIP_MOUNTPOINT, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.RECORDING_OUTPUT, SettingsSetOptionPolicy.LOCKED)
+                .withPolicy(ActiveSetupOptionKey.STORAGE, SettingsSetOptionPolicy.LOCKED),
+            overrides = SettingsSetOverrides(
+                commandProfileRef = ProfileReference("other-command", "Other command"),
+                usbBaudProfileRef = ProfileReference("other-baud", "Other baud"),
+                ntripCasterProfileRef = ProfileReference("other-caster", "Other caster"),
+                ntripMountpointProfileRef = ProfileReference("other-mount", "Other mount"),
+                ntripCasterUploadProfileRef = ProfileReference("other-upload", "Other upload"),
+                baseCasterUploadEnabled = true,
+                recordingOutputProfileRef = ProfileReference("other-output", "Other output"),
+                storageProfileRef = ProfileReference("other-storage", "Other storage"),
+                command = CommandProfileOverride(initScript = "UNLOG COM1"),
+                ntripCaster = NtripCasterOverride(host = "other.example.org"),
+                ntripMountpoint = NtripMountpointOverride(mountpoint = "OTHER"),
+                ntripCasterUpload = NtripCasterUploadOverride(host = "other-upload.example.org"),
+                recordingOutput = RecordingOutputOverride(enableMockLocation = true),
+                storage = StorageProfileOverride(kind = "APP_PRIVATE"),
+            ),
+        )
+
+        val active = original.effectiveForActiveSetup()
+
+        assertEquals(original.commandProfileRef, active.effectiveCommandProfileRef())
+        assertEquals(original.usbBaudProfileRef, active.effectiveUsbBaudProfileRef())
+        assertEquals(original.ntripCasterProfileRef, active.effectiveNtripCasterProfileRef())
+        assertEquals(original.ntripMountpointProfileRef, active.effectiveNtripMountpointProfileRef())
+        assertEquals(original.ntripCasterUploadProfileRef, active.effectiveNtripCasterUploadProfileRef())
+        assertEquals(original.baseCasterUploadEnabled, active.effectiveBaseCasterUploadEnabled())
+        assertEquals(original.recordingOutputProfileRef, active.effectiveRecordingOutputProfileRef())
+        assertEquals(original.storageProfileRef, active.effectiveStorageProfileRef())
+        assertEquals(null, active.overrides.command)
+        assertEquals(null, active.overrides.ntripCaster)
+        assertEquals(null, active.overrides.ntripMountpoint)
+        assertEquals(null, active.overrides.ntripCasterUpload)
+        assertEquals(null, active.overrides.recordingOutput)
+        assertEquals(null, active.overrides.storage)
+        assertTrue(original.overrides.hasChanges)
+    }
+
+    @Test
     fun `reapply clears local reference overrides`() {
         val set = RecordingSettingsSet.builtInRoverNtrip().copy(
             commandProfileRef = ProfileReference("stored-command", "Stored command"),
@@ -69,6 +117,53 @@ class SettingsSetModelsTest {
 
         assertFalse(reapplied.hasLocalOverrides)
         assertEquals("stored-command", reapplied.effectiveCommandProfileRef().id)
+    }
+
+    @Test
+    fun `locked base coordinate ignores current selection`() {
+        val set = RecordingSettingsSet.builtInFixedBase().copy(
+            basePositionProfileRef = ProfileReference("fixed-point", "Fixed point"),
+            optionPolicies = SettingsSetOptionPolicies.defaults().withPolicy(
+                ActiveSetupOptionKey.BASE_COORDINATE,
+                SettingsSetOptionPolicy.LOCKED,
+            ),
+        )
+
+        assertEquals("fixed-point", set.effectiveBaseCoordinateId("other-point"))
+        assertEquals("other-point", set.copy(optionPolicies = SettingsSetOptionPolicies.defaults())
+            .effectiveBaseCoordinateId("other-point"))
+    }
+
+    @Test
+    fun `locked base coordinate requires a stored reference in imported settings`() {
+        val invalid = RecordingSettingsSet.builtInFixedBase().copy(
+            optionPolicies = SettingsSetOptionPolicies.defaults().withPolicy(
+                ActiveSetupOptionKey.BASE_COORDINATE,
+                SettingsSetOptionPolicy.LOCKED,
+            ),
+        )
+
+        assertThrows(IllegalArgumentException::class.java) { invalid.validate() }
+        val imported = RecordingSettingsSet.builtInFixedBase().toJson()
+            .put("optionPolicies", org.json.JSONObject().put("BASE_COORDINATE", "LOCKED"))
+        assertThrows(IllegalArgumentException::class.java) {
+            RecordingSettingsSet.fromJson(imported)
+        }
+    }
+
+    @Test
+    fun `fixed base handoff updates a locked coordinate reference`() {
+        val set = RecordingSettingsSet.builtInFixedBase().copy(
+            basePositionProfileRef = ProfileReference("old", "Old"),
+            optionPolicies = SettingsSetOptionPolicies.defaults().withPolicy(
+                ActiveSetupOptionKey.BASE_COORDINATE,
+                SettingsSetOptionPolicy.LOCKED,
+            ),
+        )
+
+        assertEquals("new", set.withAcceptedBaseCoordinate("new", "New")
+            .effectiveBaseCoordinateId("old"))
+        assertEquals("old", set.basePositionProfileRef?.id)
     }
 
     @Test

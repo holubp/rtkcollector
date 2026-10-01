@@ -254,11 +254,26 @@ Major settings-set options SHOULD declare how they apply to the live active
 setup: default and user-changeable, locked, empty and remembered after user
 selection, or empty and required every time. User selections made from the main
 dashboard are transient active-setup choices and MUST NOT silently rewrite the
-settings-set profile.
+settings-set profile. Every `LOCKED` option MUST use the settings-set value for
+both the displayed active setup and recording start, ignoring stale local
+overrides. Home selectors for locked options MUST show the effective value,
+visibly identify it with a lock symbol, expose "fixed" in accessibility text,
+and be disabled in compact and rail layouts;
+indirect selection routes MUST NOT bypass the lock. A changeable workflow
+chosen after settings-set activation MUST remain the workflow used at Start;
+Start MUST NOT silently reapply the set's activation default. Changing or
+copying an editable settings set remains the way to change a fixed value.
+The active set's lock state MUST remain authoritative through a recording;
+switching, deleting or re-applying that set MUST NOT silently unlock live
+NTRIP or mock-location controls. A fixed base coordinate MUST have a stored
+coordinate reference, and fixed-base handoff MUST update that reference
+to the accepted coordinate when it replaces the base command.
 
 Verification:
-- Automated: active setup resolver tests.
-- Manual: activate settings set, override dashboard selectors and restart app.
+- Automated: active setup resolver, effective-settings and dashboard selector
+  tests, including stale overrides and workflow selection before Start.
+- Manual: activate settings set, inspect fixed Home controls in compact and
+  rail layouts, override changeable selectors and restart app.
 
 ### UI-SETUP-003: Dashboard Setup Strip Keeps Essential Selectors
 

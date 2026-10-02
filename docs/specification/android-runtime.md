@@ -297,6 +297,37 @@ Verification:
 - Review: service start path validates SAF write access before session writers
   are opened.
 
+### ANDROID-CONFIG-001: Running Configuration Uses A Service-Owned Snapshot
+
+Status: Normative
+
+Recording Start MUST validate and hand the foreground service one immutable
+resolved configuration snapshot. Profile-library edits, settings-set
+re-application and changes to defaults MUST affect the next Start, not mutate a
+running session. Only explicitly supported live-source and mock-output changes
+may patch a running snapshot. Each patch MUST validate the active session
+identity/revision and MUST NOT be applied to a later recording after stop or
+restart. Live mock changes MUST derive from the running output configuration,
+not unrelated pending edits.
+
+For a live patch, pending and service-acknowledged state MUST be distinguishable.
+The active selection MUST be committed only after acknowledgement. On failure,
+the running snapshot MUST remain authoritative and the UI MUST offer retry or
+discard without claiming that a merely saved derived profile is active. Retained
+configuration MUST NOT be presented as proof that a network stream remains
+connected; actual degraded/failed connection state is reported separately.
+These configuration operations MUST NOT mutate or block byte-exact receiver
+capture.
+
+Verification:
+- Automated: snapshot immutability, permitted patch, session identity/revision,
+  delayed patch after restart, acknowledgement/failure, unrelated pending edit
+  and capture-independence tests.
+- Review: Start and live-update service intents consume validated snapshots;
+  library/default resolution is not rerun for an in-session patch.
+- Manual: profile edit/Re-apply during recording and live source/mock update,
+  failure and retry.
+
 ### ANDROID-STATE-001: Recording State Delivery Is App-Private
 
 Status: Normative

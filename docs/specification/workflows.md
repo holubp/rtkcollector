@@ -192,15 +192,74 @@ NTRIP` settings set MUST NOT contain a fixed correction mountpoint. Selecting or
 loading that built-in MUST NOT silently materialise the last active mountpoint;
 the user MUST explicitly select or type a mountpoint before Start.
 
-An explicit selection MAY be represented as a visible local override on the
-built-in settings set. Users MAY copy the built-in to create an editable named
-settings set with a predefined mountpoint. User-created copies MUST NOT be reset
-to built-in defaults during migration.
+An explicit selection MUST be represented as an active selection separate from
+the built-in settings-set defaults and owning mountpoint profile. Users MAY copy
+the built-in to create an editable named settings set with a predefined
+mountpoint. User-created copies MUST NOT be reset to built-in defaults during
+migration.
 
 Verification:
 - Automated: built-in settings-set and profile-store migration tests.
 - Manual: selecting `UM980 rover + NTRIP` shows Mountpoint unresolved and Upload
   as `Off` until the user explicitly chooses a mountpoint.
+
+### WF-SETTINGS-OWNERSHIP-001: Settings Sets Own Defaults And Selection Policy
+
+Status: Normative
+
+A settings set MUST own workflow activation intent, receiver-capability
+identity, profile defaults, selection policies and the enabled state of
+optional source upload. It MUST NOT store shadow copies or field overlays for
+values owned by command, USB/baud, caster, mountpoint, source-upload,
+recording-output, RTKLIB, solution-policy, storage or accepted-coordinate
+profiles. Each profile MUST own its complete declared content. The receiver
+capability identity MUST be explicit and consistent across receiver command
+validation, driver selection, RTKLIB routing and UI; a Device filter MUST NOT
+replace that identity.
+
+Coordinate selection MUST resolve from the settings-set default and its active
+selection policy; an unrelated remembered global coordinate MUST NOT silently
+supersede the set default. Editing a coordinate profile MUST NOT rewrite a
+command profile. An idle set with a coordinate/`MODE BASE` mismatch MUST show
+the disagreement and Start MUST reject it until explicit handoff or profile
+editing repairs the mismatch. Running sessions retain the validated coordinate
+snapshot.
+
+Verification:
+- Automated: ownership/resolution, receiver identity consistency, coordinate
+  selection and command-coordinate mismatch tests.
+- Review: serialized settings sets contain references/policies rather than
+  owner-field copies; all runtime consumers use the resolved identity.
+- Manual: shared coordinate edit, explicit fixed-base handoff and Start reject.
+
+### WF-SETTINGS-DEPENDENCY-001: Correction Source Owns Its Caster Reference
+
+Status: Normative
+
+The effective correction caster MUST be derived from the selected mountpoint
+profile's caster reference. A settings set MAY constrain selectable
+mountpoints to one caster identity; that constraint MUST filter choices and
+MUST NOT override a mountpoint's caster. A fixed mountpoint already fixes its
+caster, and contradictory independent fixed constraints MUST be rejected.
+Caster identity MUST use profile identity, not host, account or mountpoint-name
+guessing. A mismatch MUST be shown and MUST NOT trigger caster substitution or
+fallback. Selecting a correction source MUST NOT rewrite settings-set defaults.
+
+An inactive optional profile that is absent or stale MUST NOT block Start solely
+for that reason; enabling the option MUST validate the whole dependency. Upload
+selection policy MUST govern the pair `(enabled, profile reference)`, so a
+fixed upload cannot be partially changed. An upload profile's `enabledByDefault`
+is a creation suggestion, not runtime authority. `Off`, no profile chosen,
+disabled and not applicable MUST remain distinct states.
+
+Verification:
+- Automated: source/caster identity, same-host distinct-account, duplicate
+  mountpoint-name, fixed/unlocked, contradictory restriction and inactive
+  dependency tests.
+- Review: NTRIP resolution contains no endpoint/name fallback; upload locks
+  cover both enablement and profile reference.
+- Manual: filtered source selection, mismatch repair and inactive optional
+  profile start.
 
 ## Future In-Phone Solution
 

@@ -1,6 +1,7 @@
 # Settings and profile ownership
 
-Status: Proposed; pending human approval. No application behaviour is changed by
+Status: Approved by user on 2026-10-02 for implementation. This document
+defines the approved target contract; no application behaviour is changed by
 this document. Baseline: `b25cce2634b9c8476b9f25899180990eaa3e8b13`.
 
 ## Contract

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans. Use test-driven-development for reusable behaviour.
 
-**Status:** Proposed; pending human approval. No implementation authorized here.
+**Status:** Approved by user on 2026-10-02; implementation in progress.
 **Goal:** One field owner, intact profile references, consistent settings-set
 selection policies across Home, Menu and recording.
 **Architecture:** A pure shared active-setup resolver validates a profile graph;
@@ -15,8 +15,10 @@ store, repository specification checker and GitHub Android CI.
 
 ## Global constraints
 
-- Approval precedes product or canonical-contract changes. This plan is not an
-  approval receipt. Preserve unrelated work and local captures.
+- User approval on 2026-10-02 authorizes this plan, canonical-contract updates,
+  compliance review and the requested RC6 release. This Task 1 checkpoint is
+  documentation-only; it authorizes no code or test edits. Preserve unrelated
+  work and local captures.
 - Raw recording remains byte-exact and independent of configuration/advisory
   failures. No migration/profile-store work on capture or high-rate UI callbacks.
 - No automatic caster substitution, TLS downgrade, credential disclosure or
@@ -40,15 +42,21 @@ Home/Start/live-update equivalence. No scope reduction to NTRIP alone.
 
 ### 1. Approved contracts and grounded test inventory
 
-- [ ] Confirm human approval of design; reconcile Astra findings.
-- [ ] Update `docs/specification/ui-requirements.md`, `workflows.md`, relevant
+- [x] Confirm human approval of design; reconcile Astra findings.
+- [x] Update `docs/specification/ui-requirements.md`, `workflows.md`, relevant
   security/runtime requirements, traceability and verification matrix. Map every
   design acceptance criterion to requirement ID and planned evidence.
-- [ ] Inventory all `effective*`, `local*`, inline override, remembered selection
-  and workflow activation consumers in app/core/tests. Record supported Home
-  shortcuts, current backup fixtures and existing regression tests.
+- [x] Inventory production consumers and existing tests for `effective*`,
+  `local*`, inline overrides, remembered selection, workflow activation,
+  Home shortcuts and backup/migration. Inventory is reported at this checkpoint;
+  implementation ownership stays with the controller.
 - [ ] Add failing model tests for intact references, inactive applicability,
   source/caster mismatch and policy lifecycle before changing implementations.
+
+Task 1 scope ruling: by explicit controller instruction, this checkpoint makes
+no code or test edits. The planned failing model tests remain required before
+their implementation in Tasks 2-4; this defers their timing without waiving
+coverage.
 
 Exit: approved contract and finite consumer/test map; no invented assurances.
 
@@ -196,6 +204,7 @@ never inferred from CI. Human approval remains required for normative changes.
 | 2026-10-02 | Proposed design and checkpointable plan | Reviewed; pending human approval | No product implementation or canonical requirement modification. |
 | 2026-10-02 | Independent design review | Nine findings resolved in proposal | Requested/accepted route `gpt-6-astra`, high; runtime metadata unavailable. Full findings and focused re-review completed on agent `01a0fbec-c799-7953-99af-f7a0cd8ba337`; no blockers for human design approval, no implementation verification claimed. |
 | 2026-10-02 | Documentation-only pre-push gate | Passed | `git diff --check`; `ANDROID_HOME=/storage/3830-3863/Termux/AndroidSDK sh scripts/pre_push_check.sh`: gate tests, specification/signing checks, app production/test compilation, feasible JVM tests and IDE alias dry-runs pass. No native APK assembly attempted. |
+| 2026-10-02 | Approved settings/profile ownership; Task 1 docs checkpoint | In progress | User approval authorizes implementation, compliance review and RC6 release. Canonical contracts and traceability updated in this worktree. No code/tests changed; grounded consumer/test inventory reported to controller. New requirements remain `Needs review` until implementation and evidence are independently checked. |
 
 Review corrections: (1) explicit committed secret binding authority;
 (2) recovery before every store read/publication; (3) live patches against

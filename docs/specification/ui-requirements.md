@@ -279,6 +279,40 @@ Verification:
 - Manual: activate settings set, inspect fixed Home controls in compact and
   rail layouts, override changeable selectors and restart app.
 
+### UI-SETUP-009: Active Setup Policies Resolve Consistently
+
+Status: Normative
+
+Home, Menu and recording Start MUST consume one validated active-setup
+resolution for effective selections, provenance, applicability, locks and
+validation problems. A screen-specific fallback or a second Start-only
+selection rule MUST NOT change the resolved profile graph. Remembered
+choose-once selections MUST be isolated by settings-set identity. Ask-every-time
+choices MUST not survive into another recording after stop, failed Start or
+process restart/recovery. The current explicit valid choice MUST take
+precedence over an older remembered choice when policy permits replacement.
+An explicit fixed constraint conflict MUST fail validation instead of forcing
+selection of another dependency.
+
+Re-applying a settings set MUST restore its defined starting selections,
+including workflow activation, without changing application-global
+preferences or editing referenced profiles. Choose-once selections MUST be
+remembered until changed or reset; a failed Start MUST NOT erase them.
+Inapplicable optional selections MUST NOT prompt or block Start; `Off`, `None`,
+not chosen and not applicable MUST remain distinguishable. Workflow activation
+intent, including leave-current-workflow-unchanged, MUST remain separate from
+selection policy. A changeable workflow selected after activation MUST remain
+effective at Start. The modified marker MUST represent active-selection
+differences from the applied set, not dormant override-object presence.
+
+Verification:
+- Automated: active-setup resolver tests for policies, failed Start/stop, set
+  isolation, Re-apply, workflow activation, applicability, Off/None and modified
+  state.
+- Review: Home, Menu and Start call-site audit against the shared resolved
+  result.
+- Manual: restart/recovery and policy-selection smoke tests.
+
 ### UI-SETUP-003: Dashboard Setup Strip Keeps Essential Selectors
 
 Status: Normative
@@ -432,6 +466,34 @@ Verification:
 - Automated: profile compatibility tests where practical.
 - Manual: settings/profile screens show Activate/Edit/Rename as distinct
   actions; long profile selectors can scroll to all entries.
+
+### UI-PROFILE-003: Profile References Preserve Owner Content
+
+Status: Normative
+
+A reference MUST select its owning profile intact and MUST NOT overlay or
+override fields owned by that profile. Changing an active selection MUST replace
+the complete profile reference. Editing a shared user-owned profile MUST be an
+explicit edit of that profile, MUST identify affected settings sets, and MUST
+confirm the impact where the edit changes their next-Start configuration.
+Built-in profiles remain view-only and copyable. Fixing a reference MUST lock
+its identity, not freeze a historical copy of its content. An explicit profile
+edit MUST refresh affected idle preflight/Home state without requiring set
+reactivation; an already-running session MUST retain its validated snapshot
+except for separately specified live updates.
+
+Convenience edits that originate outside an owning profile editor, including
+typed mountpoints and mock-output controls, MUST create or reuse a complete
+matching derived user profile and select it explicitly. They MUST NOT silently
+mutate a referenced profile, create repeated profiles from refresh callbacks,
+or reuse a shared derived profile based only on its name.
+
+Verification:
+- Automated: profile ownership, built-in protection, affected-set and
+  derived-profile identity/reuse tests.
+- Review: profile editor and settings-set save call sites do not write
+  owner fields through references.
+- Manual: shared-profile edit, typed mountpoint and mock-output workflows.
 
 ### UI-PROFILE-001: Built-In Profiles Are Viewable And Copyable
 

@@ -73,6 +73,25 @@ Verification:
 - Automated: session metadata and settings-export tests.
 - Review: all session metadata writers redact credentials.
 
+### SEC-SECRETS-002: Committed Profile Owns Its Secret Binding
+
+Status: Normative
+
+The committed owning NTRIP profile's explicit secret binding MUST be the sole
+runtime authority for that profile. Legacy/canonical aliases MAY be read as
+migration inputs only and MUST NOT take precedence at runtime. Ordinary profile
+JSON, profile IDs, logs, diagnostics and session metadata MUST NOT contain
+password values. If password export is explicitly requested and consented, it
+MUST traverse only committed, reachable profiles and MUST exclude staged or
+orphan secret bindings. Existing explicit consent and sensitive-data warnings
+remain required for that export exception.
+
+Verification:
+- Automated: secret binding precedence/collision, reachable-only export and
+  profile/session/diagnostic redaction tests.
+- Review: runtime credential lookup uses only the committed owner binding.
+- Manual: credential collision migration and consented password export.
+
 ### SEC-SETTINGS-001: Plaintext Password Export Is Explicit
 
 Status: Normative
@@ -188,6 +207,46 @@ Verification:
 - Automated: `SettingsImportModelsTest` present-family malformed-field tests.
 - Manual: import backups with omitted, empty and malformed optional-family
   fields and confirm their distinct outcomes.
+
+### SEC-IMPORT-006: Legacy Profile Migration Is Staged And Recoverable
+
+Status: Normative
+
+Migration of legacy settings-set field overlays into explicit derived profiles
+and active references MUST run only while idle. It MUST be idempotent and use a
+staged graph transaction that retains a validated prior graph and a durable
+migration phase before publishing reachable profile references. New secret
+entries MUST be staged before references become reachable; migration MUST NOT
+overwrite live secret bindings, and orphan cleanup MUST wait until commit is
+confirmed. Recovery MUST run before ordinary profile-store reads, default
+fallbacks or write-on-read migration, and MUST be serialized with configuration
+writes and recording Start.
+
+For supported persistence failures or process interruption, recovery MUST leave
+one consistent committed old or new graph. If rollback/recovery persistence is
+uncertain, the new graph MUST be blocked from use, recovery MUST remain
+available, and the app MUST report uncertainty without claiming success. Lost
+encryption keys, unreadable storage or revoked SAF permissions are unavailable
+prerequisites, not graph-migration success; retain evidence and block only
+affected operations. Distinguish absent passwords from present but undecryptable
+entries. Do not rewrite unrelated stores.
+
+Migration MUST preserve explicit TLS/plaintext, credentials, outputs and
+operator customizations. Dormant values ignored by a fixed policy MUST remain
+recoverable but MUST NOT become active. Uncertain source lineage or conflicting
+legacy policies MUST be retained for explicit operator review, never guessed.
+Continue format-1 RC2-RC6 imports and introduce a newer backup schema when
+persisted semantics change; exports MUST declare their format and MUST NOT
+imply old releases understand new semantics.
+
+Verification:
+- Automated: repeated/idempotent migration, format-1 RC2-RC6 imports, new-schema
+  round trips, partial secret/profile failures, interruption/recovery, collision,
+  missing optional families, and reachable-only export tests.
+- Review: every normal profile-store read/default fallback is gated on recovery;
+  staged references are not visible before commit.
+- Manual: upgrade/import with legacy customizations, missing credentials,
+  storage/Keystore failure and SAF reselection.
 
 ## Diagnostics
 

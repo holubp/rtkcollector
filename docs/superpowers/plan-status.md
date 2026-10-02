@@ -1,6 +1,6 @@
 # Superpowers Plan Status
 
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 
 This tracker summarises implementation status for the larger Superpowers plans.
 It is intentionally separate from the historical step-by-step plan files so
@@ -22,6 +22,7 @@ Status meanings:
 
 | Area | Related plan(s) | Status | Notes |
 | --- | --- | --- | --- |
+| Settings/profile ownership consistency | `2026-10-02-settings-profile-ownership.md` | Open | Proposed design and checkpointable plan only, pending human approval. Independent review requested as Astra/high found nine issues; revised-document review closes them at design level, not implementation level. Covers intact profile references, caster/source dependencies, active-selection policies, receiver/base-coordinate authority, migration and Home/Menu/Start consistency. No application behaviour or canonical contract changed. |
 | Stable sideload signing | `2026-09-29-stable-sideload-signing.md` | Implemented, not field-tested | Owner confirms independent backup outside GitHub. Stable-key RC4 release runs `36850174366` and `36850525062` passed; both downloaded APKs verified with identical checksum and pinned signer. RC5 release run `36913195652` passed; the downloaded APK checksum and single pinned signer were independently verified (see RC5 plan). An RC4-to-RC5 in-place device update is still untested. |
 | Branding and logos | `2026-06-11-logo-branding-assets.md` | Done | Source logos, generator, Android launcher assets and rectangular badge assets are in place. |
 | NTRIP/correction robustness | `2026-06-07-profiled-recording-fixes.md`, `2026-06-12-field-hardening-settings-telemetry.md` | Done | NTRIP v2-style client behaviour, mountpoint handling, correction recording, reconnect/auth policy and explicit terminal state for callback failures are implemented. False replacement results enter a visible degraded retry state that clears when connection work starts. Bounded shutdown retains the reconnect coordinator through join or final quiescent release, deactivates and drains correction callbacks, retains unconfirmed workers for retry and defers session-writer finalisation until intake stops. Correction callbacks and upload paths remain isolated from byte-exact receiver capture; keep field-regression testing with real casters. |

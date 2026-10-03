@@ -1,6 +1,7 @@
 package org.rtkcollector.app.profile
 
 import org.rtkcollector.core.correction.DEFAULT_NTRIP_USER_AGENT
+import org.rtkcollector.app.base.AcceptedBaseCoordinate
 import org.rtkcollector.core.correction.NtripEndpointSecurityPolicy
 import org.rtkcollector.core.correction.NtripSourceUploadRequest
 import org.rtkcollector.core.correction.NtripTlsVerification
@@ -10,7 +11,6 @@ import org.rtkcollector.core.correction.normalizeSourceUploadMountpoint
 import org.rtkcollector.core.rtklib.RtklibSnapshot
 import org.rtkcollector.core.solution.SolutionSourcePolicy
 import org.rtkcollector.core.workflow.SessionArtifact
-import org.rtkcollector.receiver.ublox.UbloxBaudCommands
 import org.rtkcollector.receiver.unicore.Um980OutputFrequencyValidator
 
 data class ActiveRecordingConfig(
@@ -53,6 +53,12 @@ data class ActiveRecordingConfig(
     }
 
     fun validateForStart() {
+        require(rtklib.enabled || solutionPolicy.screenPolicy != SolutionSourcePolicy.RTKLIB_ONLY) {
+            "Screen RTKLIB_ONLY requires an active RTKLIB workflow."
+        }
+        require(!recording.enableMockLocation || rtklib.enabled || solutionPolicy.mockPolicy != SolutionSourcePolicy.RTKLIB_ONLY) {
+            "Mock RTKLIB_ONLY requires an active RTKLIB workflow."
+        }
         validateUm980OutputFrequenciesForStart(
             receiverFamily = commandReceiverFamily,
             commands = initCommands + baudSwitchCommands + modeCommands,
@@ -61,6 +67,7 @@ data class ActiveRecordingConfig(
             require(rtklib.validationErrors.isEmpty()) { rtklib.validationErrors.joinToString(" ") }
         }
         if (ntrip.enabled) {
+            validateCorrectionProtocolPolicy(ntrip.protocolPolicy)
             require(!ntrip.requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." }
             require(ntrip.host.isNotBlank()) { "NTRIP host is required for ${workflowName}." }
             require(ntrip.port in 1..65535) { "NTRIP port must be 1..65535." }
@@ -110,6 +117,40 @@ data class ActiveRecordingConfig(
     companion object {
         fun resolve(
             settingsSet: RecordingSettingsSet,
+            selections: ActiveSetupSelections,
+            profileGraph: ActiveSetupProfileGraph,
+            workflowName: String,
+            passwordLookup: (String) -> String?,
+            currentWorkflowId: String? = null,
+        ): ActiveRecordingConfig {
+            require(!settingsSet.overrides.hasChanges) {
+                "Settings set contains legacy overlays; migrate them to owning profiles before starting."
+            }
+            val setup = ActiveSetupResolver.resolve(settingsSet, selections, currentWorkflowId,
+                profileGraph = profileGraph)
+            require(setup.canStart) { setup.messages.joinToString(" ") { it.message } }
+            val profiles = checkNotNull(setup.resolvedProfiles)
+            val projected = setup.projectSettingsSet(settingsSet, profileGraph::referenceFor)
+            return fromResolvedProfiles(
+                settingsSet = projected,
+                commandProfile = checkNotNull(profiles.command),
+                usbBaudProfile = checkNotNull(profiles.usbBaud),
+                ntripCasterProfile = profiles.caster,
+                ntripMountpointProfile = profiles.source,
+                ntripCasterUploadProfile = profiles.upload,
+                recordingPolicyProfile = checkNotNull(profiles.output),
+                storageProfile = checkNotNull(profiles.storage),
+                rtklibProfile = profiles.rtklib,
+                solutionPolicyProfile = profiles.solution,
+                workflowName = workflowName,
+                workflowUsesNtrip = setup.option(ActiveSetupOptionKey.NTRIP_MOUNTPOINT).applicable,
+                hasAcceptedBaseCoordinate = profiles.baseCoordinate != null,
+                passwordLookup = passwordLookup,
+            )
+        }
+
+        fun resolve(
+            settingsSet: RecordingSettingsSet,
             commandProfile: CommandProfile,
             usbBaudProfile: UsbBaudProfile,
             ntripCasterProfile: NtripCasterProfile?,
@@ -123,130 +164,70 @@ data class ActiveRecordingConfig(
             workflowUsesNtrip: Boolean,
             hasAcceptedBaseCoordinate: Boolean = false,
             passwordLookup: (String) -> String?,
-            localInitCommands: String? = null,
-            localShutdownCommands: String? = null,
-            localProfileBaud: Int? = null,
-            localSerialBaud: Int? = null,
-            localNtripHost: String? = null,
-            localNtripPort: Int? = null,
-            localNtripMountpoint: String? = null,
-            localNtripUsername: String? = null,
-            localNtripSecretRef: String? = null,
-            modeCommands: List<String> = emptyList(),
+            baseCoordinates: List<AcceptedBaseCoordinate> = emptyList(),
         ): ActiveRecordingConfig {
-            settingsSet.validate()
-            commandProfile.validate()
-            usbBaudProfile.validate()
-            ntripCasterProfile?.validate()
-            ntripMountpointProfile?.validate()
-            ntripCasterUploadProfile?.validate()
-            recordingPolicyProfile.validate()
-            storageProfile.validate()
-            rtklibProfile?.validate()
+            val expectedNtrip = settingsSet.workflowId in setOf(WORKFLOW_ROVER_NTRIP, WORKFLOW_ROVER_RTKLIB,
+                WORKFLOW_ROVER_NTRIP_RTKLIB, WORKFLOW_BASE_CALIBRATION)
+            require(workflowUsesNtrip == expectedNtrip) { "Correction applicability does not match selected workflow." }
+            // The legacy boolean cannot supply coordinate identity or prove MODE BASE agreement.
+            require(!hasAcceptedBaseCoordinate || baseCoordinates.isNotEmpty() || settingsSet.basePositionProfileRef == null) {
+                "Supply selected accepted base coordinates, not only a presence flag."
+            }
+            return resolve(settingsSet, ActiveSetupSelections(settingsSet.id), ActiveSetupProfileGraph(
+                commandProfiles = listOf(commandProfile), usbBaudProfiles = listOf(usbBaudProfile),
+                ntripCasterProfiles = listOfNotNull(ntripCasterProfile), ntripMountpointProfiles = listOfNotNull(ntripMountpointProfile),
+                ntripCasterUploadProfiles = listOfNotNull(ntripCasterUploadProfile), rtklibProfiles = listOfNotNull(rtklibProfile),
+                solutionPolicyProfiles = listOfNotNull(solutionPolicyProfile), recordingOutputProfiles = listOf(recordingPolicyProfile),
+                storageProfiles = listOf(storageProfile), baseCoordinates = baseCoordinates,
+            ), workflowName, passwordLookup, currentWorkflowId = settingsSet.workflowId)
+        }
 
-            val commandOverride = settingsSet.overrides.command
-            val baudOverride = settingsSet.overrides.usbBaud
-            val casterOverride = settingsSet.overrides.ntripCaster
-            val mountOverride = settingsSet.overrides.ntripMountpoint
-            val casterUploadOverride = settingsSet.overrides.ntripCasterUpload
-            val recordingOverride = settingsSet.overrides.recordingOutput
-            val storageOverride = settingsSet.overrides.storage
+        private fun fromResolvedProfiles(
+            settingsSet: RecordingSettingsSet,
+            commandProfile: CommandProfile,
+            usbBaudProfile: UsbBaudProfile,
+            ntripCasterProfile: NtripCasterProfile?,
+            ntripMountpointProfile: NtripMountpointProfile?,
+            ntripCasterUploadProfile: NtripCasterUploadProfile?,
+            recordingPolicyProfile: RecordingPolicyProfile,
+            storageProfile: StorageProfile,
+            rtklibProfile: RtklibProfile?,
+            solutionPolicyProfile: SolutionPolicyProfile?,
+            workflowName: String,
+            workflowUsesNtrip: Boolean,
+            hasAcceptedBaseCoordinate: Boolean,
+            passwordLookup: (String) -> String?,
+        ): ActiveRecordingConfig {
+            val profileBaud = usbBaudProfile.profileBaud
+            val serialBaud = usbBaudProfile.serialBaud
+            val baudSwitchCommands = receiverBaudTransitionCommands(commandProfile.receiverFamily, profileBaud, serialBaud)
 
-            val profileBaud = localProfileBaud ?: baudOverride?.profileBaud ?: usbBaudProfile.profileBaud
-            val serialBaud = localSerialBaud ?: baudOverride?.serialBaud ?: usbBaudProfile.serialBaud
-            val isUblox = commandProfile.receiverFamily.startsWith("ublox", ignoreCase = true)
-            val baudSwitchCommands = if (profileBaud == serialBaud) {
-                emptyList()
-            } else if (isUblox) {
-                listOf(UbloxBaudCommands.uart1BaudCommand(serialBaud))
+            val ntrip = if (workflowUsesNtrip) {
+                ActiveNtripConfig.fromProfiles(checkNotNull(ntripCasterProfile), checkNotNull(ntripMountpointProfile), passwordLookup)
             } else {
-                listOf("CONFIG COM1 $serialBaud")
+                ActiveNtripConfig(false, "", 2101, "", "", null, null, null, null, null)
             }
 
-            val profileOwnedNtripSecretRef = ntripCasterProfile
-                ?.let { ntripCasterSecretId(it.id) }
-                .orEmpty()
-            val legacyProfileNtripSecretRef = ntripCasterProfile?.secretId.orEmpty()
-            val ntripSecretRef =
-                if (workflowUsesNtrip) {
-                    localNtripSecretRef ?: casterOverride?.secretId ?: profileOwnedNtripSecretRef
-                } else {
-                    ""
-                }
-            val ntripPassword = ntripSecretRef
-                .takeIf { workflowUsesNtrip && it.isNotBlank() }
-                ?.let { secretRef ->
-                    passwordLookup(secretRef)
-                        ?: legacyProfileNtripSecretRef
-                            .takeIf { legacyRef ->
-                                secretRef == profileOwnedNtripSecretRef &&
-                                    legacyRef.isNotBlank() &&
-                                    legacyRef != profileOwnedNtripSecretRef
-                            }
-                            ?.let(passwordLookup)
-                }
-
-            val ntripHost = localNtripHost ?: casterOverride?.host ?: ntripCasterProfile?.host.orEmpty()
-            val ntripPort = localNtripPort ?: casterOverride?.port ?: ntripCasterProfile?.port ?: 2101
-            val ntrip = ActiveNtripConfig(
-                enabled = workflowUsesNtrip,
-                host = ntripHost,
-                port = ntripPort,
-                mountpoint = localNtripMountpoint ?: mountOverride?.mountpoint ?: ntripMountpointProfile?.mountpoint.orEmpty(),
-                username = localNtripUsername ?: casterOverride?.username ?: ntripCasterProfile?.username.orEmpty(),
-                secretRef = ntripSecretRef.takeIf { it.isNotBlank() },
-                password = ntripPassword,
-                stationId = mountOverride?.stationId,
-                baseLatDeg = mountOverride?.baseLatDeg,
-                baseLonDeg = mountOverride?.baseLonDeg,
-                transportMode = ntripCasterProfile?.transportMode ?: NtripTransportMode.TLS,
-                tlsVerification = ntripCasterProfile?.tlsVerification ?: NtripTlsVerification.SystemTrust,
-                unsafeTlsAcknowledged = ntripCasterProfile?.let {
-                    it.unsafeTlsAcknowledged && ntripHost == it.host && ntripPort == it.port
-                } == true,
-                requiresTlsVerificationChoice = ntripCasterProfile?.requiresTlsVerificationChoice == true,
-            )
-
-            val profileOwnedUploadSecretRef = ntripCasterUploadProfile
-                ?.let { ntripCasterUploadSecretId(it.id) }
-                .orEmpty()
-            val legacyUploadSecretRef = ntripCasterUploadProfile?.secretId.orEmpty()
-            val casterUploadEnabled = settingsSet.effectiveBaseCasterUploadEnabled() && ntripCasterUploadProfile != null
+            val casterUploadEnabled = settingsSet.baseCasterUploadEnabled
             val casterUploadSecretRef = if (casterUploadEnabled) {
-                casterUploadOverride?.secretId ?: profileOwnedUploadSecretRef
+                ntripCasterUploadProfile?.secretId.orEmpty()
             } else {
                 ""
             }
             val casterUploadPassword = casterUploadSecretRef
                 .takeIf { casterUploadEnabled && it.isNotBlank() }
-                ?.let { secretRef ->
-                    passwordLookup(secretRef)
-                        ?: legacyUploadSecretRef
-                            .takeIf { legacyRef ->
-                                secretRef == profileOwnedUploadSecretRef &&
-                                    legacyRef.isNotBlank() &&
-                                    legacyRef != profileOwnedUploadSecretRef
-                            }
-                            ?.let(passwordLookup)
-                }
-            val uploadHost = casterUploadOverride?.host ?: ntripCasterUploadProfile?.host.orEmpty()
-            val uploadPort = casterUploadOverride?.port ?: ntripCasterUploadProfile?.port ?: 2101
+                ?.let { readOwnerPassword(it, passwordLookup) }
+            val uploadHost = ntripCasterUploadProfile?.host.orEmpty()
+            val uploadPort = ntripCasterUploadProfile?.port ?: 2101
             val casterUpload = ActiveCasterUploadConfig(
                 enabled = casterUploadEnabled,
                 host = uploadHost,
                 port = uploadPort,
-                mountpoint = casterUploadOverride?.mountpoint ?: ntripCasterUploadProfile?.mountpoint.orEmpty(),
-                username = casterUploadOverride?.username ?: ntripCasterUploadProfile?.username.orEmpty(),
+                mountpoint = ntripCasterUploadProfile?.mountpoint.orEmpty(),
+                username = ntripCasterUploadProfile?.username.orEmpty(),
                 secretRef = casterUploadSecretRef.takeIf(String::isNotBlank),
                 password = casterUploadPassword,
-                protocolPolicy = when (
-                    val policy = ntripCasterUploadProfile?.protocolPolicy
-                        ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY"
-                ) {
-                    "NTRIP_V1_ONLY", "NTRIP_V2_ONLY" -> policy
-                    "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY" -> "NTRIP_V2_ONLY"
-                    else -> throw IllegalArgumentException("NTRIP caster upload protocol policy is invalid.")
-                },
+                protocolPolicy = ntripCasterUploadProfile?.protocolPolicy ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
                 retryMode = ntripCasterUploadProfile?.retryMode ?: NtripCasterUploadRetryMode.ADAPTIVE,
                 fixedReconnectDelaySeconds = ntripCasterUploadProfile?.fixedReconnectDelaySeconds ?: 10,
                 adaptiveInitialDelaySeconds = ntripCasterUploadProfile?.adaptiveInitialDelaySeconds ?: 10,
@@ -267,11 +248,8 @@ data class ActiveRecordingConfig(
                 requiresTlsVerificationChoice = ntripCasterUploadProfile?.requiresTlsVerificationChoice == true,
             )
             val resolvedModeCommands = commandProfile.runtimeScript.commandLines()
-                .ifEmpty { modeCommands }
-            val resolvedInitCommands = (localInitCommands ?: commandOverride?.initScript ?: commandProfile.initScript)
-                .commandLines()
-            val resolvedShutdownCommands = (localShutdownCommands ?: commandOverride?.shutdownScript ?: commandProfile.shutdownScript)
-                .commandLines()
+            val resolvedInitCommands = commandProfile.initScript.commandLines()
+            val resolvedShutdownCommands = commandProfile.shutdownScript.commandLines()
             val effectiveRtklibProfile = rtklibProfile.takeIf { settingsSet.workflowId.workflowUsesRtklibForStart() }
             val rtklibEnabled = effectiveRtklibProfile?.enabled == true
 
@@ -305,34 +283,29 @@ data class ActiveRecordingConfig(
             )
 
             val recordingOutput = ActiveRecordingOutputConfig(
-                recordTxToReceiver = recordingOverride?.recordTxToReceiver ?: recordingPolicyProfile.recordTxToReceiver,
+                recordTxToReceiver = recordingPolicyProfile.recordTxToReceiver,
                 recordNtripCorrectionInput = workflowUsesNtrip &&
-                    (recordingOverride?.recordNtripCorrectionInput ?: recordingPolicyProfile.recordNtripCorrectionInput),
-                exportNmea = recordingOverride?.exportNmea ?: recordingPolicyProfile.exportNmea,
-                pppNmeaGgaQuality = recordingOverride?.pppNmeaGgaQuality
-                    ?: recordingPolicyProfile.pppNmeaGgaQuality,
-                exportJsonSolution = recordingOverride?.exportJsonSolution
-                    ?: recordingPolicyProfile.exportJsonSolution,
-                exportGpx = recordingOverride?.exportGpx ?: recordingPolicyProfile.exportGpx,
+                    recordingPolicyProfile.recordNtripCorrectionInput,
+                exportNmea = recordingPolicyProfile.exportNmea,
+                pppNmeaGgaQuality = recordingPolicyProfile.pppNmeaGgaQuality,
+                exportJsonSolution = recordingPolicyProfile.exportJsonSolution,
+                exportGpx = recordingPolicyProfile.exportGpx,
                 recordRemoteBaseRaw = workflowUsesNtrip &&
-                    (recordingOverride?.recordRemoteBaseRaw ?: recordingPolicyProfile.recordRemoteBaseRaw),
-                enableMockLocation = recordingOverride?.enableMockLocation ?: recordingPolicyProfile.enableMockLocation,
-                mockLocationRateHz = recordingOverride?.mockLocationRateHz
-                    ?: recordingPolicyProfile.mockLocationRateHz,
+                    recordingPolicyProfile.recordRemoteBaseRaw,
+                enableMockLocation = recordingPolicyProfile.enableMockLocation,
+                mockLocationRateHz = recordingPolicyProfile.mockLocationRateHz,
             )
 
             val solutionPolicy = ActiveSolutionPolicyConfig(
                 profileId = solutionPolicyProfile?.id,
-                screenPolicy = (solutionPolicyProfile?.screenPolicy ?: SolutionSourcePolicy.AUTO_BEST)
-                    .coerceWhenRtklibInactive(rtklib.enabled),
-                mockPolicy = (solutionPolicyProfile?.mockPolicy ?: SolutionSourcePolicy.AUTO_BEST)
-                    .coerceWhenRtklibInactive(rtklib.enabled),
+                screenPolicy = solutionPolicyProfile?.screenPolicy ?: SolutionSourcePolicy.AUTO_BEST,
+                mockPolicy = solutionPolicyProfile?.mockPolicy ?: SolutionSourcePolicy.AUTO_BEST,
             )
 
             val storage = ActiveStorageConfig(
                 id = storageProfile.id,
-                kind = storageOverride?.kind ?: storageProfile.kind,
-                treeUri = storageOverride?.treeUri ?: storageProfile.treeUri,
+                kind = storageProfile.kind,
+                treeUri = storageProfile.treeUri,
             )
 
             return ActiveRecordingConfig(
@@ -430,12 +403,43 @@ data class ActiveNtripConfig(
     val tlsVerification: NtripTlsVerification = NtripTlsVerification.SystemTrust,
     val unsafeTlsAcknowledged: Boolean = false,
     val requiresTlsVerificationChoice: Boolean = false,
+    val casterProfileId: String? = null,
+    val sourceProfileId: String? = null,
+    val ggaUploadPolicy: String = "",
+    val protocolPolicy: String = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
 ) {
     val isConfigured: Boolean get() = host.isNotBlank() && mountpoint.isNotBlank()
 
     fun toCore(allowInsecure: Boolean): NtripEndpointSecurityPolicy =
         ntripSecurityPolicy(host, port, transportMode, tlsVerification, unsafeTlsAcknowledged, allowInsecure)
             .also { require(!requiresTlsVerificationChoice) { "Choose system-trusted TLS or explicit plaintext in profile settings before connecting." } }
+
+    companion object {
+        fun fromProfiles(
+            caster: NtripCasterProfile,
+            mountpoint: NtripMountpointProfile,
+            passwordLookup: (String) -> String?,
+        ): ActiveNtripConfig {
+            caster.validate()
+            validateCorrectionProtocolPolicy(caster.protocolPolicy)
+            mountpoint.validate()
+            require(mountpoint.casterProfileId == caster.id) { "Selected source belongs to another caster profile." }
+            require(caster.host.isNotBlank()) { "NTRIP host is required." }
+            require(mountpoint.mountpoint.isNotBlank()) { "NTRIP mountpoint is required." }
+            caster.toCore(false)
+            val secret = caster.secretId.takeIf(String::isNotBlank)
+            return ActiveNtripConfig(
+                enabled = true, host = caster.host, port = caster.port, mountpoint = mountpoint.mountpoint,
+                username = caster.username, secretRef = secret, password = secret?.let { readOwnerPassword(it, passwordLookup) },
+                stationId = mountpoint.stationId, baseLatDeg = mountpoint.baseLatDeg, baseLonDeg = mountpoint.baseLonDeg,
+                transportMode = caster.transportMode, tlsVerification = caster.tlsVerification,
+                unsafeTlsAcknowledged = caster.unsafeTlsAcknowledged,
+                requiresTlsVerificationChoice = caster.requiresTlsVerificationChoice,
+                casterProfileId = caster.id, sourceProfileId = mountpoint.id, ggaUploadPolicy = mountpoint.ggaUploadPolicy,
+                protocolPolicy = caster.protocolPolicy,
+            )
+        }
+    }
 }
 
 data class ActiveRecordingOutputConfig(
@@ -459,6 +463,17 @@ data class ActiveStorageConfig(
     val kind: String,
     val treeUri: String?,
 )
+
+internal fun validateCorrectionProtocolPolicy(policy: String) {
+    require(policy in setOf("NTRIP_V1_ONLY", "NTRIP_V2_ONLY", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY")) {
+        "NTRIP correction protocol policy is invalid."
+    }
+}
+
+private fun readOwnerPassword(secretId: String, lookup: (String) -> String?): String? =
+    try { lookup(secretId) } catch (_: RuntimeException) {
+        throw IllegalArgumentException("Selected profile credentials could not be read.")
+    }
 
 private fun buildSessionArtifacts(
     recordTxToReceiver: Boolean,
@@ -496,13 +511,6 @@ private fun List<String>.containsModeCommand(mode: String): Boolean =
 
 private fun String.workflowUsesRtklibForStart(): Boolean =
     this == WORKFLOW_ROVER_RTKLIB || this == WORKFLOW_ROVER_NTRIP_RTKLIB
-
-private fun SolutionSourcePolicy.coerceWhenRtklibInactive(rtklibEnabled: Boolean): SolutionSourcePolicy =
-    if (!rtklibEnabled && this == SolutionSourcePolicy.RTKLIB_ONLY) {
-        SolutionSourcePolicy.DEVICE_INTERNAL_ONLY
-    } else {
-        this
-    }
 
 internal fun validateWorkflowModeCommandsForStart(workflowId: String?, modeCommands: List<String>) {
     if (workflowId == WORKFLOW_PLAIN_ROVER ||

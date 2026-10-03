@@ -69,7 +69,7 @@ fun validateSettingsImportJson(text: String): SettingsImportValidationResult {
         return SettingsImportValidationResult.Invalid("This JSON file is not a RtkCollector settings backup.")
     }
 
-    if (json.optInt("formatVersion", 0) != SettingsBackupFile.CURRENT_FORMAT_VERSION) {
+    if (json.optInt("formatVersion", 0) !in 1..SettingsBackupFile.CURRENT_FORMAT_VERSION) {
         return SettingsImportValidationResult.Invalid("Unsupported settings backup format version.")
     }
 
@@ -147,6 +147,9 @@ fun validateSettingsImportJson(text: String): SettingsImportValidationResult {
     )
 }
 
+internal fun hasPersistedSafTreeAuthority(readPermission: Boolean, writePermission: Boolean): Boolean =
+    readPermission && writePermission
+
 /**
  * Isolates imported NTRIP credentials and removes unavailable SAF authority.
  *
@@ -154,16 +157,58 @@ fun validateSettingsImportJson(text: String): SettingsImportValidationResult {
  * the current installation. Persisted URI grants are also installation-local;
  * affected SAF profiles remain unusable until the user selects a folder again.
  */
+fun SettingsBackupFile.withValidatedSafAuthority(
+    persistedSafTreeUrisWithWriteAccess: Set<String>,
+): SettingsBackupFile {
+    val unavailable = storageProfiles.filter {
+        it.kind == "SAF_TREE" && (it.requiresTreeReselection || it.treeUri.isNullOrBlank() ||
+            it.treeUri !in persistedSafTreeUrisWithWriteAccess)
+    }.mapTo(linkedSetOf()) { it.id }
+    val updatedRecovery = migrationRecovery.toMutableMap()
+    settingsSets.forEach { set ->
+        val prior = updatedRecovery[set.id]
+        if (prior == null && unavailable.isEmpty()) return@forEach
+        val record = prior ?: LegacyMigrationRecovery(set, emptySet())
+        val issues = unavailable.map { id -> MigrationReviewIssue(ActiveSetupOptionKey.STORAGE, "treeUri",
+            LegacyFieldDisposition.UNCERTAIN, MigrationReviewReason.SAF_RESELECTION, id) }
+        val reconciled = (record.issues.map { issue ->
+            if (issue.reason != MigrationReviewReason.SAF_RESELECTION || issue.profileId == null) issue
+            else if (issue.profileId in unavailable) issue.copy(resolution = null)
+            else if (storageProfiles.any { it.id == issue.profileId && it.kind == "SAF_TREE" &&
+                    !it.requiresTreeReselection && it.treeUri in persistedSafTreeUrisWithWriteAccess })
+                issue.copy(resolution = MigrationIssueResolution.PERSISTED_SAF_AUTHORITY)
+            else issue
+        } + issues).distinct()
+        updatedRecovery[set.id] = record.copy(issues = reconciled,
+            reviewReasons = (record.reviewReasons - MigrationReviewReason.SAF_RESELECTION) +
+                if (reconciled.any { it.reason == MigrationReviewReason.SAF_RESELECTION && it.resolution == null })
+                    setOf(MigrationReviewReason.SAF_RESELECTION) else emptySet())
+    }
+    return copy(storageProfiles = storageProfiles.map { profile ->
+        if (profile.id in unavailable) profile.copy(treeUri = null, requiresTreeReselection = true) else profile
+    }, migrationRecovery = updatedRecovery)
+}
+
 fun settingsBackupImportPlan(
     backup: SettingsBackupFile,
     persistedSafTreeUrisWithWriteAccess: Set<String>,
     retainedProfileIds: RetainedSettingsProfileIds = RetainedSettingsProfileIds(),
     idFactory: SettingsImportIdFactory = collisionResistantSettingsImportIdFactory,
+    retainedUploadProfiles: List<NtripCasterUploadProfile> = emptyList(),
 ): SettingsBackupImportPlan {
     validateRetainedOptionalProfileReferences(backup, retainedProfileIds)?.let { error ->
         throw IllegalArgumentException(error)
     }
-    val remappedBackup = remapImportedNtripGraph(backup, idFactory)
+    val uploadIncluded = SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD in backup.includedProfileFamilies
+    val materializationInput = if (uploadIncluded) backup else backup.copy(ntripCasterUploadProfiles = retainedUploadProfiles)
+    val complete = planLegacyProfileOwnership(materializationInput)
+    val materializedBackup = if (uploadIncluded) complete else complete.copy(
+        ntripCasterUploadProfiles = complete.ntripCasterUploadProfiles.filter { candidate ->
+            retainedUploadProfiles.none { it.id == candidate.id }
+        },
+    )
+    val remappedBackup = remapImportedNtripGraph(materializedBackup, idFactory,
+        allowLegacyAliases = backup.formatVersion == 1)
     var reselectionCount = 0
     val storageProfilesById = remappedBackup.storageProfiles.associateBy(StorageProfile::id)
     val storageProfiles = remappedBackup.storageProfiles.map { profile ->
@@ -181,9 +226,7 @@ fun settingsBackupImportPlan(
     val settingsSets = remappedBackup.settingsSets.map { settingsSet ->
         val storageOverride = settingsSet.overrides.storage
         val effectiveStorageRef = settingsSet.overrides.storageProfileRef ?: settingsSet.storageProfileRef
-        val referencedStorageProfile = requireNotNull(storageProfilesById[effectiveStorageRef.id]) {
-            "Settings set '${settingsSet.name}' references missing storage profile '${effectiveStorageRef.id}'."
-        }
+        val referencedStorageProfile = storageProfilesById[effectiveStorageRef.id] ?: return@map settingsSet
         val effectiveStorageKind = storageOverride?.kind ?: referencedStorageProfile.kind
         if (
             storageOverride != null &&
@@ -205,11 +248,50 @@ fun settingsBackupImportPlan(
             settingsSet
         }
     }
-    return SettingsBackupImportPlan(
-        backup = remappedBackup.copy(
+    val sanitized = remappedBackup.copy(
             storageProfiles = storageProfiles,
             settingsSets = settingsSets,
-        ),
+        )
+    val recovery = sanitized.migrationRecovery.toMutableMap()
+    sanitized.settingsSets.forEach { set ->
+        val record = recovery[set.id] ?: LegacyMigrationRecovery(set, emptySet())
+        val issues = record.issues.toMutableList()
+        fun add(key: ActiveSetupOptionKey, field: String, reason: MigrationReviewReason, id: String?) {
+            issues += MigrationReviewIssue(key, field, LegacyFieldDisposition.UNCERTAIN, reason, id)
+        }
+        val availableRtklibIds = if (SettingsBackupProfileFamily.RTKLIB in sanitized.includedProfileFamilies) {
+            sanitized.rtklibProfiles.mapTo(linkedSetOf()) { it.id }
+        } else retainedProfileIds.rtklibProfileIds
+        val rtklibReferences = listOfNotNull(set.rtklibProfileRef?.id) +
+            listOfNotNull(sanitized.activeSetupSelections[set.id]?.rememberedChoices?.get(ActiveSetupOptionKey.RTKLIB)?.profileId,
+                sanitized.activeSetupSelections[set.id]?.activeChoices?.get(ActiveSetupOptionKey.RTKLIB)?.profileId)
+        rtklibReferences.distinct().filterNot(availableRtklibIds::contains).forEach {
+            add(ActiveSetupOptionKey.RTKLIB, "selection", MigrationReviewReason.MISSING_PROFILE, it)
+        }
+        set.basePositionProfileRef?.let { add(ActiveSetupOptionKey.BASE_COORDINATE, "basePositionProfileRef",
+            MigrationReviewReason.BASE_COORDINATE, it.id) }
+        sanitized.activeSetupSelections[set.id]?.let { state ->
+            (state.rememberedChoices + state.activeChoices)[ActiveSetupOptionKey.BASE_COORDINATE]?.profileId?.let {
+                add(ActiveSetupOptionKey.BASE_COORDINATE, "baseCoordinateSelection", MigrationReviewReason.BASE_COORDINATE, it)
+            }
+        }
+        sanitized.storageProfiles.filter { it.requiresTreeReselection }.forEach {
+            add(ActiveSetupOptionKey.STORAGE, "treeUri", MigrationReviewReason.SAF_RESELECTION, it.id)
+        }
+        sanitized.ntripMountpointProfiles.forEach { mount ->
+            sanitized.ntripCasterProfiles.firstOrNull { it.id == mount.casterProfileId }?.let { caster ->
+                if (caster.secretId !in sanitized.plaintextPasswordsBySecretId) add(ActiveSetupOptionKey.NTRIP_MOUNTPOINT,
+                    "secretId", MigrationReviewReason.MISSING_CREDENTIAL, mount.id)
+            }
+        }
+        sanitized.ntripCasterUploadProfiles.forEach { upload ->
+            if (upload.secretId !in sanitized.plaintextPasswordsBySecretId) add(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD,
+                "secretId", MigrationReviewReason.MISSING_CREDENTIAL, upload.id)
+        }
+        recovery[set.id] = record.copy(issues = issues.distinct(), reviewReasons = record.reviewReasons + issues.mapNotNull { it.reason })
+    }
+    return SettingsBackupImportPlan(
+        backup = sanitized.copy(migrationRecovery = recovery),
         safTreeUriReselectionCount = reselectionCount,
     )
 }
@@ -240,6 +322,7 @@ fun SettingsImportValidationResult.sanitizedForPersistedSafWriteAccess(
 private fun remapImportedNtripGraph(
     backup: SettingsBackupFile,
     idFactory: SettingsImportIdFactory,
+    allowLegacyAliases: Boolean,
 ): SettingsBackupFile {
     val sourceSecretIds = backup.referencedNtripSecretIds()
     val forbiddenIds = buildSet {
@@ -248,6 +331,7 @@ private fun remapImportedNtripGraph(
         addAll(backup.ntripCasterUploadProfiles.map(NtripCasterUploadProfile::id))
         backup.settingsSets.forEach { settingsSet ->
             settingsSet.ntripCasterProfileRef?.id?.let(::add)
+            settingsSet.ntripCasterRestrictionRef?.id?.let(::add)
             settingsSet.ntripCasterUploadProfileRef?.id?.let(::add)
             settingsSet.overrides.ntripCasterProfileRef?.id?.let(::add)
             settingsSet.overrides.ntripCasterUploadProfileRef?.id?.let(::add)
@@ -258,23 +342,20 @@ private fun remapImportedNtripGraph(
         profile.id to freshIds.next("ntrip-caster")
     }
     val uploadFamilyIncluded = SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD in backup.includedProfileFamilies
-    val uploadIdMap = if (uploadFamilyIncluded) {
-        backup.ntripCasterUploadProfiles.associate { profile ->
-            profile.id to freshIds.next("ntrip-caster-upload")
-        }
-    } else {
-        emptyMap()
+    val uploadIdMap = backup.ntripCasterUploadProfiles.associate { profile ->
+        profile.id to freshIds.next("ntrip-caster-upload")
     }
     val remappedPasswords = linkedMapOf<String, String>()
+    val remappedOverrideSecretIds = mutableMapOf<Pair<String, String>, String>()
 
     val casterProfiles = backup.ntripCasterProfiles.map { profile ->
         val newProfileId = casterIdMap.getValue(profile.id)
-        val newSecretId = ntripCasterSecretId(newProfileId)
-        freshIds.reserveDerived(newSecretId)
+        val newSecretId = freshIds.next("ntrip-caster-owner-secret")
         profilePassword(
             passwords = backup.plaintextPasswordsBySecretId,
-            profileOwnedSecretId = ntripCasterSecretId(profile.id),
-            legacySecretIds = listOf(profile.secretId, legacyNtripCasterSecretId(profile)) +
+            profileOwnedSecretId = profile.secretId,
+            allowLegacyAliases = allowLegacyAliases,
+            legacySecretIds = listOf(ntripCasterSecretId(profile.id), legacyNtripCasterSecretId(profile)) +
                 backup.legacyNtripMountpointSecretIds(profile),
         )?.let { password -> remappedPasswords[newSecretId] = password }
         profile.copy(
@@ -283,24 +364,20 @@ private fun remapImportedNtripGraph(
             unsafeTlsAcknowledged = false,
         )
     }
-    val uploadProfiles = if (uploadFamilyIncluded) {
-        backup.ntripCasterUploadProfiles.map { profile ->
+    val uploadProfiles = backup.ntripCasterUploadProfiles.map { profile ->
             val newProfileId = uploadIdMap.getValue(profile.id)
-            val newSecretId = ntripCasterUploadSecretId(newProfileId)
-            freshIds.reserveDerived(newSecretId)
+            val newSecretId = freshIds.next("ntrip-caster-upload-owner-secret")
             profilePassword(
                 passwords = backup.plaintextPasswordsBySecretId,
-                profileOwnedSecretId = ntripCasterUploadSecretId(profile.id),
-                legacySecretIds = listOf(profile.secretId),
+                profileOwnedSecretId = profile.secretId,
+                allowLegacyAliases = allowLegacyAliases,
+                legacySecretIds = listOf(ntripCasterUploadSecretId(profile.id)),
             )?.let { password -> remappedPasswords[newSecretId] = password }
             profile.copy(
                 id = newProfileId,
                 secretId = newSecretId,
                 unsafeTlsAcknowledged = false,
             )
-        }
-    } else {
-        backup.ntripCasterUploadProfiles
     }
 
     fun remapExplicitSecretId(
@@ -310,7 +387,7 @@ private fun remapImportedNtripGraph(
     ): String? {
         val sourceId = sourceSecretId?.takeIf(String::isNotBlank) ?: return null
         if (!requireFreshBinding && sourceId !in backup.plaintextPasswordsBySecretId) return null
-        val newSecretId = freshIds.next(namespace)
+        val newSecretId = remappedOverrideSecretIds.getOrPut(namespace to sourceId) { freshIds.next(namespace) }
         backup.plaintextPasswordsBySecretId[sourceId]?.let { password ->
             remappedPasswords[newSecretId] = password
         }
@@ -336,11 +413,15 @@ private fun remapImportedNtripGraph(
         )
     }
 
-    val settingsSets = backup.settingsSets.map { settingsSet ->
+    fun remapSettingsSet(settingsSet: RecordingSettingsSet): RecordingSettingsSet =
         settingsSet.copy(
             ntripCasterProfileRef = settingsSet.ntripCasterProfileRef.remapProfileReference(
                 casterIdMap,
                 "NTRIP caster profile",
+            ),
+            ntripCasterRestrictionRef = settingsSet.ntripCasterRestrictionRef.remapProfileReference(
+                casterIdMap,
+                "NTRIP caster restriction",
             ),
             ntripCasterUploadProfileRef = if (uploadFamilyIncluded) {
                 settingsSet.ntripCasterUploadProfileRef.remapProfileReference(
@@ -348,7 +429,7 @@ private fun remapImportedNtripGraph(
                     "NTRIP caster upload profile",
                 )
             } else {
-                settingsSet.ntripCasterUploadProfileRef
+                settingsSet.ntripCasterUploadProfileRef?.let { ref -> ref.copy(id = uploadIdMap[ref.id] ?: ref.id) }
             },
             overrides = settingsSet.overrides.copy(
                 ntripCasterProfileRef = settingsSet.overrides.ntripCasterProfileRef.remapProfileReference(
@@ -361,7 +442,7 @@ private fun remapImportedNtripGraph(
                         "NTRIP caster upload profile",
                     )
                 } else {
-                    settingsSet.overrides.ntripCasterUploadProfileRef
+                    settingsSet.overrides.ntripCasterUploadProfileRef?.let { ref -> ref.copy(id = uploadIdMap[ref.id] ?: ref.id) }
                 },
                 ntripCaster = settingsSet.overrides.ntripCaster?.let { override ->
                     override.copy(
@@ -378,6 +459,38 @@ private fun remapImportedNtripGraph(
                 },
             ),
         )
+    val settingsSets = backup.settingsSets.map(::remapSettingsSet)
+
+    fun remapChoice(key: ActiveSetupOptionKey, choice: SelectionChoice): SelectionChoice {
+        if (choice.kind != SelectionChoiceKind.PROFILE) return choice
+        val oldId = requireNotNull(choice.profileId)
+        val remapped = when (key) {
+            ActiveSetupOptionKey.NTRIP_CASTER -> casterIdMap[oldId] ?: oldId
+            ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD -> uploadIdMap[oldId] ?: oldId
+            else -> oldId
+        }
+        return SelectionChoice.profile(remapped)
+    }
+
+    val selections = backup.activeSetupSelections.mapValues { (_, state) ->
+        state.copy(
+            rememberedChoices = state.rememberedChoices.mapValues { (key, choice) -> remapChoice(key, choice) },
+            activeChoices = state.activeChoices.mapValues { (key, choice) -> remapChoice(key, choice) },
+            transientChoices = emptyMap(),
+            uploadSelection = state.uploadSelection?.let { upload ->
+                upload.copy(profile = remapChoice(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD, upload.profile))
+            },
+            transientUploadSelection = null,
+        )
+    }
+    val recovery = backup.migrationRecovery.mapValues { (_, record) ->
+        record.copy(legacySettingsSet = remapSettingsSet(record.legacySettingsSet), issues = record.issues.map { issue ->
+            issue.copy(profileId = issue.profileId?.let { id -> when (issue.option) {
+                ActiveSetupOptionKey.NTRIP_CASTER -> casterIdMap[id] ?: id
+                ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD -> uploadIdMap[id] ?: id
+                else -> id
+            } })
+        })
     }
     val mountpointProfiles = backup.ntripMountpointProfiles.map { profile ->
         profile.copy(
@@ -392,7 +505,11 @@ private fun remapImportedNtripGraph(
         ntripCasterUploadProfiles = uploadProfiles,
         ntripMountpointProfiles = mountpointProfiles,
         settingsSets = settingsSets,
-        plaintextPasswordsBySecretId = remappedPasswords,
+        activeSetupSelections = selections,
+        migrationRecovery = recovery,
+        plaintextPasswordsBySecretId = remappedPasswords.filterKeys { secret ->
+            casterProfiles.any { it.secretId == secret } || uploadProfiles.any { it.secretId == secret }
+        },
     )
 }
 
@@ -431,8 +548,10 @@ private fun profilePassword(
     passwords: Map<String, String>,
     profileOwnedSecretId: String,
     legacySecretIds: List<String>,
+    allowLegacyAliases: Boolean,
 ): String? {
     if (profileOwnedSecretId in passwords) return passwords.getValue(profileOwnedSecretId)
+    if (profileOwnedSecretId.isNotBlank() && !allowLegacyAliases) return null
     return legacySecretIds
         .firstOrNull { secretId -> secretId.isNotBlank() && secretId in passwords }
         ?.let(passwords::getValue)
@@ -468,6 +587,13 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
     val storageIds = backup.storageProfiles.mapTo(mutableSetOf()) { it.id }
     val settingsSetIds = backup.settingsSets.mapTo(mutableSetOf()) { it.id }
 
+    backup.activeSetupSelections.keys.firstOrNull { it !in settingsSetIds }?.let { id ->
+        return "Active selection state references missing settings set '$id'."
+    }
+    backup.migrationRecovery.keys.firstOrNull { it !in settingsSetIds }?.let { id ->
+        return "Migration recovery references missing settings set '$id'."
+    }
+
     backup.ntripMountpointProfiles.firstOrNull { it.casterProfileId !in casterIds }?.let {
         return "NTRIP mountpoint '${it.name}' references missing caster profile '${it.casterProfileId}'."
     }
@@ -491,7 +617,9 @@ private fun validateBackupReferences(backup: SettingsBackupFile): String? {
                 ?.let { missingReference(it, casterUploadIds, settingsSet.name, "NTRIP caster upload profile") }
                 ?.let { return it }
         }
-        if (SettingsBackupProfileFamily.RTKLIB in backup.includedProfileFamilies) {
+        if (SettingsBackupProfileFamily.RTKLIB in backup.includedProfileFamilies &&
+            ActiveSetupResolver.resolve(settingsSet, backup.activeSetupSelections[settingsSet.id] ?:
+                ActiveSetupSelections(settingsSet.id)).option(ActiveSetupOptionKey.RTKLIB).dependencyActive) {
             settingsSet.rtklibProfileRef?.id
                 ?.let { missingReference(it, rtklibIds, settingsSet.name, "RTKLIB profile") }
                 ?.let { return it }
@@ -549,7 +677,9 @@ private fun validateRetainedOptionalProfileReferences(
                 )?.let { return it }
             }
         }
-        if (SettingsBackupProfileFamily.RTKLIB !in backup.includedProfileFamilies) {
+        if (SettingsBackupProfileFamily.RTKLIB !in backup.includedProfileFamilies &&
+            ActiveSetupResolver.resolve(settingsSet, backup.activeSetupSelections[settingsSet.id] ?:
+                ActiveSetupSelections(settingsSet.id)).option(ActiveSetupOptionKey.RTKLIB).dependencyActive) {
             settingsSet.rtklibProfileRef?.id
                 ?.let {
                     missingReference(

@@ -1,6 +1,9 @@
 package org.rtkcollector.app.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.rtkcollector.app.profile.NtripCasterProfile
@@ -40,9 +43,11 @@ class DashboardMountpointLabelTest {
         assertEquals(null, selected.overrides.ntripCasterProfileRef)
         assertEquals("fixed", selected.resolveNtripProfiles(listOf(fixed, other), listOf(gope)).caster?.id)
         assertEquals(null, selected.resolveNtripProfiles(listOf(fixed, other), listOf(gope)).problem)
-        assertEquals("other", set.copy(
+        val unrestricted = set.copy(
             optionPolicies = SettingsSetOptionPolicies.defaults(),
-        ).withSelectedNtripMountpoint(foreign, listOf(fixed, other)).effectiveNtripCasterProfileRef()?.id)
+        ).withSelectedNtripMountpoint(foreign, listOf(fixed, other))
+        assertEquals("fixed", unrestricted.effectiveNtripCasterProfileRef()?.id)
+        assertEquals("other", unrestricted.resolveNtripProfiles(listOf(fixed, other), listOf(foreign)).caster?.id)
     }
     @Test
     fun `selected mountpoint label follows current settings set profile reference`() {
@@ -68,7 +73,7 @@ class DashboardMountpointLabelTest {
     }
 
     @Test
-    fun `selected mountpoint profile determines active caster even when settings set caster is stale`() {
+    fun `selected mountpoint owns caster without rewriting legacy set caster`() {
         val oldCaster = NtripCasterProfile(id = "old", name = "Old", host = "old.example.org")
         val newCaster = NtripCasterProfile(id = "new", name = "New", host = "new.example.org")
         val mountpoint = NtripMountpointProfile(
@@ -89,7 +94,7 @@ class DashboardMountpointLabelTest {
 
         assertEquals("new", resolved.caster?.id)
         assertEquals("new.example.org", resolved.caster?.host)
-        assertEquals(ProfileReference("new", "New"), resolved.settingsSet.ntripCasterProfileRef)
+        assertEquals(ProfileReference("old", "Old"), resolved.settingsSet.ntripCasterProfileRef)
     }
 
     @Test
@@ -108,13 +113,13 @@ class DashboardMountpointLabelTest {
 
         val resolved = set.resolveNtripProfiles(listOf(fixedCaster, otherCaster), listOf(mountpoint))
 
-        assertEquals("fixed", resolved.caster?.id)
+        assertEquals("other", resolved.caster?.id)
         assertEquals("fixed", resolved.settingsSet.effectiveNtripCasterProfileRef()?.id)
-        assertEquals("Locked NTRIP caster does not match the selected mountpoint.", resolved.problem)
+        assertTrue(resolved.problem.orEmpty().contains("caster restriction"))
     }
 
     @Test
-    fun `active caster falls back to settings set only when no mountpoint profile is selected`() {
+    fun `no selected source never activates set caster`() {
         val caster = NtripCasterProfile(id = "caster", name = "Caster", host = "caster.example.org")
         val settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
             ntripCasterProfileRef = ProfileReference("caster", "Caster"),
@@ -126,12 +131,13 @@ class DashboardMountpointLabelTest {
             mountpointProfiles = emptyList(),
         )
 
-        assertEquals("caster", resolved.caster?.id)
+        assertNull(resolved.caster)
+        assertNotNull(resolved.problem)
         assertEquals(settingsSet, resolved.settingsSet)
     }
 
     @Test
-    fun `active caster falls back to selected configured caster when mountpoint caster is missing`() {
+    fun `missing source caster is reported without substituting set caster`() {
         val selectedCaster = NtripCasterProfile(id = "selected", name = "Selected", host = "caster.example.org")
         val mountpoint = NtripMountpointProfile(
             id = "mount",
@@ -149,12 +155,13 @@ class DashboardMountpointLabelTest {
             mountpointProfiles = listOf(mountpoint),
         )
 
-        assertEquals("selected", resolved.caster?.id)
+        assertNull(resolved.caster)
+        assertTrue(resolved.problem.orEmpty().contains("missing"))
         assertEquals("TUBO00CZE0", resolved.mountpoint?.mountpoint)
     }
 
     @Test
-    fun `active caster falls back to selected configured caster when mountpoint caster is unconfigured`() {
+    fun `unconfigured source caster is not replaced by set caster`() {
         val selectedCaster = NtripCasterProfile(id = "selected", name = "Selected", host = "caster.example.org")
         val blankCaster = NtripCasterProfile(id = "blank", name = "Blank", host = "")
         val mountpoint = NtripMountpointProfile(
@@ -173,12 +180,13 @@ class DashboardMountpointLabelTest {
             mountpointProfiles = listOf(mountpoint),
         )
 
-        assertEquals("selected", resolved.caster?.id)
+        assertEquals("blank", resolved.caster?.id)
+        assertNotNull(resolved.problem)
         assertEquals(ProfileReference("selected", "Selected"), resolved.settingsSet.ntripCasterProfileRef)
     }
 
     @Test
-    fun `active caster falls back to configured caster whose sourcetable contains selected mountpoint`() {
+    fun `sourcetable name match cannot substitute source caster`() {
         val blankCaster = NtripCasterProfile(id = "blank", name = "Blank", host = "")
         val matchingCaster = NtripCasterProfile(
             id = "matching",
@@ -202,12 +210,13 @@ class DashboardMountpointLabelTest {
             mountpointProfiles = listOf(mountpoint),
         )
 
-        assertEquals("matching", resolved.caster?.id)
-        assertEquals(ProfileReference("matching", "Matching"), resolved.settingsSet.ntripCasterProfileRef)
+        assertEquals("blank", resolved.caster?.id)
+        assertNotNull(resolved.problem)
+        assertEquals(ProfileReference("blank", "Blank"), resolved.settingsSet.ntripCasterProfileRef)
     }
 
     @Test
-    fun `active caster falls back to single configured caster for selected mountpoint`() {
+    fun `single configured caster cannot substitute unconfigured source caster`() {
         val blankCaster = NtripCasterProfile(id = "blank", name = "Blank", host = "")
         val configuredCaster = NtripCasterProfile(id = "configured", name = "Configured", host = "caster.example.org")
         val mountpoint = NtripMountpointProfile(
@@ -226,8 +235,9 @@ class DashboardMountpointLabelTest {
             mountpointProfiles = listOf(mountpoint),
         )
 
-        assertEquals("configured", resolved.caster?.id)
-        assertEquals(ProfileReference("configured", "Configured"), resolved.settingsSet.ntripCasterProfileRef)
+        assertEquals("blank", resolved.caster?.id)
+        assertNotNull(resolved.problem)
+        assertEquals(ProfileReference("blank", "Blank"), resolved.settingsSet.ntripCasterProfileRef)
     }
 
     @Test

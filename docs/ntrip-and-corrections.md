@@ -30,6 +30,21 @@ mountpoint names and a secret reference for the password. A mountpoint profile
 references a caster profile and stores the selected mountpoint plus expected
 correction characteristics.
 
+The mountpoint owns the reference to its caster; that caster supplies its host,
+port, account, secret binding, NTRIP version and transport unchanged. Settings
+sets select complete profiles. An optional fixed caster restriction filters
+which sources can be selected; it never overwrites a selected source's caster.
+Profiles with the same host but different accounts remain distinct identities.
+A missing or conflicting reference is reported rather than replaced using a
+cached mountpoint name or another configured caster.
+
+Typed source names create or reuse a complete user mountpoint profile with an
+explicit caster reference. They do not overlay an existing source or edit its
+caster. Shared profile edits are explicit and identify affected settings sets;
+running sessions keep their accepted configuration until a supported live
+source change is acknowledged by the foreground service. Source upload has its
+own independent profile and does not borrow correction-download credentials.
+
 The UI can fetch a caster sourcetable with an NTRIP v2 root request and cache
 the `STR` mountpoint names on the caster profile. The user may select one of
 those cached names or type a mountpoint directly. Typed mountpoints remain valid

@@ -96,7 +96,7 @@ private fun storedPreferenceValue(value: Any): StoredPreferenceValue =
         else -> error("SharedPreferences contained an unsupported value type.")
     }
 
-private class SharedPreferencesCommitTarget(
+internal class SharedPreferencesCommitTarget(
     private val preferences: SharedPreferences,
 ) : PreferenceCommitTarget {
     override fun allValues(): Map<String, *> = preferences.all
@@ -115,5 +115,25 @@ private class SharedPreferencesCommitTarget(
             }
         }
         return editor.commit()
+    }
+}
+
+internal class NamespacedPreferenceCommitTarget(
+    private val profiles: PreferenceCommitTarget,
+    private val coordinates: PreferenceCommitTarget,
+) : PreferenceCommitTarget {
+    override fun allValues(): Map<String, *> = profiles.allValues() +
+        coordinates.allValues().mapKeys { (key, _) -> "$COORDINATE_PREFIX$key" }
+
+    override fun commit(changes: Map<String, StoredPreferenceValue?>): Boolean {
+        val profileChanges = changes.filterKeys { !it.startsWith(COORDINATE_PREFIX) }
+        val coordinateChanges = changes.filterKeys { it.startsWith(COORDINATE_PREFIX) }
+            .mapKeys { (key, _) -> key.removePrefix(COORDINATE_PREFIX) }
+        if (profileChanges.isNotEmpty() && !profiles.commit(profileChanges)) return false
+        return coordinateChanges.isEmpty() || coordinates.commit(coordinateChanges)
+    }
+
+    companion object {
+        const val COORDINATE_PREFIX = "coordinate."
     }
 }

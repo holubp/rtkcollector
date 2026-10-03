@@ -260,7 +260,7 @@ Prefer the strongest feasible verification for the touched code:
   app unit-test sources, test fixtures and test-only dependencies are complete.
   The gate also rejects untracked test inputs that would be absent from a clean
   checkout. On Termux it compiles every app JVM test and runs the non-Robolectric
-  tests through `:app:termuxTestDebugUnitTest`; the three Robolectric classes
+  tests through `:app:termuxTestDebugUnitTest`; Robolectric classes
   remain compile-checked locally and execute in clean-host CI.
   The gate must compile the app test source sets. CI must repeat the full-host
   check and execute the tests before any independent native assembly step can

@@ -76,6 +76,7 @@ data class DashboardState(
             uploadConfigurationResolved: Boolean = true,
             storageProfileResolved: Boolean = true,
             storageConfigurationResolved: Boolean = true,
+            configurationProblems: List<String> = emptyList(),
             settingsSetOutsideDeviceFilter: Boolean = false,
             initProfileOutsideDeviceFilter: Boolean = false,
             storage: String,
@@ -116,6 +117,7 @@ data class DashboardState(
                     uploadConfigurationResolved = uploadConfigurationResolved,
                     storageProfileResolved = storageProfileResolved,
                     storageConfigurationResolved = storageConfigurationResolved,
+                    configurationProblems = configurationProblems,
                     settingsSetOutsideDeviceFilter = settingsSetOutsideDeviceFilter,
                     initProfileOutsideDeviceFilter = initProfileOutsideDeviceFilter,
                     storage = storage,
@@ -201,6 +203,7 @@ data class DashboardStatus(
     val uploadConfigurationResolved: Boolean = true,
     val storageProfileResolved: Boolean = true,
     val storageConfigurationResolved: Boolean = true,
+    val configurationProblems: List<String> = emptyList(),
     val settingsSetOutsideDeviceFilter: Boolean = false,
     val initProfileOutsideDeviceFilter: Boolean = false,
     val storage: String = "n/a",
@@ -285,6 +288,7 @@ internal fun DashboardStatus.setupWarningReason(item: DashboardSetupItem): Strin
         DashboardSetupItem.DEVICE -> null
         DashboardSetupItem.SETTINGS -> when {
             !settingsSetResolved -> "Settings set is unavailable"
+            configurationProblems.isNotEmpty() -> configurationProblems.first()
             settingsSetOutsideDeviceFilter -> "Settings set is outside active Device filter"
             settingsSet.isMissingDashboardValue() -> "Settings set is missing"
             else -> null
@@ -782,9 +786,11 @@ data class ProfilesCardState(
 data class MockGpsDashboardState(
     val enabled: Boolean = false,
     val rateHz: Int = 1,
+    val changePending: Boolean = false,
 ) {
     val label: String
-        get() = if (enabled) "Mock GPS ${rateHz} Hz" else "Mock GPS off"
+        get() = (if (enabled) "Mock GPS ${rateHz} Hz" else "Mock GPS off") +
+            if (changePending) " · Pending" else ""
 }
 
 data class DashboardAction(

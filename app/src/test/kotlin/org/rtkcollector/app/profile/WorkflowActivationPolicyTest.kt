@@ -7,6 +7,40 @@ import org.junit.jupiter.api.Test
 
 class WorkflowActivationPolicyTest {
     @Test
+    fun `ask each recording is a canonical workflow activation mode`() {
+        val set = RecordingSettingsSet.builtInPlainRover()
+            .withWorkflowActivationMode(WorkflowActivationMode.LET_USER_SELECT_EACH_RECORDING)
+        assertEquals(WorkflowApplicationPolicy.LET_USER_SELECT, set.workflowApplicationPolicy)
+        assertEquals(SettingsSetOptionPolicy.ASK_EVERY_TIME, set.optionPolicies.policyFor(ActiveSetupOptionKey.WORKFLOW))
+        assertEquals(WorkflowActivationMode.LET_USER_SELECT_EACH_RECORDING, set.workflowActivationMode())
+        val selected = ActiveSetupSelections(set.id).choose(set, ActiveSetupOptionKey.WORKFLOW, SelectionChoice.profile("plain-rover"))
+        assertEquals("plain-rover", ActiveSetupResolver.resolve(set, selected).option(ActiveSetupOptionKey.WORKFLOW).effectiveValueId)
+        assertTrue(ActiveSetupResolver.resolve(set, selected.afterStopOrFailedStart()).option(ActiveSetupOptionKey.WORKFLOW).requiresUserSelection)
+    }
+
+    @Test
+    fun `conflicting legacy activation stays readable and is marked for review`() {
+        for (set in listOf(
+            RecordingSettingsSet.builtInPlainRover().copy(workflowApplicationPolicy = WorkflowApplicationPolicy.LEAVE_INTACT,
+                optionPolicies = SettingsSetOptionPolicies.defaults().withPolicy(ActiveSetupOptionKey.WORKFLOW, SettingsSetOptionPolicy.LOCKED)),
+            RecordingSettingsSet.builtInPlainRover().copy(workflowApplicationPolicy = WorkflowApplicationPolicy.LET_USER_SELECT),
+        )) {
+            val restored = RecordingSettingsSet.fromJson(set.toJson())
+            assertEquals(set, restored)
+            assertTrue(restored.workflowActivationPolicyProblem() != null)
+            assertEquals(WorkflowActivationMode.NEEDS_REVIEW, restored.workflowActivationMode())
+            assertFalse(ActiveSetupResolver.resolve(restored, ActiveSetupSelections(restored.id), currentWorkflowId = "plain-rover").canStart)
+        }
+    }
+
+    @Test
+    fun `remembered workflow activation resolves from this set and reapply clears memory`() {
+        val set = RecordingSettingsSet.builtInPlainRover().withWorkflowActivationMode(WorkflowActivationMode.LET_USER_SELECT_BEFORE_START)
+        val selections = ActiveSetupSelections(set.id).choose(set, ActiveSetupOptionKey.WORKFLOW, SelectionChoice.profile("rover-ntrip"))
+        assertEquals("rover-ntrip", ActiveSetupResolver.resolve(set, selections, currentWorkflowId = "fixed-base").option(ActiveSetupOptionKey.WORKFLOW).effectiveValueId)
+        assertTrue(ActiveSetupResolver.resolve(set, selections.reapply(set, "fixed-base")).option(ActiveSetupOptionKey.WORKFLOW).requiresUserSelection)
+    }
+    @Test
     fun `active setup cannot change while recording starts or runs`() {
         assertTrue(canChangeActiveSetup(isRecording = false, startInProgress = false))
         assertFalse(canChangeActiveSetup(isRecording = false, startInProgress = true))
@@ -21,9 +55,9 @@ class WorkflowActivationPolicyTest {
             ),
         )
 
-        assertEquals(WorkflowActivationMode.SELECT_CHANGEABLE, set.workflowActivationMode())
+        assertEquals(WorkflowActivationMode.NEEDS_REVIEW, set.workflowActivationMode())
         assertEquals(SettingsSetOptionPolicy.ASK_EVERY_TIME,
-            set.withWorkflowActivationMode(WorkflowActivationMode.SELECT_CHANGEABLE)
+            set.withWorkflowActivationMode(WorkflowActivationMode.NEEDS_REVIEW)
                 .optionPolicies.policyFor(ActiveSetupOptionKey.WORKFLOW))
     }
     @Test

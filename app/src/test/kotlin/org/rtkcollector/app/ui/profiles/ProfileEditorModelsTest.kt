@@ -5,10 +5,47 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.rtkcollector.app.profile.storageValue
+import org.rtkcollector.app.profile.CommandProfile
+import org.rtkcollector.app.profile.withEditedCommandPhases
 import org.rtkcollector.core.correction.NtripTlsVerification
 import org.rtkcollector.core.correction.NtripTransportMode
 
 class ProfileEditorModelsTest {
+    @Test
+    fun `editor submission preserves all command phases through unchanged save and rename`() {
+        val profile = CommandProfile("command", "Command", initScript = "\r\n UNLOGALL COM1\r\n",
+            runtimeScript = "MODE ROVER\r\nBESTNAVB COM1 1\r\n", shutdownScript = " UNLOGALL COM1\n \n")
+        val fields = listOf(EditableProfileField("name", "Name", profile.name),
+            EditableProfileField("initScript", "Init", profile.initScript, multiline = true),
+            EditableProfileField("runtimeScript", "Runtime", profile.runtimeScript, multiline = true),
+            EditableProfileField("shutdownScript", "Shutdown", profile.shutdownScript, multiline = true))
+        val values = fields.associate { it.key to it.value }
+        assertEquals(profile, profile.withEditedCommandPhases(profileEditorSubmissionValues(fields, values)))
+        val renamedValues = profileEditorSubmissionValues(fields, values + ("name" to " Renamed "))
+        assertEquals("Renamed", renamedValues["name"])
+        val renamed = profile.copy(name = renamedValues.getValue("name")).withEditedCommandPhases(renamedValues)
+        assertEquals(profile.copy(name = "Renamed"), renamed)
+    }
+
+    @Test
+    fun `editor submission distinguishes omitted command phases from explicit clearing`() {
+        val profile = CommandProfile("command", "Command", initScript = " INIT\r\n",
+            runtimeScript = " RUNTIME\n", shutdownScript = " STOP\r\n")
+        val fields = listOf(EditableProfileField("initScript", "Init", profile.initScript, multiline = true))
+        assertEquals(profile, profile.withEditedCommandPhases(profileEditorSubmissionValues(fields, emptyMap())))
+        assertEquals(profile.copy(initScript = ""), profile.withEditedCommandPhases(
+            profileEditorSubmissionValues(fields, mapOf("initScript" to ""))))
+    }
+
+    @Test
+    fun `editor submission preserves secret bytes while normalizing ordinary scalar fields`() {
+        val fields = listOf(EditableProfileField("password", "Password", " fixture-only \t", secret = true),
+            EditableProfileField("host", "Host", " caster.invalid "))
+        val submitted = profileEditorSubmissionValues(fields, fields.associate { it.key to it.value })
+        assertEquals(" fixture-only \t", submitted["password"])
+        assertEquals("caster.invalid", submitted["host"])
+    }
+
     @Test
     fun `plaintext transport warning follows selection and GGA policy in either build`() {
         val fields = ntripSecurityEditorFields(

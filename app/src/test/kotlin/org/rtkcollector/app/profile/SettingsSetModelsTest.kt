@@ -56,7 +56,7 @@ class SettingsSetModelsTest {
     }
 
     @Test
-    fun `locked active options ignore stale overrides without deleting them`() {
+    fun `legacy active adapter retains locked overlays for explicit migration review`() {
         val original = RecordingSettingsSet.builtInRoverNtrip().copy(
             optionPolicies = SettingsSetOptionPolicies.defaults()
                 .withPolicy(ActiveSetupOptionKey.RECEIVER_COMMAND, SettingsSetOptionPolicy.LOCKED)
@@ -86,20 +86,14 @@ class SettingsSetModelsTest {
 
         val active = original.effectiveForActiveSetup()
 
-        assertEquals(original.commandProfileRef, active.effectiveCommandProfileRef())
-        assertEquals(original.usbBaudProfileRef, active.effectiveUsbBaudProfileRef())
-        assertEquals(original.ntripCasterProfileRef, active.effectiveNtripCasterProfileRef())
-        assertEquals(original.ntripMountpointProfileRef, active.effectiveNtripMountpointProfileRef())
-        assertEquals(original.ntripCasterUploadProfileRef, active.effectiveNtripCasterUploadProfileRef())
-        assertEquals(original.baseCasterUploadEnabled, active.effectiveBaseCasterUploadEnabled())
-        assertEquals(original.recordingOutputProfileRef, active.effectiveRecordingOutputProfileRef())
-        assertEquals(original.storageProfileRef, active.effectiveStorageProfileRef())
-        assertEquals(null, active.overrides.command)
-        assertEquals(null, active.overrides.ntripCaster)
-        assertEquals(null, active.overrides.ntripMountpoint)
-        assertEquals(null, active.overrides.ntripCasterUpload)
-        assertEquals(null, active.overrides.recordingOutput)
-        assertEquals(null, active.overrides.storage)
+        assertEquals(original, active)
+        assertEquals(original.overrides, active.overrides)
+        val resolved = ActiveSetupResolver.resolve(active, ActiveSetupSelections(active.id))
+        assertEquals(original.commandProfileRef.id, resolved.option(ActiveSetupOptionKey.RECEIVER_COMMAND).effectiveValueId)
+        assertEquals(original.usbBaudProfileRef.id, resolved.option(ActiveSetupOptionKey.USB_BAUD).effectiveValueId)
+        assertEquals(original.ntripMountpointProfileRef?.id, resolved.option(ActiveSetupOptionKey.NTRIP_MOUNTPOINT).effectiveValueId)
+        assertEquals(original.recordingOutputProfileRef.id, resolved.option(ActiveSetupOptionKey.RECORDING_OUTPUT).effectiveValueId)
+        assertEquals(original.storageProfileRef.id, resolved.option(ActiveSetupOptionKey.STORAGE).effectiveValueId)
         assertTrue(original.overrides.hasChanges)
     }
 
@@ -130,7 +124,9 @@ class SettingsSetModelsTest {
         )
 
         assertEquals("fixed-point", set.effectiveBaseCoordinateId("other-point"))
-        assertEquals("other-point", set.copy(optionPolicies = SettingsSetOptionPolicies.defaults())
+        assertEquals("fixed-point", set.copy(optionPolicies = SettingsSetOptionPolicies.defaults())
+            .effectiveBaseCoordinateId("other-point"))
+        assertEquals("other-point", set.copy(basePositionProfileRef = null, optionPolicies = SettingsSetOptionPolicies.defaults())
             .effectiveBaseCoordinateId("other-point"))
     }
 
@@ -164,6 +160,24 @@ class SettingsSetModelsTest {
         assertEquals("new", set.withAcceptedBaseCoordinate("new", "New")
             .effectiveBaseCoordinateId("old"))
         assertEquals("old", set.basePositionProfileRef?.id)
+    }
+
+    @Test
+    fun `fixed base handoff persists coordinate default for every selection policy`() {
+        SettingsSetOptionPolicy.entries.forEach { policy ->
+            val set = RecordingSettingsSet.builtInFixedBase().copy(
+                basePositionProfileRef = ProfileReference("old", "Old"),
+                optionPolicies = SettingsSetOptionPolicies.defaults().withPolicy(
+                    ActiveSetupOptionKey.BASE_COORDINATE, policy,
+                ),
+            )
+            val updated = set.withAcceptedBaseCoordinate("new", "New")
+            assertEquals("new", updated.basePositionProfileRef?.id)
+            val reapplied = ActiveSetupResolver.resolve(updated, ActiveSetupSelections(updated.id))
+            assertEquals(if (policy in setOf(SettingsSetOptionPolicy.CHOOSE_ONCE_REMEMBER,
+                    SettingsSetOptionPolicy.ASK_EVERY_TIME)) null else "new",
+                reapplied.option(ActiveSetupOptionKey.BASE_COORDINATE).effectiveValueId)
+        }
     }
 
     @Test

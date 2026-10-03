@@ -5,7 +5,7 @@ The Termux mode deliberately bypasses only Android resource processing, whose
 host binary cannot run in the supported aarch64 Termux environment. It still
 compiles every app JVM unit-test source and runs the non-Robolectric app tests,
 so missing test dependencies, stale test calls and ordinary test regressions
-remain blocking failures. Clean CI runs the complete suite, including the three
+remain blocking failures. Clean CI runs the complete suite, including all
 Robolectric classes that need a host-compatible Android runtime artifact.
 """
 

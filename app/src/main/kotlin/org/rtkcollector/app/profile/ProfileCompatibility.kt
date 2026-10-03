@@ -92,10 +92,8 @@ object ProfileCompatibility {
         val receiver = receiverProfileId.lowercase()
         val family = receiverFamily.lowercase()
         return receiver == family ||
-            receiver.startsWith(family) ||
-            family.startsWith(receiver) ||
-            (receiver.startsWith("um980") && family.startsWith("um980")) ||
-            (receiver.startsWith("ublox") && family.startsWith("ublox") && receiver == family)
+            (receiver in setOf("um980", "um980-n4", "unicore-n4") &&
+                family in setOf("um980", "um980-n4", "unicore-n4"))
     }
 
     private fun baudStatus(receiverProfileId: String, baud: Int): BaudCompatibilityStatus {

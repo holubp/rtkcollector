@@ -199,6 +199,8 @@ data class RecordingSettingsSet(
     val commandProfileRef: ProfileReference,
     val usbBaudProfileRef: ProfileReference,
     val ntripCasterProfileRef: ProfileReference? = null,
+    val ntripCasterRestrictionRef: ProfileReference? = null,
+    val ntripCasterPolicyNeedsReview: Boolean = false,
     val ntripMountpointProfileRef: ProfileReference? = null,
     val ntripCasterUploadProfileRef: ProfileReference? = null,
     val baseCasterUploadEnabled: Boolean = false,
@@ -224,6 +226,7 @@ data class RecordingSettingsSet(
         commandProfileRef.validate()
         usbBaudProfileRef.validate()
         ntripCasterProfileRef?.validate()
+        ntripCasterRestrictionRef?.validate()
         ntripMountpointProfileRef?.validate()
         ntripCasterUploadProfileRef?.validate()
         rtklibProfileRef?.validate()
@@ -325,62 +328,52 @@ data class RecordingSettingsSet(
 }
 
 fun RecordingSettingsSet.effectiveCommandProfileRef(): ProfileReference =
-    overrides.commandProfileRef ?: commandProfileRef
+    overrides.commandProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECEIVER_COMMAND) } ?: commandProfileRef
 
 fun RecordingSettingsSet.effectiveUsbBaudProfileRef(): ProfileReference =
-    overrides.usbBaudProfileRef ?: usbBaudProfileRef
+    overrides.usbBaudProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.USB_BAUD) } ?: usbBaudProfileRef
 
 fun RecordingSettingsSet.effectiveNtripCasterProfileRef(): ProfileReference? =
-    overrides.ntripCasterProfileRef ?: ntripCasterProfileRef
+    overrides.ntripCasterProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) } ?: ntripCasterProfileRef
 
 fun RecordingSettingsSet.effectiveNtripMountpointProfileRef(): ProfileReference? =
-    overrides.ntripMountpointProfileRef ?: ntripMountpointProfileRef
+    overrides.ntripMountpointProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT) } ?: ntripMountpointProfileRef
 
 fun RecordingSettingsSet.effectiveNtripCasterUploadProfileRef(): ProfileReference? =
-    overrides.ntripCasterUploadProfileRef ?: ntripCasterUploadProfileRef
+    overrides.ntripCasterUploadProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) } ?: ntripCasterUploadProfileRef
 
 fun RecordingSettingsSet.effectiveBaseCasterUploadEnabled(): Boolean =
-    overrides.baseCasterUploadEnabled ?: baseCasterUploadEnabled
+    overrides.baseCasterUploadEnabled.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) } ?: baseCasterUploadEnabled
 
 fun RecordingSettingsSet.effectiveRecordingOutputProfileRef(): ProfileReference =
-    overrides.recordingOutputProfileRef ?: recordingOutputProfileRef
+    overrides.recordingOutputProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECORDING_OUTPUT) } ?: recordingOutputProfileRef
 
 fun RecordingSettingsSet.effectiveStorageProfileRef(): ProfileReference =
-    overrides.storageProfileRef ?: storageProfileRef
+    overrides.storageProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.STORAGE) } ?: storageProfileRef
 
 fun RecordingSettingsSet.isOptionLocked(key: ActiveSetupOptionKey): Boolean =
     optionPolicies.policyFor(key) == SettingsSetOptionPolicy.LOCKED
 
 fun RecordingSettingsSet.effectiveBaseCoordinateId(selectedId: String?): String? =
-    if (isOptionLocked(ActiveSetupOptionKey.BASE_COORDINATE)) basePositionProfileRef?.id else selectedId
+    basePositionProfileRef?.id ?: selectedId.takeUnless { isOptionLocked(ActiveSetupOptionKey.BASE_COORDINATE) }
+
+fun RecordingSettingsSet.correctionCasterRestrictionRef(): ProfileReference? =
+    ntripCasterRestrictionRef ?: ntripCasterProfileRef.takeIf { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) }
+
+fun RecordingSettingsSet.correctionCasterPolicyProblem(): String? = when {
+    ntripCasterPolicyNeedsReview || optionPolicies.policyFor(ActiveSetupOptionKey.NTRIP_CASTER) in
+        setOf(SettingsSetOptionPolicy.CHOOSE_ONCE_REMEMBER, SettingsSetOptionPolicy.ASK_EVERY_TIME) ->
+        "Legacy caster selection policy needs review before using correction."
+    isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) && correctionCasterRestrictionRef() == null ->
+        "Legacy fixed caster is missing; review the caster restriction."
+    else -> null
+}
 
 fun RecordingSettingsSet.withAcceptedBaseCoordinate(id: String, name: String): RecordingSettingsSet =
-    if (isOptionLocked(ActiveSetupOptionKey.BASE_COORDINATE)) {
-        copy(basePositionProfileRef = ProfileReference(id, name))
-    } else {
-        this
-    }
+    copy(basePositionProfileRef = ProfileReference(id, name))
 
-fun RecordingSettingsSet.effectiveForActiveSetup(): RecordingSettingsSet {
-    val activeOverrides = overrides.copy(
-        commandProfileRef = overrides.commandProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECEIVER_COMMAND) },
-        command = overrides.command.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECEIVER_COMMAND) },
-        usbBaudProfileRef = overrides.usbBaudProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.USB_BAUD) },
-        usbBaud = overrides.usbBaud.takeUnless { isOptionLocked(ActiveSetupOptionKey.USB_BAUD) },
-        ntripCasterProfileRef = overrides.ntripCasterProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) },
-        ntripCaster = overrides.ntripCaster.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER) },
-        ntripMountpointProfileRef = overrides.ntripMountpointProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT) },
-        ntripMountpoint = overrides.ntripMountpoint.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_MOUNTPOINT) },
-        ntripCasterUploadProfileRef = overrides.ntripCasterUploadProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) },
-        ntripCasterUpload = overrides.ntripCasterUpload.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) },
-        baseCasterUploadEnabled = overrides.baseCasterUploadEnabled.takeUnless { isOptionLocked(ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD) },
-        recordingOutputProfileRef = overrides.recordingOutputProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECORDING_OUTPUT) },
-        recordingOutput = overrides.recordingOutput.takeUnless { isOptionLocked(ActiveSetupOptionKey.RECORDING_OUTPUT) },
-        storageProfileRef = overrides.storageProfileRef.takeUnless { isOptionLocked(ActiveSetupOptionKey.STORAGE) },
-        storage = overrides.storage.takeUnless { isOptionLocked(ActiveSetupOptionKey.STORAGE) },
-    )
-    return copy(overrides = activeOverrides)
-}
+// Legacy callers must not erase migration evidence before runtime validation.
+fun RecordingSettingsSet.effectiveForActiveSetup(): RecordingSettingsSet = this
 
 fun RecordingSettingsSet.reapplied(): RecordingSettingsSet =
     copy(overrides = SettingsSetOverrides())
@@ -406,6 +399,8 @@ object SettingsSetJson {
         .put("commandProfile", settingsSet.commandProfileRef.toJson())
         .put("usbBaudProfile", settingsSet.usbBaudProfileRef.toJson())
         .putNullable("ntripCasterProfile", settingsSet.ntripCasterProfileRef?.toJson())
+        .putNullable("ntripCasterRestriction", settingsSet.ntripCasterRestrictionRef?.toJson())
+        .put("ntripCasterPolicyNeedsReview", settingsSet.ntripCasterPolicyNeedsReview)
         .putNullable("ntripMountpointProfile", settingsSet.ntripMountpointProfileRef?.toJson())
         .putNullable("ntripCasterUploadProfile", settingsSet.ntripCasterUploadProfileRef?.toJson())
         .put("baseCasterUploadEnabled", settingsSet.baseCasterUploadEnabled)
@@ -430,6 +425,8 @@ object SettingsSetJson {
         commandProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_COMMAND)),
         usbBaudProfileRef = ProfileReference.fromJson(json.getJSONObject(KEY_USB_BAUD)),
         ntripCasterProfileRef = json.optJSONObject(KEY_NTRIP_CASTER)?.let(ProfileReference::fromJson),
+        ntripCasterRestrictionRef = json.optJSONObject("ntripCasterRestriction")?.let(ProfileReference::fromJson),
+        ntripCasterPolicyNeedsReview = json.optBoolean("ntripCasterPolicyNeedsReview", false),
         ntripMountpointProfileRef = json.optJSONObject(KEY_NTRIP_MOUNTPOINT)?.let(ProfileReference::fromJson),
         ntripCasterUploadProfileRef = json.optJSONObject(KEY_NTRIP_CASTER_UPLOAD)?.let(ProfileReference::fromJson),
         baseCasterUploadEnabled = json.optBoolean("baseCasterUploadEnabled", false),

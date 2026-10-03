@@ -7,6 +7,102 @@ import kotlin.test.assertTrue
 
 class SettingsBackupModelsTest {
     @Test
+    fun `unclassified input stays private through migration and is absent from portable recovery`() {
+        val set = RecordingSettingsSet.builtInRoverNtrip()
+        val json = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(), usbBaudProfiles = emptyList(), ntripCasterProfiles = emptyList(),
+            ntripCasterUploadProfiles = emptyList(), ntripMountpointProfiles = emptyList(),
+            recordingPolicyProfiles = emptyList(), storageProfiles = emptyList(), settingsSets = listOf(set),
+            selectedSettingsSetId = set.id, selectedWorkflowId = null, lastActiveNtripMountpointProfileId = null,
+            passwordsBySecretId = emptyMap(), options = SettingsSetExportOptions(),
+        ).toJson().put("unrecognizedSensitiveField", "private-fixture")
+        val parsed = SettingsBackupFile.fromJson(json)
+        val migrated = planLegacyProfileOwnership(parsed)
+        assertTrue(migrated.privateRecoveryInput!!.contentForPrivateStorage().contains("private-fixture"))
+        assertFalse(migrated.privateRecoveryInput.toString().contains("private-fixture"))
+        assertFalse(migrated.toJson().toString().contains("private-fixture"))
+        assertFalse(migrated.toJson().toString().contains("unrecognizedSensitiveField"))
+        assertTrue(migrated.migrationRecovery.getValue(set.id).issues.any { it.field == "unclassifiedInput" })
+    }
+
+    @Test
+    fun `consented export looks up owner bindings without enumerating secrets`() {
+        val lookedUp = mutableListOf<String>()
+        val source = object : AbstractMap<String, String>() {
+            override val entries: Set<Map.Entry<String, String>> get() = error("Secret enumeration is forbidden")
+            override fun get(key: String): String? {
+                lookedUp += key
+                return if (key == "owner") "export-fixture" else error("Unexpected secret lookup")
+            }
+        }
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(), usbBaudProfiles = emptyList(),
+            ntripCasterProfiles = listOf(NtripCasterProfile("caster", "Caster", secretId = "owner")),
+            ntripCasterUploadProfiles = emptyList(), ntripMountpointProfiles = emptyList(),
+            recordingPolicyProfiles = emptyList(), storageProfiles = emptyList(), settingsSets = emptyList(),
+            selectedSettingsSetId = null, selectedWorkflowId = null, lastActiveNtripMountpointProfileId = null,
+            passwordsBySecretId = source, options = SettingsSetExportOptions(includePlaintextPasswords = true),
+        )
+        assertEquals(listOf("owner"), lookedUp)
+        assertEquals(mapOf("owner" to "export-fixture"), backup.plaintextPasswordsBySecretId)
+    }
+    @Test
+    fun `format two retains separate selections and redacted migration recovery`() {
+        val legacySet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            id = "settings",
+            overrides = SettingsSetOverrides(command = CommandProfileOverride(initScript = "MODE ROVER")),
+        )
+        val selection = ActiveSetupSelections(
+            settingsSetId = "settings",
+            rememberedChoices = mapOf(
+                ActiveSetupOptionKey.RECEIVER_COMMAND to SelectionChoice.profile("derived-command"),
+            ),
+        )
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(), usbBaudProfiles = emptyList(),
+            ntripCasterProfiles = emptyList(), ntripCasterUploadProfiles = emptyList(),
+            ntripMountpointProfiles = emptyList(), recordingPolicyProfiles = emptyList(),
+            storageProfiles = emptyList(), settingsSets = listOf(legacySet),
+            selectedSettingsSetId = "settings", selectedWorkflowId = null,
+            lastActiveNtripMountpointProfileId = null, passwordsBySecretId = emptyMap(),
+            options = SettingsSetExportOptions(),
+            activeSetupSelections = mapOf("settings" to selection),
+            migrationRecovery = mapOf(
+                "settings" to LegacyMigrationRecovery(legacySet, setOf(MigrationReviewReason.CASTER_LINEAGE)),
+            ),
+        )
+
+        val parsed = SettingsBackupFile.fromJson(backup.toJson())
+
+        assertEquals(2, parsed.formatVersion)
+        assertEquals(selection, parsed.activeSetupSelections["settings"])
+        assertEquals(legacySet, parsed.migrationRecovery["settings"]?.legacySettingsSet)
+        assertEquals(setOf(MigrationReviewReason.CASTER_LINEAGE), parsed.migrationRecovery["settings"]?.reviewReasons)
+        assertFalse(backup.toJson().toString().contains("plaintextPasswords"))
+    }
+
+    @Test
+    fun `format one remains readable without new state fields`() {
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(), usbBaudProfiles = emptyList(),
+            ntripCasterProfiles = emptyList(), ntripCasterUploadProfiles = emptyList(),
+            ntripMountpointProfiles = emptyList(), recordingPolicyProfiles = emptyList(),
+            storageProfiles = emptyList(), settingsSets = emptyList(),
+            selectedSettingsSetId = null, selectedWorkflowId = null,
+            lastActiveNtripMountpointProfileId = null, passwordsBySecretId = emptyMap(),
+            options = SettingsSetExportOptions(),
+        )
+        val legacyJson = backup.toJson().put("formatVersion", 1)
+            .also { it.remove("activeSetupSelections"); it.remove("migrationRecovery") }
+
+        val parsed = SettingsBackupFile.fromJson(legacyJson)
+
+        assertEquals(1, parsed.formatVersion)
+        assertTrue(parsed.activeSetupSelections.isEmpty())
+        assertTrue(parsed.migrationRecovery.isEmpty())
+    }
+
+    @Test
     fun `export round trips all profile collections and selected ids`() {
         val backup = SettingsBackupFile.fromProfiles(
             commandProfiles = listOf(CommandProfile(id = "command", name = "Command")),
@@ -172,7 +268,7 @@ class SettingsBackupModelsTest {
     }
 
     @Test
-    fun `plaintext export retains matching legacy RC2 caster secret`() {
+    fun `plaintext export ignores matching legacy RC2 alias when owner binding differs`() {
         val profile = NtripCasterProfile(
             id = "TUBO00CZE0",
             name = "EUREF TUBO",
@@ -197,6 +293,26 @@ class SettingsBackupModelsTest {
             options = SettingsSetExportOptions(includePlaintextPasswords = true),
         )
 
-        assertEquals(mapOf(legacySecretId to "legacy-password"), backup.plaintextPasswordsBySecretId)
+        assertTrue(backup.plaintextPasswordsBySecretId.isEmpty())
+    }
+
+    @Test
+    fun `plaintext export uses explicit owner binding even with canonical collision`() {
+        val profile = NtripCasterProfile(id = "caster", name = "Caster", secretId = "owner-binding")
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(), usbBaudProfiles = emptyList(),
+            ntripCasterProfiles = listOf(profile), ntripCasterUploadProfiles = emptyList(),
+            ntripMountpointProfiles = emptyList(), recordingPolicyProfiles = emptyList(),
+            storageProfiles = emptyList(), settingsSets = emptyList(),
+            selectedSettingsSetId = null, selectedWorkflowId = null,
+            lastActiveNtripMountpointProfileId = null,
+            passwordsBySecretId = mapOf(
+                "owner-binding" to "owner-password",
+                ntripCasterSecretId("caster") to "stale-password",
+            ),
+            options = SettingsSetExportOptions(includePlaintextPasswords = true),
+        )
+
+        assertEquals(mapOf("owner-binding" to "owner-password"), backup.plaintextPasswordsBySecretId)
     }
 }

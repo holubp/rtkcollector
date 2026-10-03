@@ -3,6 +3,9 @@ package org.rtkcollector.app.base
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.rtkcollector.app.profile.NamespacedPreferenceCommitTarget
+import org.rtkcollector.app.profile.ProfileGraphJournal
+import org.rtkcollector.app.profile.SharedPreferencesCommitTarget
 
 interface AcceptedBaseCoordinatePreferences {
     fun getString(key: String): String?
@@ -10,16 +13,27 @@ interface AcceptedBaseCoordinatePreferences {
     fun remove(key: String)
 }
 
-class AcceptedBaseCoordinateStore(
+class AcceptedBaseCoordinateStore private constructor(
     private val preferences: AcceptedBaseCoordinatePreferences,
+    private val journal: ProfileGraphJournal?,
 ) {
+    constructor(preferences: AcceptedBaseCoordinatePreferences) : this(preferences, null)
+
     constructor(context: Context) : this(
         SharedPreferencesAcceptedBaseCoordinatePreferences(
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE),
         ),
+        ProfileGraphJournal(
+            NamespacedPreferenceCommitTarget(
+                SharedPreferencesCommitTarget(context.getSharedPreferences("profile-manager", Context.MODE_PRIVATE)),
+                SharedPreferencesCommitTarget(context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)),
+            ),
+            context.getSharedPreferences("profile-manager", Context.MODE_PRIVATE),
+        ),
     )
 
     fun coordinates(): List<AcceptedBaseCoordinate> {
+        journal?.requireRecovered()
         val raw = preferences.getString(KEY_COORDINATES) ?: return emptyList()
         return runCatching {
             val array = JSONArray(raw)
@@ -45,10 +59,13 @@ class AcceptedBaseCoordinateStore(
         }
     }
 
-    fun selectedCoordinateId(): String? =
-        preferences.getString(KEY_SELECTED_COORDINATE_ID)?.takeIf(String::isNotBlank)
+    fun selectedCoordinateId(): String? {
+        journal?.requireRecovered()
+        return preferences.getString(KEY_SELECTED_COORDINATE_ID)?.takeIf(String::isNotBlank)
+    }
 
     fun saveSelectedCoordinateId(id: String?) {
+        journal?.requireRecovered()
         if (id.isNullOrBlank()) {
             preferences.remove(KEY_SELECTED_COORDINATE_ID)
         } else {

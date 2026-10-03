@@ -151,6 +151,12 @@ data class CommandProfile(
     }
 }
 
+internal fun CommandProfile.withEditedCommandPhases(values: Map<String, String>): CommandProfile = copy(
+    initScript = values["initScript"] ?: initScript,
+    runtimeScript = values["runtimeScript"] ?: runtimeScript,
+    shutdownScript = values["shutdownScript"] ?: shutdownScript,
+)
+
 data class UsbBaudProfile(
     val id: String,
     val name: String,
@@ -454,15 +460,29 @@ data class NtripMountpointProfile(
     val expectedFormat: String = "RTCM3",
     val remoteBaseRawAvailable: Boolean = false,
     val isProtected: Boolean = false,
+    val stationId: String? = null,
+    val baseLatDeg: Double? = null,
+    val baseLonDeg: Double? = null,
 ) {
     fun validate() {
         require(id.isNotBlank()) { "NTRIP mountpoint profile id must not be blank." }
         require(name.isNotBlank()) { "NTRIP mountpoint profile name must not be blank." }
         require(casterProfileId.isNotBlank()) { "NTRIP mountpoint profile must reference a caster profile." }
+        require(baseLatDeg == null || baseLatDeg.isFinite() && baseLatDeg in -90.0..90.0) {
+            "Source base latitude must be finite and within -90..90 degrees."
+        }
+        require(baseLonDeg == null || baseLonDeg.isFinite() && baseLonDeg in -180.0..180.0) {
+            "Source base longitude must be finite and within -180..180 degrees."
+        }
     }
 
     fun copyProfile(id: String, name: String): NtripMountpointProfile =
         copy(id = id, name = name, isProtected = false).also(NtripMountpointProfile::validate)
+
+    fun withSourceIdentity(casterProfileId: String, mountpoint: String): NtripMountpointProfile =
+        if (this.casterProfileId == casterProfileId && this.mountpoint == mountpoint) this
+        else copy(casterProfileId = casterProfileId, mountpoint = mountpoint,
+            stationId = null, baseLatDeg = null, baseLonDeg = null).also(NtripMountpointProfile::validate)
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -473,6 +493,9 @@ data class NtripMountpointProfile(
         .put("ggaUploadPolicy", ggaUploadPolicy)
         .put("expectedFormat", expectedFormat)
         .put("remoteBaseRawAvailable", remoteBaseRawAvailable)
+        .putNullable("stationId", stationId)
+        .putNullable("baseLatDeg", baseLatDeg)
+        .putNullable("baseLonDeg", baseLonDeg)
 
     companion object {
         fun fromJson(json: JSONObject): NtripMountpointProfile = NtripMountpointProfile(
@@ -484,6 +507,9 @@ data class NtripMountpointProfile(
             ggaUploadPolicy = json.optString("ggaUploadPolicy", ""),
             expectedFormat = json.optString("expectedFormat", "RTCM3"),
             remoteBaseRawAvailable = json.optBoolean("remoteBaseRawAvailable", false),
+            stationId = json.optNullableString("stationId"),
+            baseLatDeg = json.optNullableDouble("baseLatDeg"),
+            baseLonDeg = json.optNullableDouble("baseLonDeg"),
         ).also(NtripMountpointProfile::validate)
     }
 }
@@ -801,6 +827,9 @@ private fun JSONObject.optNullableString(name: String): String? =
 
 private fun JSONObject.optNullableInt(name: String): Int? =
     if (has(name) && !isNull(name)) optInt(name) else null
+
+private fun JSONObject.optNullableDouble(name: String): Double? =
+    if (has(name) && !isNull(name)) getDouble(name) else null
 
 private fun JSONObject.putStringList(name: String, values: List<String>): JSONObject {
     val array = org.json.JSONArray()

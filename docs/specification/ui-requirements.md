@@ -255,8 +255,8 @@ setup: default and user-changeable, locked, empty and remembered after user
 selection, or empty and required every time. User selections made from the main
 dashboard are transient active-setup choices and MUST NOT silently rewrite the
 settings-set profile. Every `LOCKED` option MUST use the settings-set value for
-both the displayed active setup and recording start, ignoring stale local
-overrides. Home selectors for locked options MUST show the effective value,
+both the displayed active setup and recording start. Legacy local field overlays
+are migration inputs only. Home selectors for locked options MUST show the effective value,
 visibly identify it with a lock symbol, expose "fixed" in accessibility text,
 and be disabled in compact and rail layouts;
 indirect selection routes MUST NOT bypass the lock. A changeable workflow

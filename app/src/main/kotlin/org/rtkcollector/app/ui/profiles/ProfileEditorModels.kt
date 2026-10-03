@@ -3,6 +3,16 @@ package org.rtkcollector.app.ui.profiles
 const val RefreshNtripCasterMountpointsLabel = "Refresh mountpoints from caster"
 const val SuspectInvalidMountpointWarning = "Suspect invalid mountpoint"
 
+/** Preserve command and credential bytes while normalizing ordinary scalar input. */
+fun profileEditorSubmissionValues(
+    fields: List<EditableProfileField>,
+    values: Map<String, String>,
+): Map<String, String> {
+    val verbatimKeys = setOf("initScript", "runtimeScript", "shutdownScript") +
+        fields.filter { it.secret }.map { it.key }
+    return values.mapValues { (key, value) -> if (key in verbatimKeys) value else value.trim() }
+}
+
 data class NtripMountpointEditorState(
     val mountpointText: String = "",
     val availableMountpoints: List<String> = emptyList(),

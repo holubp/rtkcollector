@@ -372,7 +372,7 @@ private fun MockGpsStatusChip(
     ) {
         Row(modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)) {
             Text(state.label, style = MaterialTheme.typography.labelSmall, color = foreground,
-                fontWeight = FontWeight.SemiBold, maxLines = 1)
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (fixed) Text(" 🔒", style = MaterialTheme.typography.labelSmall, color = foreground)
         }
     }

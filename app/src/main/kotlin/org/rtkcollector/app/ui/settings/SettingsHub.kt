@@ -51,6 +51,7 @@ fun SettingsHub(
     initProfileOutsideDeviceFilter: Boolean = false,
     onActiveSettingsSet: () -> Unit,
     onDeviceFilter: () -> Unit = {},
+    onActiveChoices: () -> Unit = {},
     canReapplySettingsSet: Boolean = false,
     onReapplySettingsSet: () -> Unit = {},
     onSettingsSets: () -> Unit,
@@ -124,13 +125,15 @@ fun SettingsHub(
                         }.joinToString(" · "),
                         warning = activeSettingsSetOutsideDeviceFilter,
                     )
+                    SettingsDivider()
+                    SettingsRow("⇄", "Active profile choices", onActiveChoices)
                     if (canReapplySettingsSet) {
                         SettingsDivider()
                         SettingsRow(
                             icon = "+",
                             label = "Re-apply settings set",
                             onClick = onReapplySettingsSet,
-                            subtitle = "Discard local changes and restore the stored set",
+                            subtitle = "Reset choices to the settings set",
                         )
                     }
                 }

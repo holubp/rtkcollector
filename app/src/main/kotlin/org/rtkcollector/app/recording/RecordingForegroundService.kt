@@ -15,6 +15,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
 import org.rtkcollector.app.BuildConfig
+import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.diagnostics.DiagnosticCategory
 import org.rtkcollector.app.diagnostics.DiagnosticsSettings
 import org.rtkcollector.app.diagnostics.DiagnosticsStore
@@ -27,8 +28,10 @@ import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.app.mocklocation.MockLocationPublisher
 import org.rtkcollector.app.mocklocation.mockLocationSetupFailureMessage
 import org.rtkcollector.app.profile.RecordingPolicyProfile
+import org.rtkcollector.app.profile.ActiveSetupOptionKey
 import org.rtkcollector.app.profile.SatelliteTelemetryCapability
 import org.rtkcollector.app.profile.ntripSecurityPolicy
+import org.rtkcollector.app.profile.storageValue
 import org.rtkcollector.app.profile.validateUm980OutputFrequenciesForStart
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
 import org.rtkcollector.app.ui.MainActivity
@@ -215,6 +218,12 @@ internal val UPLOAD_NTRIP_INTENT_KEYS = ServiceNtripIntentKeys(
     RecordingForegroundService.EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED,
 )
 
+internal fun correctionProtocolVersion(policy: String): NtripProtocolVersion = when (policy) {
+    "NTRIP_V1_ONLY" -> NtripProtocolVersion.NTRIP_V1
+    "NTRIP_V2_ONLY", "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY", "AUTO" -> NtripProtocolVersion.NTRIP_V2
+    else -> throw IllegalArgumentException("NTRIP correction protocol policy is invalid.")
+}
+
 @Suppress("DEPRECATION")
 internal fun <T> withValidatedServiceNtripIntent(
     intent: Intent,
@@ -245,6 +254,10 @@ internal fun correctionNtripRequestFromIntent(intent: Intent, allowInsecure: Boo
         NtripRequest(
             policy = policy,
             mountpoint = mountpoint,
+            protocolVersion = correctionProtocolVersion(
+                intent.getStringExtra(RecordingForegroundService.EXTRA_NTRIP_PROTOCOL_POLICY)
+                    ?: "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+            ),
             credentials = intent.getStringExtra(RecordingForegroundService.EXTRA_NTRIP_USERNAME)
                 ?.takeIf { it.isNotBlank() }
                 ?.let { username ->
@@ -318,6 +331,10 @@ class RecordingForegroundService : Service() {
     private var writers: RecordingSessionWriters? = null
     private var advisoryFanout: AsyncAdvisoryFanout? = null
     private var activeSessionMetadata: SessionMetadata? = null
+    private var activeSetupSessionId: String? = null
+    private var lastSetupReceipt: SetupBridgeReceipt? = null
+    private var startedSetupState: SetupBridgeState? = null
+    private var latestAcceptedSetupState: SetupBridgeState? = null
     private var activeRecorder: SessionRawRecorder? = null
     private var activeEventSink: CaptureEventSink? = null
     private var activeProfileBaud: Int = 230400
@@ -401,7 +418,7 @@ class RecordingForegroundService : Service() {
                 }
             }
             ACTION_UPDATE_NTRIP -> updateNtrip(intent)
-            ACTION_DISABLE_NTRIP -> disableNtrip()
+            ACTION_DISABLE_NTRIP -> rejectUnstagedSetupUpdate()
             ACTION_UPDATE_MOCK_LOCATION -> updateMockLocation(intent)
             ACTION_WRITE_PERSISTENT_RECEIVER_CONFIG -> writePersistentReceiverConfig(intent)
             ACTION_START_COORDINATE_AVERAGING -> startCoordinateAveraging()
@@ -420,19 +437,182 @@ class RecordingForegroundService : Service() {
         super.onDestroy()
     }
 
-    private fun startRecording(intent: Intent) {
+    private fun authorizedStartIntent(incoming: Intent, snapshot: RunningSetupSnapshot): Intent {
+        val config = snapshot.config
+        val usb = incoming.usbDevice() ?: throw IllegalArgumentException("No USB device supplied.")
+        val baseId = snapshot.profileIds[ActiveSetupOptionKey.BASE_COORDINATE]
+        val basePosition = if (config.workflowId == "fixed-base") {
+            val selectedBaseId = baseId?.takeIf(String::isNotBlank)
+                ?: throw IllegalArgumentException("Accepted base coordinate does not match the validated setup.")
+            RecordingSetupBridge.serviceBasePosition(snapshot.sessionId)?.also { coordinate ->
+                require(coordinate.id == selectedBaseId) { "Accepted base coordinate does not match the validated setup." }
+            } ?: throw IllegalArgumentException("Validated base coordinate is unavailable.")
+        } else null
+        return Intent(this, RecordingForegroundService::class.java).apply {
+            action = ACTION_START
+            putExtra(EXTRA_USB_DEVICE, usb)
+            putExtra(EXTRA_PROFILE_BAUD, config.profileBaud)
+            putExtra(EXTRA_SERIAL_BAUD, config.serialBaud)
+            putStringArrayListExtra(EXTRA_INIT_COMMANDS, ArrayList(config.initCommands))
+            putStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS, ArrayList(config.baudSwitchCommands))
+            putStringArrayListExtra(EXTRA_MODE_COMMANDS, ArrayList(config.modeCommands))
+            putStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS, ArrayList(config.shutdownCommands))
+            putExtra(EXTRA_WORKFLOW_ID, config.workflowId)
+            putExtra(EXTRA_WORKFLOW_NAME, config.workflowName)
+            putExtra(EXTRA_RECEIVER_ROLE, when (config.workflowId) {
+                "fixed-base" -> "FIXED_BASE"
+                "base-calibration" -> "BASE_CALIBRATION"
+                else -> "ROVER"
+            })
+            putExtra(EXTRA_RECEIVER_PROFILE_ID, config.receiverProfileId)
+            putExtra(EXTRA_COMMAND_PROFILE_ID, config.commandProfileId)
+            putExtra(EXTRA_UM980_PROFILE_ID, config.commandProfileId)
+            putExtra(EXTRA_COMMAND_RECEIVER_FAMILY, config.commandReceiverFamily)
+            putExtra(EXTRA_COMMAND_SATELLITE_TELEMETRY, config.satelliteTelemetry.storageId)
+            putExtra(EXTRA_USB_BAUD_PROFILE_ID, config.usbBaudProfileId)
+            putExtra(EXTRA_NTRIP_ENABLED, config.ntrip.enabled)
+            putExtra(EXTRA_NTRIP_HOST, config.ntrip.host)
+            putExtra(EXTRA_NTRIP_PORT, config.ntrip.port)
+            putExtra(EXTRA_NTRIP_TRANSPORT_MODE, config.ntrip.transportMode.name)
+            putExtra(EXTRA_NTRIP_TLS_VERIFICATION, config.ntrip.tlsVerification.storageValue)
+            putExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, config.ntrip.unsafeTlsAcknowledged)
+            putExtra(EXTRA_NTRIP_MOUNTPOINT, config.ntrip.mountpoint)
+            putExtra(EXTRA_NTRIP_PROTOCOL_POLICY, config.ntrip.protocolPolicy)
+            putExtra(EXTRA_NTRIP_USERNAME, config.ntrip.username)
+            putExtra(EXTRA_NTRIP_PASSWORD, config.ntrip.password.orEmpty())
+            putExtra(EXTRA_NTRIP_SECRET_REF, config.ntrip.secretRef)
+            putExtra(EXTRA_NTRIP_GGA, "")
+            putExtra(EXTRA_NTRIP_SEND_TO_RECEIVER, config.workflowId in setOf(
+                "rover-ntrip", "rover-ntrip-rtklib", "base-calibration",
+            ))
+            putExtra(EXTRA_NTRIP_STATION_ID, config.ntrip.stationId)
+            config.ntrip.baseLatDeg?.let { putExtra(EXTRA_NTRIP_BASE_LAT, it) }
+            config.ntrip.baseLonDeg?.let { putExtra(EXTRA_NTRIP_BASE_LON, it) }
+            putExtra(EXTRA_NTRIP_CASTER_PROFILE_ID, snapshot.profileIds[ActiveSetupOptionKey.NTRIP_CASTER])
+            putExtra(EXTRA_NTRIP_MOUNTPOINT_PROFILE_ID, snapshot.profileIds[ActiveSetupOptionKey.NTRIP_MOUNTPOINT])
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_ENABLED, config.casterUpload.enabled)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_HOST, config.casterUpload.host)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_PORT, config.casterUpload.port)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_TRANSPORT_MODE, config.casterUpload.transportMode.name)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_TLS_VERIFICATION, config.casterUpload.tlsVerification.storageValue)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_UNSAFE_TLS_ACKNOWLEDGED, config.casterUpload.unsafeTlsAcknowledged)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_MOUNTPOINT, config.casterUpload.mountpoint)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_USERNAME, config.casterUpload.username)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT, config.casterUpload.username.isNotBlank())
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_PASSWORD, config.casterUpload.password.orEmpty())
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_SECRET_REF, config.casterUpload.secretRef)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_PROTOCOL_POLICY, config.casterUpload.protocolPolicy)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_RETRY_MODE, config.casterUpload.retryMode.name)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_FIXED_RECONNECT_DELAY_SECONDS, config.casterUpload.fixedReconnectDelaySeconds)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_INITIAL_DELAY_SECONDS, config.casterUpload.adaptiveInitialDelaySeconds)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_ADAPTIVE_MAX_DELAY_SECONDS, config.casterUpload.adaptiveMaxDelaySeconds)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_FAILURES_ENABLED, config.casterUpload.stopAfterFailuresEnabled)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_STOP_AFTER_CONSECUTIVE_FAILURES, config.casterUpload.stopAfterConsecutiveFailures)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_ENABLED, config.casterUpload.safetyRulesEnabled)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_SAFETY_RULES_FORCED,
+                config.casterUpload.effectiveSafetyRulesEnabled && !config.casterUpload.safetyRulesEnabled)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_BITRATE_KBPS, config.casterUpload.safetyMaxBitrateKbps)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_SAFETY_BITRATE_WINDOW_SECONDS, config.casterUpload.safetyBitrateWindowSeconds)
+            putExtra(EXTRA_BASE_CASTER_UPLOAD_SAFETY_MAX_SESSION_UPLOAD_MB, config.casterUpload.safetyMaxSessionUploadMb)
+            putExtra(EXTRA_RECORDING_POLICY_ID, snapshot.recordingOutputProfile.id)
+            putExtra(EXTRA_RECORD_NTRIP_CORRECTION_INPUT, config.recording.recordNtripCorrectionInput)
+            putExtra(EXTRA_EXPORT_NMEA, config.recording.exportNmea)
+            putExtra(EXTRA_PPP_NMEA_GGA_QUALITY, config.recording.pppNmeaGgaQuality)
+            putExtra(EXTRA_EXPORT_JSON_SOLUTION, config.recording.exportJsonSolution)
+            putExtra(EXTRA_RECORD_REMOTE_BASE_RAW, config.recording.recordRemoteBaseRaw)
+            putExtra(EXTRA_ENABLE_MOCK_LOCATION, config.recording.enableMockLocation)
+            putExtra(EXTRA_MOCK_LOCATION_RATE_HZ, config.recording.mockLocationRateHz)
+            putExtra(EXTRA_STORAGE_PROFILE_ID, config.storage.id)
+            putExtra(EXTRA_STORAGE_KIND, config.storage.kind)
+            putExtra(EXTRA_STORAGE_TREE_URI, config.storage.treeUri)
+            putExtra(EXTRA_RTKLIB_PROFILE_ID, config.rtklib.profileId)
+            putExtra(EXTRA_RTKLIB_ENABLED, config.rtklib.enabled)
+            putExtra(EXTRA_RTKLIB_PRESET, config.rtklib.preset)
+            putExtra(EXTRA_RTKLIB_SNAPSHOT_ID, config.rtklib.snapshotId)
+            putExtra(EXTRA_RTKLIB_ROUTE_PLAN, config.rtklib.routePlan)
+            putExtra(EXTRA_RTKLIB_VALIDATION_SUMMARY, config.rtklib.validationSummary)
+            putExtra(EXTRA_RTKLIB_OUTPUT_NMEA, config.rtklib.outputNmea)
+            putExtra(EXTRA_RTKLIB_OUTPUT_POS, config.rtklib.outputPos)
+            putExtra(EXTRA_RTKLIB_MAX_ROVER_QUEUE_BYTES, config.rtklib.maxRoverQueueBytes)
+            putExtra(EXTRA_RTKLIB_MAX_CORRECTION_QUEUE_BYTES, config.rtklib.maxCorrectionQueueBytes)
+            putExtra(EXTRA_RTKLIB_FREQUENCY_COUNT, config.rtklib.frequencyCount)
+            putExtra(EXTRA_RTKLIB_SERVER_CYCLE_MILLIS, config.rtklib.serverCycleMillis)
+            putExtra(EXTRA_RTKLIB_SERVER_BUFFER_BYTES, config.rtklib.serverBufferBytes)
+            putExtra(EXTRA_RTKLIB_SOLUTION_BUFFER_BYTES, config.rtklib.solutionBufferBytes)
+            putExtra(EXTRA_SOLUTION_POLICY_PROFILE_ID, config.solutionPolicy.profileId)
+            putExtra(EXTRA_SOLUTION_SCREEN_POLICY, config.solutionPolicy.screenPolicy.name)
+            putExtra(EXTRA_SOLUTION_MOCK_POLICY, config.solutionPolicy.mockPolicy.name)
+            putStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS, ArrayList(config.expectedSessionArtifactNames))
+            putExtra(EXTRA_BASE_COORDINATE_ID, baseId)
+            if (basePosition != null) {
+                putExtra(EXTRA_BASE_POSITION_JSON, BasePositionJsonCodec.encode(basePosition))
+                putExtra(EXTRA_BASE_COORDINATE_NAME, basePosition.name)
+                putExtra(EXTRA_BASE_COORDINATE_METHOD, basePosition.method)
+                putExtra(EXTRA_COORDINATE_SOURCE, basePosition.sourceDescription)
+            }
+            putExtra(EXTRA_SETTINGS_SET_NAME, snapshot.settingsSetId)
+            putExtra(EXTRA_SETTINGS_COMMAND_PROFILE_NAME, config.commandProfileId)
+            putExtra(EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME, config.usbBaudProfileId)
+            putExtra(EXTRA_SETTINGS_NTRIP_CASTER_PROFILE_NAME,
+                snapshot.profileIds[ActiveSetupOptionKey.NTRIP_CASTER] ?: "NTRIP disabled")
+            putExtra(EXTRA_SETTINGS_RECORDING_OUTPUT_PROFILE_NAME, snapshot.recordingOutputProfile.name)
+            putExtra(EXTRA_SETTINGS_STORAGE_PROFILE_NAME, config.storage.id)
+        }
+    }
+
+    private fun startRecording(incoming: Intent) {
         if (stopping.get()) {
+            RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
             runCatching { broadcastState() }
             return
         }
         if (!running.compareAndSet(false, true)) {
+            RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
+            return
+        }
+        val snapshot = runCatching {
+            val token = incoming.getStringExtra(EXTRA_SETUP_TOKEN)
+            require(!token.isNullOrBlank()) { "Validated recording setup is required." }
+            RecordingSetupBridge.acceptStart(token)
+                ?: throw IllegalArgumentException("Validated recording setup expired; retry Start.")
+        }.getOrElse {
+            RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
+            running.set(false)
+            state = state.copy(running = false, lifecycle = RecordingLifecycleState.FAILED,
+                lastError = "Validated recording setup is required; retry Start.",
+                errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+                errorSeverity = RecordingErrorSeverity.FATAL)
+            broadcastState()
+            stopSelf()
+            return
+        }
+        activeSetupSessionId = snapshot.sessionId
+        lastSetupReceipt = null
+        startedSetupState = null
+        latestAcceptedSetupState = null
+        val intent = try {
+            authorizedStartIntent(incoming, snapshot)
+        } catch (_: Throwable) {
+            RecordingSetupBridge.stop(snapshot.sessionId)
+            activeSetupSessionId = null
+            running.set(false)
+            state = state.copy(running = false, lifecycle = RecordingLifecycleState.FAILED,
+                lastError = "Validated recording setup could not be prepared.",
+                errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+                errorSeverity = RecordingErrorSeverity.FATAL)
+            broadcastState()
+            stopSelf()
             return
         }
         if (stopping.get()) {
             running.set(false)
+            RecordingSetupBridge.stop(snapshot.sessionId)
+            activeSetupSessionId = null
             runCatching { broadcastState() }
             return
         }
+        startedSetupState = requireNotNull(RecordingSetupBridge.current())
+        latestAcceptedSetupState = startedSetupState
         shutdownSent.set(false)
         ntripReconnectRequested.set(false)
         activeWorkflowUsesNtrip = false
@@ -536,7 +716,7 @@ class RecordingForegroundService : Service() {
             val openedSession = openSessionWriters(intent)
             val sessionWriters = openedSession.writers
             val startedAt = Instant.now().toString()
-            val sessionUuid = UUID.randomUUID().toString()
+            val sessionUuid = snapshot.sessionId
             val metadata = SessionMetadata(
                 appVersion = BuildConfig.VERSION_NAME,
                 androidDeviceModel = Build.MODEL ?: "unknown",
@@ -608,13 +788,13 @@ class RecordingForegroundService : Service() {
                     intent.getBooleanExtra(EXTRA_BASE_CASTER_UPLOAD_USERNAME_PRESENT, false),
                 baseCasterUploadSecretRef = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_SECRET_REF),
                 baseCasterUploadFinalStatus = intent.getStringExtra(EXTRA_BASE_CASTER_UPLOAD_FINAL_STATUS),
-                validationSummary = intent.getStringExtra(EXTRA_VALIDATION_SUMMARY),
+                validationSummary = "Validated settings set ${snapshot.settingsSetId}; start revision ${snapshot.revision}",
                 expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
             )
             writers = sessionWriters
             ActiveRecordingSessionRegistry.activate(openedSession.displayPath)
             activeSessionLocation = openedSession.displayPath
-            sessionWriters.writeSessionJson(exportSessionMetadata(metadata))
+            sessionWriters.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
             activeSessionMetadata = metadata
             intent.getStringExtra(EXTRA_BASE_POSITION_JSON)
                 ?.takeIf { it.isNotBlank() }
@@ -1764,38 +1944,36 @@ class RecordingForegroundService : Service() {
     }
 
     private fun updateNtrip(intent: Intent) {
-        val policy = NtripUpdatePolicy.validateUpdate(
-            activeRecordingRunning = running.get(),
-            activeWorkflowUsesNtrip = activeWorkflowUsesNtrip,
-        )
-        if (!policy.allowed) {
-            state = state.copy(
-                lastError = policy.message,
-                errorCategory = policy.category,
-                errorSeverity = policy.severity,
+        if (!running.get() || activeRecorder == null) {
+            rejectUnstagedSetupUpdate()
+            return
+        }
+        val previousRevision = RecordingSetupBridge.current()?.revision
+        var validatedConfig: NtripRuntimeConfig? = null
+        val receipt = RecordingSetupBridge.acceptSource(intent.getStringExtra(EXTRA_SETUP_TOKEN)) { candidate ->
+            require(candidate.sessionId == activeSetupSessionId) { "The update belongs to another recording." }
+            val policy = NtripUpdatePolicy.validateUpdate(
+                activeRecordingRunning = running.get(), activeWorkflowUsesNtrip = activeWorkflowUsesNtrip,
             )
+            require(policy.allowed) { policy.message ?: "This recording cannot change correction source." }
+            val request = correctionNtripRequestFromIntent(authorizedNtripUpdateIntent(candidate), false)
+            validatedConfig = NtripRuntimeConfig(request = request, ggaLines = emptyList())
+        }
+        if (receipt == null || !receipt.accepted) {
+            lastSetupReceipt = receipt
+            rejectUnstagedSetupUpdate(receipt?.message)
+            return
+        }
+        if (!shouldApplySetupReceipt(previousRevision, receipt)) {
+            lastSetupReceipt = receipt
             broadcastState()
             return
         }
-        val config = runCatching { ntripRuntimeConfig(intent) }
-            .getOrElse { error ->
-                state = state.copy(
-                    lastError = "Cannot update NTRIP: ${error.message ?: error.javaClass.simpleName}",
-                    errorCategory = RecordingErrorCategory.NTRIP,
-                    errorSeverity = RecordingErrorSeverity.DEGRADED,
-                )
-                broadcastState()
-                return
-            }
-        if (config == null) {
-            state = state.copy(
-                lastError = "Cannot update NTRIP: host and mountpoint are required.",
-                errorCategory = RecordingErrorCategory.NTRIP,
-                errorSeverity = RecordingErrorSeverity.DEGRADED,
-            )
-            broadcastState()
+        val snapshot = RecordingSetupBridge.serviceSnapshot(receipt.sessionId) ?: run {
+            rejectUnstagedSetupUpdate()
             return
         }
+        val config = requireNotNull(validatedConfig)
         val configAccepted = synchronized(ntripOperationLock) {
             if (!running.get()) {
                 false
@@ -1805,6 +1983,10 @@ class RecordingForegroundService : Service() {
             }
         }
         if (!configAccepted) return
+        lastSetupReceipt = receipt
+        latestAcceptedSetupState = RecordingSetupBridge.current()
+        state = state.copy(ntripState = NtripRuntimeState.RECONNECT_WAIT.name, correctionsActive = false)
+        broadcastState()
         coordinateAveragingController.onNtripSourceChanged(
             casterLabel = config.request.host,
             mountpointLabel = config.request.mountpoint,
@@ -1825,7 +2007,7 @@ class RecordingForegroundService : Service() {
         }
         runCatching {
             writers?.appendEventJson(
-                """{"type":"ntrip-config-updated","host":"${config.request.host.jsonEscape()}","mountpoint":"${config.request.mountpoint.jsonEscape()}","usernamePresent":${config.request.credentials != null}}""",
+                """{"type":"ntrip-config-updated","host":"${config.request.host.jsonEscape()}","mountpoint":"${config.request.mountpoint.jsonEscape()}","casterProfileId":"${snapshot.profileIds[ActiveSetupOptionKey.NTRIP_CASTER].orEmpty().jsonEscape()}","sourceProfileId":"${snapshot.profileIds[ActiveSetupOptionKey.NTRIP_MOUNTPOINT].orEmpty().jsonEscape()}","configurationRevision":${snapshot.revision},"usernamePresent":${config.request.credentials != null}}""",
             )
         }
         if (ntripController == null) {
@@ -1844,29 +2026,31 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun disableNtrip() {
-        val cleanupConfirmed = synchronized(ntripOperationLock) {
-            activeNtripRuntimeConfig = null
-            ntripController?.disable("User disabled NTRIP during recording.") ?: true
-        }
-        runCatching { writers?.appendEventJson("""{"type":"ntrip-disabled","reason":"user"}""") }
-        if (!cleanupConfirmed) {
-            recordRuntimeDiagnostic(
-                category = DiagnosticCategory.NTRIP,
-                severity = RecordingErrorSeverity.DEGRADED.name,
-                message = { "NTRIP was disabled, but its previous worker is still stopping." },
-            )
-        }
-        state = state.copy(ntripState = "DISABLED", correctionsActive = false)
-        broadcastState()
-    }
-
     private fun updateMockLocation(intent: Intent) {
-        if (!running.get()) {
+        if (!running.get() || activeRecorder == null) {
+            rejectUnstagedSetupUpdate()
             return
         }
-        mockLocationRequested = intent.getBooleanExtra(EXTRA_ENABLE_MOCK_LOCATION, false)
-        mockLocationRateHz = intent.mockLocationRateHz()
+        val previousRevision = RecordingSetupBridge.current()?.revision
+        val receipt = RecordingSetupBridge.acceptMock(intent.getStringExtra(EXTRA_SETUP_TOKEN))
+        if (receipt == null || !receipt.accepted) {
+            lastSetupReceipt = receipt
+            rejectUnstagedSetupUpdate(receipt?.message)
+            return
+        }
+        if (!shouldApplySetupReceipt(previousRevision, receipt)) {
+            lastSetupReceipt = receipt
+            broadcastState()
+            return
+        }
+        val snapshot = RecordingSetupBridge.serviceSnapshot(receipt.sessionId) ?: run {
+            rejectUnstagedSetupUpdate()
+            return
+        }
+        lastSetupReceipt = receipt
+        latestAcceptedSetupState = RecordingSetupBridge.current()
+        mockLocationRequested = snapshot.config.recording.enableMockLocation
+        mockLocationRateHz = snapshot.config.recording.mockLocationRateHz
         lastMockPublishedAt = null
         lastMockPublishedIdentity = null
         lastMockPublishWallClockAtMillis = null
@@ -1880,6 +2064,36 @@ class RecordingForegroundService : Service() {
         configureMockLocation(mockLocationRequested)
         startBestSolutionTicker()
         broadcastState()
+    }
+
+    private fun authorizedNtripUpdateIntent(snapshot: RunningSetupSnapshot): Intent =
+        Intent(this, RecordingForegroundService::class.java).apply {
+            val source = snapshot.config.ntrip
+            putExtra(EXTRA_NTRIP_ENABLED, source.enabled)
+            putExtra(EXTRA_NTRIP_HOST, source.host)
+            putExtra(EXTRA_NTRIP_PORT, source.port)
+            putExtra(EXTRA_NTRIP_TRANSPORT_MODE, source.transportMode.name)
+            putExtra(EXTRA_NTRIP_TLS_VERIFICATION, source.tlsVerification.storageValue)
+            putExtra(EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED, source.unsafeTlsAcknowledged)
+            putExtra(EXTRA_NTRIP_MOUNTPOINT, source.mountpoint)
+            putExtra(EXTRA_NTRIP_PROTOCOL_POLICY, source.protocolPolicy)
+            putExtra(EXTRA_NTRIP_USERNAME, source.username)
+            putExtra(EXTRA_NTRIP_PASSWORD, source.password.orEmpty())
+            putExtra(EXTRA_NTRIP_SECRET_REF, source.secretRef)
+            putExtra(EXTRA_NTRIP_GGA, "")
+        }
+
+    private fun rejectUnstagedSetupUpdate(message: String? = null) {
+        state = state.copy(lastError = message ?: "Recording update requires a current validated request.",
+            errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+            errorSeverity = RecordingErrorSeverity.DEGRADED)
+        broadcastState()
+    }
+
+    private fun sessionJsonWithSetupProvenance(metadata: SessionMetadata): String {
+        val started = requireNotNull(startedSetupState) { "Recording setup provenance is unavailable." }
+        val latest = requireNotNull(latestAcceptedSetupState) { "Recording setup provenance is unavailable." }
+        return withRecordingSetupProvenance(exportSessionMetadata(metadata), started, latest)
     }
 
     private fun writePersistentReceiverConfig(intent: Intent) {
@@ -2131,6 +2345,9 @@ class RecordingForegroundService : Service() {
                 running.getAndSet(false)
             }
         }
+        activeSetupSessionId?.let(RecordingSetupBridge::stop)
+        activeSetupSessionId = null
+        lastSetupReceipt = null
         if (
             !wasRunning &&
             runtime == null &&
@@ -2411,7 +2628,7 @@ class RecordingForegroundService : Service() {
                         baseCasterUploadFinalStatus = casterUploadSnapshot?.state,
                     )
                     ?.let { metadata ->
-                        writers?.writeSessionJson(exportSessionMetadata(metadata))
+                        writers?.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
                         activeSessionMetadata = metadata
                     }
             }
@@ -2455,6 +2672,8 @@ class RecordingForegroundService : Service() {
         writers = null
         advisoryFanout = null
         activeSessionMetadata = null
+        startedSetupState = null
+        latestAcceptedSetupState = null
         activeRecorder = null
         activeEventSink = null
         activeBaudPlan = null
@@ -2799,7 +3018,7 @@ class RecordingForegroundService : Service() {
             usernamePresent = !intent.getStringExtra(EXTRA_NTRIP_USERNAME).isNullOrBlank(),
             ggaUploadEnabled = !intent.getStringExtra(EXTRA_NTRIP_GGA).isNullOrBlank(),
             secretRef = intent.getStringExtra(EXTRA_NTRIP_SECRET_REF)?.takeIf { it.isNotBlank() },
-            protocol = "NTRIP_V2_PREFERRED_WITH_COMPATIBILITY",
+            protocol = intent.getStringExtra(EXTRA_NTRIP_PROTOCOL_POLICY),
             finalStatus = null,
         )
     }
@@ -2972,6 +3191,12 @@ class RecordingForegroundService : Service() {
         sendBroadcast(
             Intent(ACTION_STATE).apply {
                 setPackage(packageName)
+                val setup = RecordingSetupBridge.current()
+                putExtra(EXTRA_STATE_SETUP_SESSION_ID, setup?.sessionId)
+                putExtra(EXTRA_STATE_SETUP_REVISION, setup?.revision ?: -1L)
+                putExtra(EXTRA_STATE_SETUP_REQUEST_ID, lastSetupReceipt?.requestId)
+                putExtra(EXTRA_STATE_SETUP_ACCEPTED, lastSetupReceipt?.accepted ?: false)
+                putExtra(EXTRA_STATE_SETUP_MESSAGE, lastSetupReceipt?.message)
                 putExtra(EXTRA_STATE_RUNNING, state.running)
                 putExtra(EXTRA_STATE_WORKFLOW_LABEL, state.workflowLabel)
                 putExtra(EXTRA_STATE_RECEIVER_LABEL, state.receiverLabel)
@@ -4191,6 +4416,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_NTRIP_TLS_VERIFICATION = "ntripTlsVerification"
         const val EXTRA_NTRIP_UNSAFE_TLS_ACKNOWLEDGED = "ntripUnsafeTlsAcknowledged"
         const val EXTRA_NTRIP_MOUNTPOINT = "ntripMountpoint"
+        const val EXTRA_NTRIP_PROTOCOL_POLICY = "ntripProtocolPolicy"
         const val EXTRA_NTRIP_USERNAME = "ntripUsername"
         const val EXTRA_NTRIP_PASSWORD = "ntripPassword"
         const val EXTRA_NTRIP_SECRET_REF = "ntripSecretRef"
@@ -4271,6 +4497,7 @@ class RecordingForegroundService : Service() {
         const val EXTRA_BASE_CASTER_UPLOAD_FINAL_STATUS = "baseCasterUploadFinalStatus"
         const val EXTRA_VALIDATION_SUMMARY = "validationSummary"
         const val EXTRA_EXPECTED_ARTIFACTS = "expectedArtifacts"
+        const val EXTRA_SETUP_TOKEN = "setupToken"
         const val EXTRA_SETTINGS_SET_NAME = "settingsSetName"
         const val EXTRA_SETTINGS_COMMAND_PROFILE_NAME = "settingsCommandProfileName"
         const val EXTRA_SETTINGS_USB_BAUD_PROFILE_NAME = "settingsUsbBaudProfileName"
@@ -4279,6 +4506,11 @@ class RecordingForegroundService : Service() {
         const val EXTRA_SETTINGS_STORAGE_PROFILE_NAME = "settingsStorageProfileName"
 
         const val EXTRA_STATE_RUNNING = "running"
+        const val EXTRA_STATE_SETUP_SESSION_ID = "setupSessionId"
+        const val EXTRA_STATE_SETUP_REVISION = "setupRevision"
+        const val EXTRA_STATE_SETUP_REQUEST_ID = "setupRequestId"
+        const val EXTRA_STATE_SETUP_ACCEPTED = "setupAccepted"
+        const val EXTRA_STATE_SETUP_MESSAGE = "setupMessage"
         const val EXTRA_STATE_WORKFLOW_LABEL = "workflowLabel"
         const val EXTRA_STATE_RECEIVER_LABEL = "receiverLabel"
         const val EXTRA_STATE_RECEIVER_FAMILY = "receiverFamily"

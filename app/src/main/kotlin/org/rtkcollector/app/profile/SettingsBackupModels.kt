@@ -2,6 +2,7 @@ package org.rtkcollector.app.profile
 
 import org.json.JSONArray
 import org.json.JSONObject
+import org.rtkcollector.app.profile.ActiveSetupResolver.defaultOptionValues
 
 enum class SettingsBackupProfileFamily(val jsonKey: String) {
     COMMAND("commandProfiles"),
@@ -14,6 +15,107 @@ enum class SettingsBackupProfileFamily(val jsonKey: String) {
     SOLUTION_POLICY("solutionPolicyProfiles"),
     STORAGE("storageProfiles"),
     SETTINGS_SET("settingsSets"),
+}
+
+enum class MigrationReviewReason(val blocksApplicableRoute: Boolean) {
+    CASTER_LINEAGE(true),
+    POLICY_CONFLICT(true),
+    MISSING_PROFILE(true),
+    MISSING_CREDENTIAL(true),
+    UNREADABLE_CREDENTIAL(true),
+    BASE_COORDINATE(true),
+    SAF_RESELECTION(true),
+    DORMANT_OVERRIDE(false),
+    UNCLASSIFIED_INPUT(false),
+}
+
+enum class LegacyFieldDisposition { EFFECTIVE, DORMANT, UNCERTAIN }
+
+enum class MigrationIssueResolution { VALIDATED_OPERATOR_REPAIR, EXACT_BOUND_CREDENTIAL, PERSISTED_SAF_AUTHORITY }
+
+data class MigrationReviewIssue(
+    val option: ActiveSetupOptionKey,
+    val field: String,
+    val disposition: LegacyFieldDisposition,
+    val reason: MigrationReviewReason? = null,
+    /** Null means the decision concerns the option rather than a particular profile. */
+    val profileId: String? = null,
+    val resolution: MigrationIssueResolution? = null,
+) {
+    fun toJson(): JSONObject = JSONObject().put("option", option.name)
+        .put("field", field.takeIf(::isAllowedRecoveryField) ?: "unclassifiedInput")
+        .put("disposition", disposition.name).putNullable("reason", reason?.name)
+        .putNullable("profileId", profileId)
+        .putNullable("resolution", resolution?.name)
+
+    companion object {
+        fun fromJson(json: JSONObject) = MigrationReviewIssue(
+            ActiveSetupOptionKey.valueOf(json.getString("option")),
+            json.getString("field").takeIf(::isAllowedRecoveryField) ?: "unclassifiedInput",
+            LegacyFieldDisposition.valueOf(json.getString("disposition")),
+            json.optNullableString("reason")?.let(MigrationReviewReason::valueOf),
+            json.optNullableString("profileId"),
+            json.optNullableString("resolution")?.let(MigrationIssueResolution::valueOf),
+        )
+    }
+}
+
+data class LegacyMigrationRecovery(
+    val legacySettingsSet: RecordingSettingsSet,
+    val reviewReasons: Set<MigrationReviewReason>,
+    val issues: List<MigrationReviewIssue> = emptyList(),
+    /** Global choices without proven set ownership remain evidence, never active choices. */
+    val choiceProvenance: Map<String, String> = emptyMap(),
+    /** Named recovery inputs only; neither passwords nor permission to resolve runtime aliases. */
+    val ownerSecretInputs: Map<String, List<String>> = emptyMap(),
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("legacySettingsSet", legacySettingsSet.toJson())
+        .put("reviewReasons", JSONArray().also { array -> reviewReasons.forEach { array.put(it.name) } })
+        .put("issues", issues.toJsonArray(MigrationReviewIssue::toJson))
+        .put("choiceProvenance", JSONObject(choiceProvenance.filterKeys { it in RECOVERY_CHOICE_KEYS }))
+        .put("ownerSecretInputs", JSONObject().also { bindings ->
+            ownerSecretInputs.filterKeys(::isAllowedRecoveryOwner).forEach { (owner, inputs) -> bindings.put(owner, JSONArray(inputs)) }
+        })
+
+    fun blockingIssues(set: RecordingSettingsSet, state: ActiveSetupSelections): List<MigrationReviewIssue> {
+        val active = ActiveSetupResolver.resolve(set, state)
+        val originalDefaults = legacySettingsSet.defaultOptionValues()
+        return issues.filter { issue ->
+            issue.resolution == null && issue.disposition != LegacyFieldDisposition.DORMANT && issue.reason?.blocksApplicableRoute == true &&
+                active.options[issue.option]?.let { option ->
+                    val requiresDependency = issue.reason in setOf(MigrationReviewReason.MISSING_PROFILE,
+                        MigrationReviewReason.MISSING_CREDENTIAL, MigrationReviewReason.UNREADABLE_CREDENTIAL,
+                        MigrationReviewReason.CASTER_LINEAGE)
+                    option.applicable && (!requiresDependency || option.dependencyActive) &&
+                        (issue.reason !in setOf(MigrationReviewReason.SAF_RESELECTION,
+                            MigrationReviewReason.MISSING_CREDENTIAL, MigrationReviewReason.UNREADABLE_CREDENTIAL) ||
+                            issue.profileId == null || issue.profileId == option.effectiveValueId ||
+                            issue.profileId == originalDefaults[issue.option])
+                } == true
+        }
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): LegacyMigrationRecovery = LegacyMigrationRecovery(
+            legacySettingsSet = RecordingSettingsSet.fromJson(json.getJSONObject("legacySettingsSet")),
+            reviewReasons = json.getJSONArray("reviewReasons").let { array ->
+                (0 until array.length()).mapTo(linkedSetOf()) { index ->
+                    MigrationReviewReason.valueOf(array.getString(index))
+                }
+            },
+            issues = json.optJSONArray("issues")?.mapObjects(MigrationReviewIssue::fromJson).orEmpty(),
+            choiceProvenance = json.optJSONObject("choiceProvenance")?.let { values ->
+                values.keys().asSequence().filter { it in RECOVERY_CHOICE_KEYS }.associateWith(values::getString)
+            }.orEmpty(),
+            ownerSecretInputs = json.optJSONObject("ownerSecretInputs")?.let { values ->
+                values.keys().asSequence().filter(::isAllowedRecoveryOwner).associateWith { owner ->
+                    val inputs = values.getJSONArray(owner)
+                    (0 until inputs.length()).map(inputs::getString)
+                }
+            }.orEmpty(),
+        )
+    }
 }
 
 data class SettingsBackupFile(
@@ -33,8 +135,12 @@ data class SettingsBackupFile(
     val selectedWorkflowId: String?,
     val lastActiveNtripMountpointProfileId: String?,
     val plaintextPasswordsBySecretId: Map<String, String>,
+    val activeSetupSelections: Map<String, ActiveSetupSelections> = emptyMap(),
+    val migrationRecovery: Map<String, LegacyMigrationRecovery> = emptyMap(),
     /** Families physically present in the imported JSON; all families are present in new exports. */
     val includedProfileFamilies: Set<SettingsBackupProfileFamily> = SettingsBackupProfileFamily.entries.toSet(),
+    /** Never serialized or printed. Publication must retain this in private encrypted storage first. */
+    val privateRecoveryInput: PrivateRecoveryInput? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("formatVersion", formatVersion)
@@ -53,6 +159,21 @@ data class SettingsBackupFile(
         .putNullable("selectedWorkflowId", selectedWorkflowId)
         .putNullable("lastActiveNtripMountpointProfileId", lastActiveNtripMountpointProfileId)
         .also { json ->
+            if (formatVersion >= 2) {
+                json.put("includedProfileFamilies", JSONArray(includedProfileFamilies.map { it.name }))
+                json.put("activeSetupSelections", JSONObject().also { selections ->
+                    activeSetupSelections.forEach { (setId, state) ->
+                        require(setId == state.settingsSetId) { "Selection state key must match its settings set." }
+                        selections.put(setId, state.toJson())
+                    }
+                })
+                json.put("migrationRecovery", JSONObject().also { recovery ->
+                    migrationRecovery.forEach { (setId, record) ->
+                        require(setId == record.legacySettingsSet.id) { "Recovery key must match its settings set." }
+                        recovery.put(setId, record.toJson())
+                    }
+                })
+            }
             if (plaintextPasswordsBySecretId.isNotEmpty()) {
                 json.put(
                     "plaintextPasswords",
@@ -66,7 +187,7 @@ data class SettingsBackupFile(
         }
 
     companion object {
-        const val CURRENT_FORMAT_VERSION = 1
+        const val CURRENT_FORMAT_VERSION = 2
 
         fun fromProfiles(
             commandProfiles: List<CommandProfile>,
@@ -85,6 +206,8 @@ data class SettingsBackupFile(
             passwordsBySecretId: Map<String, String>,
             options: SettingsSetExportOptions,
             exportedAtEpochMillis: Long = System.currentTimeMillis(),
+            activeSetupSelections: Map<String, ActiveSetupSelections> = emptyMap(),
+            migrationRecovery: Map<String, LegacyMigrationRecovery> = emptyMap(),
         ): SettingsBackupFile =
             SettingsBackupFile(
                 formatVersion = CURRENT_FORMAT_VERSION,
@@ -103,10 +226,12 @@ data class SettingsBackupFile(
                 selectedWorkflowId = selectedWorkflowId,
                 lastActiveNtripMountpointProfileId = lastActiveNtripMountpointProfileId,
                 plaintextPasswordsBySecretId = emptyMap(),
+                activeSetupSelections = activeSetupSelections,
+                migrationRecovery = migrationRecovery,
             ).let { backup ->
                 backup.copy(
                     plaintextPasswordsBySecretId = if (options.includePlaintextPasswords) {
-                        passwordsBySecretId.filterKeys(backup.referencedNtripSecretIds()::contains)
+                        backup.committedNtripSecretIds().mapNotNull { id -> passwordsBySecretId[id]?.let { id to it } }.toMap()
                     } else {
                         emptyMap()
                     },
@@ -114,12 +239,23 @@ data class SettingsBackupFile(
             }
 
         fun fromJson(json: JSONObject): SettingsBackupFile {
-            require(json.optInt("formatVersion", 0) == CURRENT_FORMAT_VERSION) {
+            val formatVersion = json.optInt("formatVersion", 0)
+            require(formatVersion in 1..CURRENT_FORMAT_VERSION) {
                 "Unsupported settings backup format version."
             }
+            val selections = if (formatVersion >= 2) {
+                requireNotNull(json.optJSONObject("activeSetupSelections")) {
+                    "Settings backup is missing active setup selections."
+                }
+            } else null
+            val recovery = if (formatVersion >= 2) {
+                requireNotNull(json.optJSONObject("migrationRecovery")) {
+                    "Settings backup is missing migration recovery data."
+                }
+            } else null
             val passwords = json.optJSONObject("plaintextPasswords")
             return SettingsBackupFile(
-                formatVersion = json.getInt("formatVersion"),
+                formatVersion = formatVersion,
                 exportedAtEpochMillis = json.optLong("exportedAtEpochMillis", 0L),
                 commandProfiles = json.getJSONArray("commandProfiles").mapObjects(CommandProfile::fromJson),
                 usbBaudProfiles = json.getJSONArray("usbBaudProfiles").mapObjects(UsbBaudProfile::fromJson),
@@ -145,12 +281,37 @@ data class SettingsBackupFile(
                 plaintextPasswordsBySecretId = passwords?.keys()?.asSequence()
                     ?.associateWith { secretId -> passwords.getString(secretId) }
                     .orEmpty(),
-                includedProfileFamilies = SettingsBackupProfileFamily.entries
-                    .filterTo(linkedSetOf()) { family -> json.optJSONArray(family.jsonKey) != null },
-            )
+                activeSetupSelections = selections?.let { objectJson ->
+                    objectJson.keys().asSequence().associateWith { setId ->
+                        ActiveSetupSelections.fromJson(objectJson.getJSONObject(setId)).also { state ->
+                            require(state.settingsSetId == setId) { "Selection state key does not match its settings set." }
+                        }
+                    }
+                }.orEmpty(),
+                migrationRecovery = recovery?.let { objectJson ->
+                    objectJson.keys().asSequence().associateWith { setId ->
+                        LegacyMigrationRecovery.fromJson(objectJson.getJSONObject(setId)).also { record ->
+                            require(record.legacySettingsSet.id == setId) { "Recovery key does not match its settings set." }
+                        }
+                    }
+                }.orEmpty(),
+                includedProfileFamilies = SettingsBackupProfileFamily.entries.filterTo(linkedSetOf()) { family ->
+                    json.optJSONArray(family.jsonKey) != null && (formatVersion < 2 ||
+                        json.optJSONArray("includedProfileFamilies")?.let { included ->
+                            (0 until included.length()).any { included.getString(it) == family.name }
+                        } != false)
+                },
+            ).let { retainPrivateLegacyInput(it, json) }
         }
     }
 }
+
+private val RECOVERY_CHOICE_KEYS = setOf("workflow", "baseCoordinate", "unscopedWorkflow", "unscopedBaseCoordinate")
+
+private fun isAllowedRecoveryOwner(owner: String): Boolean =
+    listOf(ActiveSetupOptionKey.NTRIP_CASTER, ActiveSetupOptionKey.NTRIP_CASTER_UPLOAD).any {
+        owner.startsWith("${it.name}:") && owner.length > it.name.length + 1
+    }
 
 private fun <T> List<T>.toJsonArray(encode: (T) -> JSONObject): JSONArray =
     JSONArray().also { array -> forEach { array.put(encode(it)) } }
@@ -228,3 +389,17 @@ internal fun SettingsBackupFile.referencedNtripSecretIds(): Set<String> = buildS
         settingsSet.overrides.ntripCasterUpload?.secretId?.takeIf(String::isNotBlank)?.let(::add)
     }
 }
+
+/** Only these committed owner bindings may be consulted for a consented export. */
+fun SettingsBackupFile.committedNtripSecretIds(): Set<String> = buildSet {
+    ntripCasterProfiles.map(NtripCasterProfile::secretId).filterTo(this, String::isNotBlank)
+    ntripCasterUploadProfiles.map(NtripCasterUploadProfile::secretId).filterTo(this, String::isNotBlank)
+}
+
+/** Consent gates the callback itself, not merely inclusion of its result in JSON. */
+fun SettingsBackupFile.withPasswordExport(
+    options: SettingsSetExportOptions,
+    passwordLookup: (String) -> String?,
+): SettingsBackupFile = copy(plaintextPasswordsBySecretId = if (options.includePlaintextPasswords) {
+    committedNtripSecretIds().mapNotNull { id -> passwordLookup(id)?.let { id to it } }.toMap()
+} else emptyMap())

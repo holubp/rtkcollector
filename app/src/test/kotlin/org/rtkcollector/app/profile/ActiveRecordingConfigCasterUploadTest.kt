@@ -33,6 +33,7 @@ class ActiveRecordingConfigCasterUploadTest {
                 host = "caster.example.org",
                 port = 2101,
                 mountpoint = "BASEOUT",
+                secretId = "ntrip-caster-upload-profile:upload",
             ),
         )
 
@@ -46,13 +47,13 @@ class ActiveRecordingConfigCasterUploadTest {
     }
 
     @Test
-    fun `legacy upload protocol policy becomes explicit v2 at runtime`() {
+    fun `legacy upload protocol intent remains owned by selected profile`() {
         val config = activeConfig(
             workflowId = "fixed-base",
             hasAcceptedBaseCoordinate = true,
         )
 
-        assertEquals("NTRIP_V2_ONLY", config.casterUpload.protocolPolicy)
+        assertEquals("NTRIP_V2_PREFERRED_WITH_COMPATIBILITY", config.casterUpload.protocolPolicy)
     }
 
     @Test
@@ -91,27 +92,23 @@ class ActiveRecordingConfigCasterUploadTest {
     }
 
     @Test
-    fun `rover workflow rejects enabled caster upload before start`() {
+    fun `rover workflow leaves enabled upload default dormant`() {
         val config = activeConfig(
-            workflowId = "rover-ntrip",
-            hasAcceptedBaseCoordinate = true,
+            workflowId = "plain-rover",
+            hasAcceptedBaseCoordinate = false,
+            runtimeScript = "MODE ROVER",
         )
-
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
-
-        assertEquals("NTRIP caster upload is only available for base workflows.", error.message)
+        assertEquals(false, config.casterUpload.enabled)
+        config.validateForStart()
     }
 
     @Test
     fun `upload requires accepted base coordinate`() {
-        val config = activeConfig(
+        val error = assertThrows(IllegalArgumentException::class.java) { activeConfig(
             workflowId = "fixed-base",
             hasAcceptedBaseCoordinate = false,
-        )
-
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
-
-        assertEquals("NTRIP caster upload requires an accepted base coordinate.", error.message)
+        ) }
+        assertTrue(error.message.orEmpty().contains("Base coordinate must be selected"))
     }
 
     @Test
@@ -136,13 +133,11 @@ class ActiveRecordingConfigCasterUploadTest {
 
     @Test
     fun `upload rejects command profile without base rtcm output`() {
-        val config = activeConfig(
+        val error = assertThrows(IllegalArgumentException::class.java) { activeConfig(
             workflowId = "fixed-base",
             hasAcceptedBaseCoordinate = true,
-            runtimeScript = "MODE BASE TIME 120 2.5\nBESTNAVB COM1 1",
-        )
-
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+            runtimeScript = "MODE BASE 49.4637593130 15.4512544790 707.8000\nBESTNAVB COM1 1",
+        ) }
 
         assertTrue(error.message!!.contains("NTRIP caster upload requires base RTCM output"))
     }
@@ -169,7 +164,7 @@ class ActiveRecordingConfigCasterUploadTest {
 
     @Test
     fun `v2 source upload rejects malformed mountpoint before start`() {
-        val config = activeConfig(
+        val error = assertThrows(IllegalArgumentException::class.java) { activeConfig(
             workflowId = "fixed-base",
             hasAcceptedBaseCoordinate = true,
             uploadProfile = NtripCasterUploadProfile(
@@ -180,9 +175,7 @@ class ActiveRecordingConfigCasterUploadTest {
                 protocolPolicy = "NTRIP_V2_ONLY",
             ),
             passwordLookup = { "secret" },
-        )
-
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+        ) }
 
         assertEquals("NTRIP source upload mountpoint must not contain HTTP syntax.", error.message)
     }
@@ -194,6 +187,12 @@ class ActiveRecordingConfigCasterUploadTest {
                 workflowId = "rover-ntrip",
                 baseCasterUploadEnabled = false,
                 ntripCasterUploadProfileRef = null,
+                commandProfileRef = ProfileReference("commands", "Commands"),
+                usbBaudProfileRef = ProfileReference("baud", "Baud"),
+                ntripCasterProfileRef = null,
+                ntripMountpointProfileRef = ProfileReference("mount", "Mount"),
+                recordingOutputProfileRef = ProfileReference("record", "Record"),
+                storageProfileRef = ProfileReference("storage", "Storage"),
             ),
             commandProfile = CommandProfile("commands", "Commands", runtimeScript = "MODE ROVER"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
@@ -222,6 +221,7 @@ class ActiveRecordingConfigCasterUploadTest {
             host = "caster.example.org",
             mountpoint = "BASEOUT",
             username = "user",
+            secretId = "ntrip-caster-upload-profile:upload",
         ),
         runtimeScript: String = BASE_RTCM_SCRIPT,
         passwordLookup: (String) -> String? = { "password" },
@@ -231,7 +231,12 @@ class ActiveRecordingConfigCasterUploadTest {
                 workflowId = workflowId,
                 ntripCasterProfileRef = null,
                 ntripMountpointProfileRef = null,
-                ntripCasterUploadProfileRef = ProfileReference("upload", "Upload"),
+                commandProfileRef = ProfileReference("commands", "Commands"),
+                usbBaudProfileRef = ProfileReference("baud", "Baud"),
+                recordingOutputProfileRef = ProfileReference("record", "Record"),
+                storageProfileRef = ProfileReference("storage", "Storage"),
+                basePositionProfileRef = if (hasAcceptedBaseCoordinate) ProfileReference("base", "Base") else null,
+                ntripCasterUploadProfileRef = ProfileReference(uploadProfile.id, uploadProfile.name),
                 baseCasterUploadEnabled = baseCasterUploadEnabled,
             ),
             commandProfile = CommandProfile("commands", "Commands", runtimeScript = runtimeScript),
@@ -244,12 +249,13 @@ class ActiveRecordingConfigCasterUploadTest {
             workflowName = "Fixed base",
             workflowUsesNtrip = false,
             hasAcceptedBaseCoordinate = hasAcceptedBaseCoordinate,
+            baseCoordinates = if (hasAcceptedBaseCoordinate) listOf(modelTestBaseCoordinate()) else emptyList(),
             passwordLookup = passwordLookup,
         )
 
     private companion object {
         const val BASE_RTCM_SCRIPT = """
-            MODE BASE TIME 120 2.5
+            MODE BASE 49.4637593130 15.4512544790 707.8000
             RTCM1006 COM1 10
             RTCM1033 COM1 10
             RTCM1074 COM1 1

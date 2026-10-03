@@ -614,7 +614,7 @@ fun ProfileEditorScreen(
     )
     val saveValues = {
         if (editorCanSave) {
-            onSave(values.mapValues { it.value.trim() })
+            onSave(profileEditorSubmissionValues(data.fields, values))
         }
     }
     val leaveEditor = {
@@ -625,7 +625,7 @@ fun ProfileEditorScreen(
         }
     }
     fun runAction(action: ProfileEditorAction) {
-        action.onClickWithValues?.invoke(values.mapValues { it.value.trim() }) ?: action.onClick()
+        action.onClickWithValues?.invoke(profileEditorSubmissionValues(data.fields, values)) ?: action.onClick()
     }
     BackHandler(onBack = leaveEditor)
     if (showUnsavedPrompt) {

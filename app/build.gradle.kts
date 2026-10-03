@@ -58,7 +58,7 @@ android {
         applicationId = "org.rtkcollector.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
+        versionCode = 7
         versionName = "1.0-RC6"
 
         ndk {
@@ -202,6 +202,8 @@ tasks.register<org.gradle.api.tasks.testing.Test>("termuxTestDebugUnitTest") {
         excludeTestsMatching("org.rtkcollector.app.ui.dashboard.DashboardServiceMapperTest")
         excludeTestsMatching("org.rtkcollector.app.ui.imports.SettingsImportIntentReaderTest")
         excludeTestsMatching("org.rtkcollector.app.profile.NtripProfileStoreSecurityTest")
+        excludeTestsMatching("org.rtkcollector.app.profile.ActiveSelectionsStoreTest")
+        excludeTestsMatching("org.rtkcollector.app.profile.NtripSecretAvailabilityTest")
         excludeTestsMatching("org.rtkcollector.app.recording.ServiceNtripIntentParserTest")
     }
 }

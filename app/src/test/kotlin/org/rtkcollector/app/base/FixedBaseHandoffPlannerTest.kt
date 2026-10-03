@@ -12,6 +12,11 @@ import org.rtkcollector.app.profile.ActiveSetupOptionKey
 import org.rtkcollector.app.profile.SettingsSetOptionPolicies
 import org.rtkcollector.app.profile.SettingsSetOptionPolicy
 import org.rtkcollector.app.profile.SettingsSetOverrides
+import org.rtkcollector.app.profile.ActiveSetupSelections
+import org.rtkcollector.app.profile.SelectionChoice
+import org.rtkcollector.app.profile.WorkflowActivationMode
+import org.rtkcollector.app.profile.withWorkflowActivationMode
+import org.rtkcollector.app.profile.modelTestBaseCoordinate
 import java.util.Date
 
 class FixedBaseHandoffPlannerTest {
@@ -55,6 +60,111 @@ class FixedBaseHandoffPlannerTest {
         )
 
         assertFalse(candidates.single().requiresDerivedSettingsSet)
+    }
+
+    @Test
+    fun `effective active command is the advertised fixed-base template`() {
+        val candidates = FixedBaseHandoffPlanner.eligibleSettingsSets(
+            settingsSets = listOf(fixedBaseSet("fixed", "rover-command")),
+            commandProfiles = listOf(
+                command("rover-command", "MODE ROVER SURVEY"),
+                command("active-base", "MODE BASE 49 15 707"),
+            ),
+            filter = ProfileDeviceFilter.ANY,
+            effectiveCommandId = { "active-base" },
+        )
+        assertEquals("active-base", candidates.single().commandProfile?.id)
+    }
+
+    @Test
+    fun `shared editable command offers derivation without forcing it`() {
+        val candidates = FixedBaseHandoffPlanner.eligibleSettingsSets(
+            settingsSets = listOf(fixedBaseSet("target", "shared"), fixedBaseSet("other", "shared")),
+            commandProfiles = listOf(command("shared", "MODE BASE 49 15 707")),
+            filter = ProfileDeviceFilter.ANY,
+        )
+        assertTrue(candidates.first().requiresDerivedCommandProfile)
+        assertFalse(candidates.first().requiresDerivedSettingsSet)
+        assertEquals(setOf("other"), candidates.first().affectedSettingsSetIds)
+    }
+
+    @Test
+    fun `affected sets include active and remembered command references`() {
+        val sets = listOf(
+            fixedBaseSet("target", "shared"),
+            fixedBaseSet("active", "other-command"),
+            fixedBaseSet("remembered", "other-command"),
+        )
+        val selections = mapOf(
+            "active" to ActiveSetupSelections("active", activeChoices = mapOf(
+                ActiveSetupOptionKey.RECEIVER_COMMAND to SelectionChoice.profile("shared"))),
+            "remembered" to ActiveSetupSelections("remembered", rememberedChoices = mapOf(
+                ActiveSetupOptionKey.RECEIVER_COMMAND to SelectionChoice.profile("shared"))),
+        )
+        val candidates = FixedBaseHandoffPlanner.eligibleSettingsSets(
+            sets, listOf(command("shared", "MODE BASE TIME 120 2.5")), ProfileDeviceFilter.ANY,
+            commandUsageIds = { set -> setOf(set.commandProfileRef.id) +
+                listOfNotNull(
+                    selections[set.id]?.activeChoices?.get(ActiveSetupOptionKey.RECEIVER_COMMAND)?.profileId,
+                    selections[set.id]?.rememberedChoices?.get(ActiveSetupOptionKey.RECEIVER_COMMAND)?.profileId,
+                ) },
+        )
+        assertEquals(setOf("active", "remembered"), candidates.single().affectedSettingsSetIds)
+    }
+
+    @Test
+    fun `explicit update of shared command retains other set and preserves non mode commands`() {
+        val sets = listOf(fixedBaseSet("target", "shared"), fixedBaseSet("other", "shared"))
+        val commands = listOf(command("shared", "UNLOG COM1\nMODE BASE TIME 120 2.5\nGNGGA 1"))
+        val candidate = FixedBaseHandoffPlanner.eligibleSettingsSets(sets, commands, ProfileDeviceFilter.ANY).first()
+
+        val plan = FixedBaseHandoffPlanner.prepare(candidate, sets, commands, modelTestBaseCoordinate(),
+            "new-set", "new-command", FixedBaseCommandAction.UPDATE_EXISTING)
+
+        assertEquals("shared", plan.overwritesCommandId)
+        assertEquals(setOf("other"), plan.confirmedAffectedSettingsSetIds)
+        assertEquals("shared", plan.targetSet.commandProfileRef.id)
+        assertEquals("shared", plan.settingsSets.last().commandProfileRef.id)
+        assertEquals("UNLOG COM1\n${modelTestBaseCoordinate().toFixedBaseModeCommand()}\nGNGGA 1",
+            plan.commands.single().runtimeScript)
+        assertEquals("UNLOG COM1\nMODE BASE TIME 120 2.5\nGNGGA 1", commands.single().runtimeScript)
+    }
+
+    @Test
+    fun `explicit copy of shared command changes only target reference`() {
+        val sets = listOf(fixedBaseSet("target", "shared"), fixedBaseSet("other", "shared"))
+        val commands = listOf(command("shared", "MODE BASE TIME 120 2.5\nGNGGA 1"))
+        val candidate = FixedBaseHandoffPlanner.eligibleSettingsSets(sets, commands, ProfileDeviceFilter.ANY).first()
+
+        val plan = FixedBaseHandoffPlanner.prepare(candidate, sets, commands, modelTestBaseCoordinate(),
+            "new-set", "new-command", FixedBaseCommandAction.COPY_COMMAND)
+
+        assertEquals(null, plan.overwritesCommandId)
+        assertTrue(plan.confirmedAffectedSettingsSetIds.isEmpty())
+        assertEquals("new-command", plan.targetSet.commandProfileRef.id)
+        assertEquals("shared", plan.settingsSets.last().commandProfileRef.id)
+        assertEquals(commands.single(), plan.commands.first())
+    }
+
+    @Test
+    fun `handoff preserves workflow activation policy and selects fixed base`() {
+        listOf(WorkflowActivationMode.SELECT_CHANGEABLE, WorkflowActivationMode.SELECT_LOCKED,
+            WorkflowActivationMode.LET_USER_SELECT_BEFORE_START,
+            WorkflowActivationMode.LET_USER_SELECT_EACH_RECORDING,
+            WorkflowActivationMode.LEAVE_CURRENT_INTACT).forEach { mode ->
+            val set = fixedBaseSet("target", "base-command").withWorkflowActivationMode(mode)
+            val commands = listOf(command("base-command", "MODE BASE TIME 120 2.5"))
+            val candidate = FixedBaseHandoffPlanner.eligibleSettingsSets(listOf(set), commands,
+                ProfileDeviceFilter.ANY).single()
+            val plan = FixedBaseHandoffPlanner.prepare(candidate, listOf(set), commands,
+                modelTestBaseCoordinate(), "new-set", "new-command", FixedBaseCommandAction.UPDATE_EXISTING)
+            assertEquals(set.workflowApplicationPolicy, plan.targetSet.workflowApplicationPolicy)
+            assertEquals("fixed-base", plan.selections.workflowBaselineId
+                ?: plan.selections.activeChoices[ActiveSetupOptionKey.WORKFLOW]?.profileId
+                ?: plan.selections.rememberedChoices[ActiveSetupOptionKey.WORKFLOW]?.profileId
+                ?: plan.selections.transientChoices[ActiveSetupOptionKey.WORKFLOW]?.profileId
+                ?: plan.targetSet.workflowId)
+        }
     }
 
     @Test

@@ -3,13 +3,49 @@ package org.rtkcollector.app.recording
 import android.content.Intent
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import org.rtkcollector.core.correction.NtripProtocolVersion
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class ServiceNtripIntentParserTest {
+    @Test
+    fun `legacy raw extras cannot start recording without a staged setup token`() {
+        val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        try {
+            controller.get().onStartCommand(
+                Intent().setAction(RecordingForegroundService.ACTION_START)
+                    .putExtra(RecordingForegroundService.EXTRA_NTRIP_ENABLED, true)
+                    .putExtra(RecordingForegroundService.EXTRA_NTRIP_HOST, "caster.example"),
+                0, 1,
+            )
+            assertNull(RecordingSetupBridge.current())
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `failed start releases accepted setup before opening USB`() {
+        val snapshot = RecordingSetupBridgeTest.snapshot().copy(sessionId = java.util.UUID.randomUUID().toString())
+        val token = RecordingSetupBridge.stageStart(snapshot)
+        val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        try {
+            controller.get().onStartCommand(
+                Intent().setAction(RecordingForegroundService.ACTION_START)
+                    .putExtra(RecordingForegroundService.EXTRA_SETUP_TOKEN, token),
+                0, 1,
+            )
+            assertNull(RecordingSetupBridge.current())
+            assertNull(RecordingSetupBridge.acceptStart(token))
+        } finally {
+            controller.destroy()
+        }
+    }
+
     @Test
     fun `real request factories reject malformed typed extras`() {
         for ((valid, keys, construct) in listOf(
@@ -106,6 +142,21 @@ class ServiceNtripIntentParserTest {
             assertFailsWith<IllegalArgumentException> {
                 uploadNtripRequestFromIntent(intent, false)
             }
+        }
+    }
+
+    @Test
+    fun `correction request uses selected version and rejects unknown policy`() {
+        val v1 = correctionNtripRequestFromIntent(
+            correctionIntent().putExtra(RecordingForegroundService.EXTRA_NTRIP_PROTOCOL_POLICY, "NTRIP_V1_ONLY"),
+            false,
+        )
+        assertEquals(NtripProtocolVersion.NTRIP_V1, v1.protocolVersion)
+        assertFailsWith<IllegalArgumentException> {
+            correctionNtripRequestFromIntent(
+                correctionIntent().putExtra(RecordingForegroundService.EXTRA_NTRIP_PROTOCOL_POLICY, "INVALID"),
+                false,
+            )
         }
     }
 

@@ -11,6 +11,139 @@ import kotlin.test.assertTrue
 
 class SettingsImportModelsTest {
     @Test
+    fun `SAF reconciliation requires both persisted grants and retains resolution history`() {
+        val uri = "content://documents/tree/selected"
+        val backup = sampleBackup(false)
+        val set = backup.settingsSets.single()
+        val storage = backup.storageProfiles.single().copy(kind = "SAF_TREE", treeUri = uri)
+        val issue = MigrationReviewIssue(ActiveSetupOptionKey.STORAGE, "treeUri", LegacyFieldDisposition.UNCERTAIN,
+            MigrationReviewReason.SAF_RESELECTION, storage.id)
+        val recovery = LegacyMigrationRecovery(set, setOf(MigrationReviewReason.SAF_RESELECTION), listOf(issue))
+        listOf(false, true).forEach { read -> listOf(false, true).forEach { write ->
+            val grants = if (hasPersistedSafTreeAuthority(read, write)) setOf(uri) else emptySet()
+            val reconciled = backup.copy(storageProfiles = listOf(storage), migrationRecovery = mapOf(set.id to recovery))
+                .withValidatedSafAuthority(grants)
+            val record = reconciled.migrationRecovery.getValue(set.id)
+            assertEquals(read && write, !reconciled.storageProfiles.single().requiresTreeReselection)
+            assertEquals(read && write, record.blockingIssues(set, ActiveSetupSelections(set.id)).isEmpty())
+            assertEquals(issue.reason, record.issues.first().reason)
+            assertEquals(read && write, record.issues.first().resolution != null)
+        } }
+    }
+    @Test
+    fun `validated repair history survives backup export parse and import remapping`() {
+        val backup = sampleBackup(false)
+        val set = backup.settingsSets.single()
+        val issue = MigrationReviewIssue(ActiveSetupOptionKey.NTRIP_MOUNTPOINT, "ntripCasterPolicy",
+            LegacyFieldDisposition.UNCERTAIN, MigrationReviewReason.POLICY_CONFLICT,
+            resolution = MigrationIssueResolution.VALIDATED_OPERATOR_REPAIR)
+        val withHistory = backup.copy(formatVersion = SettingsBackupFile.CURRENT_FORMAT_VERSION,
+            migrationRecovery = mapOf(set.id to LegacyMigrationRecovery(
+            set, emptySet(), listOf(issue))))
+        val exported = SettingsBackupFile.fromJson(withHistory.toJson())
+        assertEquals(issue, exported.migrationRecovery.getValue(set.id).issues.single())
+        val imported = settingsBackupImportPlan(exported, emptySet()).backup
+        assertTrue(imported.migrationRecovery.getValue(set.id).issues.contains(issue))
+        assertFalse(imported.migrationRecovery.getValue(set.id).blockingIssues(
+            imported.settingsSets.single(), ActiveSetupSelections(set.id)).contains(issue))
+    }
+    @Test
+    fun `idle migration revoked SAF authority preserves reference and requires reselection`() {
+        val backup = sampleBackup(false).copy(storageProfiles = listOf(StorageProfile("storage", "Storage",
+            kind = "SAF_TREE", treeUri = "content://documents/tree/revoked")))
+        val sanitized = backup.withValidatedSafAuthority(emptySet())
+        assertEquals("storage", sanitized.settingsSets.single().storageProfileRef.id)
+        assertNull(sanitized.storageProfiles.single().treeUri)
+        assertTrue(sanitized.storageProfiles.single().requiresTreeReselection)
+        assertTrue(sanitized.migrationRecovery.getValue("settings").blockingIssues(
+            sanitized.settingsSets.single(), ActiveSetupSelections("settings")).any {
+            it.reason == MigrationReviewReason.SAF_RESELECTION })
+        val granted = backup.withValidatedSafAuthority(setOf("content://documents/tree/revoked"))
+        assertEquals(backup.storageProfiles, granted.storageProfiles)
+    }
+
+    @Test
+    fun `SAF authority reconciliation clears only repaired profile issue`() {
+        val set = sampleSettingsSet()
+        val lost = StorageProfile("storage", "Storage", kind = "SAF_TREE",
+            requiresTreeReselection = true)
+        val other = StorageProfile("other", "Other", kind = "SAF_TREE",
+            requiresTreeReselection = true)
+        val backup = sampleBackup(false).copy(storageProfiles = listOf(lost, other),
+            migrationRecovery = mapOf(set.id to LegacyMigrationRecovery(set,
+                setOf(MigrationReviewReason.SAF_RESELECTION), issues = listOf(
+                    MigrationReviewIssue(ActiveSetupOptionKey.STORAGE, "treeUri",
+                        LegacyFieldDisposition.UNCERTAIN, MigrationReviewReason.SAF_RESELECTION, lost.id),
+                    MigrationReviewIssue(ActiveSetupOptionKey.STORAGE, "treeUri",
+                        LegacyFieldDisposition.UNCERTAIN, MigrationReviewReason.SAF_RESELECTION, other.id),
+                ))))
+        val repaired = backup.copy(storageProfiles = listOf(
+            lost.copy(treeUri = "content://documents/tree/reselected", requiresTreeReselection = false), other,
+        )).withValidatedSafAuthority(setOf("content://documents/tree/reselected"))
+
+        assertEquals(listOf(other.id), repaired.migrationRecovery.getValue(set.id).issues
+            .filter { it.reason == MigrationReviewReason.SAF_RESELECTION && it.resolution == null }.map { it.profileId })
+        assertTrue(repaired.migrationRecovery.getValue(set.id).issues.any { it.profileId == lost.id && it.resolution != null })
+        assertTrue(MigrationReviewReason.SAF_RESELECTION in repaired.migrationRecovery.getValue(set.id).reviewReasons)
+    }
+
+    @Test
+    fun `format two missing explicit owner never imports stale canonical password`() {
+        val backup = sampleBackup(false).copy(formatVersion = 2,
+            plaintextPasswordsBySecretId = mapOf(ntripCasterSecretId("caster") to "stale-fixture"))
+        val imported = settingsBackupImportPlan(backup, emptySet()).backup
+        assertTrue(imported.plaintextPasswordsBySecretId.isEmpty())
+        assertTrue(imported.migrationRecovery.getValue("settings").issues.any {
+            it.reason == MigrationReviewReason.MISSING_CREDENTIAL })
+    }
+
+    @Test
+    fun `unclassified input becomes an allowlisted descriptor not normal recovery content`() {
+        val raw = sampleBackup(false).toJson()
+        raw.getJSONArray("commandProfiles").getJSONObject(0).put("futurePrivateField",
+            JSONObject().put("unknownToken", "private-only-fixture"))
+        val parsed = SettingsBackupFile.fromJson(raw)
+        assertFalse(parsed.toJson().toString().contains("private-only-fixture"))
+        assertFalse(parsed.toJson().toString().contains("futurePrivateField"))
+        assertTrue(parsed.migrationRecovery.getValue("settings").issues.any {
+            it.option == ActiveSetupOptionKey.RECEIVER_COMMAND && it.field == "unclassifiedInput"
+        })
+    }
+    @Test
+    fun `format two remaps restriction and active upload dependency`() {
+        val set = sampleSettingsSet().copy(
+            ntripCasterRestrictionRef = ProfileReference("caster", "Caster"),
+            ntripCasterUploadProfileRef = ProfileReference("upload", "Upload"),
+        )
+        val backup = sampleBackup(includePassword = false).copy(
+            formatVersion = 2,
+            ntripCasterUploadProfiles = listOf(NtripCasterUploadProfile(id = "upload", name = "Upload")),
+            settingsSets = listOf(set),
+            activeSetupSelections = mapOf(
+                set.id to ActiveSetupSelections(
+                    settingsSetId = set.id,
+                    uploadSelection = UploadSelection(true, SelectionChoice.profile("upload")),
+                ),
+            ),
+            migrationRecovery = mapOf(
+                set.id to LegacyMigrationRecovery(set, setOf(MigrationReviewReason.DORMANT_OVERRIDE)),
+            ),
+        )
+
+        val imported = settingsBackupImportPlan(
+            backup, persistedSafTreeUrisWithWriteAccess = emptySet(),
+            idFactory = deterministicIdFactory(),
+        ).backup
+
+        assertEquals(imported.ntripCasterProfiles.single().id,
+            imported.settingsSets.single().ntripCasterRestrictionRef?.id)
+        assertEquals(imported.ntripCasterUploadProfiles.single().id,
+            imported.activeSetupSelections.getValue(set.id).uploadSelection?.profile?.profileId)
+        assertEquals(imported.ntripCasterProfiles.single().id,
+            imported.migrationRecovery.getValue(set.id).legacySettingsSet.ntripCasterRestrictionRef?.id)
+    }
+
+    @Test
     fun `valid backup produces summary counts and password warning`() {
         val backup = sampleBackup(includePassword = true)
 
@@ -106,12 +239,14 @@ class SettingsImportModelsTest {
             retainedProfileIds = RetainedSettingsProfileIds(rtklibProfileIds = setOf("rtklib")),
         )
         assertEquals("rtklib", plan.backup.settingsSets.single().rtklibProfileRef?.id)
-        assertFailsWith<IllegalArgumentException> {
-            settingsBackupImportPlan(
-                backup = result.backup,
-                persistedSafTreeUrisWithWriteAccess = emptySet(),
-            )
-        }
+        val missingPlan = settingsBackupImportPlan(result.backup, emptySet())
+        val imported = missingPlan.backup.settingsSets.single()
+        assertEquals("rtklib", imported.rtklibProfileRef?.id)
+        val recovery = missingPlan.backup.migrationRecovery.getValue(imported.id)
+        assertTrue(recovery.blockingIssues(imported, ActiveSetupSelections(imported.id))
+            .none { it.option == ActiveSetupOptionKey.RTKLIB })
+        assertTrue(recovery.blockingIssues(imported.copy(workflowId = "rover-rtklib"),
+            ActiveSetupSelections(imported.id)).any { it.option == ActiveSetupOptionKey.RTKLIB })
     }
 
     @Test
@@ -214,7 +349,7 @@ class SettingsImportModelsTest {
     }
 
     @Test
-    fun `settings set referencing missing rtklib profile is rejected`() {
+    fun `missing inactive rtklib reference remains recoverable without blocking rover`() {
         val json = sampleBackup(includePassword = false).toJson()
         json.getJSONArray("settingsSets")
             .getJSONObject(0)
@@ -222,11 +357,15 @@ class SettingsImportModelsTest {
 
         val result = validateSettingsImportJson(json.toString())
 
-        assertTrue(result is SettingsImportValidationResult.Invalid)
-        assertEquals(
-            "Settings set 'UM980 rover + NTRIP' references missing RTKLIB profile 'missing-rtklib'.",
-            result.message,
-        )
+        assertTrue(result is SettingsImportValidationResult.Valid)
+        val plan = settingsBackupImportPlan(result.backup, emptySet())
+        val imported = plan.backup.settingsSets.single()
+        assertEquals("missing-rtklib", imported.rtklibProfileRef?.id)
+        val recovery = plan.backup.migrationRecovery.getValue(imported.id)
+        assertTrue(recovery.issues.any { it.option == ActiveSetupOptionKey.RTKLIB &&
+            it.reason == MigrationReviewReason.MISSING_PROFILE })
+        assertTrue(recovery.blockingIssues(imported, ActiveSetupSelections(imported.id))
+            .none { it.option == ActiveSetupOptionKey.RTKLIB })
     }
 
     @Test
@@ -273,13 +412,17 @@ class SettingsImportModelsTest {
         assertEquals("SAF_TREE", plan.backup.storageProfiles[1].kind)
         assertNull(plan.backup.storageProfiles[1].treeUri)
         assertTrue(plan.backup.storageProfiles[1].requiresTreeReselection)
-        assertEquals("SAF_TREE", plan.backup.settingsSets.single().overrides.storage?.kind)
-        assertNull(plan.backup.settingsSets.single().overrides.storage?.treeUri)
-        assertTrue(plan.backup.settingsSets.single().overrides.storage?.requiresTreeReselection == true)
+        val selectedStorage = selectedStorage(plan.backup)
+        assertEquals("SAF_TREE", selectedStorage.kind)
+        assertNull(selectedStorage.treeUri)
+        assertTrue(selectedStorage.requiresTreeReselection)
+        assertEquals(SettingsSetOverrides(), plan.backup.settingsSets.single().overrides)
+        assertEquals("content://documents/tree/override-missing",
+            plan.backup.migrationRecovery.getValue("settings").legacySettingsSet.overrides.storage?.treeUri)
 
         val reparsed = SettingsBackupFile.fromJson(plan.backup.toJson())
         assertTrue(reparsed.storageProfiles[1].requiresTreeReselection)
-        assertTrue(reparsed.settingsSets.single().overrides.storage?.requiresTreeReselection == true)
+        assertTrue(selectedStorage(reparsed).requiresTreeReselection)
     }
 
     @Test
@@ -344,10 +487,11 @@ class SettingsImportModelsTest {
 
         val settingsSet = plan.backup.settingsSets.single()
         assertEquals(1, plan.safTreeUriReselectionCount)
-        assertEquals("saf-storage", settingsSet.overrides.storageProfileRef?.id)
-        assertEquals("SAF_TREE", settingsSet.overrides.storage?.kind)
-        assertNull(settingsSet.overrides.storage?.treeUri)
-        assertTrue(settingsSet.overrides.storage?.requiresTreeReselection == true)
+        assertEquals("app-storage", settingsSet.storageProfileRef.id)
+        assertEquals(SettingsSetOverrides(), settingsSet.overrides)
+        assertEquals("SAF_TREE", selectedStorage(plan.backup).kind)
+        assertNull(selectedStorage(plan.backup).treeUri)
+        assertTrue(selectedStorage(plan.backup).requiresTreeReselection)
         assertEquals(
             "content://documents/tree/granted-profile",
             plan.backup.storageProfiles.single { it.id == "saf-storage" }.treeUri,
@@ -577,6 +721,30 @@ class SettingsImportModelsTest {
     }
 
     @Test
+    fun `explicit owner binding wins over stale canonical alias during import`() {
+        val profile = NtripCasterProfile(
+            id = "caster", name = "Caster", secretId = "owner-binding",
+        )
+        val backup = sampleBackup(includePassword = false).copy(
+            ntripCasterProfiles = listOf(profile),
+            plaintextPasswordsBySecretId = mapOf(
+                profile.secretId to "owner-password",
+                ntripCasterSecretId(profile.id) to "stale-password",
+            ),
+        )
+
+        val imported = settingsBackupImportPlan(
+            backup = backup,
+            persistedSafTreeUrisWithWriteAccess = emptySet(),
+            idFactory = deterministicIdFactory(),
+        ).backup
+
+        val binding = imported.ntripCasterProfiles.single().secretId
+        assertEquals("owner-password", imported.plaintextPasswordsBySecretId[binding])
+        assertTrue(binding != ntripCasterSecretId(imported.ntripCasterProfiles.single().id))
+    }
+
+    @Test
     fun `near matching legacy RC2 caster password is rejected`() {
         val json = sampleBackup(includePassword = false).copy(
             ntripCasterProfiles = listOf(
@@ -636,18 +804,17 @@ class SettingsImportModelsTest {
             idFactory = deterministicIdFactory(),
         ).backup
 
-        val caster = imported.ntripCasterProfiles.single()
-        val upload = imported.ntripCasterUploadProfiles.single()
+        val caster = imported.ntripCasterProfiles.single { it.id == imported.settingsSets.single().ntripCasterProfileRef?.id }
+        val upload = imported.ntripCasterUploadProfiles.single { it.id == imported.settingsSets.single().ntripCasterUploadProfileRef?.id }
         val settingsSet = imported.settingsSets.single()
         assertTrue(caster.id != "caster")
         assertTrue(upload.id != "upload")
-        assertEquals(ntripCasterSecretId(caster.id), caster.secretId)
-        assertEquals(ntripCasterUploadSecretId(upload.id), upload.secretId)
-        assertEquals(caster.id, imported.ntripMountpointProfiles.single().casterProfileId)
+        assertTrue(caster.secretId != ntripCasterSecretId(caster.id))
+        assertTrue(upload.secretId != ntripCasterUploadSecretId(upload.id))
+        assertEquals(caster.id, imported.ntripMountpointProfiles.single { it.id == "mount" }.casterProfileId)
         assertEquals(caster.id, settingsSet.ntripCasterProfileRef?.id)
-        assertEquals(caster.id, settingsSet.overrides.ntripCasterProfileRef?.id)
+        assertEquals(SettingsSetOverrides(), settingsSet.overrides)
         assertEquals(upload.id, settingsSet.ntripCasterUploadProfileRef?.id)
-        assertEquals(upload.id, settingsSet.overrides.ntripCasterUploadProfileRef?.id)
         assertNull(settingsSet.overrides.ntripCaster?.secretId)
         assertNull(settingsSet.overrides.ntripCasterUpload?.secretId)
         assertTrue(imported.plaintextPasswordsBySecretId.isEmpty())
@@ -683,9 +850,12 @@ class SettingsImportModelsTest {
             idFactory = deterministicIdFactory(),
         ).backup
 
-        val casterSecretId = imported.ntripCasterProfiles.single().secretId
-        val uploadSecretId = imported.ntripCasterUploadProfiles.single().secretId
-        val casterOverrideSecretId = imported.settingsSets.single().overrides.ntripCaster?.secretId
+        val casterSecretId = imported.ntripCasterProfiles.single { it.id == imported.settingsSets.single().ntripCasterProfileRef?.id }.secretId
+        val uploadSecretId = imported.ntripCasterUploadProfiles.single { it.id == imported.settingsSets.single().ntripCasterUploadProfileRef?.id }.secretId
+        val sourceId = imported.activeSetupSelections.getValue("settings").activeChoices.getValue(ActiveSetupOptionKey.NTRIP_MOUNTPOINT).profileId
+        val casterOverrideSecretId = imported.ntripCasterProfiles.single { caster ->
+            caster.id == imported.ntripMountpointProfiles.single { it.id == sourceId }.casterProfileId
+        }.secretId
         assertEquals("caster-password", imported.plaintextPasswordsBySecretId[casterSecretId])
         assertEquals("upload-password", imported.plaintextPasswordsBySecretId[uploadSecretId])
         assertEquals("override-password", imported.plaintextPasswordsBySecretId[casterOverrideSecretId])
@@ -726,14 +896,16 @@ class SettingsImportModelsTest {
             idFactory = idFactory,
         ).backup
 
-        assertTrue(preview.ntripCasterProfiles.single().id != source.ntripCasterProfiles.single().id)
-        assertTrue(operation.ntripCasterProfiles.single().id != preview.ntripCasterProfiles.single().id)
+        val previewDefault = preview.ntripCasterProfiles.single { it.id == preview.settingsSets.single().ntripCasterProfileRef?.id }
+        val operationDefault = operation.ntripCasterProfiles.single { it.id == operation.settingsSets.single().ntripCasterProfileRef?.id }
+        assertTrue(previewDefault.id != source.ntripCasterProfiles.single().id)
+        assertTrue(operationDefault.id != previewDefault.id)
         assertEquals(
-            operation.ntripCasterProfiles.single().id,
-            operation.ntripMountpointProfiles.single().casterProfileId,
+            operationDefault.id,
+            operation.ntripMountpointProfiles.single { it.id == "mount" }.casterProfileId,
         )
         assertEquals(
-            operation.ntripCasterProfiles.single().id,
+            operationDefault.id,
             operation.settingsSets.single().ntripCasterProfileRef?.id,
         )
         assertEquals(
@@ -768,15 +940,14 @@ class SettingsImportModelsTest {
             backup = result.backup,
             persistedSafTreeUrisWithWriteAccess = emptySet(),
             retainedProfileIds = RetainedSettingsProfileIds(ntripCasterUploadProfileIds = setOf("upload")),
+            retainedUploadProfiles = listOf(retainedUploadProfile()),
             idFactory = deterministicIdFactory(),
         ).backup
         assertTrue(SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD !in imported.includedProfileFamilies)
-        assertTrue(imported.ntripCasterUploadProfiles.isEmpty())
+        assertEquals(1, imported.ntripCasterUploadProfiles.size)
         assertEquals("upload", imported.settingsSets.single().ntripCasterUploadProfileRef?.id)
-        assertEquals("upload", imported.settingsSets.single().overrides.ntripCasterUploadProfileRef?.id)
-        val remappedOverrideSecretId = assertNotNull(
-            imported.settingsSets.single().overrides.ntripCasterUpload?.secretId,
-        )
+        assertEquals(SettingsSetOverrides(), imported.settingsSets.single().overrides)
+        val remappedOverrideSecretId = selectedUpload(imported).secretId
         assertTrue(remappedOverrideSecretId != "imported-upload-override")
         assertFalse(imported.plaintextPasswordsBySecretId.containsKey(remappedOverrideSecretId))
         assertFalse(imported.plaintextPasswordsBySecretId.containsKey(ntripCasterUploadSecretId("upload")))
@@ -808,14 +979,15 @@ class SettingsImportModelsTest {
             backup = result.backup,
             persistedSafTreeUrisWithWriteAccess = emptySet(),
             retainedProfileIds = RetainedSettingsProfileIds(ntripCasterUploadProfileIds = setOf("upload")),
+            retainedUploadProfiles = listOf(retainedUploadProfile()),
             idFactory = deterministicIdFactory(),
         ).backup
-        val uploadOverride = assertNotNull(imported.settingsSets.single().overrides.ntripCasterUpload)
-        val shadowSecretId = assertNotNull(uploadOverride.secretId)
-        assertEquals("imported.example.org", uploadOverride.host)
+        val uploadOwner = selectedUpload(imported)
+        val shadowSecretId = uploadOwner.secretId
+        assertEquals("imported.example.org", uploadOwner.host)
         assertTrue(shadowSecretId != retainedProfileSecretId)
         assertFalse(imported.plaintextPasswordsBySecretId.containsKey(shadowSecretId))
-        val runtimePassword = localSecrets[uploadOverride.secretId ?: retainedProfileSecretId]
+        val runtimePassword = localSecrets[uploadOwner.secretId]
         assertNull(runtimePassword)
         assertEquals("retained-local-password", localSecrets[retainedProfileSecretId])
     }
@@ -842,10 +1014,11 @@ class SettingsImportModelsTest {
             backup = result.backup,
             persistedSafTreeUrisWithWriteAccess = emptySet(),
             retainedProfileIds = RetainedSettingsProfileIds(ntripCasterUploadProfileIds = setOf("upload")),
+            retainedUploadProfiles = listOf(retainedUploadProfile()),
             idFactory = deterministicIdFactory(),
         ).backup
 
-        val shadowSecretId = assertNotNull(imported.settingsSets.single().overrides.ntripCasterUpload?.secretId)
+        val shadowSecretId = selectedUpload(imported).secretId
         assertTrue(shadowSecretId.isNotBlank())
         assertFalse(imported.plaintextPasswordsBySecretId.containsKey(shadowSecretId))
     }
@@ -878,11 +1051,10 @@ class SettingsImportModelsTest {
             backup = result.backup,
             persistedSafTreeUrisWithWriteAccess = emptySet(),
             retainedProfileIds = RetainedSettingsProfileIds(ntripCasterUploadProfileIds = setOf("upload")),
+            retainedUploadProfiles = listOf(retainedUploadProfile()),
             idFactory = deterministicIdFactory(),
         ).backup
-        val remappedSecretId = assertNotNull(
-            imported.settingsSets.single().overrides.ntripCasterUpload?.secretId,
-        )
+        val remappedSecretId = selectedUpload(imported).secretId
         assertTrue(remappedSecretId != "upload-override-secret")
         assertEquals("imported-password", imported.plaintextPasswordsBySecretId[remappedSecretId])
         assertFalse(imported.plaintextPasswordsBySecretId.containsKey("upload-override-secret"))
@@ -896,6 +1068,19 @@ class SettingsImportModelsTest {
         val result = validateSettingsImportJson(json.toString())
 
         assertTrue(result is SettingsImportValidationResult.Valid)
+    }
+
+    private fun retainedUploadProfile() = NtripCasterUploadProfile("upload", "Upload", host = "retained.example.invalid",
+        mountpoint = "RET", secretId = ntripCasterUploadSecretId("upload"), safetyRulesEnabled = true)
+
+    private fun selectedUpload(backup: SettingsBackupFile): NtripCasterUploadProfile {
+        val id = backup.activeSetupSelections.getValue("settings").uploadSelection!!.profile.profileId
+        return backup.ntripCasterUploadProfiles.single { it.id == id }
+    }
+
+    private fun selectedStorage(backup: SettingsBackupFile): StorageProfile {
+        val id = backup.activeSetupSelections.getValue("settings").activeChoices.getValue(ActiveSetupOptionKey.STORAGE).profileId
+        return backup.storageProfiles.single { it.id == id }
     }
 
     private fun sampleBackup(includePassword: Boolean): SettingsBackupFile =
@@ -916,7 +1101,7 @@ class SettingsImportModelsTest {
             lastActiveNtripMountpointProfileId = "mount",
             passwordsBySecretId = if (includePassword) mapOf("secret" to "secret-password") else emptyMap(),
             options = SettingsSetExportOptions(includePlaintextPasswords = includePassword),
-        )
+        ).copy(formatVersion = 1)
 
     private fun sampleSettingsSet(): RecordingSettingsSet =
         RecordingSettingsSet.builtInRoverNtrip().copy(

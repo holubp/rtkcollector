@@ -12,6 +12,14 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.rtkcollector.app.profile.commitStringChangesWithRollback
 
+sealed interface StoredNtripPassword {
+    data object Missing : StoredNtripPassword
+    data class Available(val value: String) : StoredNtripPassword {
+        override fun toString(): String = "Available(redacted)"
+    }
+    data object Unreadable : StoredNtripPassword
+}
+
 class NtripSecretStore(
     context: Context,
     private val preferences: SharedPreferences = context.getSharedPreferences("ntrip-secrets", Context.MODE_PRIVATE),
@@ -24,8 +32,22 @@ class NtripSecretStore(
         putPasswords(mapOf(secretId to password))
     }
 
-    fun putPasswords(passwordsBySecretId: Map<String, String>) {
-        if (passwordsBySecretId.isEmpty()) return
+    /** Publication-only path: a staged owner binding must never replace a live entry. */
+    fun putNewPasswords(passwordsBySecretId: Map<String, String>) = synchronized(preferences) {
+        requireUnallocated(passwordsBySecretId.keys)
+        putPasswords(passwordsBySecretId)
+    }
+
+    fun requireUnallocated(secretIds: Set<String>) = synchronized(preferences) {
+        secretIds.forEach { id ->
+            require(id.isNotBlank() && !preferences.contains("$id.iv") && !preferences.contains("$id.ciphertext")) {
+                "NTRIP secret binding is already allocated."
+            }
+        }
+    }
+
+    fun putPasswords(passwordsBySecretId: Map<String, String>) = synchronized(preferences) {
+        if (passwordsBySecretId.isEmpty()) return@synchronized
         passwordsBySecretId.keys.forEach { secretId ->
             require(secretId.isNotBlank()) { "NTRIP secret id must not be blank." }
         }
@@ -50,14 +72,27 @@ class NtripSecretStore(
         )
     }
 
-    fun getPassword(secretId: String): String? {
-        val iv = preferences.getString("$secretId.iv", null)?.let { Base64.decode(it, Base64.NO_WRAP) }
-            ?: return null
-        val ciphertext = preferences.getString("$secretId.ciphertext", null)?.let { Base64.decode(it, Base64.NO_WRAP) }
-            ?: return null
-        val cipher = Cipher.getInstance(cipherTransformation)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-        return cipher.doFinal(ciphertext).toString(Charsets.UTF_8)
+    fun getPassword(secretId: String): String? = when (val stored = readPassword(secretId)) {
+        StoredNtripPassword.Missing -> null
+        is StoredNtripPassword.Available -> stored.value
+        StoredNtripPassword.Unreadable -> throw IllegalStateException("Stored NTRIP password cannot be decrypted.")
+    }
+
+    fun readPassword(secretId: String): StoredNtripPassword {
+        return try {
+            val ivText = preferences.getString("$secretId.iv", null)
+            val ciphertextText = preferences.getString("$secretId.ciphertext", null)
+            if (ivText == null && ciphertextText == null) return StoredNtripPassword.Missing
+            if (ivText == null || ciphertextText == null) return StoredNtripPassword.Unreadable
+            val iv = Base64.decode(ivText, Base64.NO_WRAP)
+            val ciphertext = Base64.decode(ciphertextText, Base64.NO_WRAP)
+            val cipher = Cipher.getInstance(cipherTransformation)
+            val key = existingKey() ?: return StoredNtripPassword.Unreadable
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+            StoredNtripPassword.Available(cipher.doFinal(ciphertext).toString(Charsets.UTF_8))
+        } catch (_: Exception) {
+            StoredNtripPassword.Unreadable
+        }
     }
 
     fun hasPassword(secretId: String): Boolean =
@@ -70,8 +105,7 @@ class NtripSecretStore(
             .toSet()
 
     private fun getOrCreateKey(): SecretKey {
-        val keyStore = KeyStore.getInstance(keyStoreType).apply { load(null) }
-        (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        existingKey()?.let { return it }
 
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, keyStoreType)
         generator.init(
@@ -85,6 +119,11 @@ class NtripSecretStore(
                 .build(),
         )
         return generator.generateKey()
+    }
+
+    private fun existingKey(): SecretKey? {
+        val keyStore = KeyStore.getInstance(keyStoreType).apply { load(null) }
+        return (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.secretKey
     }
 
     private data class EncodedSecret(

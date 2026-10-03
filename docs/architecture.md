@@ -45,7 +45,7 @@ and Play-facing documents must label them as future or non-current capabilities.
 - `core:quality` owns quality event aggregation boundaries.
 - `receiver:api` defines receiver-driver contracts.
 - Receiver implementation modules provide advisory parsing and command builders.
-- `app` will later host Android Activity and foreground-service integration.
+- `app` hosts Android Activity, profile management and foreground-service integration.
 
 ## Failure Isolation
 
@@ -78,3 +78,24 @@ Version 1 user workflows cover receiver-side solutions only: plain rover,
 NTRIP-to-receiver rover, temporary-base preparation, fixed-base operation and
 replay/test. In-phone RTKLIB real-time solution is a version 2 advisory engine
 and must not be required by V1 capture or session execution.
+
+## Configuration Authority
+
+Profile libraries own complete reusable configuration. Settings sets own default
+references, applicability and selection policies; active operator choices are
+stored separately per set. `ActiveSetupResolver` is the shared authority for
+Home, Menu and Start. A correction source resolves its exact caster reference,
+never an endpoint or credential substituted by another selection.
+
+Start submits one validated `RunningSetupSnapshot` through
+`RecordingSetupBridge`. The service owns the accepted snapshot. Library edits
+and Re-apply affect the next Start, not an existing recording. Supported live
+source/mock patches bind request, session and revision identities; acceptance
+and actual network connectivity are separate states. A failed or delayed patch
+must not publish a selection as active or overwrite newer next-start choices.
+
+Legacy field overlays are migration inputs only. Idle migration stages fresh
+secret bindings before recoverable graph publication; recovery precedes normal
+profile reads and Start. Ordinary profile/session JSON contains explicit secret
+references, not passwords. Configuration and migration work remain outside the
+byte-exact capture path.

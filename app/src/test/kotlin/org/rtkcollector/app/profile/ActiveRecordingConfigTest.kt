@@ -12,6 +12,27 @@ import org.rtkcollector.core.workflow.SessionArtifact
 
 class ActiveRecordingConfigTest {
     @Test
+    fun `unsupported receiver family baud transition is rejected before IO`() {
+        listOf("generic-nmea-rtcm", "custom-receiver", "um980-custom").forEach { family ->
+            assertEquals(emptyList<String>(), configWithBaud(family, 230400).baudSwitchCommands)
+            val error = assertThrows(IllegalArgumentException::class.java) { configWithBaud(family, 460800) }
+            assertTrue(error.message.orEmpty().contains("baud"))
+        }
+        assertEquals(listOf("CONFIG COM1 460800"), configWithBaud("unicore-n4", 460800).baudSwitchCommands)
+    }
+
+    private fun configWithBaud(family: String, targetBaud: Int): ActiveRecordingConfig = ActiveRecordingConfig.resolve(
+        settingsSet = recordingSet().copy(workflowId = "plain-rover", receiverProfileId = family,
+            ntripMountpointProfileRef = null),
+        commandProfile = CommandProfile("commands", "Commands", receiverFamily = family),
+        usbBaudProfile = UsbBaudProfile("baud", "Baud", serialBaud = targetBaud),
+        ntripCasterProfile = null, ntripMountpointProfile = null,
+        recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+        storageProfile = StorageProfile("storage", "Storage"),
+        workflowName = "Plain rover", workflowUsesNtrip = false, passwordLookup = { null },
+    )
+
+    @Test
     fun `both distributions accept explicitly selected plaintext correction`() {
         val plain = ActiveNtripConfig(true, "caster.example", 2101, "MOUNT", "", null, null, null, null, null,
             transportMode = NtripTransportMode.PLAINTEXT)
@@ -36,8 +57,8 @@ class ActiveRecordingConfigTest {
     }
     @Test
     fun `SAF profile awaiting folder reselection cannot start`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+        val error = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(
                 workflowId = "plain-rover",
                 ntripCasterProfileRef = null,
                 ntripMountpointProfileRef = null,
@@ -56,20 +77,16 @@ class ActiveRecordingConfigTest {
             workflowName = "Plain rover recording",
             workflowUsesNtrip = false,
             passwordLookup = { null },
-        )
+        ) }
 
-        val failure = assertThrows(IllegalArgumentException::class.java) {
-            config.validateForStart()
-        }
-
-        assertTrue(failure.message.orEmpty().contains("Select the Android recording folder again"))
+        assertTrue(error.message.orEmpty().contains("Select the Android recording folder again"))
     }
 
     @Test
-    fun `SAF override marker uses folder selected later on referenced profile`() {
+    fun `unmigrated SAF override is rejected instead of merged with referenced profile`() {
         val selectedTreeUri = "content://documents/tree/selected-after-import"
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+        val failure = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(
                 workflowId = "plain-rover",
                 ntripCasterProfileRef = null,
                 ntripMountpointProfileRef = null,
@@ -96,23 +113,22 @@ class ActiveRecordingConfigTest {
             workflowName = "Plain rover recording",
             workflowUsesNtrip = false,
             passwordLookup = { null },
-        )
+        ) }
 
-        assertEquals(selectedTreeUri, config.storage.treeUri)
-        config.validateForStart()
+        assertTrue(failure.message.orEmpty().contains("migrate"))
     }
 
     @Test
     fun `plain rover config disables ntrip`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "plain-rover",
                 ntripCasterProfileRef = null,
                 ntripMountpointProfileRef = null,
             ),
             commandProfile = CommandProfile("commands", "Commands", initScript = "UNLOG COM1"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud", profileBaud = 230400, serialBaud = 921600),
-            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
             ntripMountpointProfile = NtripMountpointProfile(
                 "mount",
                 "Mount",
@@ -142,9 +158,10 @@ class ActiveRecordingConfigTest {
     @Test
     fun `command receiver family follows selected command profile`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "plain-rover",
-                receiverProfileId = "um980-n4",
+                receiverProfileId = "ublox-m8t",
+                commandProfileRef = ProfileReference("ublox-m8t-raw-safe", "u-blox M8T raw"),
                 ntripCasterProfileRef = null,
                 ntripMountpointProfileRef = null,
             ),
@@ -172,9 +189,10 @@ class ActiveRecordingConfigTest {
     @Test
     fun `ublox command profile generates ubx baud switch when initial and target baud differ`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "plain-rover",
-                receiverProfileId = "um980-n4",
+                receiverProfileId = "ublox-m8t",
+                commandProfileRef = ProfileReference("ublox-m8t-raw-safe", "u-blox M8T raw"),
                 ntripCasterProfileRef = null,
                 ntripMountpointProfileRef = null,
             ),
@@ -199,9 +217,9 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
-    fun `ntrip config uses profile and local overrides and secret lookup`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+    fun `legacy field overlays must migrate before runtime resolution`() {
+        val failure = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(
                 workflowId = "rover-ntrip",
                 overrides = SettingsSetOverrides(
                     ntripCaster = NtripCasterOverride(
@@ -230,39 +248,17 @@ class ActiveRecordingConfigTest {
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
             passwordLookup = { "password-for-$it" },
-            localInitCommands = "CONFIG COM1 230400",
-            localProfileBaud = 921600,
-            localSerialBaud = 115200,
-            localNtripHost = "runtime-host",
-            localNtripPort = 2101,
-            localNtripMountpoint = "TUBO00CZE0",
-            localNtripUsername = "runtime-user",
-        )
-
-        assertTrue(config.ntrip.enabled)
-        assertEquals("runtime-host", config.ntrip.host)
-        assertEquals(2101, config.ntrip.port)
-        assertEquals(NtripTransportMode.PLAINTEXT, config.ntrip.toCore(allowInsecure = true).transport)
-        assertEquals("TUBO00CZE0", config.ntrip.mountpoint)
-        assertEquals("runtime-user", config.ntrip.username)
-        assertEquals("secret-override", config.ntrip.secretRef)
-        assertEquals("password-for-secret-override", config.ntrip.password)
-        assertEquals("CONFIG COM1 230400", config.initCommands.single())
-        assertEquals(921600, config.profileBaud)
-        assertEquals(115200, config.serialBaud)
-        assertTrue(config.baudSwitchCommands.contains("CONFIG COM1 115200"))
-        assertEquals(false, config.recording.expectedSessionArtifacts.contains(SessionArtifact.TX_TO_RECEIVER_RAW))
-        assertEquals(false, config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RAW))
-        assertEquals(false, config.recording.expectedSessionArtifacts.contains(SessionArtifact.CORRECTION_INPUT_RTCM3))
+        ) }
+        assertTrue(failure.message.orEmpty().contains("migrate"))
     }
 
     @Test
     fun `recording artifacts include tx and correction when enabled`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            settingsSet = recordingSet(),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
-            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "OLD"),
             recordingPolicyProfile = RecordingPolicyProfile(
                 "record",
@@ -284,10 +280,10 @@ class ActiveRecordingConfigTest {
     @Test
     fun `rtklib disabled by default adds no rtklib artifacts`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            settingsSet = recordingSet(),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
-            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
             ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "OLD"),
             recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
             storageProfile = StorageProfile("storage", "Storage"),
@@ -304,7 +300,7 @@ class ActiveRecordingConfigTest {
     @Test
     fun `enabled rtklib profile adds configured output artifacts`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "rover-ntrip-rtklib",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
                 receiverProfileId = "um980-n4",
@@ -339,7 +335,7 @@ class ActiveRecordingConfigTest {
     @Test
     fun `enabled rtklib accepts UM980 compact OBSVMCMPB through decoder shim`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "rover-ntrip-rtklib",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
                 receiverProfileId = "um980-n4",
@@ -371,7 +367,7 @@ class ActiveRecordingConfigTest {
     @Test
     fun `plain rover workflow ignores remembered enabled rtklib profile`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "plain-rover",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
             ),
@@ -400,7 +396,7 @@ class ActiveRecordingConfigTest {
     @Test
     fun `ublox rtklib rover workflow accepts configured ntrip corrections`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "rover-rtklib",
                 receiverProfileId = "ublox-m8t",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
@@ -435,7 +431,7 @@ class ActiveRecordingConfigTest {
     @Test
     fun `active config carries rtklib server runtime parameters`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "rover-rtklib",
                 receiverProfileId = "ublox-m8t",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
@@ -473,8 +469,8 @@ class ActiveRecordingConfigTest {
 
     @Test
     fun `rtklib rover workflow rejects base mode command profiles`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+        val error = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(
                 workflowId = "rover-rtklib",
                 receiverProfileId = "ublox-m8t",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
@@ -498,18 +494,16 @@ class ActiveRecordingConfigTest {
             workflowName = "Rover + RTKLIB",
             workflowUsesNtrip = true,
             passwordLookup = { null },
-        )
-
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+        ) }
 
         assertTrue(error.message.orEmpty().contains("Rover workflow cannot start with a command profile that sets MODE BASE."))
     }
 
     @Test
-    fun `ntrip runtime uses profile-bound secret and falls back to legacy stored password`() {
+    fun `ntrip runtime uses only explicit committed secret binding`() {
         val lookedUpSecrets = mutableListOf<String>()
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            settingsSet = recordingSet(),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile(
@@ -530,15 +524,15 @@ class ActiveRecordingConfigTest {
             },
         )
 
-        assertEquals("ntrip-caster-profile:caster", config.ntrip.secretRef)
+        assertEquals("legacy-shared-secret", config.ntrip.secretRef)
         assertEquals("legacy-password", config.ntrip.password)
-        assertEquals(listOf("ntrip-caster-profile:caster", "legacy-shared-secret"), lookedUpSecrets)
+        assertEquals(listOf("legacy-shared-secret"), lookedUpSecrets)
     }
 
     @Test
     fun `temporary base config enables ntrip when workflow supports corrections`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "base-calibration"),
+            settingsSet = recordingSet().copy(workflowId = "base-calibration"),
             commandProfile = CommandProfile("commands", "Commands", initScript = "UNLOG COM1", runtimeScript = "MODE ROVER"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud", profileBaud = 230400, serialBaud = 921600),
             ntripCasterProfile = NtripCasterProfile(
@@ -577,11 +571,11 @@ class ActiveRecordingConfigTest {
     @Test
     fun `recording config uses mock location policy and settings override`() {
         val policyConfig = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            settingsSet = recordingSet(),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
-            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
-            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
             recordingPolicyProfile = RecordingPolicyProfile(
                 "record",
                 "Record",
@@ -593,16 +587,16 @@ class ActiveRecordingConfigTest {
             workflowUsesNtrip = true,
             passwordLookup = { null },
         )
-        val overrideConfig = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+        val overrideFailure = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(
                 overrides = SettingsSetOverrides(
                     recordingOutput = RecordingOutputOverride(enableMockLocation = false, mockLocationRateHz = 10),
                 ),
             ),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
-            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
-            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
             recordingPolicyProfile = RecordingPolicyProfile(
                 "record",
                 "Record",
@@ -613,19 +607,19 @@ class ActiveRecordingConfigTest {
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
             passwordLookup = { null },
-        )
+        ) }
 
         assertEquals(true, policyConfig.recording.enableMockLocation)
         assertEquals(5, policyConfig.recording.mockLocationRateHz)
-        assertEquals(false, overrideConfig.recording.enableMockLocation)
-        assertEquals(10, overrideConfig.recording.mockLocationRateHz)
+        assertTrue(overrideFailure.message.orEmpty().contains("migrate"))
     }
 
     @Test
     fun `recording config resolves solution policy profile`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+            settingsSet = recordingSet().copy(
                 workflowId = "rover-ntrip-rtklib",
+                solutionPolicyProfileRef = ProfileReference("solution-rtklib", "RTKLIB solution"),
                 receiverProfileId = "um980-n4",
                 rtklibProfileRef = ProfileReference("rtklib-rover", "RTKLIB rover"),
             ),
@@ -635,8 +629,8 @@ class ActiveRecordingConfigTest {
                 runtimeScript = "MODE ROVER\nOBSVMB COM1 0.2",
             ),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
-            ntripCasterProfile = NtripCasterProfile("caster", "Caster"),
-            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster"),
+            ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+            ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
             recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
             storageProfile = StorageProfile("storage", "Storage"),
             rtklibProfile = RtklibProfile(
@@ -661,9 +655,9 @@ class ActiveRecordingConfigTest {
     }
 
     @Test
-    fun `plain rover workflow coerces rtklib-only solution policy to device internal`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "plain-rover"),
+    fun `plain rover workflow rejects active rtklib-only screen policy`() {
+        val failure = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(workflowId = "plain-rover", solutionPolicyProfileRef = ProfileReference("solution-rtklib", "RTKLIB solution")),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = null,
@@ -679,16 +673,15 @@ class ActiveRecordingConfigTest {
             workflowName = "Plain rover",
             workflowUsesNtrip = false,
             passwordLookup = { null },
-        )
+        ) }
 
-        assertEquals(SolutionSourcePolicy.DEVICE_INTERNAL_ONLY, config.solutionPolicy.screenPolicy)
-        assertEquals(SolutionSourcePolicy.DEVICE_INTERNAL_ONLY, config.solutionPolicy.mockPolicy)
+        assertTrue(failure.message.orEmpty().contains("Screen RTKLIB_ONLY"))
     }
 
     @Test
     fun `command profile runtime script becomes mode commands`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "plain-rover"),
+            settingsSet = recordingSet().copy(workflowId = "plain-rover"),
             commandProfile = CommandProfile(
                 id = "commands",
                 name = "Commands",
@@ -702,7 +695,6 @@ class ActiveRecordingConfigTest {
             workflowName = "Plain rover",
             workflowUsesNtrip = false,
             passwordLookup = { null },
-            modeCommands = listOf("FALLBACK"),
         )
 
         assertEquals(listOf("MODE ROVER", "BESTNAVB COM1 0.1"), config.modeCommands)
@@ -710,8 +702,8 @@ class ActiveRecordingConfigTest {
 
     @Test
     fun `ntrip workflow requires host and mountpoint before start`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+        val error = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet(),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = ""),
@@ -721,15 +713,14 @@ class ActiveRecordingConfigTest {
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
             passwordLookup = { null },
-        )
+        ) }
 
-        assertThrows(IllegalArgumentException::class.java, config::validateForStart)
     }
 
     @Test
     fun `configured ntrip workflow passes start validation`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip(),
+            settingsSet = recordingSet(),
             commandProfile = CommandProfile("commands", "Commands"),
             usbBaudProfile = UsbBaudProfile("baud", "Baud"),
             ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
@@ -746,8 +737,8 @@ class ActiveRecordingConfigTest {
 
     @Test
     fun `rover workflow rejects base mode command profile before start`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+        val error = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(workflowId = "rover-ntrip"),
             commandProfile = CommandProfile(
                 id = "commands",
                 name = "Commands",
@@ -761,17 +752,15 @@ class ActiveRecordingConfigTest {
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
             passwordLookup = { null },
-        )
+        ) }
 
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
-
-        assertEquals("Rover workflow cannot start with a command profile that sets MODE BASE.", error.message)
+        assertTrue(error.message.orEmpty().contains("Rover workflow cannot start with a command profile that sets MODE BASE."))
     }
 
     @Test
     fun `rover workflow rejects base mode init command before start`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+        val error = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(workflowId = "rover-ntrip"),
             commandProfile = CommandProfile(
                 id = "commands",
                 name = "Commands",
@@ -786,17 +775,15 @@ class ActiveRecordingConfigTest {
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
             passwordLookup = { null },
-        )
+        ) }
 
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
-
-        assertEquals("Rover workflow cannot start with a command profile that sets MODE BASE.", error.message)
+        assertTrue(error.message.orEmpty().contains("Rover workflow cannot start with a command profile that sets MODE BASE."))
     }
 
     @Test
     fun `um980 workflow rejects unsupported periodic output frequency before start`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+        val error = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(workflowId = "rover-ntrip"),
             commandProfile = CommandProfile(
                 id = "commands",
                 name = "Commands",
@@ -817,9 +804,7 @@ class ActiveRecordingConfigTest {
             workflowName = "Rover + NTRIP",
             workflowUsesNtrip = true,
             passwordLookup = { null },
-        )
-
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
+        ) }
 
         assertEquals(
             "Unsupported UM980 output frequency in `BESTNAVB COM1 0.25`: use 1, 2, 5, 10, 20, or 50 Hz.",
@@ -830,7 +815,7 @@ class ActiveRecordingConfigTest {
     @Test
     fun `um980 workflow accepts supported output frequencies and non-periodic outputs before start`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "rover-ntrip"),
+            settingsSet = recordingSet().copy(workflowId = "rover-ntrip"),
             commandProfile = CommandProfile(
                 id = "commands",
                 name = "Commands",
@@ -860,8 +845,8 @@ class ActiveRecordingConfigTest {
 
     @Test
     fun `fixed base workflow rejects rover mode command profile before start`() {
-        val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "fixed-base"),
+        val error = assertThrows(IllegalArgumentException::class.java) { ActiveRecordingConfig.resolve(
+            settingsSet = recordingSet().copy(workflowId = "fixed-base"),
             commandProfile = CommandProfile(
                 id = "commands",
                 name = "Commands",
@@ -875,17 +860,17 @@ class ActiveRecordingConfigTest {
             workflowName = "Fixed base",
             workflowUsesNtrip = false,
             passwordLookup = { null },
-        )
+        ) }
 
-        val error = assertThrows(IllegalArgumentException::class.java, config::validateForStart)
-
-        assertEquals("Fixed base workflow cannot start with a command profile that sets MODE ROVER.", error.message)
+        assertTrue(error.message.orEmpty().contains("Fixed base workflow cannot start with a command profile that sets MODE ROVER."))
     }
 
     @Test
     fun `fixed base mode commands are not mutated by start config`() {
         val config = ActiveRecordingConfig.resolve(
-            settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(workflowId = "fixed-base"),
+            settingsSet = recordingSet().copy(workflowId = "fixed-base",
+                commandProfileRef = ProfileReference("fixed", "Fixed"),
+                basePositionProfileRef = ProfileReference("base", "Base")),
             commandProfile = CommandProfile(
                 id = "fixed",
                 name = "Fixed",
@@ -900,6 +885,7 @@ class ActiveRecordingConfigTest {
             workflowName = "Fixed base",
             workflowUsesNtrip = false,
             hasAcceptedBaseCoordinate = true,
+            baseCoordinates = listOf(modelTestBaseCoordinate()),
             passwordLookup = { null },
         )
 
@@ -912,4 +898,13 @@ class ActiveRecordingConfigTest {
             config.modeCommands,
         )
     }
+    private fun recordingSet(): RecordingSettingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+        commandProfileRef = ProfileReference("commands", "Commands"),
+        usbBaudProfileRef = ProfileReference("baud", "Baud"),
+        ntripCasterProfileRef = null,
+        ntripMountpointProfileRef = ProfileReference("mount", "Mount"),
+        recordingOutputProfileRef = ProfileReference("record", "Record"),
+        storageProfileRef = ProfileReference("storage", "Storage"),
+    )
+
 }

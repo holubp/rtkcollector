@@ -142,21 +142,71 @@ from Menu.
 The dashboard configuration tiles are intentionally lean selectors: Workflow
 selects the active workflow, Settings selects the active settings set, Device
 filters profile selectors to `Any`, `UM980` or `u-blox M8T`, Mountpoint selects
-or overrides the active NTRIP mountpoint, Profiles selects the active
+the active NTRIP mountpoint profile, Profiles selects the active
 init/shutdown profile, Upload selects `Off` or a configured NTRIP source-upload
 profile for base workflows, and Storage selects a storage location profile. For
 rover workflows, Upload is shown as not needed and is not a warning. Full
 profile creation and editing belongs in Menu. If a settings set name is followed
-by `+`, the active setup has local changes; use Re-apply in Menu to reset it to the
-saved settings set.
+by `+`, active selections differ from the applied settings set; use Re-apply in
+Menu to restore its starting selections. This does not edit shared profiles or
+reset layout, theme or the Device filter.
 When a settings set fixes an option, its Home selector is greyed out and
 marked with a lock symbol. The value shown there is the value used when recording starts;
 Start does not silently restore an older workflow choice. Copy an immutable
 settings set, or edit an editable one, to change its fixed values. The same
 rule applies to a fixed base-coordinate selection in the Base coordinates list.
-Fixing the NTRIP caster does not fix the mountpoint: the Home Mountpoint selector
-stays available, but lists only mountpoint profiles associated with that caster.
-To choose mountpoints from another caster, unlock the caster in the settings set.
+A caster restriction does not fix the mountpoint: the Home Mountpoint selector
+stays available, but lists only profiles belonging to the restricted caster.
+To choose a source from another caster, change the restriction in the settings
+set. A mountpoint always uses its own caster profile unchanged; the app never
+substitutes another endpoint or account with a similar mountpoint name.
+
+### Selections And Shared Profiles
+
+A profile owns its settings. For example, a caster profile owns its host, port,
+account and transport; a mountpoint profile names that caster and the stream.
+A settings set chooses complete profiles and decides which selections can
+change. It does not replace individual fields inside those profiles.
+
+The selection policies are:
+
+- Default/changeable: start with the set's default, then keep your replacement
+  selection until you change or reset it.
+- Fixed: the selection has a lock symbol and cannot be changed from Home or an
+  active selector in Menu.
+- Choose once/remember: choose a profile once; the choice survives restart and
+  a failed Start until you change or reset it.
+- Ask every time: choose for this recording; stop, failed Start or process
+restart clears the choice for the next recording.
+
+An accepted live source or Mock GPS choice under Ask every time also belongs to
+the current recording and clears when it stops. A separate choice prepared for
+the next recording is retained, even if it selects the same profile.
+
+An option that the workflow does not use does not demand a selection. Upload
+`Off` is deliberate and is different from an enabled upload missing a profile.
+Upload locking covers both the enabled state and the selected upload profile.
+Selecting a solution source for Mock GPS does not itself enable publishing;
+the recording-output profile controls publishing and its rate.
+
+A lock fixes the selected profile's identity, not a private historical copy of
+its contents. Editing a shared user profile identifies the affected settings
+sets. After confirmation, idle Home shows what the next Start will use. Built-in
+profiles remain read-only: copy one to customize it. Editing a shared coordinate
+does not update `MODE BASE`; a mismatch must be repaired explicitly before Start.
+
+Re-apply clears remembered choices for the current set, including choose-once
+choices. Its workflow follows the set's activation rule; `Leave current workflow
+unchanged` deliberately retains the current workflow. Other sets keep their
+choices. A running recording keeps its service-owned configuration: profile
+edits and re-application never silently change its receiver commands or outputs.
+
+Typed mountpoints and quick Mock GPS changes use complete derived user profiles,
+not hidden field replacements. Fixed selections still apply. Live source/mock
+changes show pending state until the service acknowledges them; failed changes
+can be retried or discarded. A saved profile is not proof that it is active or
+that its caster connection succeeded. Local receiver recording stays independent.
+
 It also provides the experimental real-recording controls:
 
 - USB device refresh and Android USB permission request;
@@ -177,7 +227,12 @@ It also provides the experimental real-recording controls:
   folder selection for user-visible session folders;
 - manual fixed-base coordinates or pasted/imported `base-position.json`;
 - foreground-service start/stop;
-- live receiver RX, receiver TX, correction input and NTRIP state counters.
+- live receiver RX, app TX to receiver, correction input and NTRIP state counters.
+
+Command-profile editing keeps three phases separate: `Pre-baud init script`
+runs before the serial baud change, `Post-baud runtime script` runs afterward,
+and `Shutdown script` runs when stopping. Imported initialization commands remain
+in their original phase; changing a profile name does not delete those commands.
 
 The Position card is also an action surface. Tapping the displayed coordinate
 opens copy choices for `geo:lat,lon`, `lat,lon`, `lat` and `lon`. In base
@@ -204,9 +259,12 @@ coordinate. Built-in or otherwise immutable settings sets are derived into a
 new timestamped settings set; editable settings sets can be updated in place.
 The final confirmation shows exactly what will happen. Pressing Cancel before
 the final confirmation leaves existing settings sets and command profiles
-unchanged. Pressing OK stores the accepted coordinate, writes the selected MSL
-altitude into the `MODE BASE` line, stops any active recording, switches to
-Fixed base and leaves the app ready for Start. Upload is not enabled
+unchanged. Pressing OK stops any active recording before publishing the accepted
+coordinate and the selected MSL altitude in the `MODE BASE` line, then switches to
+Fixed base. Any choices required by the resulting settings set remain visible
+before Start. Re-apply keeps the saved command and coordinate defaults, but
+Choose-once and Ask policies still reset their selections as described above.
+Upload is not enabled
 automatically; choose it explicitly if this base should publish RTCM. For
 UM980/N4, the generated `MODE BASE` command uses MSL altitude. Ellipsoidal
 height and geoid separation remain recorded metadata for review, dashboard
@@ -719,6 +777,11 @@ because it is not live hardware recording.
 
 Settings backup export writes profiles, selected workflow/settings references
 and optional NTRIP passwords to a JSON file selected through Android sharing.
+Accepted base-coordinate records are transferred separately using
+`base-position.json`; settings backup preserves their references, not the
+coordinate library. When restoring a fixed-base setup on another device, also
+import or recreate its accepted coordinate and check agreement with `MODE BASE`
+before Start.
 Plaintext password export is off by default and requires explicit user selection.
 Settings backup share files are temporary cache artifacts and include redacted
 or plaintext-password JSON in the filename; plaintext-exported backups are
@@ -729,6 +792,28 @@ Settings import is available through Android content/share intents. The app
 accepts JSON content, validates structure and references, shows a preview, and
 requires explicit confirmation before replacing profiles or importing plaintext
 passwords. Import is blocked while recording is active.
+
+New backups keep settings-set defaults, selection policies and active choices
+separate. Old RC2-RC6 format-1 backups remain importable. Legacy field
+customizations are preserved as derived profiles; values that a fixed policy
+ignored remain recoverable rather than being activated silently. Ambiguous
+caster relationships or old selection policies require review before that route
+is used. The app does not guess where credentials should be sent.
+
+Imports and upgrades stage credentials before publishing the new profile graph.
+An interrupted change recovers a consistent committed graph. If storage,
+Keystore access or folder permissions are unavailable, affected operations stay
+blocked with an actionable message; the app does not silently replace your
+configuration with defaults. Missing passwords can be supplied in their owning
+profiles; unavailable SAF folders must be selected again with the folder picker.
+For a settings set marked as needing migration review, stop recording, repair
+its profile references and any missing credentials or folder access, then open
+its settings-set editor and choose `Validate and apply migration repairs`.
+The app validates the applicable configuration before saving the repair. Merely
+changing a profile reference does not acknowledge an ambiguous legacy decision.
+Unrelated or inactive recovery information is retained for later review.
+Password export includes only credentials owned by committed profiles, never
+temporary staging or orphan entries. Treat a plaintext-password backup as secret.
 
 ## Live Stream Diagnostics
 

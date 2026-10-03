@@ -132,6 +132,12 @@ retrieval and base upload in both distribution variants. Plaintext exposes
 credentials and optional GGA position to the network. Invalid TLS is not
 accepted, and failed TLS never falls back to plaintext.
 
+Settings sets select complete profiles and define which selections can change.
+They do not replace a referenced caster's credentials or other profile fields.
+Fixed selections show a lock; caster restrictions filter mountpoint choices.
+See [Selections And Shared Profiles](docs/user-workflows.md#selections-and-shared-profiles)
+for Re-apply, shared edits and recording-scoped changes.
+
 The capture path must not depend on the Android Activity lifecycle, Compose,
 NTRIP availability or parser success.
 

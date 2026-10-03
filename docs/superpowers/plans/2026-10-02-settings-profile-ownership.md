@@ -190,7 +190,7 @@ leave the derived profile unselected and capture intact.
 - [ ] Manual Windows/Android: upgrade with legacy configs; copy built-ins; all
   policy/lock combinations; source switch; edit shared profile; failed/retried
   migration; SAF reselect; mock shortcuts; fixed-base handoff; no raw data loss.
-- [ ] Commit/push only intended approved implementation after mandatory gates;
+- [x] Commit/push only intended approved implementation after mandatory gates;
   record CI and manual gaps truthfully. No release without separate instruction.
 
 Exit: verified automated criteria; manual evidence explicitly pending/passing,
@@ -207,6 +207,7 @@ never inferred from CI. Human approval remains required for normative changes.
 | 2026-10-02 | Approved settings/profile ownership; Task 1 docs checkpoint | In progress | User approval authorizes implementation, compliance review and RC6 release. Canonical contracts and traceability updated in this worktree. No code/tests changed; grounded consumer/test inventory reported to controller. New requirements remain `Needs review` until implementation and evidence are independently checked. |
 | 2026-10-03 | Model, migration, UI and session integration | Implemented; verification in progress | Consolidated production compilation and 557 targeted tests passed before corrective edits. Fixed-base corrections passed 42 tests; integrated retry/maintenance corrections passed 10 tests. Independent re-review found operator-repair, ASK lifecycle and generic baud-safety gaps; these remain blocking pending correction. Full gates, clean-host CI and release are not complete. |
 | 2026-10-03 | Final original-scope corrective review and checked-in gate | Passed; publication gate clarification pending | All independent code/spec findings closed, including accepted-live ASK consumption, explicit migration repair, command phases and lossless submission, receiver-family baud readiness, and SAF read/write authority. Final checked-in pre-push session 74869 passed: 1212 tests / 164 suites, zero failures/errors/skips. Current root instructions require a newer full assurance checker absent from this branch; running that uncommitted root checker against the branch reports missing approval/capability/evidence records. Owner clarification is requested before push; no approval fabrication, gate waiver or unrelated root draft integration. CI, release and manual device evidence remain pending. |
+| 2026-10-03 | Owner-authorized RC6 publication and artifact verification | Released; manual validation pending | Owner explicitly deferred strict-framework integration until after validation and authorized release using checked-in gates. Source `f480c6d` is pushed to main and tagged RC6. CI `37113929234` passed full-host tests, both variants, native assembly and signing checks; 2145 executions, no failures/errors/skips. Release build `37114265604` published the stable-key APK. Downloaded checksum, signing pin, source receipt and package/version were independently verified; full receipt in `docs/releases/1.0-RC6.md`. No manual/device pass or newer strict-checker pass is inferred. |
 
 Review corrections: (1) explicit committed secret binding authority;
 (2) recovery before every store read/publication; (3) live patches against

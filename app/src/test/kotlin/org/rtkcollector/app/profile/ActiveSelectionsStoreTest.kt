@@ -174,7 +174,10 @@ class ActiveSelectionsStoreTest {
             transientChoices = mapOf(ActiveSetupOptionKey.RECEIVER_COMMAND to SelectionChoice.profile("old-command")),
         )
         cache.remember(owner, active)
-        assertEquals(active, cache.cached(owner, ActiveSetupSelections.fromJson(active.toJson())))
+        val cached = requireNotNull(cache.cached(owner, ActiveSetupSelections.fromJson(active.toJson())))
+        assertEquals(active, cached.copy(transientAnswerGenerations = emptyMap()))
+        assertEquals(setOf(ActiveSetupOptionKey.RECEIVER_COMMAND), cached.transientAnswerGenerations.keys)
+        assertTrue(requireNotNull(cached.transientAnswerGenerations[ActiveSetupOptionKey.RECEIVER_COMMAND]) > 0L)
 
         cache.invalidate(owner)
 

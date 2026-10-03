@@ -7,6 +7,36 @@ import org.junit.jupiter.api.Test
 
 class RecordingPermissionModelTest {
     @Test
+    fun opensBatterySettingsWithoutLaunchingTheFallbackOnSuccess() {
+        val launched = mutableListOf<BatterySettingsPage>()
+
+        assertTrue(openBatteryOptimisationSettings { page -> launched.add(page); true })
+
+        assertEquals(listOf(BatterySettingsPage.BATTERY_OPTIMISATION), launched)
+    }
+
+    @Test
+    fun fallsBackToAppDetailsWhenBatterySettingsAreUnavailable() {
+        val launched = mutableListOf<BatterySettingsPage>()
+
+        assertTrue(openBatteryOptimisationSettings { page ->
+            launched.add(page)
+            page == BatterySettingsPage.APP_DETAILS
+        })
+
+        assertEquals(listOf(BatterySettingsPage.BATTERY_OPTIMISATION, BatterySettingsPage.APP_DETAILS), launched)
+    }
+
+    @Test
+    fun reportsFailureWhenNeitherSettingsScreenCanBeOpened() {
+        val launched = mutableListOf<BatterySettingsPage>()
+
+        assertFalse(openBatteryOptimisationSettings { page -> launched.add(page); false })
+
+        assertEquals(listOf(BatterySettingsPage.BATTERY_OPTIMISATION, BatterySettingsPage.APP_DETAILS), launched)
+    }
+
+    @Test
     fun androidTiramisuAndNewerRequiresNotificationPermission() {
         assertEquals(
             listOf("android.permission.POST_NOTIFICATIONS"),

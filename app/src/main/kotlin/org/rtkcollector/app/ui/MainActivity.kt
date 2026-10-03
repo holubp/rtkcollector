@@ -93,6 +93,7 @@ import org.rtkcollector.app.base.FixedBaseSettingsSetAction
 import org.rtkcollector.app.base.FixedBaseSettingsSetCandidate
 import org.rtkcollector.app.base.FixedBaseProfileMaterializer
 import org.rtkcollector.app.permissions.batteryOptimisationWarning
+import org.rtkcollector.app.permissions.openBatteryOptimisationSettings
 import org.rtkcollector.app.permissions.runtimePermissionsRequiredBeforeRecording
 import org.rtkcollector.app.profile.ActiveRecordingConfig
 import org.rtkcollector.app.profile.ActiveSetupOptionKey
@@ -1449,8 +1450,21 @@ fun RtkCollectorApp(
         }
     }
     val powerManager = remember(context) { context.getSystemService(PowerManager::class.java) }
+    var isIgnoringBatteryOptimisations by remember(context, powerManager) {
+        mutableStateOf(powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true)
+    }
+    DisposableEffect(context, powerManager) {
+        val activity = context as? ComponentActivity
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isIgnoringBatteryOptimisations = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+            }
+        }
+        activity?.lifecycle?.addObserver(observer)
+        onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
     val batteryWarning = batteryOptimisationWarning(
-        isIgnoringBatteryOptimisations = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true,
+        isIgnoringBatteryOptimisations = isIgnoringBatteryOptimisations,
         isRecording = state.isRecording,
     )
 
@@ -1682,6 +1696,11 @@ fun RtkCollectorApp(
                             setupExpandedPreference = dashboardSetupExpanded,
                             startInProgress = startInProgress,
                             recordingReliabilityWarning = batteryWarning.message.takeIf { batteryWarning.show },
+                            onOpenBatterySettings = {
+                                if (!openBatteryOptimisationSettings(context)) {
+                                    Toast.makeText(context, "Unable to open power settings. Open Android Settings manually and check RtkCollector's battery settings.", Toast.LENGTH_LONG).show()
+                                }
+                            },
                             onSetupExpandedPreferenceChange = { expanded ->
                                 dashboardSetupExpanded = expanded
                                 dashboardUiPreferences.saveSetupExpanded(expanded)

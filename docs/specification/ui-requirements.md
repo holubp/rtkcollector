@@ -80,11 +80,24 @@ monitoring cards in compact layouts. In rail layouts they MUST share the alert
 area directly above the monitoring cards. Such warnings MUST NOT be rendered
 above or displace the app title and icon.
 
+When the battery-optimisation warning is visible, its strip MUST provide a
+`Fix it` action that opens Android's battery-optimisation settings, falling back
+to this app's details settings when the first screen is unavailable or denied.
+If neither screen opens, the UI MUST explain that settings must be opened
+manually rather than crash. The app MUST recheck its optimisation exemption on
+return to the foreground and hide the warning when exempt. The action MUST NOT
+change power settings automatically, request an exemption automatically, or
+start/stop recording. Manufacturer-specific restrictions remain outside the
+standard exemption check.
+
 Verification:
 - Review: `HomeDashboard` owns reliability-warning placement in both compact
   and rail layouts.
-- Manual: enable battery optimisation, start recording and inspect phone
-  portrait and landscape layouts.
+- Automated: `RecordingPermissionModelTest` verifies the pure launch-order and
+  fallback policy with simulated successful/unavailable settings destinations.
+- Manual: while idle with battery optimisation enabled, inspect phone portrait
+  and landscape layouts, use `Fix it`, change exemption and return; confirm the
+  warning refreshes and settings navigation does not change recording state.
 
 ### UI-NTRIP-001: Transport Metadata Does Not Masquerade As Status
 

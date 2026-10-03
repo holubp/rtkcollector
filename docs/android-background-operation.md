@@ -23,6 +23,12 @@ flush and close are prioritised over derived sidecar finalisation.
 - Users receive an in-app warning when Android battery optimisation may affect
   long recordings. V1 warns but does not request battery-optimisation exemption
   automatically; users remain in control of vendor-specific battery settings.
+  The warning's `Fix it` button opens Android battery-optimisation settings,
+  falling back to RtkCollector's app-details settings if needed. Select the
+  appropriate unrestricted/not-optimised option there, then return to the app;
+  it rechecks the standard exemption and hides the warning when exempt. The
+  button does not change settings or recording state itself. Manufacturers may
+  impose additional background restrictions not covered by this standard check.
 
 On Android 13 and newer, recording start must request notification permission
 before foreground recording begins when that permission is still missing. If the

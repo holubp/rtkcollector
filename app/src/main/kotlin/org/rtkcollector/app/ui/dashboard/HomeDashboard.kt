@@ -98,6 +98,7 @@ fun HomeDashboard(
     setupExpandedPreference: Boolean = DefaultDashboardSetupExpanded,
     startInProgress: Boolean = false,
     recordingReliabilityWarning: String? = null,
+    onOpenBatterySettings: () -> Unit = {},
     onSetupExpandedPreferenceChange: (Boolean) -> Unit = {},
     onPrimaryAction: () -> Unit,
     onMenu: () -> Unit,
@@ -235,6 +236,7 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
+                        onOpenBatterySettings = onOpenBatterySettings,
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -265,6 +267,7 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
+                        onOpenBatterySettings = onOpenBatterySettings,
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
                         onStopCoordinateAveraging = onStopCoordinateAveraging,
@@ -463,6 +466,7 @@ private fun CompactDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    onOpenBatterySettings: () -> Unit,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -494,6 +498,7 @@ private fun CompactDashboard(
         DashboardAlerts(
             displayedError = displayedError,
             recordingReliabilityWarning = recordingReliabilityWarning,
+            onOpenBatterySettings = onOpenBatterySettings,
             onCopyError = onCopyError,
         )
         DashboardCards(
@@ -535,6 +540,7 @@ private fun RailDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    onOpenBatterySettings: () -> Unit,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
     onStopCoordinateAveraging: () -> Unit,
@@ -604,6 +610,7 @@ private fun RailDashboard(
             DashboardAlerts(
                 displayedError = displayedError,
                 recordingReliabilityWarning = recordingReliabilityWarning,
+                onOpenBatterySettings = onOpenBatterySettings,
                 onCopyError = onCopyError,
             )
             DashboardCards(
@@ -628,6 +635,7 @@ private fun RailDashboard(
 private fun DashboardAlerts(
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    onOpenBatterySettings: () -> Unit,
     onCopyError: () -> Unit,
 ) {
     val warning = recordingReliabilityWarning?.takeIf { it.isNotBlank() }
@@ -635,23 +643,35 @@ private fun DashboardAlerts(
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
-        warning?.let { RecordingReliabilityWarningStrip(text = it) }
+        warning?.let { RecordingReliabilityWarningStrip(text = it, onOpenBatterySettings = onOpenBatterySettings) }
     }
 }
 
 @Composable
-private fun RecordingReliabilityWarningStrip(text: String) {
+private fun RecordingReliabilityWarningStrip(text: String, onOpenBatterySettings: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
         shape = MaterialTheme.shapes.small,
     ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = text,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            TextButton(
+                onClick = onOpenBatterySettings,
+                modifier = Modifier.semantics { contentDescription = "Fix it: open battery optimisation settings" },
+            ) {
+                Text("Fix it")
+            }
+        }
     }
 }
 

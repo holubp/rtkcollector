@@ -9,6 +9,11 @@ data class BatteryOptimisationWarning(
     val message: String,
 )
 
+enum class BatterySettingsPage { BATTERY_OPTIMISATION, APP_DETAILS }
+
+fun openBatteryOptimisationSettings(launch: (BatterySettingsPage) -> Boolean): Boolean =
+    launch(BatterySettingsPage.BATTERY_OPTIMISATION) || launch(BatterySettingsPage.APP_DETAILS)
+
 fun runtimePermissionsRequiredBeforeRecording(sdkInt: Int): List<String> =
     if (sdkInt >= 33) {
         listOf(NotificationPermission)

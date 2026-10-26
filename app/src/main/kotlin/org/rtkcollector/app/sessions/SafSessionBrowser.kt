@@ -19,10 +19,12 @@ object SafSessionBrowser {
             ?.let(Uri::parse)
         val entries = mutableListOf<SessionBrowserEntry>()
         currentUri?.let { uri ->
+            val assessment = uri.completionAssessment(resolver, currentSessionActive)
             entries += SessionBrowserEntry(
                 id = uri.toString(),
                 title = if (currentSessionActive) "Current recording" else (uri.displayName(resolver) ?: "Last session"),
-                subtitle = uri.toString(),
+                subtitle = "${assessment.label}: $uri",
+                completionAssessment = assessment,
                 location = uri.toString(),
                 kind = if (currentSessionActive) SessionEntryKind.CURRENT_ACTIVE else SessionEntryKind.CURRENT_STOPPED,
                 modifiedEpochMillis = uri.lastModified(resolver),
@@ -36,10 +38,12 @@ object SafSessionBrowser {
         rootUri.children(resolver).forEach { child ->
             if (currentUri != null && child.uri == currentUri) return@forEach
             if (child.isDirectory && child.uri.looksLikeSessionDirectory(resolver)) {
+                val assessment = child.uri.completionAssessment(resolver, false)
                 entries += SessionBrowserEntry(
                     id = child.uri.toString(),
                     title = child.displayName,
-                    subtitle = child.uri.toString(),
+                    subtitle = "${assessment.label}: ${child.uri}",
+                    completionAssessment = assessment,
                     location = child.uri.toString(),
                     kind = SessionEntryKind.RECORDING,
                     modifiedEpochMillis = child.lastModified,
@@ -171,6 +175,13 @@ internal fun Uri.receiverFamily(resolver: ContentResolver): String? =
                 .takeIf(String::isNotBlank)
         }
     }.getOrNull()
+
+private fun Uri.completionAssessment(resolver: ContentResolver, reportedActive: Boolean): SessionCompletionAssessment = assessSessionCompletion(
+    runCatching {
+        val file = findChild(resolver, SessionArtifactFile.SESSION_JSON.fileName) ?: return@runCatching null
+        resolver.openInputStream(file.uri)?.use { JSONObject(it.readBytes().toString(Charsets.UTF_8)) }
+    }.getOrNull(), reportedActive || ActiveRecordingSessionRegistry.isActive(toString()), toString(),
+)
 
 private fun Uri.querySingleString(resolver: ContentResolver, column: String): String? =
     resolver.query(this, arrayOf(column), null, null, null)?.use { cursor ->

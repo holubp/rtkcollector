@@ -45,6 +45,8 @@ Current V1 writes these top-level `session.json` fields:
   `REPLAY_TEST`
 - `startedAt`
 - `stoppedAt`
+- `stopReason`, `stopOutcome`, `stopCorrelationId`, `stopContributingReasons`
+- `diagnosticDroppedRecords`, `diagnosticWriteFailures`
 - `sessionUuid`
 - `linkedBaseSessionUuid`
 - `workflowId`
@@ -206,6 +208,27 @@ Runtime NTRIP changes are represented as redacted `events.jsonl` entries, not
 as markers in `receiver-rx.raw`. Future structured exports such as GPX must be
 finalised with best-effort closing syntax; failure to finalise them is a
 sidecar error and does not invalidate raw RX.
+
+## Essential Lifecycle Evidence
+
+New recordings retain Minimal lifecycle events in `events.jsonl` independently
+of optional app logging. Version 1 lifecycle records contain `schemaVersion`,
+`sessionId`, `type`, `severity`, ISO `timestamp`, `timestampMillis`,
+process-monotonic `elapsedRealtimeMillis`, sanitized `message` and evidence-loss
+counters. Stop events include a `correlationId`. Other existing event schemas
+remain valid in the same JSONL file; consumers must tolerate both.
+
+The additive stop summary in `session.json` distinguishes `FINALIZED`,
+`EVIDENCE_INCOMPLETE` and `CLOSE_FAILED`. `stopReason` retains the initiator
+(`USER`, `START_FAILURE`, `RAW_STORAGE_FAILURE`, `SERVICE_DESTROYED`);
+`stopContributingReasons` is a comma-separated list of later causes, not an
+overwrite of the initiator. Normal user stops are not errors. Counts are
+session-local and do not assert that every event reached durable storage.
+
+Absent finalization after an abrupt process loss means incomplete with unknown
+cause, not a diagnosed Android kill. Historical sessions are not retroactively
+given stop evidence. Session events follow session archive/delete lifetime and
+are unaffected by optional app-log caps, retention or deletion.
 
 ## Session Archives
 

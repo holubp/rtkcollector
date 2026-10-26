@@ -28,6 +28,7 @@ class SessionWriters private constructor(
     private val extractedRtcm: OutputStream,
 ) : Closeable {
     private var finalCloseReport: SessionWriterCloseReport? = null
+    private var eventCloseReport: SessionWriterCloseReport? = null
 
     fun writeSessionJson(json: String) {
         writeAtomicText(
@@ -54,8 +55,10 @@ class SessionWriters private constructor(
     }
 
     fun appendEventJson(json: String) {
-        events.writeJsonLine(json)
+        synchronized(events) { events.writeJsonLine(json) }
     }
+
+    fun flushEvents() { synchronized(events) { events.flush() } }
 
     fun appendQualityLiveJson(json: String) {
         qualityLive.writeJsonLine(json)
@@ -121,12 +124,24 @@ class SessionWriters private constructor(
 
     @Synchronized
     fun closeAll(): SessionWriterCloseReport {
+        return SessionWriterCloseReport(closeNonEventStreams().issues + closeEventStream().issues)
+    }
+
+    @Synchronized
+    fun closeNonEventStreams(): SessionWriterCloseReport {
         finalCloseReport?.let { return it }
         val issues = mutableListOf<SessionWriterIssue>()
-        writerTargets().forEach { target ->
+        writerTargets().filter { it.artifact != SessionArtifactFile.EVENTS_JSONL }.forEach { target ->
             finaliseStream(target, issues)
         }
         return SessionWriterCloseReport(issues).also { finalCloseReport = it }
+    }
+
+    fun closeEventStream(): SessionWriterCloseReport = synchronized(events) {
+        eventCloseReport?.let { return@synchronized it }
+        val issues = mutableListOf<SessionWriterIssue>()
+        finaliseStream(writerTargets().first { it.artifact == SessionArtifactFile.EVENTS_JSONL }, issues)
+        SessionWriterCloseReport(issues).also { eventCloseReport = it }
     }
 
     override fun close() {
@@ -299,6 +314,12 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
         appendJsonField("mode", metadata.mode.name)
         appendJsonField("startedAt", metadata.startedAt)
         appendJsonField("stoppedAt", metadata.stoppedAt)
+        appendJsonField("stopReason", metadata.stopReason)
+        appendJsonField("stopOutcome", metadata.stopOutcome)
+        appendJsonField("stopCorrelationId", metadata.stopCorrelationId)
+        appendJsonField("stopContributingReasons", metadata.stopContributingReasons)
+        appendJsonField("diagnosticDroppedRecords", metadata.diagnosticDroppedRecords)
+        appendJsonField("diagnosticWriteFailures", metadata.diagnosticWriteFailures)
         appendJsonField("sessionUuid", metadata.sessionUuid)
         appendJsonField("linkedBaseSessionUuid", metadata.linkedBaseSessionUuid)
         appendJsonField("workflowId", metadata.workflowId)
@@ -398,6 +419,13 @@ private fun StringBuilder.appendJsonField(name: String, value: Boolean) {
     appendQuoted(name)
     append(":")
     append(value)
+}
+
+private fun StringBuilder.appendJsonField(name: String, value: Long?) {
+    appendSeparatorIfNeeded()
+    appendQuoted(name)
+    append(":")
+    append(value?.toString() ?: "null")
 }
 
 private fun StringBuilder.appendNtripMetadata(ntrip: NtripSessionMetadata) {

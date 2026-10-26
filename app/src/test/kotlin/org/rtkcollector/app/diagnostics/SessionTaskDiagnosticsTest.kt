@@ -20,6 +20,7 @@ class SessionTaskDiagnosticsTest {
             label = "Regenerate RTKLIB",
             category = DiagnosticCategory.RTKLIB,
             error = IllegalStateException("RTKLIB postpos failed\nnative detail"),
+            directWrites = true,
         )
 
         val text = tempDir.resolve("diagnostics/runtime/runtime.jsonl").toFile().readText()
@@ -38,8 +39,19 @@ class SessionTaskDiagnosticsTest {
             label = "Regenerate RTKLIB",
             category = DiagnosticCategory.RTKLIB,
             error = IllegalStateException("RTKLIB postpos failed"),
+            directWrites = true,
         )
 
         assertEquals(0, store.status(runtimeEnabled = false, performanceEnabled = false).runtimeBytes)
+        assertTrue(store.status(false, false).essentialBytes > 0)
+    }
+
+    @Test
+    fun `diagnostic storage failure cannot escape task failure handling`() {
+        val blocked = tempDir.resolve("not-a-directory").toFile().apply { writeText("blocked") }
+        val store = DiagnosticsStore(blocked)
+        recordSessionTaskFailure(store, false, "Share", DiagnosticCategory.APP,
+            IllegalStateException("original failure"), directWrites = true)
+        assertTrue(store.status(false, false).writeFailures > 0)
     }
 }

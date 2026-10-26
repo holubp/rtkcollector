@@ -25,6 +25,7 @@ internal interface RecordingSessionWriters : Closeable {
     fun appendCorrectionInput(bytes: ByteArray)
     fun appendBaseCasterUploadRtcm(bytes: ByteArray)
     fun appendEventJson(json: String)
+    fun flushEvents() = Unit
     fun appendQualityLiveJson(json: String)
     fun appendReceiverSolutionNmea(sentence: String)
     fun appendReceiverSolutionJson(json: String)
@@ -38,6 +39,8 @@ internal interface RecordingSessionWriters : Closeable {
     fun finish(): SessionWriterCloseReport = SessionWriterCloseReport()
     fun flushRaw()
     fun closeAll(): SessionWriterCloseReport
+    fun closeNonEventStreams(): SessionWriterCloseReport = closeAll()
+    fun closeEventStream(): SessionWriterCloseReport = SessionWriterCloseReport()
 }
 
 internal class PathRecordingSessionWriters private constructor(
@@ -78,6 +81,8 @@ internal class PathRecordingSessionWriters private constructor(
         delegate.appendEventJson(json)
         countJsonLine(json)
     }
+
+    override fun flushEvents() = delegate.flushEvents()
 
     override fun appendQualityLiveJson(json: String) {
         delegate.appendQualityLiveJson(json)
@@ -127,6 +132,8 @@ internal class PathRecordingSessionWriters private constructor(
     override fun flush() = delegate.flush()
     override fun flushRaw() = delegate.flushReceiverRx()
     override fun closeAll(): SessionWriterCloseReport = delegate.closeAll()
+    override fun closeNonEventStreams(): SessionWriterCloseReport = delegate.closeNonEventStreams()
+    override fun closeEventStream(): SessionWriterCloseReport = delegate.closeEventStream()
 
     override fun close() {
         val report = closeAll()
@@ -179,6 +186,7 @@ internal class SafRecordingSessionWriters private constructor(
 ) : RecordingSessionWriters {
     private val totalBytes = AtomicLong(0)
     private var finalCloseReport: SessionWriterCloseReport? = null
+    private var eventCloseReport: SessionWriterCloseReport? = null
 
     override val totalBytesWritten: Long
         get() = totalBytes.get()
@@ -212,9 +220,11 @@ internal class SafRecordingSessionWriters private constructor(
     }
 
     override fun appendEventJson(json: String) {
-        events.writeJsonLine(json)
+        synchronized(events) { events.writeJsonLine(json) }
         countJsonLine(json)
     }
+
+    override fun flushEvents() { synchronized(events) { events.flush() } }
 
     override fun appendQualityLiveJson(json: String) {
         qualityLive.writeJsonLine(json)
@@ -285,6 +295,11 @@ internal class SafRecordingSessionWriters private constructor(
 
     @Synchronized
     override fun closeAll(): SessionWriterCloseReport {
+        return SessionWriterCloseReport(closeNonEventStreams().issues + closeEventStream().issues)
+    }
+
+    @Synchronized
+    override fun closeNonEventStreams(): SessionWriterCloseReport {
         finalCloseReport?.let { return it }
         val issues = mutableListOf<SessionWriterIssue>()
         closeStream(
@@ -326,13 +341,6 @@ internal class SafRecordingSessionWriters private constructor(
             stream = extractedRtcm,
             artifact = SessionArtifactFile.RTCM_EXTRACTED_RTCM3,
             category = SessionWriterIssueCategory.BINARY_SIDECAR,
-            severity = SessionWriterIssueSeverity.DEGRADED,
-            issues = issues,
-        )
-        closeStream(
-            stream = events,
-            artifact = SessionArtifactFile.EVENTS_JSONL,
-            category = SessionWriterIssueCategory.LINE_SIDECAR,
             severity = SessionWriterIssueSeverity.DEGRADED,
             issues = issues,
         )
@@ -386,6 +394,14 @@ internal class SafRecordingSessionWriters private constructor(
             issues = issues,
         )
         return SessionWriterCloseReport(issues).also { finalCloseReport = it }
+    }
+
+    override fun closeEventStream(): SessionWriterCloseReport = synchronized(events) {
+        eventCloseReport?.let { return@synchronized it }
+        val issues = mutableListOf<SessionWriterIssue>()
+        closeStream(events, SessionArtifactFile.EVENTS_JSONL, SessionWriterIssueCategory.LINE_SIDECAR,
+            SessionWriterIssueSeverity.DEGRADED, issues)
+        SessionWriterCloseReport(issues).also { eventCloseReport = it }
     }
 
     override fun close() {

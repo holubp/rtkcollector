@@ -815,6 +815,46 @@ Unrelated or inactive recovery information is retained for later review.
 Password export includes only credentials owned by committed profiles, never
 temporary staging or orphan entries. Treat a plaintext-password backup as secret.
 
+## App Logs
+
+Open **Menu -> Developer tools -> App logs and performance monitoring**.
+Minimal logging is always on: each new session keeps essential lifecycle and
+stop evidence in its session ZIP, without enabling troubleshooting first.
+
+Choose **Verbose** for operational summaries or **Debug** for internal diagnostic
+detail. The choice survives app restarts. The main-screen elevated-logging
+advisory opens logging settings; choose Minimal when finished to reduce extra
+storage and processing. Performance monitoring is a separate switch.
+
+The initial optional log cap is **10 MB**. Change it in logging settings to
+5, 10, 25 or 50 MB; age retention can be 1, 7 or 30 days (initially seven).
+The first limit reached removes the oldest optional logs. Changing a limit does
+not restart recording. Essential session events stay with their session, outside
+this optional cap. A separate small essential app journal covers startup failures
+before a session can be created.
+
+Use **Share app logs** for app-wide troubleshooting and Sessions to share a
+recording with essential evidence. App logs may cover multiple sessions.
+**Delete logs** clears app diagnostics, not recordings, session events or the
+chosen level. Diagnostic loss counters show evidence that could not be kept.
+Recently shared ZIP copies are protected from deletion for one hour so a share
+recipient can open them, including after app-screen recreation. At most three
+copies are retained; expired copies are cleaned on later sharing or log deletion.
+Sharing reserves free storage before making temporary copies and may ask you to
+free space first. Older app logs are sanitized again when shared; malformed or
+oversized retained records are replaced by an omission notice in the ZIP.
+
+Android process killing or failing storage can prevent the last event reaching
+storage. Sessions without verified finalization are labelled incomplete with
+unknown cause; the app does not guess why they stopped. Older sessions retain
+their original evidence and may lack the new summary. Raw session recordings
+still contain sensitive receiver data and positions; share only with intended
+recipients.
+If diagnostic storage stalls during Stop, raw recording can still finish; that
+session remains protected from sharing/deletion until its event writer releases
+it. A new recording can start meanwhile. Completion evidence stays conservatively
+incomplete rather than being silently upgraded later.
+
 ## Live Stream Diagnostics
 
 The main dashboard may show compact UM980 receive-frequency diagnostics such as

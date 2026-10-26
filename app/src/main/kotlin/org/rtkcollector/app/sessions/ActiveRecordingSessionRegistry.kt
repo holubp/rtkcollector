@@ -1,16 +1,30 @@
 package org.rtkcollector.app.sessions
 
 import java.nio.file.Paths
+import java.io.Closeable
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class ActiveSessionRegistry {
     private val lock = Any()
     private var activeLocation: String? = null
     private val destructiveOperationLocations = mutableSetOf<String>()
+    private val writerLocations = mutableSetOf<String>()
+
+    fun retainWriter(location: String): Closeable {
+        val key = normalizedLocation(location)
+        synchronized(lock) {
+            require(key !in destructiveOperationLocations && writerLocations.add(key)) {
+                "Session writers already owned or session maintenance is active."
+            }
+        }
+        val released = AtomicBoolean(false)
+        return Closeable { if (released.compareAndSet(false, true)) synchronized(lock) { writerLocations.remove(key) } }
+    }
 
     fun activate(location: String) {
         val key = normalizedLocation(location)
         synchronized(lock) {
-            require(key !in destructiveOperationLocations) {
+            require(key !in destructiveOperationLocations && key !in writerLocations) {
                 "Cannot start recording while this session is being changed destructively."
             }
             val current = activeLocation
@@ -34,8 +48,11 @@ internal class ActiveSessionRegistry {
     fun isAnyActive(): Boolean = synchronized(lock) { activeLocation != null }
 
     fun requireInactive(location: String, action: String) {
-        require(!isActive(location)) {
-            "Cannot $action the active recording session. Stop recording first."
+        synchronized(lock) {
+            val key = normalizedLocation(location)
+            require(activeLocation != key && key !in writerLocations) {
+                "Cannot $action while recording or session writers are still finalizing."
+            }
         }
     }
 
@@ -48,7 +65,7 @@ internal class ActiveSessionRegistry {
     fun <T> withDestructiveOperation(location: String, action: String, block: () -> T): T {
         val key = normalizedLocation(location)
         synchronized(lock) {
-            require(activeLocation != key) {
+            require(activeLocation != key && key !in writerLocations) {
                 "Cannot $action the active recording session. Stop recording first."
             }
             require(destructiveOperationLocations.add(key)) {
@@ -78,6 +95,7 @@ internal class ActiveSessionRegistry {
 
 internal object ActiveRecordingSessionRegistry {
     private val delegate = ActiveSessionRegistry()
+    fun retainWriter(location: String): Closeable = delegate.retainWriter(location)
 
     fun activate(location: String) = delegate.activate(location)
 

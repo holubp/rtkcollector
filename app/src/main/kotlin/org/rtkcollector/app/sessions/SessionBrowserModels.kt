@@ -47,6 +47,7 @@ data class SessionBrowserEntry(
     val receiverFamily: String? = null,
     val filesystemBacked: Boolean = true,
     val capabilities: SessionActionCapabilities? = null,
+    val completionAssessment: SessionCompletionAssessment? = null,
 ) {
     val isActive: Boolean
         get() = kind == SessionEntryKind.CURRENT_ACTIVE

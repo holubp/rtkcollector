@@ -59,6 +59,22 @@ recording/session stops.
 
 ## Limits
 
+Minimal diagnostics retain explicit stop requests and service lifecycle evidence
+without enabling Verbose/Debug logging. A deliberate user Stop is not an error.
+Events are flushed by a dedicated worker; shutdown must release producers and
+drain essential writes before closing the event stream. A delayed essential
+writer retains only its event-stream ownership; the service waits up to 150 ms,
+finalizes raw/other streams and releases recording state independently. A retained
+writer lease prevents unsafe maintenance of that old session, not a new recording.
+Successful stop metadata is committed only after the required close outcomes are
+known; a late event tail does not retroactively claim success.
+Log failures are best-effort diagnostics, not a reason to stop healthy capture.
+
+An Activity restart does not imply service interruption. Session completion
+assessment checks service-owned active-session identity. After abrupt process
+loss, absent finalization means incomplete with unknown cause, not a fabricated
+user stop or diagnosed Android kill. Historical sessions are not rewritten.
+
 Android cannot guarantee survival after:
 
 - user force-stop;

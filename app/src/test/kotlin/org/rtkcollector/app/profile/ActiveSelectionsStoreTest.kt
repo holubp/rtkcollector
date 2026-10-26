@@ -13,6 +13,21 @@ import org.robolectric.RuntimeEnvironment
 @RunWith(RobolectricTestRunner::class)
 class ActiveSelectionsStoreTest {
     @Test
+    fun diagnosticSettingsMigrateAndPersistIndependentlyOfProfiles() {
+        val prefs = context.getSharedPreferences("rtkcollector-diagnostics", Context.MODE_PRIVATE)
+        assertTrue(prefs.edit().clear().putBoolean("runtimeLoggingEnabled", true).commit())
+        val first = org.rtkcollector.app.diagnostics.DiagnosticsSettings(context)
+        assertEquals(org.rtkcollector.app.diagnostics.DiagnosticLevel.VERBOSE, first.level)
+        assertEquals(10_000_000L, first.retention.maxOptionalBytes)
+        first.level = org.rtkcollector.app.diagnostics.DiagnosticLevel.DEBUG
+        first.retention = org.rtkcollector.app.diagnostics.DiagnosticsRetention(25_000_000L, 30)
+        val second = org.rtkcollector.app.diagnostics.DiagnosticsSettings(context)
+        assertEquals(org.rtkcollector.app.diagnostics.DiagnosticLevel.DEBUG, second.level)
+        assertEquals(25_000_000L, second.retention.maxOptionalBytes)
+        assertEquals(30, second.retention.maxOptionalAgeDays)
+        assertTrue(prefs.edit().clear().commit())
+    }
+    @Test
     fun externalOwnerInvalidationIsDurableAndScoped() {
         assertTrue(context.getSharedPreferences("profile-manager", Context.MODE_PRIVATE).edit().clear().commit())
         val first = ProfileStores(context)

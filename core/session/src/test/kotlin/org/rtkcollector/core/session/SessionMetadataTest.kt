@@ -29,6 +29,9 @@ class SessionMetadataTest {
         assertEquals(SessionMode.ROVER, metadata.mode)
         assertEquals(921600, metadata.baudRate)
         assertNull(metadata.stoppedAt)
+        val stopped = metadata.copy(stopReason = "USER", stopOutcome = "FINALIZED", stopCorrelationId = "stop-1")
+        val json = exportSessionMetadata(stopped)
+        org.junit.jupiter.api.Assertions.assertTrue(json.contains("\"stopReason\":\"USER\""))
         assertEquals("caster.example", metadata.ntrip?.casterHost)
     }
 

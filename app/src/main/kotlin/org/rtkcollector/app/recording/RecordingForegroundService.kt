@@ -23,6 +23,8 @@ import org.rtkcollector.app.diagnostics.PerformanceDiagnosticSample
 import org.rtkcollector.app.diagnostics.PerformanceDiagnostics
 import org.rtkcollector.app.diagnostics.RuntimeDiagnosticRecord
 import org.rtkcollector.app.diagnostics.RuntimeDiagnostics
+import org.rtkcollector.app.diagnostics.DiagnosticLevel
+import org.rtkcollector.app.diagnostics.SessionDiagnostics
 import org.rtkcollector.app.mocklocation.AndroidMockLocationSink
 import org.rtkcollector.app.mocklocation.MockLocationPublishResult
 import org.rtkcollector.app.mocklocation.MockLocationPublisher
@@ -358,9 +360,50 @@ class RecordingForegroundService : Service() {
     private var shutdownCommands: List<String> = emptyList()
     private var state = RecordingServiceState()
     private val diagnosticsSettings by lazy { DiagnosticsSettings(this) }
-    private val diagnosticsStore by lazy { DiagnosticsStore(filesDir) }
+    private val diagnosticsStore by lazy {
+        val settings = diagnosticsSettings
+        DiagnosticsStore(filesDir, retentionProvider = { settings.retention })
+    }
     private val runtimeDiagnostics by lazy {
-        RuntimeDiagnostics(diagnosticsStore) { diagnosticsSettings.runtimeLoggingEnabled }
+        RuntimeDiagnostics(diagnosticsStore, level = { diagnosticsSettings.level }) { diagnosticsSettings.runtimeLoggingEnabled }
+    }
+    @Volatile private var sessionDiagnostics: SessionDiagnostics? = null
+    @Volatile private var stopContext = RecordingStopContext()
+    private val essentialStopSealed = AtomicBoolean(false)
+    private val diagnosticMaintenance = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "rtkcollector-diagnostic-maintenance").apply { isDaemon = true }
+    }
+    private var diagnosticSubscription: java.io.Closeable? = null
+    private var debugTicker: java.util.concurrent.ScheduledFuture<*>? = null
+    private var observedDiagnosticLevel: DiagnosticLevel? = null
+
+    private fun refreshDiagnostics() {
+        runCatching { refreshDiagnosticsUnchecked() }.onFailure { diagnosticsStore.noteWriteFailure() }
+    }
+
+    private fun refreshDiagnosticsUnchecked() {
+        if (diagnosticMaintenance.isShutdown) return
+        val selected = diagnosticsSettings.level
+        if (selected != observedDiagnosticLevel) {
+            observedDiagnosticLevel = selected
+            sessionDiagnostics?.record("logging-level-changed", selected.name, critical = true)
+        }
+        diagnosticMaintenance.execute {
+            runCatching { diagnosticsStore.applyRetention(diagnosticsSettings.retention) }
+                .onFailure { diagnosticsStore.noteWriteFailure() }
+        }
+        debugTicker?.cancel(false)
+        debugTicker = if (selected == DiagnosticLevel.DEBUG && running.get()) {
+            diagnosticMaintenance.scheduleAtFixedRate({
+                runCatching {
+                    val snapshot = state
+                    runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(), DiagnosticCategory.SERVICE,
+                        "DEBUG", "Capture counters", mapOf("receiverRxBytes" to snapshot.receiverRxBytes.toString(),
+                            "txBytes" to snapshot.txToReceiverBytes.toString(),
+                            "correctionBytes" to snapshot.correctionInputBytes.toString())), DiagnosticLevel.DEBUG)
+                }
+            }, 5, 5, java.util.concurrent.TimeUnit.SECONDS)
+        } else null
     }
     private val performanceDiagnostics by lazy {
         PerformanceDiagnostics(diagnosticsStore) { diagnosticsSettings.performanceMonitoringEnabled }
@@ -405,12 +448,14 @@ class RecordingForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        diagnosticSubscription = diagnosticsSettings.observeChanges { refreshDiagnostics() }
+        refreshDiagnostics()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startRecording(intent)
-            ACTION_STOP -> stopRecording(sendShutdown = true)
+            ACTION_STOP -> stopRecording(sendShutdown = true, reason = RecordingStopReason.USER)
             ACTION_QUERY -> {
                 broadcastState()
                 if (!running.get()) {
@@ -430,10 +475,14 @@ class RecordingForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        stopRecording(sendShutdown = false)
+        stopRecording(sendShutdown = false, reason = RecordingStopReason.SERVICE_DESTROYED)
         bestSolutionTicker?.cancel(false)
         bestSolutionTicker = null
         bestSolutionExecutor.shutdownNow()
+        diagnosticSubscription?.close()
+        diagnosticSubscription = null
+        debugTicker?.cancel(false)
+        diagnosticMaintenance.shutdown()
         super.onDestroy()
     }
 
@@ -570,6 +619,9 @@ class RecordingForegroundService : Service() {
             RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
             return
         }
+        stopContext = RecordingStopContext()
+        essentialStopSealed.set(false)
+        recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "NOTICE", { "Recording start requested." })
         val snapshot = runCatching {
             val token = incoming.getStringExtra(EXTRA_SETUP_TOKEN)
             require(!token.isNullOrBlank()) { "Validated recording setup is required." }
@@ -582,6 +634,7 @@ class RecordingForegroundService : Service() {
                 lastError = "Validated recording setup is required; retry Start.",
                 errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
                 errorSeverity = RecordingErrorSeverity.FATAL)
+            recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Start rejected: validated setup unavailable." })
             broadcastState()
             stopSelf()
             return
@@ -600,6 +653,7 @@ class RecordingForegroundService : Service() {
                 lastError = "Validated recording setup could not be prepared.",
                 errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
                 errorSeverity = RecordingErrorSeverity.FATAL)
+            recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Start rejected: setup preparation failed." })
             broadcastState()
             stopSelf()
             return
@@ -794,8 +848,17 @@ class RecordingForegroundService : Service() {
             writers = sessionWriters
             ActiveRecordingSessionRegistry.activate(openedSession.displayPath)
             activeSessionLocation = openedSession.displayPath
-            sessionWriters.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
             activeSessionMetadata = metadata
+            val diagnosticLease = ActiveRecordingSessionRegistry.retainWriter(openedSession.displayPath)
+            val maintenance = diagnosticMaintenance
+            val essentialLog = createSessionDiagnostics(metadata.sessionUuid, sessionWriters,
+                diagnosticsStore, diagnosticLease, scheduleCleanup = { maintenance.execute(it) })
+            sessionDiagnostics = essentialLog
+            refreshDiagnostics()
+            essentialLog.record("session-created", "Session writers opened.", critical = true)
+            essentialLog.record("start-accepted", "Validated recording setup accepted.", critical = true)
+            essentialLog.record("logging-level", diagnosticsSettings.level.name, critical = true)
+            sessionWriters.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
             intent.getStringExtra(EXTRA_BASE_POSITION_JSON)
                 ?.takeIf { it.isNotBlank() }
                 ?.let(sessionWriters::writeBasePositionJson)
@@ -805,7 +868,7 @@ class RecordingForegroundService : Service() {
                 initialFlushElapsedRealtimeMillis = SystemClock.elapsedRealtime(),
             )
             activeRecorder = recorder
-            val eventSink = SessionEventSink(sessionWriters)
+            val eventSink = SessionEventSink(essentialLog)
             activeEventSink = eventSink
             startRtklibWorkerIfEnabled(intent, sessionWriters)
             val casterUploadConfig = casterUploadRuntimeConfig(intent)
@@ -958,6 +1021,7 @@ class RecordingForegroundService : Service() {
                 captureThread = startedCaptureThread
             }
             startedCaptureThread.start()
+            essentialLog.record("capture-started", "Receiver capture worker started.", critical = true)
             maybeStartNtrip(intent, recorder)
         } catch (error: Throwable) {
             activeSatelliteTelemetry = SatelliteTelemetryCapability.NONE
@@ -984,7 +1048,8 @@ class RecordingForegroundService : Service() {
                 message = { "Recording start failed: ${error.message ?: error.javaClass.simpleName}" },
             )
             broadcastState()
-            stopRecording(sendShutdown = false)
+            sessionDiagnostics?.record("start-failed", "Recording startup failed.", "FATAL", critical = true)
+            stopRecording(sendShutdown = false, reason = RecordingStopReason.START_FAILURE)
         }
     }
 
@@ -1091,7 +1156,7 @@ class RecordingForegroundService : Service() {
             message = { failure.message ?: "Raw recording storage failed." },
         )
         runCatching { broadcastState() }
-        stopRecording(sendShutdown = false)
+        stopRecording(sendShutdown = false, reason = RecordingStopReason.RAW_STORAGE_FAILURE)
         return true
     }
 
@@ -1718,6 +1783,9 @@ class RecordingForegroundService : Service() {
     }
 
     private fun handleNtripSnapshot(snapshot: NtripRuntimeSnapshot) {
+        if (state.ntripState != snapshot.state.name) {
+            recordSessionEvent("ntrip-state-changed", snapshot.state.name)
+        }
         val ntripProblem = snapshot.state == NtripRuntimeState.AUTH_ERROR ||
             snapshot.state == NtripRuntimeState.TLS_ERROR || snapshot.state == NtripRuntimeState.NETWORK_ERROR
         state = state.copy(
@@ -2335,7 +2403,13 @@ class RecordingForegroundService : Service() {
         return response.toByteArray()
     }
 
-    private fun stopRecording(sendShutdown: Boolean) {
+    private fun stopRecording(sendShutdown: Boolean, reason: RecordingStopReason) {
+        if (running.get() || writers != null || stopping.get()) {
+            val first = stopContext.request(reason)
+            sessionDiagnostics?.record(if (first) "stop-requested" else "stop-contributing-cause",
+                reason.name, correlationId = stopContext.correlationId, critical = true)
+            if (first) recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "NOTICE", { "Recording stop requested: ${reason.name}" })
+        }
         if (!stopping.compareAndSet(false, true)) {
             runCatching { broadcastState() }
             return
@@ -2367,6 +2441,7 @@ class RecordingForegroundService : Service() {
         }
         routineStateBroadcastRateLimiter.reset()
         state = state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false)
+        recordSessionEvent("shutdown-started", "Stopping recording producers.")
         runCatching { broadcastState() }
         persistentWriteThread?.interrupt()
         if (sendShutdown && shutdownSent.compareAndSet(false, true)) {
@@ -2377,6 +2452,9 @@ class RecordingForegroundService : Service() {
                     }
                 }
             }.onFailure { error ->
+                stopContext.request(RecordingStopReason.SHUTDOWN_COMMAND_FAILURE)
+                sessionDiagnostics?.record("shutdown-command-failed", "Receiver shutdown command failed.",
+                    "ERROR", stopContext.correlationId, critical = true)
                 state = state.copy(
                     lastError = error.message,
                     errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
@@ -2387,6 +2465,7 @@ class RecordingForegroundService : Service() {
         }
         bestSolutionTicker?.cancel(false)
         bestSolutionTicker = null
+        recordSessionEvent("shutdown-commands-finished", "Receiver shutdown command phase finished.")
         val ntripReconnectStopped = tryStopNtripReconnect(NTRIP_RECONNECT_SHUTDOWN_WAIT_MILLIS)
         val activeNtripController = ntripController
         val ntripStopped = activeNtripController == null ||
@@ -2613,40 +2692,30 @@ class RecordingForegroundService : Service() {
         casterUploadSnapshot: NtripCasterUploadSnapshot?,
         errorBeforeDeferredFinalization: RecordingErrorSnapshot? = null,
     ) {
-        casterUploadSnapshot?.let { snapshot ->
-            runCatching {
-                writers?.appendEventJson(
-                    """{"type":"base-caster-upload-final","state":"${snapshot.state.jsonEscape()}","uploadedBytes":${snapshot.bytesUploaded},"droppedBytes":${snapshot.bytesDropped},"bitrateKbps":${snapshot.bitrateKbps},"rtcmHz":${snapshot.totalRtcmHz},"stopReason":${snapshot.stopReason.jsonStringOrNull()},"url":"${snapshot.mountpointUrl.jsonEscape()}","lastError":${snapshot.lastError.jsonStringOrNull()}}""",
-                )
+        val essential = sessionDiagnostics
+        essential?.record("shutdown-producers-stopped", "All recording producers have released session writers.",
+            correlationId = stopContext.correlationId, critical = true)
+        // Raw flush and transport teardown must not depend on the event writer.
+        synchronized(runtimeLock) { runCatching { runtime?.close() } }
+        if (essential != null) {
+            if (essentialStopSealed.compareAndSet(false, true)) {
+                casterUploadSnapshot?.let { snapshot ->
+                    essential.record("base-caster-upload-final", "Caster upload stopped.", critical = true,
+                        fields = mapOf("state" to snapshot.state, "uploadedBytes" to snapshot.bytesUploaded,
+                            "droppedBytes" to snapshot.bytesDropped, "bitrateKbps" to snapshot.bitrateKbps,
+                            "rtcmHz" to snapshot.totalRtcmHz, "stopReason" to snapshot.stopReason,
+                            "url" to snapshot.mountpointUrl, "lastError" to snapshot.lastError))
+                }
+                essential.record("stop-finalized", "Producers stopped; finalizing session.",
+                    correlationId = stopContext.correlationId, critical = true)
+                essential.seal()
             }
         }
+        val finalization = closeRecordingSessionWriters(writers, essential)
         synchronized(runtimeLock) {
-            runCatching {
-                activeSessionMetadata
-                    ?.copy(
-                        stoppedAt = Instant.now().toString(),
-                        baseCasterUploadFinalStatus = casterUploadSnapshot?.state,
-                    )
-                    ?.let { metadata ->
-                        writers?.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
-                        activeSessionMetadata = metadata
-                    }
-            }
-            runCatching { runtime?.close() }
-            val closeReport = runCatching { writers?.closeAll() }
-                .getOrElse { error ->
-                    SessionWriterCloseReport(
-                        issues = listOf(
-                            SessionWriterIssue(
-                                artifact = "session-writers",
-                                category = SessionWriterIssueCategory.RAW_RX,
-                                severity = SessionWriterIssueSeverity.FATAL,
-                                message = error.message ?: "Writer close failed.",
-                            ),
-                        ),
-                    )
-                }
-            if (closeReport != null && closeReport.issues.isNotEmpty()) {
+            val closeReport = finalization.closeReport
+            if (closeReport.issues.isNotEmpty()) {
+                stopContext.request(RecordingStopReason.WRITER_CLOSE_FAILURE)
                 state = state.copy(
                     lastError = closeReport.userMessage,
                     errorCategory = RecordingErrorCategory.STORAGE,
@@ -2663,6 +2732,25 @@ class RecordingForegroundService : Service() {
                     message = { closeReport.userMessage ?: "Session writer close failed." },
                 )
             }
+            val outcome = finalization.outcome
+            if (outcome == "EVIDENCE_INCOMPLETE") {
+                recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "DEGRADED",
+                    { "Essential evidence is incomplete; recording streams finalized independently." })
+            }
+            runCatching {
+                activeSessionMetadata?.copy(stoppedAt = Instant.now().toString(),
+                    stopReason = stopContext.initiator?.name, stopOutcome = outcome,
+                    stopCorrelationId = stopContext.correlationId,
+                    stopContributingReasons = stopContext.contributors.joinToString(",") { it.name },
+                    diagnosticDroppedRecords = essential?.droppedRecords,
+                    diagnosticWriteFailures = essential?.writeFailures,
+                    baseCasterUploadFinalStatus = casterUploadSnapshot?.state)?.let { metadata ->
+                    writers?.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
+                    activeSessionMetadata = metadata
+                }
+            }.onFailure {
+                recordRuntimeDiagnostic(DiagnosticCategory.STORAGE, "ERROR", { "Session stop metadata could not be persisted." })
+            }
         }
         activeSessionLocation?.let(ActiveRecordingSessionRegistry::deactivate)
         activeSessionLocation = null
@@ -2676,6 +2764,7 @@ class RecordingForegroundService : Service() {
         latestAcceptedSetupState = null
         activeRecorder = null
         activeEventSink = null
+        sessionDiagnostics = null
         activeBaudPlan = null
         activeUsbVid = null
         activeUsbPid = null
@@ -3084,7 +3173,8 @@ class RecordingForegroundService : Service() {
         attributes: () -> Map<String, String> = { emptyMap() },
     ) {
         runCatching {
-            if (!diagnosticsSettings.runtimeLoggingEnabled || !runtimeDiagnostics.isEnabled) return
+            val required = when (severity) { "DEBUG" -> DiagnosticLevel.DEBUG; "INFO" -> DiagnosticLevel.VERBOSE; else -> DiagnosticLevel.MINIMAL }
+            if (!diagnosticsSettings.level.includes(required)) return
             runtimeDiagnostics.record(
                 RuntimeDiagnosticRecord(
                     timestampMillis = System.currentTimeMillis(),
@@ -3092,7 +3182,7 @@ class RecordingForegroundService : Service() {
                     severity = severity,
                     message = message(),
                     attributes = attributes(),
-                ),
+                ), required,
             )
         }
     }
@@ -4336,7 +4426,7 @@ class RecordingForegroundService : Service() {
         }
 
         override fun close() {
-            writers.flush()
+            writers.flushRaw()
         }
 
         fun flushRawIfDue(nowElapsedRealtimeMillis: Long) {
@@ -4361,10 +4451,9 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private class SessionEventSink(private val writers: RecordingSessionWriters) : CaptureEventSink {
+    private class SessionEventSink(private val diagnostics: SessionDiagnostics) : CaptureEventSink {
         override fun recordEvent(event: CaptureEvent) {
-            val json = """{"timestamp":"${event.timestamp}","type":"${event.type}","message":"${event.message.replace("\"", "\\\"")}"}"""
-            writers.appendEventJson(json)
+            diagnostics.record(event.type, event.message)
         }
     }
 

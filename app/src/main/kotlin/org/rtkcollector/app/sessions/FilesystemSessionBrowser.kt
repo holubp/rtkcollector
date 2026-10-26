@@ -19,10 +19,12 @@ object FilesystemSessionBrowser {
         val currentEntry = currentPath
             ?.takeIf(Files::exists)
             ?.let { path ->
+                val assessment = completion(path, currentSessionActive)
                 SessionBrowserEntry(
                     id = path.toString(),
                     title = if (currentSessionActive) "Current recording" else "Last session",
-                    subtitle = path.toString(),
+                    subtitle = "${assessment.label}: $path",
+                    completionAssessment = assessment,
                     location = path.toString(),
                     kind = if (currentSessionActive) SessionEntryKind.CURRENT_ACTIVE else SessionEntryKind.CURRENT_STOPPED,
                     modifiedEpochMillis = modifiedMillis(path),
@@ -40,10 +42,12 @@ object FilesystemSessionBrowser {
                     .filter { path -> currentPath == null || path.toAbsolutePath() != currentPath.toAbsolutePath() }
                     .forEach { path ->
                         if (Files.isDirectory(path) && looksLikeSessionDirectory(path)) {
+                            val assessment = completion(path, false)
                             entries += SessionBrowserEntry(
                                 id = path.toString(),
                                 title = path.name,
-                                subtitle = path.toString(),
+                                subtitle = "${assessment.label}: $path",
+                                completionAssessment = assessment,
                                 location = path.toString(),
                                 kind = SessionEntryKind.RECORDING,
                                 modifiedEpochMillis = modifiedMillis(path),
@@ -100,6 +104,12 @@ object FilesystemSessionBrowser {
                 .optString("receiverDriverId")
                 .takeIf(String::isNotBlank)
         }.getOrNull()
+
+    private fun completion(path: Path, reportedActive: Boolean): SessionCompletionAssessment = assessSessionCompletion(
+        runCatching { JSONObject(String(Files.readAllBytes(path.resolve("session.json")), Charsets.UTF_8)) }.getOrNull(),
+        reportedActive || ActiveRecordingSessionRegistry.isActive(path.toString()),
+        path.toString(),
+    )
 
     private fun modifiedMillis(path: Path): Long =
         runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrDefault(0L)

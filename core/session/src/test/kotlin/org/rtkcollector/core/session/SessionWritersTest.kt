@@ -17,6 +17,28 @@ class SessionWritersTest {
     @TempDir
     lateinit var tempDir: Path
 
+    @Test fun `non event close finalizes raw without taking event ownership`() {
+        val writers = SessionWriters.open(tempDir)
+        writers.appendReceiverRx(byteArrayOf(7, 8))
+        assertTrue(writers.closeNonEventStreams().issues.isEmpty())
+        assertArrayEquals(byteArrayOf(7, 8), Files.readAllBytes(tempDir.resolve("receiver-rx.raw")))
+        writers.appendEventJson("""{"type":"late-finalization"}""")
+        writers.flushEvents()
+        assertTrue(writers.closeEventStream().issues.isEmpty())
+        assertTrue(writers.closeAll().issues.isEmpty())
+    }
+
+    @Test
+    fun `essential event flush is independent of raw flush`() {
+        SessionWriters.open(tempDir).use { writers ->
+            writers.appendReceiverRx(byteArrayOf(1, 2, 3))
+            writers.appendEventJson("""{"type":"stop-requested"}""")
+            writers.flushEvents()
+            assertTrue(Files.readString(tempDir.resolve("events.jsonl")).contains("stop-requested"))
+            assertEquals(0, Files.size(tempDir.resolve("receiver-rx.raw")))
+        }
+    }
+
     @Test
     fun `session writers append to distinct artifact files`() {
         val writers = SessionWriters.open(tempDir)

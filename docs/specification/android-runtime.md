@@ -43,14 +43,66 @@ Verification:
 
 Status: Normative
 
-Runtime logging and performance monitoring MUST NOT run on the raw receiver
-capture path. When disabled, they MUST avoid timers, file I/O, JSON
-construction and metric aggregation. When enabled, diagnostic failures MUST NOT
-stop recording or mutate session artifacts.
+Diagnostics MUST NOT perform disk I/O, serialization or waits on the raw receiver
+capture path. Minimal lifecycle evidence MUST remain enabled independently of
+optional Verbose/Debug logging and performance monitoring. Disabled optional
+diagnostics MUST avoid message construction and metric aggregation. Diagnostic
+failures MUST NOT stop recording or mutate raw session artifacts.
 
 Verification:
 - Automated: diagnostics controller disabled-state tests.
 - Review: service hooks are guarded and outside receiver byte loops.
+
+### ANDROID-DIAGNOSTICS-002: Persistent Levels And Bounded Optional Logs
+
+Status: Normative
+
+The app MUST offer cumulative Minimal, Verbose and Debug levels, persist the
+selection, and keep performance monitoring independent. Missing/false legacy
+runtime logging MUST migrate to Minimal; true MUST migrate to Verbose. Optional
+logs MUST rotate within an operator-selected total cap, initially 10 MB
+(10,000,000 bytes), and age limit, initially seven days. Size choices MUST include
+5/10/25/50 MB and age choices 1/7/30 days. Changing these MUST NOT restart capture.
+Minimal app evidence MUST use an independent bounded 1 MB journal; session events
+MUST remain with the session and not be deleted by app-log maintenance.
+
+Verification:
+- Automated: diagnostics policy, settings, store and export tests.
+- Manual: settings persistence, live edits and sharing during recording.
+
+### ANDROID-DIAGNOSTICS-003: Stop Evidence And Honest Recovery
+
+Status: Normative
+
+Every new session MUST record essential lifecycle events independent of optional
+logging, including explicit stop provenance and finalization outcome. Events MUST
+carry a schema version, stable code, session identity, wall and process-monotonic
+time, and stop correlation. Preserve initiating and contributing causes; duplicate
+stops MUST NOT overwrite the initiator. Essential delivery MUST have independent
+bounded capacity and observable drop/write-failure counts. Shutdown MUST drain
+essential events before closing their writer without indefinite diagnostic waits.
+Unverified finalization MUST NOT be represented as successful evidence. A session
+with absent finalization MUST be assessed as incomplete with unknown cause unless
+evidence establishes more; an active service session MUST NOT be called interrupted.
+
+Verification:
+- Automated: stop context, event queue, recovery and service lifecycle tests.
+- Manual: process termination, USB loss, repeated start/stop and Activity recreation.
+
+### ANDROID-DIAGNOSTICS-004: Logging Disclosure And Privacy
+
+Status: Normative
+
+The main monitor MUST show a non-modal Verbose/Debug logging advisory while that
+level is selected, including idle, with access to logging settings; Minimal MUST
+not show it. It MUST coexist with operational errors. All logging levels MUST
+exclude credentials and routine raw payload/position dumps. Sharing MUST snapshot
+stable logs outside capture and expose level, version and evidence loss counters.
+Deleting app logs MUST preserve session events and the selected logging level.
+
+Verification:
+- Automated: redaction, export, UI-model and maintenance isolation tests.
+- Manual: light/dark, portrait/landscape and diagnostic failure presentation.
 
 ### ANDROID-JNI-001: JNI And Native Boundaries Are Explicitly Sanitized
 

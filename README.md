@@ -43,6 +43,11 @@ Start with [User Workflows](docs/user-workflows.md) for a practical guide.
 Receiver status is summarised in
 [Supported Receivers](docs/supported-receivers.md).
 
+Essential lifecycle diagnostics are enabled for every new session.
+Optional Verbose/Debug app logging has a persistent level and a user-settable
+size cap, initially 10 MB, in Developer tools. See
+[App Logs](docs/user-workflows.md#app-logs) for retention and sharing.
+
 ## Development Status
 
 This repository is in experimental bootstrap status. The current code includes

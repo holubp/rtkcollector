@@ -56,6 +56,12 @@ data class SessionMetadata(
     val baseCasterUploadFinalStatus: String? = null,
     val validationSummary: String? = null,
     val expectedArtifacts: List<String> = emptyList(),
+    val stopReason: String? = null,
+    val stopOutcome: String? = null,
+    val stopCorrelationId: String? = null,
+    val stopContributingReasons: String? = null,
+    val diagnosticDroppedRecords: Long? = null,
+    val diagnosticWriteFailures: Long? = null,
 )
 
 data class ReceiverIdentificationMetadata(

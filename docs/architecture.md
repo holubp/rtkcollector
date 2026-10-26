@@ -99,3 +99,18 @@ secret bindings before recoverable graph publication; recovery precedes normal
 profile reads and Start. Ordinary profile/session JSON contains explicit secret
 references, not passwords. Configuration and migration work remain outside the
 byte-exact capture path.
+
+## Diagnostic Isolation
+
+Minimal essential evidence is always enabled. Session events use a dedicated,
+bounded worker with reserved lifecycle capacity; optional Verbose/Debug logging
+uses separate bounded delivery and byte-based rotation. Logging serialization,
+file I/O, snapshots and maintenance do not execute on the raw capture path.
+Diagnostic errors cannot mutate raw artifacts or stop healthy recording.
+
+The foreground service carries stop origin and correlation through finalization.
+Essential events drain before their writer closes, including deferred shutdown.
+Metadata summarizes provenance and evidence failures; it does not claim a known
+cause after an unobserved process kill. App-wide optional-log deletion never
+deletes essential session evidence. The separate Minimal app journal covers
+failures before session writers exist.

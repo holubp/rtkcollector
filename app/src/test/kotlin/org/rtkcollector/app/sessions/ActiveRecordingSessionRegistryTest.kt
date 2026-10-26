@@ -13,6 +13,18 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class ActiveRecordingSessionRegistryTest {
+    @Test fun `retained diagnostic writer protects old session without blocking new recording`() {
+        val registry = ActiveSessionRegistry()
+        val lease = registry.retainWriter("/old-session")
+        assertFalse(registry.isAnyActive())
+        assertThrows(IllegalArgumentException::class.java) { registry.requireInactive("/old-session", "share") }
+        assertThrows(IllegalArgumentException::class.java) { registry.withDestructiveOperation("/old-session", "delete") {} }
+        registry.activate("/new-session")
+        lease.close()
+        lease.close()
+        registry.requireInactive("/old-session", "share")
+        assertTrue(registry.isActive("/new-session"))
+    }
     @TempDir
     lateinit var tempDir: Path
 

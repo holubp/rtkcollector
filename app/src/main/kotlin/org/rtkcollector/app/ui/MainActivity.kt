@@ -75,7 +75,12 @@ import org.rtkcollector.app.console.DeviceConsoleController
 import org.rtkcollector.app.console.DeviceConsoleLineEnding
 import org.rtkcollector.app.console.DeviceConsoleState
 import org.rtkcollector.app.diagnostics.DiagnosticCategory
+import org.rtkcollector.app.BuildConfig
 import org.rtkcollector.app.diagnostics.DiagnosticsSettings
+import org.rtkcollector.app.diagnostics.DiagnosticLevel
+import org.rtkcollector.app.diagnostics.DiagnosticsRetention
+import org.rtkcollector.app.diagnostics.DiagnosticsStatus
+import org.rtkcollector.app.diagnostics.RecoveryDiagnostics
 import org.rtkcollector.app.diagnostics.DiagnosticsStore
 import org.rtkcollector.app.diagnostics.DiagnosticsZipExporter
 import org.rtkcollector.app.diagnostics.RuntimeDiagnosticRecord
@@ -391,13 +396,65 @@ fun RtkCollectorApp(
     }
     val context = LocalContext.current
     val diagnosticsSettings = remember(context) { DiagnosticsSettings(context) }
-    val diagnosticsStore = remember(context) { DiagnosticsStore(context.filesDir) }
+    val diagnosticsStore = remember(context) { DiagnosticsStore(context.filesDir, retentionProvider = { diagnosticsSettings.retention }) }
     val diagnosticsZipExporter = remember(context) { DiagnosticsZipExporter(context.cacheDir) }
     val runtimeDiagnostics = remember(context) {
-        RuntimeDiagnostics(diagnosticsStore) { diagnosticsSettings.runtimeLoggingEnabled }
+        RuntimeDiagnostics(diagnosticsStore, level = { diagnosticsSettings.level }) { diagnosticsSettings.runtimeLoggingEnabled }
+    }
+    val recoveryDiagnostics = remember(runtimeDiagnostics) {
+        RecoveryDiagnostics { runtimeDiagnostics.record(it, DiagnosticLevel.MINIMAL) }
     }
     var diagnosticsRevision by remember { mutableStateOf(0) }
     var diagnosticsError by remember { mutableStateOf<String?>(null) }
+    val diagnosticsScope = rememberCoroutineScope()
+    var diagnosticLevel by remember { mutableStateOf(diagnosticsSettings.level) }
+    var diagnosticsStatus by remember { mutableStateOf(DiagnosticsStatus(false, false, 0, 0, 0, 0,
+        level = diagnosticLevel, retention = diagnosticsSettings.retention)) }
+    LaunchedEffect(context) {
+        runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(), DiagnosticCategory.APP,
+            "NOTICE", "Application UI attached (${BuildConfig.VERSION_NAME}).", code = "app-ui-attached"))
+    }
+    DisposableEffect(diagnosticsSettings) {
+        val subscription = diagnosticsSettings.observeChanges {
+            diagnosticLevel = diagnosticsSettings.level
+            diagnosticsRevision++
+        }
+        onDispose { subscription.close() }
+    }
+    LaunchedEffect(screen, diagnosticsRevision) {
+        if (screen == AppScreen.APP_DIAGNOSTICS) {
+            do {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        diagnosticsStore.applyRetention(diagnosticsSettings.retention)
+                        diagnosticsStore.status(diagnosticsSettings.runtimeLoggingEnabled,
+                            diagnosticsSettings.performanceMonitoringEnabled, diagnosticsSettings.level)
+                    }
+                }.onSuccess { diagnosticsStatus = it }.onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    diagnosticsError = it.message
+                }
+                delay(2_000)
+            } while (true)
+        }
+    }
+
+    fun runDiagnosticsAction(action: () -> File?) {
+        diagnosticsScope.launch {
+            runCatching { withContext(Dispatchers.IO) { action() } }
+                .onSuccess { file ->
+                    diagnosticsError = null
+                    if (file != null) runCatching { shareDiagnosticZip(context, file) }
+                        .onFailure { diagnosticsError = it.message }
+                    diagnosticsRevision++
+                }.onFailure { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    diagnosticsError = error.message ?: error.javaClass.simpleName
+                    runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(), DiagnosticCategory.APP,
+                        "ERROR", "Diagnostics action failed: ${error.message}"))
+                }
+        }
+    }
     val profileStore = remember(context) { ProfileStores(context) }
     val secretStore = remember(context) { NtripSecretStore(context) }
     var configurationRecoveryAttempt by remember { mutableStateOf(0) }
@@ -409,6 +466,10 @@ fun RtkCollectorApp(
         } else profileStore.initializeOwnershipWhileIdle(secretStore)
     }
     if (configurationReadiness is ConfigurationReadiness.Blocked) {
+        LaunchedEffect(configurationReadiness) {
+            runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(), DiagnosticCategory.APP,
+                "ERROR", "Stored configuration recovery blocked application setup.", code = "configuration-recovery-blocked"))
+        }
         MaterialTheme {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("RtkCollector", style = MaterialTheme.typography.titleLarge)
@@ -559,6 +620,23 @@ fun RtkCollectorApp(
             settingsSets = settingsSets,
             selectedSettingsSetId = selectedSettingsSetId,
         )
+        recoveryDiagnostics.record(sessionBrowserState.allEntries.mapNotNull { it.completionAssessment })
+    }
+    LaunchedEffect(Unit) {
+        val dashboard = state
+        val sets = settingsSets
+        val selectedSet = selectedSettingsSetId
+        runCatching {
+            withContext(Dispatchers.IO) {
+                diagnosticsStore.applyRetention(diagnosticsSettings.retention)
+                buildSessionBrowserState(context, dashboard, profileStore, sets, selectedSet)
+                    .allEntries.mapNotNull { it.completionAssessment }
+            }
+        }.onSuccess { recoveryDiagnostics.record(it) }.onFailure {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(), DiagnosticCategory.SERVICE,
+                "DEGRADED", "Session recovery assessment unavailable.", code = "session-recovery-unavailable"))
+        }
     }
     fun openSessions(entryPoint: SessionBrowserEntryPoint) {
         sessionBrowserEntryPoint = entryPoint
@@ -590,6 +668,7 @@ fun RtkCollectorApp(
                             label = label,
                             category = category,
                             error = error,
+                            level = diagnosticsSettings.level,
                         )
                         Toast.makeText(context, "$label failed: ${error.message}", Toast.LENGTH_LONG).show()
                     }
@@ -1404,7 +1483,7 @@ fun RtkCollectorApp(
                 )
             }
             if (!queryStarted) {
-                recordAppRuntimeDiagnosticIfEnabled(
+                recordAppRuntimeDiagnostic(
                     context = context,
                     severity = "WARNING",
                     message = "Recording-service state query was blocked by Android background restrictions.",
@@ -1696,6 +1775,8 @@ fun RtkCollectorApp(
                             setupExpandedPreference = dashboardSetupExpanded,
                             startInProgress = startInProgress,
                             recordingReliabilityWarning = batteryWarning.message.takeIf { batteryWarning.show },
+                            loggingAdvisory = diagnosticLevel.advisory,
+                            onOpenLoggingSettings = { screen = AppScreen.APP_DIAGNOSTICS },
                             onOpenBatterySettings = {
                                 if (!openBatteryOptimisationSettings(context)) {
                                     Toast.makeText(context, "Unable to open power settings. Open Android Settings manually and check RtkCollector's battery settings.", Toast.LENGTH_LONG).show()
@@ -2841,83 +2922,36 @@ fun RtkCollectorApp(
                 AppScreen.APP_DIAGNOSTICS -> {
                     @Suppress("UNUSED_VARIABLE")
                     val currentDiagnosticsRevision = diagnosticsRevision
-                    val diagnosticsStatus = diagnosticsStore.status(
-                        runtimeEnabled = diagnosticsSettings.runtimeLoggingEnabled,
-                        performanceEnabled = diagnosticsSettings.performanceMonitoringEnabled,
-                    )
                     AppDiagnosticsScreen(
                         status = diagnosticsStatus,
                         lastError = diagnosticsError,
-                        onRuntimeLoggingChange = { enabled: Boolean ->
-                            diagnosticsSettings.runtimeLoggingEnabled = enabled
+                        onLevelChange = { level ->
+                            diagnosticsStatus = diagnosticsStatus.copy(level = level, runtimeLoggingEnabled = level != DiagnosticLevel.MINIMAL)
+                            diagnosticsSettings.level = level
+                            runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(), DiagnosticCategory.APP,
+                                "NOTICE", "Logging level changed: ${level.name}"), DiagnosticLevel.MINIMAL)
                             diagnosticsRevision++
+                        },
+                        onRetentionChange = { policy ->
+                            diagnosticsStatus = diagnosticsStatus.copy(retention = policy)
+                            diagnosticsSettings.retention = policy
+                            runDiagnosticsAction { diagnosticsStore.applyRetention(policy); null }
                         },
                         onPerformanceMonitoringChange = { enabled: Boolean ->
                             diagnosticsSettings.performanceMonitoringEnabled = enabled
                             diagnosticsRevision++
                         },
                         onShareRuntimeLogs = {
-                            runCatching {
-                                shareDiagnosticZip(
-                                    context,
-                                    diagnosticsZipExporter.exportRuntimeLogs(diagnosticsStore, diagnosticsStatus),
-                                )
-                            }.onSuccess {
-                                diagnosticsError = null
-                            }.onFailure { error ->
-                                diagnosticsError = error.message ?: error.javaClass.simpleName
-                                if (runtimeDiagnostics.isEnabled) {
-                                    runtimeDiagnostics.record(
-                                        RuntimeDiagnosticRecord(
-                                            timestampMillis = System.currentTimeMillis(),
-                                            category = DiagnosticCategory.APP,
-                                            severity = "DEGRADED",
-                                            message = "Runtime diagnostics sharing failed: ${diagnosticsError.orEmpty()}",
-                                        ),
-                                    )
-                                }
-                            }
+                            runDiagnosticsAction { diagnosticsZipExporter.exportRuntimeLogs(diagnosticsStore, diagnosticsStatus) }
                         },
                         onSharePerformanceLogs = {
-                            runCatching {
-                                shareDiagnosticZip(
-                                    context,
-                                    diagnosticsZipExporter.exportPerformanceLogs(diagnosticsStore, diagnosticsStatus),
-                                )
-                            }.onSuccess {
-                                diagnosticsError = null
-                            }.onFailure { error ->
-                                diagnosticsError = error.message ?: error.javaClass.simpleName
-                                if (runtimeDiagnostics.isEnabled) {
-                                    runtimeDiagnostics.record(
-                                        RuntimeDiagnosticRecord(
-                                            timestampMillis = System.currentTimeMillis(),
-                                            category = DiagnosticCategory.APP,
-                                            severity = "DEGRADED",
-                                            message = "Performance diagnostics sharing failed: ${diagnosticsError.orEmpty()}",
-                                        ),
-                                    )
-                                }
-                            }
+                            runDiagnosticsAction { diagnosticsZipExporter.exportPerformanceLogs(diagnosticsStore, diagnosticsStatus) }
                         },
                         onDeleteLogs = {
-                            runCatching {
+                            runDiagnosticsAction {
                                 diagnosticsStore.deleteDiagnostics()
                                 diagnosticsZipExporter.deleteTemporaryShares()
-                                diagnosticsRevision++
-                                diagnosticsError = null
-                            }.onFailure { error ->
-                                diagnosticsError = error.message ?: error.javaClass.simpleName
-                                if (runtimeDiagnostics.isEnabled) {
-                                    runtimeDiagnostics.record(
-                                        RuntimeDiagnosticRecord(
-                                            timestampMillis = System.currentTimeMillis(),
-                                            category = DiagnosticCategory.APP,
-                                            severity = "DEGRADED",
-                                            message = "Diagnostics deletion failed: ${diagnosticsError.orEmpty()}",
-                                        ),
-                                    )
-                                }
+                                null
                             }
                         },
                         onBack = { screen = AppScreen.SETTINGS },
@@ -4203,7 +4237,7 @@ private fun showCannotStart(
 ) {
     val message = "Cannot start: $detail"
     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-    recordAppRuntimeDiagnosticIfEnabled(
+    recordAppRuntimeDiagnostic(
         context = context,
         severity = "ERROR",
         message = "Start preflight failed: $detail",
@@ -4211,7 +4245,7 @@ private fun showCannotStart(
     )
 }
 
-private fun recordAppRuntimeDiagnosticIfEnabled(
+private fun recordAppRuntimeDiagnostic(
     context: Context,
     severity: String,
     message: String,
@@ -4219,10 +4253,9 @@ private fun recordAppRuntimeDiagnosticIfEnabled(
 ) {
     runCatching {
         val settings = DiagnosticsSettings(context)
-        if (!settings.runtimeLoggingEnabled) return
-        DiagnosticsStore(context.filesDir).appendRuntime(
-            enabled = true,
-            record = RuntimeDiagnosticRecord(
+        val store = DiagnosticsStore(context.filesDir, retentionProvider = { settings.retention })
+        RuntimeDiagnostics(store, level = { settings.level }) { settings.runtimeLoggingEnabled }.record(
+            RuntimeDiagnosticRecord(
                 timestampMillis = System.currentTimeMillis(),
                 category = DiagnosticCategory.APP,
                 severity = severity,

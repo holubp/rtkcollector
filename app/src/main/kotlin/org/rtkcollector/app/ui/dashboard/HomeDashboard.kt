@@ -98,6 +98,8 @@ fun HomeDashboard(
     setupExpandedPreference: Boolean = DefaultDashboardSetupExpanded,
     startInProgress: Boolean = false,
     recordingReliabilityWarning: String? = null,
+    loggingAdvisory: String? = null,
+    onOpenLoggingSettings: () -> Unit = {},
     onOpenBatterySettings: () -> Unit = {},
     onSetupExpandedPreferenceChange: (Boolean) -> Unit = {},
     onPrimaryAction: () -> Unit,
@@ -236,6 +238,8 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
+                        loggingAdvisory = loggingAdvisory,
+                        onOpenLoggingSettings = onOpenLoggingSettings,
                         onOpenBatterySettings = onOpenBatterySettings,
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
@@ -267,6 +271,8 @@ fun HomeDashboard(
                         onCopyError = copyErrorToClipboard,
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
+                        loggingAdvisory = loggingAdvisory,
+                        onOpenLoggingSettings = onOpenLoggingSettings,
                         onOpenBatterySettings = onOpenBatterySettings,
                         coordinateAveraging = coordinateAveraging,
                         onStartCoordinateAveraging = onStartCoordinateAveraging,
@@ -466,6 +472,8 @@ private fun CompactDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    loggingAdvisory: String?,
+    onOpenLoggingSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
@@ -498,6 +506,8 @@ private fun CompactDashboard(
         DashboardAlerts(
             displayedError = displayedError,
             recordingReliabilityWarning = recordingReliabilityWarning,
+            loggingAdvisory = loggingAdvisory,
+            onOpenLoggingSettings = onOpenLoggingSettings,
             onOpenBatterySettings = onOpenBatterySettings,
             onCopyError = onCopyError,
         )
@@ -540,6 +550,8 @@ private fun RailDashboard(
     onCopyError: () -> Unit,
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    loggingAdvisory: String?,
+    onOpenLoggingSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     coordinateAveraging: CoordinateAveragingState,
     onStartCoordinateAveraging: (CoordinatePair, Double?) -> Unit,
@@ -610,6 +622,8 @@ private fun RailDashboard(
             DashboardAlerts(
                 displayedError = displayedError,
                 recordingReliabilityWarning = recordingReliabilityWarning,
+                loggingAdvisory = loggingAdvisory,
+                onOpenLoggingSettings = onOpenLoggingSettings,
                 onOpenBatterySettings = onOpenBatterySettings,
                 onCopyError = onCopyError,
             )
@@ -635,15 +649,27 @@ private fun RailDashboard(
 private fun DashboardAlerts(
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
+    loggingAdvisory: String?,
+    onOpenLoggingSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     onCopyError: () -> Unit,
 ) {
     val warning = recordingReliabilityWarning?.takeIf { it.isNotBlank() }
-    if (displayedError == null && warning == null) return
+    if (displayedError == null && warning == null && loggingAdvisory == null) return
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
         warning?.let { RecordingReliabilityWarningStrip(text = it, onOpenBatterySettings = onOpenBatterySettings) }
+        loggingAdvisory?.let { text ->
+            Surface(color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenLoggingSettings).semantics {
+                    contentDescription = "$text. Extra storage and processing cost. Open logging settings."
+                }) {
+                Text(text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium)
+            }
+        }
     }
 }
 

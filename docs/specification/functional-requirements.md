@@ -118,8 +118,17 @@ reported as a finalisation failure and MUST NOT be treated as proof that the
 writers are no longer in use. USB shutdown MUST cover both the published
 transport and any replacement transport being opened during reconnect, and the
 capture thread MUST remain part of the finalisation barrier until it has exited.
-A new recording MUST NOT start while finalisation of the previous session is
-still in progress. Worker interruption used to request shutdown MUST be handled
+A new recording MUST NOT start while finalisation of the previous session's
+capture or non-diagnostic writer-using workers is still in progress. An isolated
+essential diagnostic worker MAY finish its old session event stream after raw
+and other artifacts have closed, provided it retains an exclusive old-session
+writer lease, cannot access the new session, and blocks sharing, deletion and
+other maintenance of the old session until its close attempt completes. The
+service MUST use a bounded wait for that diagnostic tail and report incomplete
+evidence rather than claim successful finalisation. Failed diagnostic worker
+startup MUST NOT close events before producer shutdown/sealing. This diagnostic
+exception was approved by human:holubp on 2026-10-26 for tiered diagnostics.
+Worker interruption used to request shutdown MUST be handled
 as expected control flow and MUST NOT escape as an uncaught process-terminating
 exception.
 

@@ -27,6 +27,14 @@ Hard non-goals:
 
 ## Non-Negotiable Architecture Rules
 
+- Diagnostic event writers own only their event stream, never raw-stream close.
+  Bound the service wait for essential evidence; an incomplete diagnostic tail
+  retains an old-session lease that blocks sharing/deletion until close finishes.
+  Rejected worker startup defers event cleanup until producer shutdown/sealing.
+  Test blocked sinks and startup rejection, and publish successful finalization
+  metadata only after actual close outcomes. Optional logging/export failures
+  must not interrupt authoritative capture.
+
 - The raw receiver capture path is authoritative and byte-exact.
 - Parser, UI, NTRIP, quality-monitor and future RTKLIB failures must not stop
   or mutate raw recording while transport and storage still function.

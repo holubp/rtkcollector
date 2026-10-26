@@ -27,6 +27,14 @@ Storage Access Framework location. Session metadata must not contain NTRIP
 passwords or tokens. Receiver RX, app TX to receiver, correction input, events,
 quality logs and derived solution files are stored as separate artifacts.
 
+Essential lifecycle and stop diagnostics are retained locally with new sessions.
+Optional Verbose/Debug app logs have a persistent, user-selected level and size
+cap (initially 10 MB). These diagnostics are not automatically uploaded; sharing
+requires an explicit user action. Known credential forms are redacted. Recently
+shared app-log ZIPs can remain in private cache for a one-hour recipient grace,
+with at most three retained copies; later sharing or log deletion removes expired
+copies. Deleting app logs does not delete session evidence or recordings.
+
 NTRIP passwords are stored locally and encrypted with Android Keystore-backed
 AES-GCM where Android provides the required Keystore services. Android backup is
 disabled for the app.

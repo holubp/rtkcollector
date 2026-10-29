@@ -1,5 +1,14 @@
 # Verification Matrix
 
+| Requirement | Verification | Evidence | Status | Notes |
+| --- | --- | --- | --- | --- |
+| `ANDROID-ALARM-001` | Automated + manual | Recording alarm plan C1/C3 | Needs review | Implementation and field evidence pending. |
+| `ANDROID-ALARM-002` | Automated + manual | Recording alarm plan C1/C5 | Needs review | Implementation and field evidence pending. |
+| `ANDROID-ALARM-003` | Automated + manual | Recording alarm plan C2/C5 | Needs review | Implementation and field evidence pending. |
+| `ANDROID-ALARM-004` | Automated + manual | Recording alarm plan C1/C4 | Needs review | Implementation and field evidence pending. |
+| `ANDROID-ALARM-005` | Automated + review | Recording alarm plan C2/C4 | Needs review | Implementation and isolation evidence pending. |
+| `ANDROID-ALARM-006` | Automated + manual | Recording alarm plan C2/C4 | Needs review | Implementation and field evidence pending. |
+
 | Requirement | Method | Evidence | Status | Notes |
 | --- | --- | --- | --- | --- |
 | `RELEASE-SIGN-001` | Automated + owner + device | `tools/test_sign_sideload_apk.py`; `release-debug-apk.yml`; `docs/sideload-signing.md`; RC4 release runs `36850174366`, `36850525062` | Implemented, not field-tested | Owner confirms independent key backup outside GitHub. Both release runs passed; independently downloaded APKs passed checksum and `apksigner` verification with the same pinned certificate `d8047f43b2748198ae69ff773be13d3aa11c8ac36159dd4e6768a3ac2db3e329`. Final RC4 APK SHA-256 is `e453ff4468027c166f3ec8c5d15f28a7bd277adb70a0c8d9fa287badc7363851`. Higher-version in-place device update remains untested; differently signed earlier installs require one reinstall. |

@@ -2,6 +2,84 @@
 
 ## Recording Runtime
 
+### ANDROID-ALARM-001: Trustworthy Loss Detection
+
+Status: Normative
+
+Recording alarms MUST distinguish receiver connection/data loss, position loss
+and other actionable recording/workflow interruption. Position loss MUST arm
+only after a fresh valid main-engine position in that recording and default to
+5 seconds without a fresh valid position. RTK fixed/float/standalone are all
+valid. Cached positions, unrelated telemetry and previous recordings MUST NOT
+refresh or arm it. Confirmed connection failures alert immediately; existing
+receiver-silence detection remains unchanged.
+
+Verification: `RecordingAlarmPolicyTest`, `RecordingAlarmEvidenceTest`; manual
+initial acquisition, main-engine and receiver-disconnection tests.
+
+### ANDROID-ALARM-002: Independent Persistent Configuration
+
+Status: Normative
+
+Menu -> Alarms MUST independently persist visual/acoustic enablement and sound
+for each category, initially enabled. Position defaults to a low repeating
+single beep/pause; other categories default to a high repeating triple beep/pause.
+Built-in and Android notification sounds with preview MUST be available. Delay
+MUST be selectable from 1-60 seconds. Profile changes MUST NOT reset alarms.
+
+Verification: policy/store/UI tests; manual sound selection and restart.
+
+### ANDROID-ALARM-003: Distinct And Private Outputs
+
+Status: Normative
+
+Notifications MUST identify the affected category/cause without private paths,
+credentials or coordinates, be eligible for normal lock-screen/watch delivery,
+and use separate channels from quiet recording status. Visual and acoustic
+choices MUST operate independently subject to OS permissions/settings. Only one
+sound plays: interruption outranks connection loss, which outranks position loss.
+No volume/DND bypass, full-screen or exact-alarm permissions may be added.
+
+Verification: notification/audio tests; manual locked-screen/watch/settings tests.
+
+### ANDROID-ALARM-004: Recovery And Stop Semantics
+
+Status: Normative
+
+Verified recovery MUST automatically stop that alarm's sound and remove its
+visual warning without acknowledgement. Other unresolved causes remain active.
+Deliberate Stop MUST fence all old effects before finalization waits. Acknowledge
+MUST silence only the displayed episode(s), never a later fatal failure. Terminal
+failure subsumes obsolete alarms; its alert remains until acknowledgement, Stop
+or a new accepted recording. Initial acquisition remains silent.
+
+Verification: policy/controller and service tests, including delayed callbacks.
+
+### ANDROID-ALARM-005: Alarm Isolation
+
+Status: Normative
+
+Alarm detection MUST consume bounded advisory evidence after raw append. Audio,
+notifications, provider/preferences IO and serialization MUST NOT run on capture,
+correction routing, receiver-command or finalization paths. Independent bounded
+effect lanes MUST isolate blocked/rejected/throwing platform calls. Alarms MUST
+NOT stop/restart recording, mutate raw artifacts or retain session writers.
+
+Verification: blocked-effect, saturation, raw byte-exactness and shutdown tests.
+
+### ANDROID-ALARM-006: Explicit Playback Lifetime
+
+Status: Normative
+
+Terminal acoustic alerts MAY retain only a foreground/audio shell after capture
+resources close; it MUST truthfully report recording stopped. Playback ownership
+MUST respect SDK foreground/focus restrictions and end on Stop, acknowledgement,
+disabling sound or permanent delivery failure. Pending focus recovery/retries
+MUST be bounded to 30 seconds. No alarm replay/resurrection after process death
+or guaranteed post-kill delivery may be claimed.
+
+Verification: foreground policy and service/audio tests; Android device validation.
+
 ### ANDROID-SERVICE-001: Foreground Service Owns Recording
 
 Status: Normative

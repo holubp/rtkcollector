@@ -220,9 +220,10 @@ private key material into the project.
    - session archive sharing;
    - settings backup export/import, including the default no-password export;
    - background/screen-off recording and reconnect behaviour;
-   - a controlled long-running `dataSync` foreground-service test, including
-     the Android 15+ timeout/interruption path. Do not publish until the app
-     handles the applicable timeout safely and preserves raw recording data.
+   - a long-running USB recording test on Android 15+, verifying that capture
+     uses `connectedDevice`, not time-limited `dataSync`; test USB detach/reconnect
+     with visual/acoustic alarms, and terminal alarm Stop/acknowledgement. Verify
+     raw data preservation and that alarm delivery never blocks finalization.
 7. Preserve the AAB's SHA-256, source commit, version code, version name,
    signing certificate fingerprint, test devices, and test outcome in the
    release record.
@@ -289,11 +290,12 @@ Complete all other App content declarations truthfully:
    market the app to children.
 5. **Permissions and foreground services:** confirm the release manifest only
    requests `INTERNET`, notification, wake-lock, and
-   `connectedDevice|dataSync` foreground-service capabilities described in
+   `connectedDevice|mediaPlayback` foreground-service capabilities described in
    `docs/play-publication.md`. Complete the required foreground-service
    declaration for both types before review: declared type, user-facing core
    use case, why it cannot be deferred or interrupted, and a short video showing
-   user-initiated USB recording with its persistent foreground notification.
+   user-initiated USB recording with its persistent foreground notification,
+   configured acoustic recording alarms and their automatic recovery/Stop.
 
 ## 7. Test Through Google Play
 

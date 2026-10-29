@@ -1,5 +1,24 @@
 # Architecture
 
+## Recording Alarms
+
+Alarm policy is advisory and session-scoped, not a capture dependency. It consumes
+decoded position receipt evidence and typed health/failure transitions after raw
+append. A separate monotonic timer detects stale positions even with mock output
+disabled. Cached RTKLIB status snapshots do not advance freshness.
+
+Independent bounded notification/audio lanes consume conflated desired state.
+They do not own session writers, USB, the recording wake lock or receiver commands.
+Stop invalidates old effects without joining workers; final visual clearing drains
+asynchronously. Generation-tagged notifications prevent late clearing of a new
+session's alarm. Terminal alert-only ownership cannot retain recording resources.
+Android/device lifecycle verification is tracked separately.
+
+Alarm-state broadcasts also use a process-owned bounded lane, never synchronous
+Binder work on Stop/finalization. Pending terminal decisions retain only bounded
+alarm ownership, not recording resources. Cause evidence retains first/last receipt
+and the latest bounded detail without changing an unresolved episode's identity.
+
 RtkCollector is service-first and receiver-agnostic. It is not a GIS app and is
 not primarily an Android RTKLIB clone. The raw capture path is authoritative;
 parsers are advisory.

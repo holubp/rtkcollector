@@ -178,6 +178,14 @@ unchanged.
   URIs.
 - Keep raw capture independent from Compose, Activity lifecycle and advisory
   parsers.
+- Recording alarms are advisory: capture producers may only enqueue bounded
+  evidence after raw append. Notifications, audio focus/playback, provider IO,
+  foreground-type changes and alarm preferences must not run on capture or
+  correction workers or delay session finalization. Preserve generation-scoped
+  Stop/Ack actions, independent effect lanes and bounded pending/focus recovery.
+  Position alarms use fresh selected-engine evidence, arm only after the first
+  valid fix of that recording and never treat an RTK quality downgrade alone as
+  position loss. Alarm permission/delivery failure must not fail raw capture.
 - Empty USB reads during an active recording are not proof of healthy capture.
   If receiver-originated bytes stop beyond the configured stall threshold, the
   foreground service must persist a session event, report degraded USB capture

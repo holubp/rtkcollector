@@ -9,7 +9,8 @@ fun interface AlarmEffect { fun apply(state: AlarmDesiredState, isCurrent: () ->
 
 /** One in-flight and one conflated desired state per independent effect lane. */
 class AlarmEffectDispatcher(notification: AlarmEffect, audio: AlarmEffect,
-    private val onFailure: (String) -> Unit = {}) : Closeable {
+    private val onFailure: (String) -> Unit = {},
+    private val onScopedFailure: (String, AlarmDesiredState) -> Unit = { _, _ -> }) : Closeable {
     private val closed = AtomicBoolean(false)
     private val latest = AtomicReference(AlarmDesiredState.EMPTY)
     private inner class Lane(private val label: String, private val effect: AlarmEffect) {
@@ -22,7 +23,7 @@ class AlarmEffectDispatcher(notification: AlarmEffect, audio: AlarmEffect,
                     val next = pending.getAndSet(null) ?: continue
                     val finalVisual = closed.get() && label == "notification"
                     if (current(next, finalVisual)) runCatching { effect.apply(next) { current(next, finalVisual) } }
-                        .onFailure { runCatching { onFailure(label) } }
+                        .onFailure { if (current(next, finalVisual)) runCatching { onFailure(label); onScopedFailure(label, next) } }
                 }
             }, "rtkcollector-alarm-$label").apply { isDaemon = true; start() } }
                 .onFailure { runCatching { onFailure(label) } }
@@ -46,7 +47,8 @@ class AlarmEffectDispatcher(notification: AlarmEffect, audio: AlarmEffect,
     }
     fun invalidate(generation: Long) {
         val clear = latest.updateAndGet { if (it.generation == generation)
-            it.copy(revision = it.revision + 1, visibleEpisodes = emptyList(), audio = null, terminalAlertPending = false) else it }
+            it.copy(revision = it.revision + 1, visibleEpisodes = emptyList(), activeEpisodes = emptyList(),
+                audio = null, terminalAlertPending = false) else it }
         if (clear.generation == generation) { visual.offer(clear); acoustic.offer(clear) }
     }
     override fun close() {

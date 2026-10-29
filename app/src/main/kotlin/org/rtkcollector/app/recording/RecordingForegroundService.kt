@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.net.Uri
@@ -14,6 +17,10 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
+import androidx.core.content.ContextCompat
+import org.rtkcollector.app.alarms.*
 import org.rtkcollector.app.BuildConfig
 import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.diagnostics.DiagnosticCategory
@@ -314,7 +321,7 @@ internal fun routeBaseCasterUploadFrame(
     return offerUpload(frame.bytes, frame.messageType)
 }
 
-class RecordingForegroundService : Service() {
+class RecordingForegroundService : Service(), AlarmForegroundHost {
     private enum class CompilePhase { START, STOP }
     private enum class NtripReplacementAttempt { STARTED, DEFERRED, STALE }
     private val running = AtomicBoolean(false)
@@ -445,20 +452,103 @@ class RecordingForegroundService : Service() {
     private val coordinateAveragingController = CoordinateAveragingController()
     private val recordingHealthMonitor = RecordingHealthMonitor()
 
+    private val alarmMain = Handler(Looper.getMainLooper())
+    private val alarmSettingsIo = java.util.concurrent.ThreadPoolExecutor(1, 1, 0,
+        java.util.concurrent.TimeUnit.MILLISECONDS, java.util.concurrent.ArrayBlockingQueue(1),
+        java.util.concurrent.ThreadFactory { Thread(it, "rtkcollector-alarm-settings").apply { isDaemon = true } })
+    private val alarmSettings by lazy { AlarmSettingsStore(this) }
+    private val alarmAudio by lazy { AlarmAudioPlayer.get(this) }
+    private val alarmPublisher by lazy { AlarmNotificationPublisher(this) }
+    private var alarmSettingsSubscription: java.io.Closeable? = null
+    private var alarmEffects: AlarmEffectsRuntime? = null
+    private var alarmStateBroadcaster: AlarmStateBroadcaster? = null
+    private var alarmController: RecordingAlarmController? = null
+    @Volatile private var alarmGeneration = -1L
+    @Volatile private var alarmSettingsReady = false
+    @Volatile private var alarmSettingsSnapshot = AlarmSettingsSnapshot.defaults()
+    @Volatile private var alarmDestroyed = false
+    private val alarmSettingsPending = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val alarmSettingsDirty = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val alarmReceiverLost = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val alarmProtocolLost = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val alarmPositionSequence = java.util.concurrent.atomic.AtomicLong(0)
+    private var alarmSourceSelector = AlarmSourceSelector("generic", false)
+    private var alarmSolutionEvidence = AlarmSolutionEvidence()
+    private var alarmRtklibEpoch = AlarmRtklibEpochTracker()
+    private var alarmUsbDeviceId = -1
+    @Volatile private var alarmLastDesired = AlarmDesiredState.EMPTY
+    private val alarmPlaybackDeadline = AlarmPlaybackDeadline()
+    private val alarmAudioStatus get() = alarmPlaybackDeadline.status
+    @Volatile private var alarmPlaybackForeground = false
+    @Volatile private var alarmServiceStartId = 0
+    private var alarmUploadBytes = 0L
+    @Volatile private var alarmBroadcast = AlarmBroadcastSnapshot()
+    private var alarmUsbRegistered = false
+    private val alarmUsbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val device = intent.usbDevice() ?: return
+            if (running.get() && device.deviceId == alarmUsbDeviceId) {
+                alarmReceiverLost.set(true)
+                raiseAlarm(RecordingAlarmEvidence.CONNECTION, "USB receiver disconnected.")
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         diagnosticSubscription = diagnosticsSettings.observeChanges { refreshDiagnostics() }
         refreshDiagnostics()
+        runCatching {
+            alarmEffects = AlarmEffectsRuntime.get(this).also { it.attach(this) }
+            alarmStateBroadcaster = AlarmStateBroadcaster.get(this)
+            alarmController = RecordingAlarmController(SystemClock::elapsedRealtime,
+                { desired -> alarmMain.post { handleAlarmDesired(desired) } },
+                { generation -> alarmEffects?.invalidate(generation); alarmAudio.cancel(generation) },
+                onTick = ::checkAlarmPlaybackDeadline)
+            alarmAudio.onStatus = { generation, revision, status, message ->
+                if (!alarmDestroyed && generation == alarmGeneration && revision == alarmLastDesired.revision) {
+                    alarmLastDesired.audio?.let { selection ->
+                        alarmPlaybackDeadline.report(selection, status, SystemClock.elapsedRealtime())
+                        if (!alarmPlaybackDeadline.allowed(selection)) alarmAudio.suppress(selection)
+                    }
+                    alarmMain.post {
+                        if (!alarmDestroyed && generation == alarmGeneration && revision == alarmLastDesired.revision) {
+                            if (alarmAudioStatus != AlarmEffectStatus.FAILED || message != null)
+                                alarmBroadcast = alarmBroadcast.copy(delivery = message)
+                            broadcastAlarmState()
+                            requestAlarmReconcile(alarmLastDesired)
+                        }
+                    }
+                }
+            }
+            ContextCompat.registerReceiver(this, alarmUsbReceiver, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED), ContextCompat.RECEIVER_NOT_EXPORTED)
+            alarmUsbRegistered = true
+            refreshAlarmSettings()
+        }.onFailure { recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Alarm delivery initialization failed; recording remains available." }) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action != ACTION_START) alarmServiceStartId = startId
         when (intent?.action) {
             ACTION_START -> startRecording(intent)
-            ACTION_STOP -> stopRecording(sendShutdown = true, reason = RecordingStopReason.USER)
+            ACTION_STOP -> {
+                if (!intent.hasExtra(AlarmActions.GENERATION) || intent.getLongExtra(AlarmActions.GENERATION, -1) == alarmGeneration ||
+                    alarmGeneration < 0 && !alarmOwnsRecording()) {
+                    if (alarmGeneration < 0) {
+                        alarmGeneration = alarmGenerationSequence.incrementAndGet()
+                        alarmBroadcast = AlarmBroadcastSnapshot(generation = alarmGeneration)
+                        alarmEffects?.offer(AlarmDesiredState(alarmGeneration, 1, emptyList(), null, false))
+                        broadcastAlarmState()
+                    }
+                    stopRecording(sendShutdown = true, reason = RecordingStopReason.USER)
+                    if (!alarmOwnsRecording()) requestAlarmExit()
+                }
+            }
+            AlarmActions.ACK -> acknowledgeAlarm(intent, startId)
             ACTION_QUERY -> {
                 broadcastState()
-                if (!running.get()) {
+                if (!running.get() && !stopping.get() && !alarmKeepsAlive()) {
                     stopSelf(startId)
                 }
             }
@@ -469,13 +559,21 @@ class RecordingForegroundService : Service() {
             ACTION_START_COORDINATE_AVERAGING -> startCoordinateAveraging()
             ACTION_STOP_COORDINATE_AVERAGING -> stopCoordinateAveraging()
         }
+        if (intent?.action == ACTION_START) alarmServiceStartId = startId
         return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        alarmDestroyed = true
         stopRecording(sendShutdown = false, reason = RecordingStopReason.SERVICE_DESTROYED)
+        alarmController?.close()
+        alarmEffects?.detach(this)
+        runCatching { if (alarmGeneration >= 0) alarmAudio.cancel(alarmGeneration); alarmAudio.onStatus = null }
+        runCatching { alarmSettingsSubscription?.close() }
+        alarmSettingsIo.shutdownNow()
+        if (alarmUsbRegistered) runCatching { unregisterReceiver(alarmUsbReceiver) }
         bestSolutionTicker?.cancel(false)
         bestSolutionTicker = null
         bestSolutionExecutor.shutdownNow()
@@ -484,6 +582,182 @@ class RecordingForegroundService : Service() {
         debugTicker?.cancel(false)
         diagnosticMaintenance.shutdown()
         super.onDestroy()
+    }
+
+    private fun refreshAlarmSettings() {
+        alarmSettingsDirty.set(true)
+        if (alarmDestroyed || !alarmSettingsPending.compareAndSet(false, true)) return
+        runCatching { alarmSettingsIo.execute {
+            try {
+                do {
+                    alarmSettingsDirty.set(false)
+                    if (alarmSettingsSubscription == null) alarmSettingsSubscription = alarmSettings.observeChanges(::refreshAlarmSettings)
+                    val next = alarmSettings.read()
+                    alarmMain.post {
+                        if (!alarmDestroyed) {
+                            alarmSettingsSnapshot = next; alarmSettingsReady = true
+                            alarmController?.post(AlarmCommand.SettingsChanged(alarmGeneration, next, SystemClock.elapsedRealtime()))
+                            alarmController?.snapshot()?.let(::handleAlarmDesired)
+                        }
+                    }
+                } while (alarmSettingsDirty.get() && !alarmDestroyed)
+            } catch (_: Exception) {
+                alarmMain.post {
+                    if (!alarmDestroyed) {
+                        alarmBroadcast = alarmBroadcast.copy(delivery = "Alarm settings unavailable; recording is unaffected.")
+                        broadcastAlarmState()
+                        recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Alarm settings could not be loaded." })
+                    }
+                }
+            } finally {
+                alarmSettingsPending.set(false)
+                if (alarmSettingsDirty.get() && !alarmDestroyed) refreshAlarmSettings()
+            }
+        } }.onFailure { alarmSettingsPending.set(false) }
+    }
+
+    private fun beginAlarms() {
+        alarmController?.userStop(alarmGeneration)
+        alarmGeneration = alarmGenerationSequence.incrementAndGet()
+        alarmReceiverLost.set(false); alarmProtocolLost.set(false); alarmPositionSequence.set(0)
+        alarmRtklibEpoch = AlarmRtklibEpochTracker(); alarmUploadBytes = 0
+        alarmSolutionEvidence = AlarmSolutionEvidence()
+        alarmLastDesired = AlarmDesiredState.EMPTY
+        alarmPlaybackDeadline.select(null, SystemClock.elapsedRealtime())
+        alarmBroadcast = AlarmBroadcastSnapshot(generation = alarmGeneration)
+        alarmController?.post(AlarmCommand.Begin(alarmGeneration, alarmSettingsSnapshot, SystemClock.elapsedRealtime()))
+    }
+    private fun raiseAlarm(key: AlarmCauseKey, detail: String) {
+        alarmController?.post(AlarmCommand.CauseRaised(alarmGeneration, key, detail, SystemClock.elapsedRealtime()))
+    }
+    private fun recoverAlarm(key: AlarmCauseKey) {
+        alarmController?.post(AlarmCommand.CauseRecovered(alarmGeneration, key, SystemClock.elapsedRealtime()))
+    }
+    private fun alarmOwnsRecording() = running.get() || stopping.get() || writers != null || runtime != null
+    private fun alarmKeepsAlive(): Boolean {
+        if (alarmController?.hasPendingTerminal(alarmGeneration, SystemClock.elapsedRealtime()) == true) return true
+        val desired = alarmController?.snapshot() ?: return false
+        return desired.terminalAlertPending && desired.audio != null &&
+            (desired.audio != alarmLastDesired.audio || alarmPlaybackDeadline.allowed(desired.audio))
+    }
+    private fun handleAlarmDesired(desired: AlarmDesiredState) {
+        if (alarmDestroyed || !alarmSettingsReady || desired.generation < 0 || desired.generation != alarmGeneration ||
+            alarmController?.isCurrent(desired) != true || desired == alarmLastDesired) return
+        if (desired.audio != alarmLastDesired.audio) {
+            alarmPlaybackDeadline.select(desired.audio, SystemClock.elapsedRealtime())
+        }
+        val delivery = alarmBroadcast.delivery.takeUnless {
+            desired.audio != alarmLastDesired.audio || desired.visibleEpisodes.isEmpty() && desired.audio == null
+        }
+        alarmLastDesired = desired
+        val receiverLost = desired.activeEpisodes.any { it.id.cause.category == AlarmCategory.CONNECTION_LOST }
+        val homeEpisodes = desired.activeEpisodes.filterNot { receiverLost && it.id.cause.category == AlarmCategory.POSITION_LOST }
+        val ids = homeEpisodes.map { it.id }
+        alarmBroadcast = AlarmBroadcastSnapshot(desired.generation,
+            homeEpisodes.map { it.id.cause.category.title }.distinct().joinToString("; ").takeIf { it.isNotBlank() },
+            desired.terminalAlertPending && homeEpisodes.isNotEmpty(),
+            ArrayList(ids.map(AlarmActions::token)), delivery)
+        requestAlarmReconcile(desired)
+        broadcastAlarmState()
+        sessionDiagnostics?.record("recording-alarm-state", desired.activeEpisodes.map { it.id.cause.category.name }.distinct().joinToString(","))
+    }
+    private fun requestAlarmReconcile(desired: AlarmDesiredState) {
+        if (desired.generation != alarmGeneration || alarmDestroyed) return
+        alarmEffects?.offer(if (desired.audio != null && !alarmPlaybackDeadline.allowed(desired.audio))
+            desired.copy(audio = null) else desired)
+    }
+    override fun ownsAlarmGeneration(generation: Long) = !alarmDestroyed && generation == alarmGeneration
+    override fun alarmStartId() = alarmServiceStartId
+    private fun requestAlarmExit() { alarmEffects?.requestExit(this, alarmGeneration) }
+    override fun finishAlarmService(generation: Long, startId: Int) {
+        if (ownsAlarmGeneration(generation) && !alarmOwnsRecording() && !alarmKeepsAlive()) stopSelfResult(startId)
+    }
+    override fun alarmDeliveryFailed(lane: String) {
+        alarmDeliveryFailed(lane, alarmLastDesired)
+    }
+    override fun alarmDeliveryFailed(lane: String, state: AlarmDesiredState) {
+        alarmMain.post {
+            if (!alarmDestroyed && state.generation == alarmGeneration &&
+                state.revision == alarmLastDesired.revision && state.generation == alarmLastDesired.generation) {
+                alarmBroadcast = alarmBroadcast.copy(delivery = "Alarm $lane delivery unavailable.")
+                broadcastAlarmState()
+                recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Alarm $lane delivery unavailable; recording remains independent." })
+            }
+        }
+    }
+    private fun checkAlarmPlaybackDeadline(now: Long) {
+        alarmPlaybackDeadline.expire(now, alarmAudio.lastProgressElapsedMillis)?.let { expired ->
+            alarmAudio.suppress(expired)
+            alarmController?.snapshot()?.let(::requestAlarmReconcile)
+            alarmController?.snapshot()?.takeIf { it.audio == expired }?.let { alarmDeliveryFailed("audio (timeout)", it) }
+        }
+        if (!alarmOwnsRecording() && !alarmKeepsAlive()) requestAlarmExit()
+    }
+    override fun applyAlarmForeground(desired: AlarmDesiredState, current: () -> Boolean): Boolean {
+        if (!ownsAlarmGeneration(desired.generation) || !current()) return false
+        val ownsRecording = alarmOwnsRecording()
+        val audio = desired.audio?.let(alarmPlaybackDeadline::allowed) == true
+        val mode = AlarmForegroundPolicy.mode(ownsRecording, desired.terminalAlertPending, alarmAudioStatus,
+            desired.audio != null, audio)
+        if (mode == AlarmServiceMode.IDLE) {
+            requestAlarmExit(); return false
+        }
+        if (audio || alarmPlaybackForeground) {
+            val text = if (ownsRecording) recordingNotificationText(state) else "Recording stopped. Alarm active."
+            val mask = AlarmForegroundPolicy.types(ownsRecording, audio)
+            val promoted = runCatching {
+                if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification(text), mask)
+                else startForeground(NOTIFICATION_ID, notification(text))
+                alarmPlaybackForeground = audio
+            }.isSuccess
+            if (!promoted) {
+                desired.audio?.let {
+                    alarmPlaybackDeadline.report(it, AlarmEffectStatus.FAILED, SystemClock.elapsedRealtime())
+                    alarmAudio.suppress(it)
+                }
+                if (current()) alarmDeliveryFailed("foreground playback", desired)
+                if (!ownsRecording) requestAlarmExit()
+                return false
+            }
+        }
+        return audio && current() && ownsAlarmGeneration(desired.generation)
+    }
+    private fun acknowledgeAlarm(intent: Intent, startId: Int) {
+        if (intent.getLongExtra(AlarmActions.GENERATION, -1) == alarmGeneration) {
+            val desired = alarmController?.snapshot()
+            val tokens = intent.getStringArrayListExtra(AlarmActions.EPISODES).orEmpty().take(32).toSet()
+            val ids = desired?.activeEpisodes.orEmpty().map { it.id }
+                .filter { AlarmActions.token(it) in tokens }.toSet()
+            alarmController?.post(AlarmCommand.Acknowledge(alarmGeneration, ids, SystemClock.elapsedRealtime()))
+        } else {
+            runCatching { alarmPublisher.cancelAcknowledged(intent) }
+            if (!alarmOwnsRecording() && alarmGeneration < 0) {
+                alarmBroadcast = AlarmBroadcastSnapshot(generation = intent.getLongExtra(AlarmActions.GENERATION, -1))
+                broadcastAlarmState()
+            }
+        }
+        if (!alarmOwnsRecording() && !alarmKeepsAlive()) stopSelf(startId)
+    }
+    private fun Intent.putAlarmState() {
+        val snapshot = alarmBroadcast
+        putExtra(AlarmActions.GENERATION, snapshot.generation)
+        putExtra(EXTRA_STATE_ALARM_MESSAGE, snapshot.message)
+        putExtra(EXTRA_STATE_ALARM_TERMINAL_PENDING, snapshot.terminalPending)
+        putStringArrayListExtra(AlarmActions.EPISODES, ArrayList(snapshot.tokens))
+        putExtra(EXTRA_STATE_ALARM_DELIVERY, snapshot.delivery)
+    }
+    private fun broadcastAlarmState() {
+        alarmStateBroadcaster?.offer(alarmBroadcast)
+    }
+    private fun offerAlarmPosition(candidate: org.rtkcollector.core.solution.SolutionCandidate) {
+        if (!running.get() || !alarmSourceSelector.accept(candidate.sourceId)) return
+        offerSelectedAlarmPosition(candidate)
+    }
+    private fun offerSelectedAlarmPosition(candidate: org.rtkcollector.core.solution.SolutionCandidate) {
+        alarmSolutionEvidence.accept(candidate, alarmPositionSequence.incrementAndGet(), SystemClock.elapsedRealtime(),
+            screenSolutionPolicy, alarmSettingsSnapshot.positionLossDelayMillis)?.let {
+            alarmController?.post(AlarmCommand.Position(alarmGeneration, it))
+        }
     }
 
     private fun authorizedStartIntent(incoming: Intent, snapshot: RunningSetupSnapshot): Intent {
@@ -636,7 +910,7 @@ class RecordingForegroundService : Service() {
                 errorSeverity = RecordingErrorSeverity.FATAL)
             recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Start rejected: validated setup unavailable." })
             broadcastState()
-            stopSelf()
+            if (!alarmKeepsAlive()) stopSelf()
             return
         }
         activeSetupSessionId = snapshot.sessionId
@@ -655,7 +929,7 @@ class RecordingForegroundService : Service() {
                 errorSeverity = RecordingErrorSeverity.FATAL)
             recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Start rejected: setup preparation failed." })
             broadcastState()
-            stopSelf()
+            if (!alarmKeepsAlive()) stopSelf()
             return
         }
         if (stopping.get()) {
@@ -666,6 +940,7 @@ class RecordingForegroundService : Service() {
             return
         }
         startedSetupState = requireNotNull(RecordingSetupBridge.current())
+        beginAlarms()
         latestAcceptedSetupState = startedSetupState
         shutdownSent.set(false)
         ntripReconnectRequested.set(false)
@@ -713,11 +988,13 @@ class RecordingForegroundService : Service() {
 
         lastNotificationText = recordingNotificationText(running = true, receiverRxBytes = 0, correctionInputBytes = 0)
         lastNotificationUpdateAtMillis = System.currentTimeMillis()
-        startForeground(NOTIFICATION_ID, notification(lastNotificationText))
-        acquireWakeLock()
-
         try {
+            if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification(lastNotificationText),
+                AlarmForegroundPolicy.types(recordingOwnsService = true, audioEnabled = false))
+            else startForeground(NOTIFICATION_ID, notification(lastNotificationText))
+            acquireWakeLock()
             val usbDevice = intent.usbDevice() ?: error("No USB device supplied.")
+            alarmUsbDeviceId = usbDevice.deviceId
             val usbManager = getSystemService(USB_SERVICE) as UsbManager
             if (!usbManager.hasPermission(usbDevice)) {
                 error("USB permission has not been granted.")
@@ -737,6 +1014,8 @@ class RecordingForegroundService : Service() {
             val initCommands = intent.getStringArrayListExtra(EXTRA_INIT_COMMANDS).orEmpty().validatedCommands()
             val baudSwitchCommands = intent.getStringArrayListExtra(EXTRA_BAUD_SWITCH_COMMANDS).orEmpty().validatedCommands()
             val modeCommands = intent.getStringArrayListExtra(EXTRA_MODE_COMMANDS).orEmpty().validatedCommands()
+            alarmSourceSelector = AlarmSourceSelector(activeReceiverFamily,
+                (initCommands + baudSwitchCommands + modeCommands).any { it.trimStart().startsWith("BESTNAV", true) })
             shutdownCommands = intent.getStringArrayListExtra(EXTRA_SHUTDOWN_COMMANDS).orEmpty().validatedCommands()
             validateWorkflowModeCommandsForStart(intent.getStringExtra(EXTRA_WORKFLOW_ID), initCommands + baudSwitchCommands + modeCommands)
             validateUm980OutputFrequenciesForStart(activeReceiverFamily, initCommands + baudSwitchCommands + modeCommands)
@@ -1073,6 +1352,7 @@ class RecordingForegroundService : Service() {
                 continue
             }
             if (!running.get()) return
+            if (bytesRead > 0 && alarmReceiverLost.getAndSet(false)) recoverAlarm(RecordingAlarmEvidence.CONNECTION)
             runCatching {
                 val receiverHealthEvents = recordingHealthMonitor.recordReceiverRead(bytesRead, nowMillis)
                 recordingHealthMonitor.recordReceiverProtocolBytes(bytesRead, nowMillis)
@@ -1109,6 +1389,8 @@ class RecordingForegroundService : Service() {
     private fun handleCaptureReadOrRawFlushFailure(failure: Throwable, recorder: SessionRawRecorder) {
         if (!running.get()) return
         if (stopForFatalRawStorageFailure(failure)) return
+        alarmReceiverLost.set(true)
+        raiseAlarm(RecordingAlarmEvidence.CONNECTION, "USB capture unavailable; reconnecting.")
         try {
             synchronized(runtimeLock) {
                 recorder.flushRawNow(SystemClock.elapsedRealtime())
@@ -1334,6 +1616,8 @@ class RecordingForegroundService : Service() {
                         errorSeverity = if (txResult.isFailure) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
                     )
                     state = updatedState
+                    if (txResult.isSuccess) recoverAlarm(RecordingAlarmEvidence.CORRECTIONS)
+                    else raiseAlarm(RecordingAlarmEvidence.CORRECTIONS, "Correction delivery interrupted; receiver recording continues.")
                     handleRecordingHealthEvents(healthEvents, recorder)
                     broadcastState()
                     updateForegroundNotification()
@@ -1658,6 +1942,8 @@ class RecordingForegroundService : Service() {
         events.forEach { event ->
             when (event) {
                 is RecordingHealthEvent.ReceiverRxStalled -> {
+                    alarmReceiverLost.set(true)
+                    raiseAlarm(RecordingAlarmEvidence.CONNECTION, "No receiver bytes; reconnecting.")
                     val message = "USB receiver produced no bytes for ${event.staleForMillis / 1000}s; reconnecting."
                     state = state.copy(
                         lastError = message,
@@ -1678,6 +1964,8 @@ class RecordingForegroundService : Service() {
                     updateForegroundNotification(force = true)
                 }
                 RecordingHealthEvent.ReceiverRxRecovered -> {
+                    alarmReceiverLost.set(false)
+                    recoverAlarm(RecordingAlarmEvidence.CONNECTION)
                     val message = "USB receiver bytes resumed."
                     recordSessionEvent("receiver-rx-recovered", message)
                     state = state.copy(rawRecordingActive = true).clearRecoverableUsbError()
@@ -1685,6 +1973,8 @@ class RecordingForegroundService : Service() {
                     updateForegroundNotification(force = true)
                 }
                 is RecordingHealthEvent.ReceiverProtocolStalled -> {
+                    alarmProtocolLost.set(true)
+                    raiseAlarm(RecordingAlarmEvidence.PROTOCOL, "Receiver protocol unavailable; raw bytes continue to be stored.")
                     val message = "Receiver bytes are arriving but no valid ${event.receiverFamily} protocol frames " +
                         "were decoded for ${event.staleForMillis / 1000}s " +
                         "(${event.bytesSinceLastValidFrame} bytes since last valid frame); reconnecting."
@@ -1732,6 +2022,7 @@ class RecordingForegroundService : Service() {
                     updateForegroundNotification(force = true)
                 }
                 is RecordingHealthEvent.CorrectionsStalled -> {
+                    raiseAlarm(RecordingAlarmEvidence.CORRECTIONS, "Correction data stopped; receiver recording continues.")
                     val message = "NTRIP corrections produced no bytes for ${event.staleForMillis / 1000}s; reconnecting."
                     state = state.copy(
                         lastError = message,
@@ -1773,6 +2064,7 @@ class RecordingForegroundService : Service() {
     }
 
     private fun markValidReceiverProtocolFrame(nowMillis: Long) {
+        if (alarmProtocolLost.getAndSet(false)) recoverAlarm(RecordingAlarmEvidence.PROTOCOL)
         val events = recordingHealthMonitor.recordValidReceiverProtocolFrame(
             nowMillis = nowMillis,
             receiverFamily = activeReceiverFamily,
@@ -1783,6 +2075,9 @@ class RecordingForegroundService : Service() {
     }
 
     private fun handleNtripSnapshot(snapshot: NtripRuntimeSnapshot) {
+        if (running.get() && snapshot.state in setOf(NtripRuntimeState.AUTH_ERROR, NtripRuntimeState.TLS_ERROR, NtripRuntimeState.NETWORK_ERROR))
+            raiseAlarm(RecordingAlarmEvidence.CORRECTIONS, "Correction intake interrupted; receiver recording continues.")
+        if (snapshot.state == NtripRuntimeState.DISABLED) recoverAlarm(RecordingAlarmEvidence.CORRECTIONS)
         if (state.ntripState != snapshot.state.name) {
             recordSessionEvent("ntrip-state-changed", snapshot.state.name)
         }
@@ -2404,6 +2699,18 @@ class RecordingForegroundService : Service() {
     }
 
     private fun stopRecording(sendShutdown: Boolean, reason: RecordingStopReason) {
+        if (reason == RecordingStopReason.USER) {
+            alarmController?.userStop(alarmGeneration)
+            runCatching { alarmAudio.cancel(alarmGeneration) }
+            alarmBroadcast = AlarmBroadcastSnapshot(generation = alarmGeneration)
+            alarmLastDesired = alarmLastDesired.copy(revision = alarmLastDesired.revision + 1,
+                visibleEpisodes = emptyList(), activeEpisodes = emptyList(), audio = null, terminalAlertPending = false)
+            broadcastAlarmState()
+        } else if (!alarmDestroyed && (running.get() || writers != null)) {
+            alarmController?.post(AlarmCommand.TerminalStop(alarmGeneration,
+                if (reason == RecordingStopReason.RAW_STORAGE_FAILURE) RecordingAlarmEvidence.STORAGE else RecordingAlarmEvidence.SERVICE,
+                "Recording stopped unexpectedly: ${reason.name}", SystemClock.elapsedRealtime()))
+        }
         if (running.get() || writers != null || stopping.get()) {
             val first = stopContext.request(reason)
             sessionDiagnostics?.record(if (first) "stop-requested" else "stop-contributing-cause",
@@ -2716,6 +3023,8 @@ class RecordingForegroundService : Service() {
             val closeReport = finalization.closeReport
             if (closeReport.issues.isNotEmpty()) {
                 stopContext.request(RecordingStopReason.WRITER_CLOSE_FAILURE)
+                if (!alarmDestroyed && stopContext.initiator != RecordingStopReason.USER) alarmController?.post(AlarmCommand.TerminalStop(
+                    alarmGeneration, RecordingAlarmEvidence.STORAGE, "Additional recording close failure.", SystemClock.elapsedRealtime()))
                 state = state.copy(
                     lastError = closeReport.userMessage,
                     errorCategory = RecordingErrorCategory.STORAGE,
@@ -2846,8 +3155,12 @@ class RecordingForegroundService : Service() {
         )
         stopping.set(false)
         runCatching { broadcastState() }
-        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
-        stopSelf()
+        alarmMain.post {
+            val desired = alarmController?.snapshot() ?: AlarmDesiredState.EMPTY
+            handleAlarmDesired(desired)
+            requestAlarmReconcile(desired)
+            if (!alarmOwnsRecording() && !alarmKeepsAlive()) requestAlarmExit()
+        }
     }
 
     private fun sendCommandLines(
@@ -3146,6 +3459,17 @@ class RecordingForegroundService : Service() {
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
             .setContentIntent(pendingIntent)
+            .setOnlyAlertOnce(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .apply {
+                if (!running.get() && alarmLastDesired.terminalAlertPending) {
+                    val stop = Intent(this@RecordingForegroundService, RecordingForegroundService::class.java)
+                        .setAction(ACTION_STOP).setData(Uri.parse("rtkcollector://alarm/stop/$alarmGeneration"))
+                        .putExtra(AlarmActions.GENERATION, alarmGeneration)
+                    addAction(Notification.Action.Builder(null, "Stop alarm", PendingIntent.getService(
+                        this@RecordingForegroundService, 8299, stop, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)).build())
+                }
+            }
             .build()
     }
 
@@ -3233,16 +3557,30 @@ class RecordingForegroundService : Service() {
 
     private fun broadcastState() {
         casterUploadController?.snapshot()?.let { snapshot ->
+            if (running.get()) {
+                if (snapshot.state in setOf("AUTH_ERROR", "TLS_ERROR", "DEGRADED", "RECONNECT_WAIT", "STOPPED") &&
+                    (snapshot.lastError != null || snapshot.stopReason != null || snapshot.consecutiveFailures > 0))
+                    raiseAlarm(RecordingAlarmEvidence.UPLOAD, "Caster upload interrupted; receiver recording continues.")
+                if (snapshot.state == "STREAMING" && snapshot.bytesUploaded > alarmUploadBytes) recoverAlarm(RecordingAlarmEvidence.UPLOAD)
+                alarmUploadBytes = snapshot.bytesUploaded
+            }
             state = state.withCasterUploadSnapshot(snapshot)
         }
         rtklibWorker?.snapshot()?.let { snapshot ->
+            if (running.get()) {
+                if (snapshot.state == org.rtkcollector.core.rtklib.RtklibEngineState.FAILED)
+                    raiseAlarm(RecordingAlarmEvidence.RTKLIB, "RTKLIB processing interrupted; receiver recording continues.")
+                else if (snapshot.state == org.rtkcollector.core.rtklib.RtklibEngineState.RUNNING) recoverAlarm(RecordingAlarmEvidence.RTKLIB)
+            }
             maybeAppendRtklibStatus(snapshot, System.currentTimeMillis())
             val solution = snapshot.latestSolution
             solution?.let { rtklibSolution ->
+                val newAlarmEpoch = if (running.get()) alarmRtklibEpoch.accept(rtklibSolution.timestampMillis) != null else false
                 RtklibSolutionCandidateMapper.toCandidate(
                     snapshot = rtklibSolution,
                     receiverFamily = activeReceiverFamily,
                 )?.let { candidate ->
+                    if (newAlarmEpoch) offerSelectedAlarmPosition(candidate)
                     solutionCandidates[candidate.sourceId] = candidate
                 }
                 offerSatelliteMonitorObservations(
@@ -3281,6 +3619,7 @@ class RecordingForegroundService : Service() {
         sendBroadcast(
             Intent(ACTION_STATE).apply {
                 setPackage(packageName)
+                putAlarmState()
                 val setup = RecordingSetupBridge.current()
                 putExtra(EXTRA_STATE_SETUP_SESSION_ID, setup?.sessionId)
                 putExtra(EXTRA_STATE_SETUP_REVISION, setup?.revision ?: -1L)
@@ -3690,6 +4029,7 @@ class RecordingForegroundService : Service() {
         candidate: org.rtkcollector.core.solution.SolutionCandidate,
         nowMillis: Long,
     ) {
+        offerAlarmPosition(candidate)
         if (candidate.isPrimaryScreenCandidateFor(activeReceiverFamily)) {
             state = state.withSelectedSolution(candidate, nowMillis)
             if (activeReceiverFamily.startsWith("ublox", ignoreCase = true)) {
@@ -4476,6 +4816,11 @@ class RecordingForegroundService : Service() {
         private const val RTKLIB_SHUTDOWN_RETRY_MILLIS = 1_000L
         const val ACTION_START = "org.rtkcollector.app.recording.START"
         const val ACTION_STOP = "org.rtkcollector.app.recording.STOP"
+        const val ACTION_ALARM_STATE = "org.rtkcollector.app.recording.ALARM_STATE"
+        const val EXTRA_STATE_ALARM_TERMINAL_PENDING = "alarmTerminalPending"
+        const val EXTRA_STATE_ALARM_MESSAGE = "alarmMessage"
+        const val EXTRA_STATE_ALARM_DELIVERY = "alarmDelivery"
+        private val alarmGenerationSequence = java.util.concurrent.atomic.AtomicLong(SystemClock.elapsedRealtimeNanos().coerceAtLeast(1))
         const val ACTION_QUERY = "org.rtkcollector.app.recording.QUERY"
         const val ACTION_UPDATE_NTRIP = "org.rtkcollector.app.recording.UPDATE_NTRIP"
         const val ACTION_DISABLE_NTRIP = "org.rtkcollector.app.recording.DISABLE_NTRIP"

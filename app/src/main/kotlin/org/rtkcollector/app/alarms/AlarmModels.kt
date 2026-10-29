@@ -28,9 +28,11 @@ data class AlarmCauseKey(val category: AlarmCategory, val component: String, val
 data class AlarmEpisodeId(val generation: Long, val cause: AlarmCauseKey, val revision: Long)
 data class AlarmPositionEvidence(val sourceId: String, val sequence: Long, val receivedElapsedMillis: Long, val valid: Boolean)
 data class AlarmEpisode(val id: AlarmEpisodeId, val detail: String, val terminal: Boolean)
+data class AlarmEpisodeEvidence(val firstElapsedMillis: Long, val lastElapsedMillis: Long, val detail: String)
 data class AlarmAudioSelection(val episodeId: AlarmEpisodeId, val sound: AlarmSoundChoice)
 data class AlarmDesiredState(val generation: Long, val revision: Long, val visibleEpisodes: List<AlarmEpisode>,
-    val audio: AlarmAudioSelection?, val terminalAlertPending: Boolean) {
+    val audio: AlarmAudioSelection?, val terminalAlertPending: Boolean,
+    val activeEpisodes: List<AlarmEpisode> = visibleEpisodes) {
     companion object { val EMPTY = AlarmDesiredState(-1, 0, emptyList(), null, false) }
 }
 enum class AlarmEffectStatus { IDLE, PENDING, ACTIVE, BLOCKED, FAILED }

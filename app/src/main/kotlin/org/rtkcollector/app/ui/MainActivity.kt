@@ -227,6 +227,9 @@ import org.rtkcollector.app.ui.console.DeviceConsoleOption
 import org.rtkcollector.app.ui.console.DeviceConsoleScreen
 import org.rtkcollector.app.ui.common.ProfileSingleLineTextField
 import org.rtkcollector.app.ui.diagnostics.AppDiagnosticsScreen
+import org.rtkcollector.app.ui.alarms.AlarmSettingsScreen
+import org.rtkcollector.app.ui.alarms.AlarmUiState
+import org.rtkcollector.app.alarms.AlarmActions
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListState
 import org.rtkcollector.app.ui.profiles.stageNtripCredentialEdit
@@ -391,6 +394,16 @@ fun RtkCollectorApp(
     onExternalIntentConsumed: () -> Unit = {},
 ) {
     var screen by rememberSaveable(stateSaver = AppScreenSaver) { mutableStateOf(AppScreen.HOME) }
+    var alarmUiState by remember { mutableStateOf(AlarmUiState()) }
+    fun applyAlarmIntent(intent: Intent) {
+        alarmUiState = alarmUiState.accept(AlarmUiState(
+            intent.getLongExtra(AlarmActions.GENERATION, -1),
+            intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ALARM_MESSAGE),
+            intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_ALARM_TERMINAL_PENDING, false),
+            intent.getStringArrayListExtra(AlarmActions.EPISODES).orEmpty().toList(),
+            intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ALARM_DELIVERY),
+        ))
+    }
     var sessionBrowserEntryPoint by rememberSaveable(stateSaver = SessionBrowserEntryPointSaver) {
         mutableStateOf(SessionBrowserEntryPoint.SETTINGS)
     }
@@ -1420,6 +1433,7 @@ fun RtkCollectorApp(
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     RecordingForegroundService.ACTION_STATE -> {
+                        applyAlarmIntent(intent)
                         val wasRecording = state.isRecording
                         val wasStarting = startInProgress
                         val nextState = dashboardStateFromRecordingIntent(intent)
@@ -1450,6 +1464,7 @@ fun RtkCollectorApp(
                             refreshSessions()
                         }
                     }
+                    RecordingForegroundService.ACTION_ALARM_STATE -> applyAlarmIntent(intent)
                     UsbManager.ACTION_USB_DEVICE_ATTACHED,
                     UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                         profileRevision++
@@ -1469,6 +1484,7 @@ fun RtkCollectorApp(
         }
         val filter = IntentFilter().apply {
             addAction(RecordingForegroundService.ACTION_STATE)
+            addAction(RecordingForegroundService.ACTION_ALARM_STATE)
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
             addAction(ACTION_USB_PERMISSION)
@@ -1776,6 +1792,30 @@ fun RtkCollectorApp(
                             startInProgress = startInProgress,
                             recordingReliabilityWarning = batteryWarning.message.takeIf { batteryWarning.show },
                             loggingAdvisory = diagnosticLevel.advisory,
+                            alarmContent = if (alarmUiState.hasContent) ({
+                                Column {
+                                    (alarmUiState.message ?: "Recording stopped. Alarm active.".takeIf { alarmUiState.terminalPending })?.let {
+                                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                    alarmUiState.delivery?.let {
+                                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    if (alarmUiState.hasActions) Row {
+                                        TextButton(onClick = {
+                                            runCatching { context.startService(Intent(context, RecordingForegroundService::class.java)
+                                                .setAction(AlarmActions.ACK).putExtra(AlarmActions.GENERATION, alarmUiState.generation)
+                                                .putExtra(AlarmActions.CATEGORY, alarmUiState.tokens.firstOrNull()?.substringBefore('|'))
+                                                .putStringArrayListExtra(AlarmActions.EPISODES, ArrayList(alarmUiState.tokens))) }
+                                                .onFailure { Toast.makeText(context, "Could not acknowledge alarm.", Toast.LENGTH_SHORT).show() }
+                                        }) { Text("Acknowledge") }
+                                        if (alarmUiState.terminalPending) TextButton(onClick = {
+                                            runCatching { context.startService(RecordingForegroundService.stopIntent(context)
+                                                .putExtra(AlarmActions.GENERATION, alarmUiState.generation)) }
+                                                .onFailure { Toast.makeText(context, "Could not stop alarm.", Toast.LENGTH_SHORT).show() }
+                                        }) { Text("Stop alarm") }
+                                    }
+                                }
+                            }) else null,
                             onOpenLoggingSettings = { screen = AppScreen.APP_DIAGNOSTICS },
                             onOpenBatterySettings = {
                                 if (!openBatteryOptimisationSettings(context)) {
@@ -2010,6 +2050,7 @@ fun RtkCollectorApp(
                         },
                         onDeviceConsole = { screen = AppScreen.DEVICE_CONSOLE },
                         onAppDiagnostics = { screen = AppScreen.APP_DIAGNOSTICS },
+                        onAlarms = { screen = AppScreen.ALARMS },
                         onBack = { screen = AppScreen.HOME },
                     )
                 AppScreen.NTRIP_MOUNTPOINT -> NtripMountpointScreen(
@@ -2919,6 +2960,7 @@ fun RtkCollectorApp(
                     },
                     onBack = { screen = sessionBrowserEntryPoint.returnScreen() },
                 )
+                AppScreen.ALARMS -> AlarmSettingsScreen(onBack = { screen = AppScreen.SETTINGS })
                 AppScreen.APP_DIAGNOSTICS -> {
                     @Suppress("UNUSED_VARIABLE")
                     val currentDiagnosticsRevision = diagnosticsRevision
@@ -5596,6 +5638,7 @@ internal enum class AppScreen {
     SESSIONS,
     DEVICE_CONSOLE,
     APP_DIAGNOSTICS,
+    ALARMS,
     SETTINGS_SETS,
     SETTINGS_SET_SELECTOR,
     MOUNTPOINT_SELECTOR,

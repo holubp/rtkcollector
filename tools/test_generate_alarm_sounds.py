@@ -13,6 +13,8 @@ class AlarmSoundsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             sounds.write_sounds(Path(directory))
             for name, pulses, frequency in (("alarm_single_low", 1, 440), ("alarm_triple_high", 3, 880)):
+                bundled = Path(__file__).resolve().parents[1] / "app/src/main/res/raw" / (name + ".wav")
+                self.assertEqual(bundled.read_bytes(), (Path(directory) / (name + ".wav")).read_bytes())
                 with wave.open(str(Path(directory) / (name + ".wav")), "rb") as audio:
                     self.assertEqual((audio.getnchannels(), audio.getsampwidth(), audio.getframerate()), (1, 2, 22050))
                     samples = struct.unpack("<" + "h" * audio.getnframes(), audio.readframes(audio.getnframes()))

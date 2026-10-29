@@ -4,6 +4,12 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class AlarmForegroundPolicyTest {
+    @Test fun `capture and playback types do not consume the data sync time budget`() {
+        assertEquals(16, AlarmForegroundPolicy.types(true, false))
+        assertEquals(2, AlarmForegroundPolicy.types(false, true))
+        assertEquals(18, AlarmForegroundPolicy.types(true, true))
+        assertEquals(0, AlarmForegroundPolicy.types(false, false))
+    }
     @Test fun `finalization retains recording ownership regardless of audio failure`() {
         assertEquals(AlarmServiceMode.RECORDING, AlarmForegroundPolicy.mode(true, true, AlarmEffectStatus.FAILED, true, false))
     }

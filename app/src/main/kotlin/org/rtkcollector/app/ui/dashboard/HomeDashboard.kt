@@ -99,6 +99,7 @@ fun HomeDashboard(
     startInProgress: Boolean = false,
     recordingReliabilityWarning: String? = null,
     loggingAdvisory: String? = null,
+    alarmContent: (@Composable () -> Unit)? = null,
     onOpenLoggingSettings: () -> Unit = {},
     onOpenBatterySettings: () -> Unit = {},
     onSetupExpandedPreferenceChange: (Boolean) -> Unit = {},
@@ -239,6 +240,7 @@ fun HomeDashboard(
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
                         loggingAdvisory = loggingAdvisory,
+                        alarmContent = alarmContent,
                         onOpenLoggingSettings = onOpenLoggingSettings,
                         onOpenBatterySettings = onOpenBatterySettings,
                         coordinateAveraging = coordinateAveraging,
@@ -272,6 +274,7 @@ fun HomeDashboard(
                         displayedError = displayedError,
                         recordingReliabilityWarning = recordingReliabilityWarning,
                         loggingAdvisory = loggingAdvisory,
+                        alarmContent = alarmContent,
                         onOpenLoggingSettings = onOpenLoggingSettings,
                         onOpenBatterySettings = onOpenBatterySettings,
                         coordinateAveraging = coordinateAveraging,
@@ -473,6 +476,7 @@ private fun CompactDashboard(
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
     loggingAdvisory: String?,
+    alarmContent: (@Composable () -> Unit)?,
     onOpenLoggingSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     coordinateAveraging: CoordinateAveragingState,
@@ -507,6 +511,7 @@ private fun CompactDashboard(
             displayedError = displayedError,
             recordingReliabilityWarning = recordingReliabilityWarning,
             loggingAdvisory = loggingAdvisory,
+            alarmContent = alarmContent,
             onOpenLoggingSettings = onOpenLoggingSettings,
             onOpenBatterySettings = onOpenBatterySettings,
             onCopyError = onCopyError,
@@ -551,6 +556,7 @@ private fun RailDashboard(
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
     loggingAdvisory: String?,
+    alarmContent: (@Composable () -> Unit)?,
     onOpenLoggingSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     coordinateAveraging: CoordinateAveragingState,
@@ -623,6 +629,7 @@ private fun RailDashboard(
                 displayedError = displayedError,
                 recordingReliabilityWarning = recordingReliabilityWarning,
                 loggingAdvisory = loggingAdvisory,
+                alarmContent = alarmContent,
                 onOpenLoggingSettings = onOpenLoggingSettings,
                 onOpenBatterySettings = onOpenBatterySettings,
                 onCopyError = onCopyError,
@@ -650,14 +657,16 @@ private fun DashboardAlerts(
     displayedError: DashboardErrorSnapshot?,
     recordingReliabilityWarning: String?,
     loggingAdvisory: String?,
+    alarmContent: (@Composable () -> Unit)?,
     onOpenLoggingSettings: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     onCopyError: () -> Unit,
 ) {
     val warning = recordingReliabilityWarning?.takeIf { it.isNotBlank() }
-    if (displayedError == null && warning == null && loggingAdvisory == null) return
+    if (displayedError == null && warning == null && loggingAdvisory == null && alarmContent == null) return
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        alarmContent?.invoke()
         ErrorStrip(snapshot = displayedError, onCopy = onCopyError)
         warning?.let { RecordingReliabilityWarningStrip(text = it, onOpenBatterySettings = onOpenBatterySettings) }
         loggingAdvisory?.let { text ->

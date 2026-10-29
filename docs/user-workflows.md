@@ -815,6 +815,50 @@ Unrelated or inactive recovery information is retained for later review.
 Password export includes only credentials owned by committed profiles, never
 temporary staging or orphan entries. Treat a plaintext-password backup as secret.
 
+## Recording Alarms
+
+Open **Menu -> Alarms** before going out. Each category has separate visual and
+acoustic switches and its own sound selection:
+
+- **Receiver connection lost:** high-pitched repeating three beeps, then a pause.
+  Covers USB disconnection and a receiver that stops sending bytes.
+- **Position lost:** lower-pitched repeating single beep, then a pause. Quiet
+  until a valid position has been acquired in this recording. The default loss
+  delay is five seconds, adjustable from one to sixty seconds. A change from
+  RTK fixed to float or standalone is not position loss.
+- **Recording interrupted:** the urgent triple-beep pattern, with a notification
+  identifying the affected component or unexpected recording stop. Corrections
+  or caster-upload problems do not necessarily mean raw receiver recording stopped.
+
+Both output types start enabled. Built-in sounds are defaults; choose another
+pattern or **Android notification sounds...** and use the play button to preview.
+Preview is short and cannot interrupt a real alarm. Preferences are app-wide,
+survive restarts and do not change when you select a settings set.
+The visual switch controls Android notifications. Home still shows current
+operational conditions and acknowledgement controls when those notifications
+are disabled.
+
+**Recovery automatically stops the relevant sound and removes its warning.** No
+acknowledgement is needed. Reconnected USB without a fresh position can leave
+the position alarm active. Only the highest-priority eligible sound plays.
+
+Use **Acknowledge** to silence an unresolved episode early, without stopping
+recording. A later new failure can sound again. Deliberately pressing **Stop**
+silences alarms and clears their warnings. For an unexpected terminal stop,
+**Stop alarm**, Acknowledge or a new accepted recording clears the outstanding
+alarm; this does not restart recording automatically.
+
+Allow notifications and the alarm channels in Android settings, and enable
+RtkCollector mirroring in your watch's companion settings. Lock-screen/watch
+visibility and watch sounds depend on those settings. Phone sound follows Android
+volume, routing and Do Not Disturb rules; the app does not override them.
+An unavailable saved sound falls back to a built-in alarm and is reported in
+Alarms settings. If Android will not grant audio focus, playback retries are
+bounded; allowed visual evidence remains. A foreground status notification may
+still be required with visual alarms disabled. No app can guarantee an alarm
+after Android kills or force-stops its process, or the phone powers off.
+Raw capture does not wait for alarm delivery.
+
 ## App Logs
 
 Open **Menu -> Developer tools -> App logs and performance monitoring**.

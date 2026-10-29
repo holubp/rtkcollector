@@ -58,8 +58,8 @@ android {
         applicationId = "org.rtkcollector.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.0-RC8"
+        versionCode = 10
+        versionName = "1.0-RC9"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -207,6 +207,7 @@ tasks.register<org.gradle.api.tasks.testing.Test>("termuxTestDebugUnitTest") {
         excludeTestsMatching("org.rtkcollector.app.recording.ServiceNtripIntentParserTest")
         excludeTestsMatching("org.rtkcollector.app.alarms.AlarmSettingsStoreTest")
         excludeTestsMatching("org.rtkcollector.app.alarms.AlarmPlatformTest")
+        excludeTestsMatching("org.rtkcollector.app.recording.RecordingAlarmServiceTest")
     }
 }
 

@@ -23,6 +23,7 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
     private val real = AtomicReference(AlarmDesiredState.EMPTY)
     private val preview = AtomicReference<Preview?>(null)
     private val canceledGeneration = AtomicLong(-1)
+    private val suppressed = AtomicReference<AlarmAudioSelection?>(null)
     private val scheduled = AtomicBoolean(false)
     private val executor = Executors.newSingleThreadScheduledExecutor { Thread(it, "rtkcollector-alarm-player").apply { isDaemon = true } }
     private val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -31,6 +32,9 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
     @Volatile var onStatus: ((Long, Long, AlarmEffectStatus, String?) -> Unit)? = null
     @Volatile var statusBrief: String? = null
         private set
+    @Volatile var lastProgressElapsedMillis: Long = SystemClock.elapsedRealtime()
+        private set
+    val isAlarmActive: Boolean get() = real.get().let { it.generation > canceledGeneration.get() && it.audio != null && it.audio != suppressed.get() }
     @Volatile private var focus = AlarmFocusState.WAITING
     @Volatile private var selected: AlarmAudioSelection? = null
     private var request: AudioFocusRequest? = null
@@ -51,8 +55,9 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
         real.updateAndGet { if (it.generation == generation) it.copy(audio = null) else it }
         preview.set(null); startTicks()
     }
+    fun suppress(selection: AlarmAudioSelection) { suppressed.set(selection); startTicks() }
     fun preview(sound: AlarmSoundChoice) {
-        if (real.get().audio != null) return
+        if (isAlarmActive) return
         val now = SystemClock.elapsedRealtime()
         preview.set(Preview(AlarmAudioSelection(AlarmEpisodeId(-1,
             AlarmCauseKey(AlarmCategory.POSITION_LOST, "preview", "preview"), System.nanoTime()), sound), now + 3_000))
@@ -60,13 +65,15 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
     }
     fun stopPreview() { preview.set(null); startTicks() }
 
-    private fun wanted(now: Long): AlarmAudioSelection? = real.get().takeIf { it.generation > canceledGeneration.get() }?.audio
+    private fun wanted(now: Long): AlarmAudioSelection? = real.get().takeIf { it.generation > canceledGeneration.get() }?.audio?.takeIf { it != suppressed.get() }
         ?: preview.get()?.takeIf { now < it.expires }?.selection
     private fun startTicks() {
         if (scheduled.compareAndSet(false, true)) runCatching { executor.execute(::tick) }
             .onFailure { scheduled.set(false); report(AlarmEffectStatus.FAILED, "Audio worker unavailable.") }
     }
     private fun tick() {
+        val beforeReal = real.get()
+        val beforePreview = preview.get()
         try { updatePlayback() } catch (_: Exception) {
             focus = AlarmFocusState.PERMANENTLY_LOST
             runCatching { stopRingtone() }
@@ -84,7 +91,7 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
                 report(AlarmEffectStatus.IDLE, null)
             }
             scheduled.set(false)
-            if (wanted(SystemClock.elapsedRealtime()) != null && wanted(now) != selected) startTicks()
+            if (real.get() !== beforeReal || preview.get() !== beforePreview) startTicks()
         }
     }
     private fun updatePlayback() {
@@ -150,9 +157,10 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
         }
         report(AlarmEffectStatus.ACTIVE, if (fallback) "Selected sound unavailable; using built-in alarm." else null)
     }
-    private fun stopRingtone() { ringtone?.let { runCatching { it.stop() } }; ringtone = null }
+    private fun stopRingtone() { ringtone?.stop(); ringtone = null }
     private fun abandonFocus() { request?.let { runCatching { manager.abandonAudioFocusRequest(it) } }; request = null }
     private fun report(status: AlarmEffectStatus, message: String?) {
+        lastProgressElapsedMillis = SystemClock.elapsedRealtime()
         statusBrief = message
         val state = real.get()
         val report = listOf(state.generation, state.revision, status, message)

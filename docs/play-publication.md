@@ -51,10 +51,12 @@ The Play listing must link to the published version of
 ## Permission Rationale
 
 - `INTERNET`: connects to user-configured NTRIP casters.
-- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE` and
-  `FOREGROUND_SERVICE_DATA_SYNC`: keep user-started recording and correction
-  routing active in the background while the app talks to an attached GNSS
-  receiver and updates recording/session state.
+- `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_CONNECTED_DEVICE`: keep
+  user-started recording, receiver reconnect and correction routing active while
+  interacting with the external GNSS receiver.
+- `FOREGROUND_SERVICE_MEDIA_PLAYBACK`: permits configured recording alarm audio
+  while backgrounded. This type is added only for acoustic alarm ownership;
+  after unexpected recording termination, only the alarm shell may remain.
 - `WAKE_LOCK`: keeps capture running while the screen is off.
 - `POST_NOTIFICATIONS`: required on Android 13+ before starting recording when
   notification permission is still missing, so Android can show the foreground
@@ -66,12 +68,19 @@ The Play listing must link to the published version of
 
 The foreground service is user initiated by pressing Start. It records receiver
 data and may route NTRIP corrections to an attached receiver while the app is in
-the background. The release manifest uses `connectedDevice|dataSync` because the
-service maintains a live connection to the receiver and keeps recording/correction
-routing session state active. On Android 13+, the app requests notification
+the background. The release manifest declares `connectedDevice|mediaPlayback`.
+Capture uses only `connectedDevice`; acoustic alarms add `mediaPlayback` and a
+terminal alarm retains no capture resources. The service does not use `dataSync`
+as an indefinite recording or disconnected-receiver fallback. On Android 13+, the app requests notification
 permission before recording when needed and does not start recording after a
 denial. The notification must show recording state, receiver RX bytes and NTRIP
 correction bytes.
+
+The Play declaration and review video must cover both declared types, including
+configured acoustic alarms, automatic recovery, acknowledgement and deliberate
+Stop. Android restrictions still apply. Verify detached USB eligibility before
+release; merely declaring `mediaPlayback` does not satisfy `connectedDevice`
+prerequisites. See [Android foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types).
 
 ## Release Validation
 

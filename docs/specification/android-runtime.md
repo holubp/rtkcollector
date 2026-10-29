@@ -39,6 +39,8 @@ and use separate channels from quiet recording status. Visual and acoustic
 choices MUST operate independently subject to OS permissions/settings. Only one
 sound plays: interruption outranks connection loss, which outranks position loss.
 No volume/DND bypass, full-screen or exact-alarm permissions may be added.
+Home condition text and episode-scoped acknowledgement MUST remain available
+independently of notification filtering and acoustic arbitration.
 
 Verification: notification/audio tests; manual locked-screen/watch/settings tests.
 

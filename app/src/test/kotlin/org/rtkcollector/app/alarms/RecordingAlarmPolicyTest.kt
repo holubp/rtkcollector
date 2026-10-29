@@ -12,6 +12,16 @@ class RecordingAlarmPolicyTest {
     private fun valid(policy: RecordingAlarmPolicy, time: Long = 0, sequence: Long = 1) =
         policy.accept(AlarmCommand.Position(1, AlarmPositionEvidence("main", sequence, time, true)))
 
+    @Test fun `all operational causes remain available to Home with visual notifications disabled`() {
+        val defaults = AlarmSettingsSnapshot.defaults()
+        val policy = started(defaults.copy(categories = defaults.categories.mapValues { it.value.copy(visual = false) }))
+        policy.accept(AlarmCommand.CauseRaised(1, corrections, "corrections", 1))
+        val state = policy.accept(AlarmCommand.CauseRaised(1, RecordingAlarmEvidence.RTKLIB, "processing", 2))
+        assertTrue(state.visibleEpisodes.isEmpty())
+        assertNotNull(state.audio)
+        assertEquals(setOf(corrections, RecordingAlarmEvidence.RTKLIB), state.activeEpisodes.map { it.id.cause }.toSet())
+    }
+
     @Test fun `initial acquisition never raises a position alarm`() {
         assertNull(started().accept(AlarmCommand.Tick(1, 600_000)).audio)
     }

@@ -1,5 +1,11 @@
 # RtkCollector Privacy Policy
 
+Recording alarm notifications use category/cause text rather than coordinates,
+credentials or private recording paths. Android or a watch companion may mirror
+them according to your settings. Sounds use bundled tones or Android's sound
+provider; RtkCollector does not record microphone audio for alarms or upload
+alarm settings automatically.
+
 Effective date: 2026-06-14
 
 RtkCollector is an Android GNSS receiver companion for byte-exact receiver

@@ -21,6 +21,9 @@ python3 tools/check_spec_requirements.py docs/specification
 echo "Checking stable sideload signing..."
 python3 -m unittest discover -s tools -p 'test_sign_sideload_apk.py' -v
 
+echo "Checking bundled alarm sounds..."
+python3 -m unittest discover -s tools -p 'test_generate_alarm_sounds.py' -v
+
 echo "Compiling Android test source sets and running feasible tests..."
 python3 tools/check_android_test_compilation.py --root "$ROOT" --mode auto
 

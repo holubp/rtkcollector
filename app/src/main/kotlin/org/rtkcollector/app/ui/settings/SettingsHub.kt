@@ -74,6 +74,7 @@ fun SettingsHub(
     onImportSettings: () -> Unit,
     onDeviceConsole: () -> Unit,
     onAppDiagnostics: () -> Unit,
+    onAlarms: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
@@ -150,6 +151,8 @@ fun SettingsHub(
                     SettingsRow("⌖", "Base coordinates", onBaseCoordinates)
                     SettingsDivider()
                     SettingsRow("▤", "Dashboard layout", onDashboardLayout, subtitle = dashboardLayoutLabel)
+                    SettingsDivider()
+                    SettingsRow("!", "Alarms", onAlarms)
                     SettingsDivider()
                     SettingsRow("●", "Recording outputs", onRecordingOutputs)
                     SettingsDivider()

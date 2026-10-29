@@ -48,6 +48,13 @@ Optional Verbose/Debug app logging has a persistent level and a user-settable
 size cap, initially 10 MB, in Developer tools. See
 [App Logs](docs/user-workflows.md#app-logs) for retention and sharing.
 
+Menu -> Alarms configures independent visual and acoustic alerts for receiver
+loss, loss of positioning after the first valid fix, and recording interruptions.
+Settings and sound choices persist; recovery clears active alerts automatically,
+and deliberate Stop silences them. See
+[Recording Alarms](docs/user-workflows.md#recording-alarms) for Android and watch
+delivery limitations.
+
 ## Development Status
 
 This repository is in experimental bootstrap status. The current code includes

@@ -41,7 +41,7 @@ no new runtime dependencies and no native RTKLIB changes.
   capture, correction routing, receiver commands, reconnect or writer finalization.
 - Process kill/force-stop/power loss cannot be covered reliably; no such promise.
 - Do not touch existing ownership draft files, private settings or samples.
-- This plan does not authorize a version bump/release or inherit the RC8-specific
+- The resumed goal authorizes RC9 publication, not inheritance of the RC8-specific
   strict-checker exception. Resolve the current required push gate before pushing.
 
 ## Review Focus
@@ -76,6 +76,21 @@ pulse count, pause and 440/880 Hz pitch. Bundled WAVs generated reproducibly.
 all app JVM-test sources compile. New settings Robolectric test is registered
 for compile-only Termux handling and still requires execution on clean-host CI.
 Checkpoint foundation is implemented; Android effects/integration remain open.
+C4 review correction: independent Sol-high review identified detached USB type
+eligibility, main-thread foreground Binder work, rejected promotion retaining
+playback, and missing independent timeout. Process-owned effect lanes now isolate
+foreground work from notifications and main; a bounded independent exit lane
+uses captured start IDs. `review-correction-red.log` confirmed absent heartbeat
+expiry support; `review-correction-green.log` passed the focused suite after
+adding pending/focus-loss deadlines and active-worker heartbeat checks. These
+are local JVM results, not Android device playback evidence.
+Ruling: remove unnecessary `dataSync` type/permission instead of using it as a
+disconnected fallback: it carries Android 15+ six-hour background limits and does
+not match continuous USB interaction. Capture uses `connectedDevice`, acoustic
+ownership adds `mediaPlayback`. `foreground-types-red.log` confirmed the missing
+type-mask API. The documented normal `CHANGE_NETWORK_STATE` alternative for
+detached `connectedDevice` eligibility still awaits human approval; do not add
+it without that approval. Foreground rationale and Play validation docs updated.
 C2: `c2-invalidation-red.log` ran 23 tests and reproduced rejection of a Stop
 clearing update. Fixed invalidation, then `c2-close-red.log` reproduced loss of
 final visual clearing on close (4 tests, one failure). Effects now drain the final
@@ -90,19 +105,89 @@ revision field is needed. Tests must include duplicate snapshots and clock rollb
 
 Baseline: worktree `.worktrees/ntrip-tls-integration`, branch
 `codex/ntrip-tls-integration`; inspected source commit `0d2a042` (RC8).
-Design approved, including automatic recovery; no product implementation yet.
+At plan creation, design was approved (including automatic recovery) and product
+implementation had not started. Current status is the checkpoint table below.
 One Sol-medium read-only design builder check completed; all three ambiguities
 are resolved in the approved design. No extra planning reviewer is required.
 
 | Checkpoint | Owner / scope | State | Required receipt |
 | --- | --- | --- | --- |
-| C0 | Controller: canonical contract and environment | Open | Requirement map, baseline/gate decision |
-| C1 | Pure policy + persistent settings | Open | RED/GREEN tests and commit |
-| C2 | Independent effect lanes and Android adapters | Open | Rejection/hang/Stop tests and commit |
-| C3 | Source evidence and detection | Open | Receiver/engine/clock tests and commit |
-| C4 | Service lifecycle and terminal alerts | Open | Isolation/SDK lifecycle tests and commit |
-| C5 | Settings, sound picker and operational actions | Open | UI/model/persistence tests and commit |
-| C6 | Integration, docs and independent audit | Open | Gate results, requirement matrix and final disposition |
+| C0 | Controller: canonical contract and environment | Contract present; push-gate decision pending | Requirement map and current branch verified |
+| C1 | Pure policy + persistent settings | Implemented; host persistence test pending | `bdd99b7`; focused tests GREEN |
+| C2 | Independent effect lanes and Android adapters | Implemented; source audit corrections closed | `e9ff9d0`; close/invalidation RED then GREEN; host/device delivery still pending |
+| C3 | Source evidence and detection | Implemented; not field-tested | Source selection and epoch/freshness tests GREEN |
+| C4 | Service lifecycle and terminal alerts | In progress; permission approval blocked | Independent review findings 2-8 closed at source level; SDK tests compile locally |
+| C5 | Settings, sound picker and operational actions | Implemented; device checks pending | Menu/controls wired; integrated Kotlin compilation GREEN |
+| C6 | Integration, docs and independent audit | In progress | Full gates, whole-delta audit and RC9 publication remain |
+
+Integration gate receipt: `pre-push-integration.log` completed successfully on
+2026-10-29 after a clean rebuild: 1,282 tests across 181 current app/core/receiver
+suites, zero failures/errors/skips; all app JVM-test sources compiled and both IDE
+compatibility aliases checked. Test counts exclude retained historical CI reports.
+The current checker `tools/check_spec_requirements.py` passed; absent
+`tools/specification/spec_check.py` was not claimed as executed. Independent final
+audit is active. A subsequent Home delivery-feedback gap was reproduced RED in
+`ui-delivery-red.log`; its fix requires fresh focused/full gate receipts before
+commit, so the earlier gate is not a final passing receipt for that delta.
+
+Independent full-delta Sol-high audit returned eight findings. Detached foreground
+eligibility remains blocked on the requested permission approval. The seven code
+findings were fixed together: asynchronous bounded alarm-state broadcast delivery;
+atomic pending terminal ownership before policy consumption; mock-independent
+AUTO_BEST evidence ranking; preserved recovery/re-failure edges (including equal
+receipt timestamps); acoustic-only Home controls; generation/revision-scoped late
+delivery failure handling; and bounded first/last episode evidence, including
+later terminal cleanup evidence without rearming acknowledged episodes.
+`review-edges-red.log` executed six tests with two expected failures (conflation
+and hidden acoustic-only actions). `review-contracts-red.log` confirmed missing
+evidence/broadcast/terminal APIs. `review-contracts-green.log` and
+`review-fixes-green.log` passed all focused Alarm tests and compiled all app JVM
+tests; service Robolectric execution still requires clean-host CI. The same
+reviewer is checking the affected corrections, not repeating the whole audit.
+No complex implementer children were used; controller kept coupled service work
+inline and reused one requested Sol-high reviewer for material lifecycle risk.
+Actual runtime model/effort and allowance attribution are not exposed.
+Resume after process interruption: `pre-push-reviewed-fixes.log` ended during
+production compilation, and no RtkCollector Gradle process survived; this is an
+interrupted gate, not a pass. The first focused resume attempt
+(`operational-episodes-red.log`) failed during configuration because dependency
+JARs removed by clean had not been regenerated. It did not reach the intentional
+`activeEpisodes` regression and is not counted as behavioral RED. Rebuild
+production prerequisites and seed the Termux R.jar before rerunning that test.
+The same independent reviewer was resumed by its existing ID, retaining context.
+It confirmed prior findings 2-5 and 7-8 addressed in source, with finding 6 still
+requiring the complete operational episode list independently of notification
+filtering/audio arbitration. Verification and approval blockers remain open.
+After production prerequisites were rebuilt, `operational-episodes-red-compiled.log`
+reached the intended missing-`activeEpisodes` compilation failure. The model now
+retains unresolved operational causes separately from visible notifications and
+the one selected sound. Home text/tokens use operational episodes (with redundant
+position warnings suppressed during known receiver loss), and nonterminal
+acknowledged conditions remain until recovery. Stop clears those episodes and
+advances the revision fence against queued pre-Stop delivery errors. Focused
+GREEN and a fresh whole gate are still required for this latest delta.
+`operational-episodes-green.log` passed after that final model/Home/Stop change,
+including production and all app JVM-test compilation. The independent reviewer
+then confirmed no additional defect in the narrow correction review and closed
+findings 2-8 at source level. Finding 1 (detached foreground eligibility) remains
+open pending explicit permission approval. `pre-push-final-source.log` is the
+fresh whole-gate attempt for this snapshot; do not infer its outcome until read.
+
+The checkpoint table and dated receipts are current implementation status. The
+original composite task checkboxes below include clean-host/device acceptance
+steps and must not be bulk-completed from source review or local compilation.
+Final local gate receipt: `pre-push-final-source.log` completed successfully after
+clean on the final source snapshot: 1,293 tests in 184 app/core/receiver suites,
+zero failures/errors/skips, all app JVM-test sources compiled and both IDE aliases
+dry-run. Sound generator, signing-tool tests, test-gate tests and structural
+requirement checker also passed. This is the checked-in Termux gate only, not
+the absent strict-assurance checker or clean-host/device validation. Separate
+Google Play production Kotlin compilation also passed sequentially
+(`google-play-production-compile.log`). This does not execute Google Play
+Robolectric tests or assemble an APK/AAB; those remain clean-host CI gates.
+Remaining authority: explicit normal `CHANGE_NETWORK_STATE` permission approval
+and RC9-specific strict-gate resolution are required before push/release. Keep
+this goal active; no RC9 publication/completion claim is authorized by local tests.
 
 Record command, outcome, source commit, review fixes and remaining manual checks
 at each checkpoint. Resume by reading this ledger and actual status/diffs.
@@ -127,6 +212,9 @@ New production files under `app/src/main/kotlin/org/rtkcollector/app/alarms/`:
 - `AlarmSettingsStore.kt`: one global preference snapshot/observer; no profile IO.
 - `AlarmEffectDispatcher.kt`: independent bounded latest-state effect lanes,
   rejection isolation and generation cancellation; no session-writer references.
+- `AlarmEffectsRuntime.kt`, `AlarmPlaybackDeadline.kt`, `AlarmStateBroadcaster.kt`:
+  process-owned effect/foreground/broadcast lanes, independent playback deadline,
+  scoped service exit and bounded asynchronous Home-state delivery.
 - `AlarmNotificationPublisher.kt`: channels, stable IDs and safe action tokens.
 - `AlarmAudioPlayer.kt`: built-in/system URI playback, focus, fallback and preview.
 - `AlarmForegroundPolicy.kt`: pure recording/alert-only/idle foreground decisions.
@@ -167,10 +255,12 @@ data class AlarmEpisodeId(val generation: Long, val cause: AlarmCauseKey, val re
 data class AlarmPositionEvidence(val sourceId: String, val sequence: Long,
     val receivedElapsedMillis: Long, val valid: Boolean)
 data class AlarmEpisode(val id: AlarmEpisodeId, val detail: String, val terminal: Boolean)
+data class AlarmEpisodeEvidence(val firstElapsedMillis: Long, val lastElapsedMillis: Long,
+    val detail: String)
 data class AlarmAudioSelection(val episodeId: AlarmEpisodeId, val sound: AlarmSoundChoice)
 data class AlarmDesiredState(val generation: Long, val revision: Long,
     val visibleEpisodes: List<AlarmEpisode>, val audio: AlarmAudioSelection?,
-    val terminalAlertPending: Boolean)
+    val terminalAlertPending: Boolean, val activeEpisodes: List<AlarmEpisode> = visibleEpisodes)
 enum class AlarmEffectStatus { IDLE, PENDING, ACTIVE, BLOCKED, FAILED }
 data class AlarmDeliveryStatus(val desiredRevision: Long,
     val visual: AlarmEffectStatus, val audio: AlarmEffectStatus, val detail: String?)
@@ -421,7 +511,8 @@ requirements/matrix, AGENTS guardrails, shared plan tracker and this ledger.
   commits/unstaged/untracked task files, not just the last change.
 - [ ] Clean-host CI must execute new Robolectric classes, both Google Play and
   sideload test/compile variants, and native debug assembly with pinned upstream.
-  Existing stable signing is unchanged. Do not claim a new release is authorized.
+  Existing stable signing is unchanged. RC9 publication is explicitly authorized
+  by the resumed goal; the strict-gate exception remains separately pending.
 - [ ] Record device checks separately: UM980/M8T/selected RTKLIB and raw-only;
   initial acquisition; backpack screen-off no-fix/unplug/replug; connection restored
   without positioning; required NTRIP/upload loss; simulated storage failure;

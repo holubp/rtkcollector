@@ -1,5 +1,10 @@
 # Session Format
 
+Alarm transitions may add a `recording-alarm-state` essential event containing
+category identifiers only. Alarm payloads must not expose coordinates,
+credentials, sound-provider contents or private paths. Settings are global
+preferences; no markers are added to `receiver-rx.raw` or correction streams.
+
 ## Folder Layout
 
 ```text

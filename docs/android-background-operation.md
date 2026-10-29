@@ -1,5 +1,16 @@
 # Android Background Operation
 
+## Reliability Alarms
+
+Alarms run independently of Activity/Compose and mock-location resampling.
+Receiver reconnect does not prove position recovery: only newly decoded valid
+position evidence clears position loss. Deliberate Stop fences late callbacks
+before finalization. Alarm delivery, permission/provider failure or focus denial
+must never stop/restart capture. Terminal audio lifetime cannot retain raw writers.
+
+Screen-off/watch delivery, USB detach/reattach, DND/routes and foreground-type
+transitions require device testing. Do not claim coverage after process death.
+
 Recording is owned by a foreground service. Activity and UI code only control
 and observe recording state.
 

@@ -45,11 +45,19 @@ class AlarmNotificationPublisher(context: Context) : AlarmEffect {
                     .putStringArrayListExtra(AlarmActions.EPISODES, ArrayList(episodes.map { AlarmActions.token(it.id) }))
                 val ack = PendingIntent.getService(context, notificationId(category), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+                val components = episodes.map { episode -> when (episode.id.cause.component) {
+                    "corrections" -> "Correction intake"
+                    "upload" -> "Caster upload"
+                    "processing" -> "RTKLIB processing"
+                    "storage" -> "Raw storage"
+                    "receiver protocol" -> "Receiver protocol"
+                    else -> "Recording"
+                } }.distinct().joinToString(", ")
                 val text = when (category) {
                     AlarmCategory.CONNECTION_LOST -> "Receiver data unavailable. Reconnecting."
                     AlarmCategory.POSITION_LOST -> "No fresh valid position. Receiver data may still be recording."
-                    AlarmCategory.RECORDING_INTERRUPTED -> if (episodes.any { it.terminal }) "Recording stopped unexpectedly. Open app for details."
-                        else "Receiver recording continues with an interrupted workflow component. Open app for details."
+                    AlarmCategory.RECORDING_INTERRUPTED -> if (episodes.any { it.terminal }) "$components: recording stopped unexpectedly. Open app for details."
+                        else "$components interrupted. Receiver recording continues."
                 }
                 val icon = when (category) {
                     AlarmCategory.CONNECTION_LOST -> android.R.drawable.ic_menu_close_clear_cancel

@@ -17,21 +17,23 @@ class AlarmEffectDispatcher(notification: AlarmEffect, audio: AlarmEffect,
         private val ready = Semaphore(0)
         init {
             runCatching { Thread({
-                while (!closed.get()) {
+                while (!closed.get() || pending.get() != null) {
                     try { ready.acquire() } catch (_: InterruptedException) { break }
                     val next = pending.getAndSet(null) ?: continue
-                    if (current(next)) runCatching { effect.apply(next) { current(next) } }
+                    val finalVisual = closed.get() && label == "notification"
+                    if (current(next, finalVisual)) runCatching { effect.apply(next) { current(next, finalVisual) } }
                         .onFailure { runCatching { onFailure(label) } }
                 }
             }, "rtkcollector-alarm-$label").apply { isDaemon = true; start() } }
                 .onFailure { runCatching { onFailure(label) } }
         }
         fun offer(value: AlarmDesiredState) { if (pending.getAndSet(value) == null) ready.release() }
-        fun stop() { pending.set(null); ready.release() }
+        fun stop(final: AlarmDesiredState? = null) { pending.set(final); ready.release() }
     }
     private val visual = Lane("notification", notification)
     private val acoustic = Lane("audio", audio)
-    private fun current(state: AlarmDesiredState) = !closed.get() && latest.get() == state
+    private fun current(state: AlarmDesiredState, finalVisual: Boolean = false) =
+        (!closed.get() || finalVisual) && latest.get() == state
     fun offer(desired: AlarmDesiredState): Boolean {
         if (closed.get()) return false
         while (true) {
@@ -43,7 +45,12 @@ class AlarmEffectDispatcher(notification: AlarmEffect, audio: AlarmEffect,
         return true
     }
     fun invalidate(generation: Long) {
-        latest.updateAndGet { if (it.generation == generation) it.copy(revision = Long.MAX_VALUE) else it }
+        val clear = latest.updateAndGet { if (it.generation == generation)
+            it.copy(revision = it.revision + 1, visibleEpisodes = emptyList(), audio = null, terminalAlertPending = false) else it }
+        if (clear.generation == generation) { visual.offer(clear); acoustic.offer(clear) }
     }
-    override fun close() { closed.set(true); visual.stop(); acoustic.stop() }
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        visual.stop(latest.get().takeIf { it.generation >= 0 }); acoustic.stop()
+    }
 }

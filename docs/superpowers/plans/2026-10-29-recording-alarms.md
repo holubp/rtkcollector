@@ -76,6 +76,17 @@ pulse count, pause and 440/880 Hz pitch. Bundled WAVs generated reproducibly.
 all app JVM-test sources compile. New settings Robolectric test is registered
 for compile-only Termux handling and still requires execution on clean-host CI.
 Checkpoint foundation is implemented; Android effects/integration remain open.
+C2: `c2-invalidation-red.log` ran 23 tests and reproduced rejection of a Stop
+clearing update. Fixed invalidation, then `c2-close-red.log` reproduced loss of
+final visual clearing on close (4 tests, one failure). Effects now drain the final
+visual state without joining; generation-tagged notifications and per-app epoch
+fencing prevent a late old clear from canceling a new session. `c2-final-green.log`
+passed the focused suite after those fixes. Platform tests compile locally;
+Robolectric execution remains a clean-host gate. No device audio claim is made.
+Ruling: use RTKLIB's existing decoded GNSS solution timestamp as the epoch identity;
+the native bridge obtains it from `sol.time`, not snapshot wall time. Deduplicate
+that identity in the app and timestamp receipts monotonically; no native/core
+revision field is needed. Tests must include duplicate snapshots and clock rollback.
 
 Baseline: worktree `.worktrees/ntrip-tls-integration`, branch
 `codex/ntrip-tls-integration`; inspected source commit `0d2a042` (RC8).

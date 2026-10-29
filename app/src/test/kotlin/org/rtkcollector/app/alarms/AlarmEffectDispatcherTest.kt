@@ -8,6 +8,28 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class AlarmEffectDispatcherTest {
     private fun desired(revision: Long) = AlarmDesiredState(1, revision, emptyList(), null, false)
+    @Test fun `closing drains final visual clear without waiting for a blocked effect`() {
+        val entered = CountDownLatch(1); val release = CountDownLatch(1); val cleared = CountDownLatch(1)
+        val dispatcher = AlarmEffectDispatcher(AlarmEffect { state, current ->
+            if (state.revision == 1L) { entered.countDown(); release.await() }
+            if (state.revision == 2L && current()) cleared.countDown()
+        }, AlarmEffect { _, _ -> })
+        try {
+            dispatcher.offer(desired(1)); assertTrue(entered.await(10, TimeUnit.SECONDS))
+            dispatcher.invalidate(1); dispatcher.close()
+            release.countDown()
+            assertTrue(cleared.await(10, TimeUnit.SECONDS))
+        } finally { release.countDown(); dispatcher.close() }
+    }
+    @Test fun `invalidation permits an immediate clear effect for the stopped generation`() {
+        val cleared = CountDownLatch(1)
+        val dispatcher = AlarmEffectDispatcher(AlarmEffect { state, _ -> if (state.revision == 2L) cleared.countDown() }, AlarmEffect { _, _ -> })
+        try {
+            dispatcher.offer(desired(1)); dispatcher.invalidate(1)
+            assertTrue(dispatcher.offer(desired(2)))
+            assertTrue(cleared.await(10, TimeUnit.SECONDS))
+        } finally { dispatcher.close() }
+    }
     @Test fun `blocked notification does not block audio or bounded latest state submission`() {
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val audio = CountDownLatch(1); val last = CountDownLatch(1)

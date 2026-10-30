@@ -2,6 +2,28 @@
 
 ## Recording Runtime
 
+### ANDROID-ALARM-009: Muted Alarm Audio Advisory
+
+Status: Normative
+
+While recording and any acoustic alarm is enabled (including connection or
+position loss), Home MUST warn that no audible alarm will be heard when the
+alarm stream volume is known to be zero, the alarm stream is known muted, or
+Android reports the total-silence interruption filter. The advisory MUST clear
+when those conditions end and update on live settings/volume/filter changes.
+Unknown readings MUST NOT be treated as zero or proof of audibility. Silent
+ringer mode alone MUST NOT be interpreted as muted alarms. Other DND modes
+retain the weaker ANDROID-ALARM-008 advisory rather than assuming total silence.
+The stronger confirmed-silence warning MAY replace the weaker DND warning.
+Platform reads MUST be isolated from capture and run only while Home is visible
+and recording with acoustic alarms enabled. No sound, mute, DND, permission,
+recording state or alarm-episode changes may be made by the advisory.
+
+Verification: recording/acoustic/volume/mute/filter truth tables, unknown and
+recovery cases, host Android stream reads, and manual phone/headset checks.
+Sources: Android AudioManager getStreamVolume/isStreamMute and NotificationManager
+INTERRUPTION_FILTER_NONE API contracts.
+
 ### ANDROID-ALARM-008: Do Not Disturb Advisory
 
 Status: Normative
@@ -15,6 +37,7 @@ audible-alarm advisory. Unknown DND state MUST NOT be represented as confirmed
 on or off. This is an environment advisory, not a recording or connection error.
 Checking/displaying it MUST NOT alter DND, volume, recording or alarm episodes,
 request DND-bypass permission, or perform platform queries on capture workers.
+The confirmed-silence advisory in ANDROID-ALARM-009 may replace this weaker text.
 
 Verification: complete recording/acoustic/DND truth table, live monitoring
 integration and manual DND changes during a recording.

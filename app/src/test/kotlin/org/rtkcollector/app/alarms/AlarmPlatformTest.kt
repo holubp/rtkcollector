@@ -15,6 +15,26 @@ import org.robolectric.annotation.Config
 @Config(sdk = [26, 27, 33])
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AlarmPlatformTest {
+    @Test fun `Home reads alarm volume rather than notification or media volume`() {
+        val context = RuntimeEnvironment.getApplication()
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        audio.setStreamVolume(android.media.AudioManager.STREAM_ALARM, 0, 0)
+        audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, 5, 0)
+        val silent = org.rtkcollector.app.ui.alarms.readAlarmAudioEnvironment(context)
+        assertEquals(0, silent.alarmVolume)
+        assertTrue(alarmAudibilityWarning(true, true, silent)!!.contains("No audible alarm will be heard."))
+        audio.setStreamVolume(android.media.AudioManager.STREAM_ALARM, 3, 0)
+        val restored = org.rtkcollector.app.ui.alarms.readAlarmAudioEnvironment(context)
+        assertEquals(3, restored.alarmVolume)
+        assertEquals(audio.isStreamMute(android.media.AudioManager.STREAM_ALARM), restored.alarmMuted)
+        audio.adjustStreamVolume(android.media.AudioManager.STREAM_ALARM, android.media.AudioManager.ADJUST_MUTE, 0)
+        val muted = org.rtkcollector.app.ui.alarms.readAlarmAudioEnvironment(context)
+        assertEquals(true, muted.alarmMuted)
+        assertTrue(alarmAudibilityWarning(true, true, muted)!!.contains("No audible alarm will be heard."))
+        audio.adjustStreamVolume(android.media.AudioManager.STREAM_ALARM, android.media.AudioManager.ADJUST_UNMUTE, 0)
+        val unmuted = org.rtkcollector.app.ui.alarms.readAlarmAudioEnvironment(context)
+        assertEquals(false, unmuted.alarmMuted)
+    }
     @Test fun `recording notification snapshot adds Stop only for terminal alarm shell`() {
         val context = RuntimeEnvironment.getApplication()
         val regular = org.rtkcollector.app.recording.RecordingNotificationRuntime.notification(context, "Recording", null)

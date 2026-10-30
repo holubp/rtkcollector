@@ -872,6 +872,12 @@ While recording, Home warns when Do Not Disturb is on and any acoustic alarm
 is enabled: audible alarms may not work. It is an advisory, not a recording
 failure, and clears when the condition ends. The app does not change DND or
 volume. Check the phone and headset with a sound preview before relying on them.
+If Android reports zero alarm volume, a muted alarm stream or DND total silence,
+Home instead warns **No audible alarm will be heard**. Restore alarm volume or
+adjust the phone's sound/DND settings; the warning clears automatically. Silent
+ringer mode alone is not treated as muted alarms. Positive phone volume does not
+guarantee audibility on a headset with its own volume controls. These checks never
+change volume or DND and never pause recording.
 
 During a USB interruption, leave recording on: RtkCollector keeps trying to
 reopen and initialise the receiver, preserving the same session files. If Android

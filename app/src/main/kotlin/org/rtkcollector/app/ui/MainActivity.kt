@@ -229,7 +229,7 @@ import org.rtkcollector.app.ui.common.ProfileSingleLineTextField
 import org.rtkcollector.app.ui.diagnostics.AppDiagnosticsScreen
 import org.rtkcollector.app.ui.alarms.AlarmSettingsScreen
 import org.rtkcollector.app.ui.alarms.AlarmUiState
-import org.rtkcollector.app.ui.alarms.rememberAlarmDndWarning
+import org.rtkcollector.app.ui.alarms.rememberAlarmAudibilityWarning
 import org.rtkcollector.app.alarms.AlarmActions
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListState
@@ -1774,7 +1774,7 @@ fun RtkCollectorApp(
             }
             when (screen) {
                 AppScreen.HOME -> Column(modifier = Modifier.fillMaxSize()) {
-                    val alarmDndWarning = rememberAlarmDndWarning(state.isRecording)
+                    val alarmAudioWarning = rememberAlarmAudibilityWarning(state.isRecording)
                     val homeState = when (pendingSetupSelection?.option) {
                         ActiveSetupOptionKey.NTRIP_MOUNTPOINT -> state.copy(status = state.status.copy(
                             mountpoint = "${state.status.mountpoint} · Change pending",
@@ -1794,7 +1794,7 @@ fun RtkCollectorApp(
                             startInProgress = startInProgress,
                             recordingReliabilityWarning = batteryWarning.message.takeIf { batteryWarning.show },
                             loggingAdvisory = diagnosticLevel.advisory,
-                            alarmContent = if (alarmUiState.hasContent || alarmDndWarning != null) ({
+                            alarmContent = if (alarmUiState.hasContent || alarmAudioWarning != null) ({
                                 Column {
                                     (alarmUiState.message ?: "Recording stopped. Alarm active.".takeIf { alarmUiState.terminalPending })?.let {
                                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
@@ -1802,7 +1802,7 @@ fun RtkCollectorApp(
                                     alarmUiState.delivery?.let {
                                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                                     }
-                                    alarmDndWarning?.let {
+                                    alarmAudioWarning?.let {
                                         Surface(color = MaterialTheme.colorScheme.tertiaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                                             modifier = Modifier.fillMaxWidth()) {

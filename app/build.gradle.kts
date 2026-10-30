@@ -71,6 +71,10 @@ android {
         compose = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     if (rtklibNativeBuildAvailable) {
         externalNativeBuild {
             cmake {

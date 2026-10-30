@@ -236,6 +236,23 @@ checks, and both IDE compatibility aliases dry-ran successfully. The retirement
 focused rerun also completed BUILD SUCCESSFUL. Host CI and signed APK verification
 are the remaining automated release gates; physical-device checks remain open.
 
+A5 host RED: GitHub run `40992251047` found nine failures (three cases on
+SDK 26/27/33). The pinned Media3 builder forbids `BandwidthMeter.NO_OP`; use a
+valid local fixed-estimate meter with no network observer. The callback test
+must measure from post-registration query count, and resource URI tests require
+merged Android resources. Controller fixed those without disabling any tests.
+The local focused repair compiles and passes. Astra re-reviewed and source-closed
+the repair, then identified missing unstable-API opt-in; narrow annotations were
+added to both production declarations and their platform test. Full release
+lint for both distributions is now an explicit CI gate after native-source
+provisioning. Host RED-to-GREEN and final local gate remain required. The
+interrupted `pre-push-release-record.log` has no terminal receipt and is not a pass.
+
+Repair gate: `pre-push-ci-repair.log` passed after a clean rebuild, with 1,340
+tests / 192 suites and zero failures/errors/skips. Both full release-lint task
+names dry-ran successfully. Astra source-closed the narrow annotations and
+reviewed CI ordering; it explicitly required actual host lint and SDK tests.
+
 | Checkpoint | Scope | State | Evidence required |
 | --- | --- | --- | --- |
 | B0 | Approval, canonical requirements and implementation plan | Approved; executing | Owner statement above; ANDROID-ALARM-007 |
@@ -342,7 +359,8 @@ codec/WAV engine. Preserve the legacy Ringtone path when routing is off. Record
 Apache-2.0 attribution; no media UI, session, ads or network-streaming features.
 
 Dependency inspection: Media3 declares optional ACCESS_NETWORK_STATE. Remove
-that declaration through the manifest merger and use BandwidthMeter.NO_OP;
+that declaration through the manifest merger and use a local fixed-estimate
+bandwidth meter with no network listener (Media3 rejects its NO_OP sentinel);
 local alarm playback does not need another permission. Disable platform media
 diagnostics. Verify the merged release manifest in CI before distribution.
 

@@ -18,10 +18,21 @@ import androidx.media3.exoplayer.audio.AudioTrackAudioOutput
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider
 import androidx.media3.exoplayer.upstream.BandwidthMeter
+import androidx.media3.datasource.TransferListener
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
+/** Local clips have no network transfer to estimate; ExoPlayer forbids its NO_OP sentinel. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal object LocalAlarmBandwidthMeter : BandwidthMeter {
+    override fun getBitrateEstimate(): Long = 1_000_000
+    override fun getTransferListener(): TransferListener? = null
+    override fun addEventListener(eventHandler: Handler, eventListener: BandwidthMeter.EventListener) = Unit
+    override fun removeEventListener(eventListener: BandwidthMeter.EventListener) = Unit
+}
+
 /** Local sound decoding and per-player routing. Called only on the alarm Looper. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class Media3AlarmClip(context: Context, handler: Handler, private val uri: Uri,
     private val builtIn: Boolean, private val devices: AlarmAudioDevices,
     private val current: () -> Boolean) : AlarmClipPlayback {
@@ -55,7 +66,7 @@ internal class Media3AlarmClip(context: Context, handler: Handler, private val u
         player = ExoPlayer.Builder(context)
             .setLooper(handler.looper)
             .setAudioOutputProvider(provider)
-            .setBandwidthMeter(BandwidthMeter.NO_OP)
+            .setBandwidthMeter(LocalAlarmBandwidthMeter)
             .setUsePlatformDiagnostics(false)
             .setReleaseTimeoutMs(500)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(500, 2_000, 250, 500)

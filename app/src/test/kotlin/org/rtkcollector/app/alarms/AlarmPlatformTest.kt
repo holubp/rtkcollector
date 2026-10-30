@@ -13,6 +13,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [26, 27, 33])
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AlarmPlatformTest {
     @Test fun `recording notification snapshot adds Stop only for terminal alarm shell`() {
         val context = RuntimeEnvironment.getApplication()
@@ -34,13 +35,14 @@ class AlarmPlatformTest {
         val callback = AlarmAudioDevices::class.java.getDeclaredField("callback").let {
             it.isAccessible = true; it.get(devices) as android.media.AudioDeviceCallback
         }
+        val initialQueries = queries
         callback.onAudioDevicesRemoved(emptyArray())
         assertTrue(devices.devices.isEmpty())
         val version = devices.version
-        assertEquals(2, queries)
+        assertEquals(initialQueries + 1, queries)
         devices.close()
         callback.onAudioDevicesAdded(emptyArray())
-        assertEquals(2, queries)
+        assertEquals(initialQueries + 1, queries)
         assertEquals(version, devices.version)
     }
     @Test fun `routed local playback can be constructed and released without changing communication routing`() {
@@ -51,6 +53,8 @@ class AlarmPlatformTest {
         val handler = android.os.Handler(android.os.Looper.getMainLooper())
         val devices = AlarmAudioDevices(manager, handler)
         try {
+            assertTrue(LocalAlarmBandwidthMeter.getBitrateEstimate() > 0)
+            assertNull(LocalAlarmBandwidthMeter.getTransferListener())
             val clip = Media3AlarmClip(context, handler,
                 AlarmAudioPlayer.builtinUri(context, BuiltInAlarmSound.SINGLE_LOW), true, devices) { true }
             clip.stop()

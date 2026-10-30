@@ -49,6 +49,9 @@ jobs:
             --ref "$RTKLIB_REF" \
             --metadata "$RUNNER_TEMP/rtklib-ex-snapshot.json"
 
+      - name: Verify release lint for both distributions
+        run: sh gradlew :app:lintSideloadRelease :app:lintGooglePlayRelease --no-parallel
+
       - name: Assemble debug bootstrap
         run: sh gradlew assembleDebug --no-parallel
 

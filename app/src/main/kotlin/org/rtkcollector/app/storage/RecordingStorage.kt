@@ -4,6 +4,12 @@ object RecordingStorage {
     const val APP_PRIVATE = "APP_PRIVATE"
     const val SAF_TREE = "SAF_TREE"
 
+    fun validateTreeGrantFlags(flags: Int) {
+        val required = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        require((flags and required) == required) { "Recording folder requires read and write access." }
+    }
+
     fun isSupportedStorageKind(kind: String): Boolean =
         kind == APP_PRIVATE || kind == SAF_TREE
 

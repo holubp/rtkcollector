@@ -35,6 +35,7 @@ import org.rtkcollector.app.profile.ntripCasterSecretId
 import org.rtkcollector.app.profile.storageValue
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.secrets.NtripSecretStore
+import org.rtkcollector.app.storage.RecordingStorage
 import org.rtkcollector.app.usb.UsbDeviceSummary
 import org.rtkcollector.core.correction.NtripCredentials
 import org.rtkcollector.core.correction.NtripSourcetableClient
@@ -431,9 +432,10 @@ class MainActivity : Activity() {
             return
         }
         val treeUri = data?.data ?: return
-        val grantFlags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         runCatching {
-            contentResolver.takePersistableUriPermission(treeUri, grantFlags)
+            RecordingStorage.validateTreeGrantFlags(data.flags)
+            contentResolver.takePersistableUriPermission(treeUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }.onFailure { error ->
             monitorText.text = "Could not persist SAF permission: ${error.message}"
             return

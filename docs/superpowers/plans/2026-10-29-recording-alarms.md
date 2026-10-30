@@ -266,6 +266,22 @@ in run `41014653701`, zero failures/errors/skips. Astra narrow environment revie
 found no conflicting test/toolchain pins; JDK 21 does not change bytecode targets.
 `pre-push-jdk21-ci.log` passed the full local gate before the workflow update push.
 
+Host run `41016179789`: downloaded XML proves 2,468 tests in 346 suites,
+zero failures/errors/skips, including both distribution variants and API 36.
+Full release lint then found one pre-existing legacy picker `WrongConstant`
+error. Controller added explicit read/write grant validation before persisting
+the exact permitted constants, preserving failure-before-profile-mutation.
+`RecordingStorageTest` covers missing/partial grants and unrelated result flags.
+This implements existing ANDROID-STORAGE-001, not a new access policy. CI now
+retains full lint reports on failures as well as successes. Actual lint GREEN
+and native assembly/signing are still required before RC9 tagging/publication.
+
+SAF repair source review closed after controller/reviewer caught and corrected
+the caller import. `saf-grants-corrected-green.log` passed all four storage tests;
+`pre-push-saf-lint.log` then passed the clean full gate: 1,341 tests / 192 suites,
+zero failures/errors/skips. The earlier `saf-grants-green.log` is a compilation
+RED receipt, not a pass. No lint baseline or global suppression was added.
+
 | Checkpoint | Scope | State | Evidence required |
 | --- | --- | --- | --- |
 | B0 | Approval, canonical requirements and implementation plan | Approved; executing | Owner statement above; ANDROID-ALARM-007 |

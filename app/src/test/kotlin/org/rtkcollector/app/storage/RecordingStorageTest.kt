@@ -7,6 +7,20 @@ import org.junit.jupiter.api.Test
 
 class RecordingStorageTest {
     @Test
+    fun `recording tree requires both read and write grants ignoring unrelated flags`() {
+        val read = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val write = android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        val persistable = android.content.Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        for (flags in listOf(0, read, write, persistable, read or persistable, write or persistable)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                RecordingStorage.validateTreeGrantFlags(flags)
+            }
+        }
+        RecordingStorage.validateTreeGrantFlags(read or write)
+        RecordingStorage.validateTreeGrantFlags(read or write or persistable)
+    }
+
+    @Test
     fun `supports app private and saf tree only`() {
         assertTrue(RecordingStorage.isSupportedStorageKind("APP_PRIVATE"))
         assertTrue(RecordingStorage.isSupportedStorageKind("SAF_TREE"))

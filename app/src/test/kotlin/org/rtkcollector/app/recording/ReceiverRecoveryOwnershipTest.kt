@@ -9,6 +9,87 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 @org.junit.jupiter.api.Timeout(20)
 class ReceiverRecoveryOwnershipTest {
+    @Test fun `read begun before detach cannot clear the new outage`() {
+        val fence = ReceiverReadRecoveryFence()
+        val oldRead = fence.beforeRead()
+        var alarm = false
+        fence.detached { alarm = true }
+        assertFalse(fence.publish(oldRead) { alarm = false })
+        assertTrue(alarm)
+        val newRead = fence.beforeRead()
+        assertTrue(fence.publish(newRead) { alarm = false })
+        assertFalse(alarm)
+    }
+
+    @Test fun `detach publication follows an admitted recovery without being lost`() {
+        val fence = ReceiverReadRecoveryFence()
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val workers = Executors.newFixedThreadPool(2)
+        val events = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val detachThread = java.util.concurrent.atomic.AtomicReference<Thread>()
+        val attemptingDetach = CountDownLatch(1)
+        val read = fence.beforeRead()
+        try {
+            val recovery = workers.submit { fence.publish(read) { entered.countDown(); release.await(); events.add("recovered") } }
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+            val detach = workers.submit {
+                detachThread.set(Thread.currentThread()); attemptingDetach.countDown()
+                fence.detached { events.add("lost") }
+            }
+            assertTrue(attemptingDetach.await(10, TimeUnit.SECONDS))
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+            while (detachThread.get().state != Thread.State.BLOCKED && !detach.isDone && System.nanoTime() < deadline) Thread.yield()
+            assertEquals(Thread.State.BLOCKED, detachThread.get().state)
+            assertTrue(events.isEmpty())
+            release.countDown()
+            recovery.get(10, TimeUnit.SECONDS); detach.get(10, TimeUnit.SECONDS)
+            assertEquals(listOf("recovered", "lost"), events.toList())
+        } finally { release.countDown(); workers.shutdownNow() }
+    }
+    @Test fun `Stop during a USB retry sleep is normal cancellation not an uncaught process crash`() {
+        val active = AtomicBoolean(true)
+        val sleeping = CountDownLatch(1)
+        val uncaught = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val worker = Thread {
+            runCaptureLoopWhileActive(active::get) {
+                sleeping.countDown()
+                Thread.sleep(60_000)
+            }
+        }.apply { uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> uncaught.set(error) } }
+        try {
+            worker.start()
+            assertTrue(sleeping.await(10, TimeUnit.SECONDS))
+            active.set(false)
+            worker.interrupt()
+            worker.join(10_000)
+            assertFalse(worker.isAlive)
+            assertNull(uncaught.get(), "InterruptedException must not reach Android's process-killing handler")
+        } finally { active.set(false); worker.interrupt(); worker.join(10_000) }
+    }
+    @Test fun `unexpected active interruption resumes capture instead of leaving a dead running worker`() {
+        val active = AtomicBoolean(true)
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val uncaught = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val worker = Thread {
+            runCaptureLoopWhileActive(active::get) {
+                if (attempts.incrementAndGet() == 1) {
+                    Thread.currentThread().interrupt()
+                    throw InterruptedException("transient")
+                }
+                assertFalse(Thread.currentThread().isInterrupted)
+                active.set(false)
+            }
+        }.apply { uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> uncaught.set(error) } }
+        worker.start(); worker.join(10_000)
+        assertFalse(worker.isAlive)
+        assertNull(uncaught.get())
+        assertEquals(2, attempts.get())
+    }
+    @Test fun `stopped worker never enters capture`() {
+        var entered = false
+        runCaptureLoopWhileActive({ false }) { entered = true }
+        assertFalse(entered)
+    }
     @Test fun `cleanup failures retry without reopening admission or repeating the Stop fence`() {
         val dispatcher = RecordingStopDispatcher(retryDelayMillis = 1)
         val attempts = java.util.concurrent.atomic.AtomicInteger()

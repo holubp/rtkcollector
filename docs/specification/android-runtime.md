@@ -304,10 +304,22 @@ not block the service callback on TX or native shutdown. Normal transport
 replacement, baud transitions, probes and correction writes MUST share one TX
 admission rule; cancellation-close remains available to interrupt blocked IO.
 Reconnected device identity MUST be published for subsequent detach detection.
+Recovery MUST work without an Activity: the recording service requests missing
+USB consent at most once per session/attachment, keeps retrying access without
+repeated dialogs after denial, and rejects stale consent callbacks after Stop,
+detach or a newer attachment/session. Permission and platform USB events MUST
+read `UsbManager.EXTRA_DEVICE`, separately from app-specific Start payloads.
+Grant/open alone MUST NOT clear loss alarms; actual receiver-byte recovery is
+required. While waiting, a dead handle MUST NOT overwrite permission guidance
+with repeated read errors. Recovery-stage changes MUST enter minimal diagnostics.
+Expected Stop interruption MUST NOT escape the capture thread and kill the app;
+unexpected interruption while still active MUST not leave a silently dead worker.
 
 Verification:
 - Automated: reconnect policy tests where practical.
 - Automated: blocked TX/Stop/transition ordering and stale-promotion tests.
+- Automated: Stop during retry sleep, active interruption, consent deduplication,
+  stale callbacks and real platform USB extra extraction.
 - Manual: disconnect and reconnect receiver during recording.
 
 ### ANDROID-USB-003: Silent Receiver RX Stalls Are Degraded USB Failures

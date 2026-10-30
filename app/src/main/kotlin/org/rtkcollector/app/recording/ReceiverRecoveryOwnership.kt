@@ -4,6 +4,18 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
+/** Stop cancellation must never reach Android's process-killing uncaught handler. */
+internal fun runCaptureLoopWhileActive(active: () -> Boolean, capture: () -> Unit) {
+    while (active()) {
+        try {
+            capture()
+            return
+        } catch (_: InterruptedException) {
+            Thread.interrupted()
+        }
+    }
+}
+
 internal fun runUsbReconnectAttempt(active: () -> Boolean, failed: (Throwable) -> Unit, attempt: () -> Boolean): Boolean {
     if (!active()) return false
     return try { attempt() && active() } catch (failure: Throwable) {
@@ -14,6 +26,18 @@ internal fun runUsbReconnectAttempt(active: () -> Boolean, failed: (Throwable) -
 }
 
 data class UsbConnectionLease(val generation: Long, val deviceId: Int)
+
+/** Only short in-memory publication belongs here, never USB IO or writer teardown. */
+internal class ReceiverReadRecoveryFence {
+    private var revision = 0L
+    @Synchronized fun beforeRead(): Long = revision
+    @Synchronized fun detached(publish: () -> Unit) { revision++; publish() }
+    @Synchronized fun publish(readRevision: Long, allowed: () -> Boolean = { true }, publish: () -> Unit): Boolean {
+        if (readRevision != revision || !allowed()) return false
+        publish()
+        return true
+    }
+}
 
 /** This lock protects only assignments, never USB IO, TX admission, or writer teardown. */
 class UsbReconnectIdentity {

@@ -193,6 +193,11 @@ unchanged.
   Never transplant voice-recording SCO/global-mode setup or final-cue delays into
   GNSS Stop, which must silence alarms without delaying raw finalization.
 - Empty USB reads during an active recording are not proof of healthy capture.
+- Treat capture-worker retry interruption as cancellation, not an uncaught app
+  exception. USB reconnect permission belongs to the service and must reject
+  stale per-attachment/session results; use Android's `UsbManager.EXTRA_DEVICE`
+  for platform events, not the app-specific Start payload key. Keep permission
+  receivers independent of optional alarm initialization.
   If receiver-originated bytes stop beyond the configured stall threshold, the
   foreground service must persist a session event, report degraded USB capture
   and attempt receiver reconnect/re-init while preserving existing artifacts.

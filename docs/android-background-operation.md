@@ -72,6 +72,22 @@ before session writers are opened. If Start requests permission, the user must
 approve the Android dialog and press Start again; V1 does not auto-start
 recording from the permission callback.
 
+During an existing recording, the service requests missing USB permission once
+per attachment, even if the Activity is absent. Approving access allows the
+existing worker to reopen/reinitialize the receiver in the same session; it does
+not create a new recording. Denial does not repeatedly reopen the dialog: reconnect
+the receiver to try consent again. Android may require unlocking the screen to
+approve access. Selecting RtkCollector as the default USB handler can simplify
+this, but recovery must not depend on that choice. Late callbacks after Stop,
+detach or a new session cannot resume capture or issue receiver commands.
+
+While access is unavailable, the service preserves session files and keeps paced
+recovery attempts active. Minimal diagnostics distinguish receiver absence,
+permission pending/denied, reopening, awaiting receiver bytes and actual byte
+recovery. Alarms do not clear merely because access was granted or a port opened.
+Stop interruption during a retry wait is normal cancellation, never an uncaught
+exception that may terminate the process.
+
 Silent USB reads are not healthy recording. If the receiver produces no bytes
 for the configured watchdog interval, the foreground service reports degraded
 USB capture, writes a session event and attempts to reopen the selected receiver

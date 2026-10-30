@@ -55,6 +55,11 @@ and deliberate Stop silences them. See
 [Recording Alarms](docs/user-workflows.md#recording-alarms) for Android and watch
 delivery limitations.
 
+If USB disconnects during recording, RtkCollector keeps the existing session and
+retries connection. Approve USB access if Android asks; you may need to unlock
+the phone. After denial, reconnect the receiver to request access again. A port
+reopening alone does not silence the connection alarm: receiver bytes must resume.
+
 ## Development Status
 
 This repository is in experimental bootstrap status. The current code includes

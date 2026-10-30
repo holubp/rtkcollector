@@ -16,6 +16,87 @@ import org.rtkcollector.app.alarms.*
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33, 35])
 class RecordingAlarmServiceTest {
+    @Test fun `queued RX recovered health event cannot undo a later detach`() {
+        val owner = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = owner.get()
+        fun field(name: String) = RecordingForegroundService::class.java.getDeclaredField(name).apply { isAccessible = true }
+        try {
+            val monitor = field("recordingHealthMonitor").get(service) as org.rtkcollector.core.capture.RecordingHealthMonitor
+            monitor.reset(0)
+            monitor.recordReceiverRead(0, 60_000)
+            val recovered = monitor.recordReceiverRead(10, 60_001)
+            assertTrue(recovered.contains(org.rtkcollector.core.capture.RecordingHealthEvent.ReceiverRxRecovered))
+            val lost = field("alarmReceiverLost").get(service) as java.util.concurrent.atomic.AtomicBoolean
+            lost.set(true)
+            (field("usbRecoveryNeeded").get(service) as java.util.concurrent.atomic.AtomicBoolean).set(true)
+            val before = field("state").get(service)
+            RecordingForegroundService::class.java.declaredMethods.single { it.name == "handleRecordingHealthEvents" && it.parameterCount == 2 }
+                .apply { isAccessible = true }.invoke(service, recovered, null)
+            assertTrue(lost.get())
+            assertSame(before, field("state").get(service))
+        } finally { owner.destroy() }
+    }
+    @Test fun `accepted permission reply changes consent only and never repaints recovered service state`() {
+        val owner = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = owner.get()
+        fun field(name: String) = RecordingForegroundService::class.java.getDeclaredField(name).apply { isAccessible = true }
+        val active = field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean
+        try {
+            val device = org.robolectric.shadow.api.Shadow.newInstanceOf(android.hardware.usb.UsbDevice::class.java)
+            val consent = field("usbConsent").get(service) as UsbRecoveryConsent
+            active.set(true)
+            consent.begin(7); consent.observe(device.deviceId)
+            val ticket = requireNotNull(consent.request())
+            val before = field("state").get(service)
+            val receiver = field("usbPermissionReceiver").get(service) as android.content.BroadcastReceiver
+            receiver.onReceive(service, usbConsentIntent(service, ticket)
+                .putExtra(android.hardware.usb.UsbManager.EXTRA_DEVICE, device)
+                .putExtra(android.hardware.usb.UsbManager.EXTRA_PERMISSION_GRANTED, false))
+            assertTrue(consent.denied)
+            assertSame(before, field("state").get(service))
+            consent.accessAvailable()
+            receiver.onReceive(service, usbConsentIntent(service, ticket)
+                .putExtra(android.hardware.usb.UsbManager.EXTRA_DEVICE, device))
+            assertSame(before, field("state").get(service))
+            assertFalse(consent.denied)
+        } finally { active.set(false); owner.destroy() }
+    }
+
+    @Test fun `queued consent request is fenced by Stop or next session before main dispatch`() {
+        val owner = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = owner.get()
+        fun field(name: String) = RecordingForegroundService::class.java.getDeclaredField(name).apply { isAccessible = true }
+        val active = field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean
+        try {
+            val device = org.robolectric.shadow.api.Shadow.newInstanceOf(android.hardware.usb.UsbDevice::class.java)
+            val consent = field("usbConsent").get(service) as UsbRecoveryConsent
+            active.set(true); consent.begin(7); consent.observe(device.deviceId)
+            val request = RecordingForegroundService::class.java.getDeclaredMethod("requestRecoveryPermission", android.hardware.usb.UsbDevice::class.java)
+                .apply { isAccessible = true }
+            request.invoke(service, device)
+            active.set(false); consent.stop()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertNull(field("usbPermissionIntent").get(service))
+            active.set(true); consent.begin(8); consent.observe(device.deviceId)
+            request.invoke(service, device)
+            consent.begin(9); consent.observe(device.deviceId)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertNull(field("usbPermissionIntent").get(service))
+        } finally { active.set(false); owner.destroy() }
+    }
+    @Test fun `USB recovery permission intent keeps ticket identity and uses Android device extra`() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val ticket = UsbConsentTicket(7, 20, 1)
+        val intent = usbConsentIntent(context, ticket)
+        assertEquals(context.packageName, intent.`package`)
+        assertEquals(ticket, usbConsentTicket(intent))
+        assertFalse(intent.filterEquals(usbConsentIntent(context, ticket.copy(nonce = 2))))
+        assertTrue(usbConsentFilter().matchData(intent.type, intent.scheme, intent.data) >= 0)
+        assertTrue(usbConsentPendingIntent(context, ticket) != usbConsentPendingIntent(context, ticket.copy(nonce = 2)))
+        val device = org.robolectric.shadow.api.Shadow.newInstanceOf(android.hardware.usb.UsbDevice::class.java)
+        assertSame(device, Intent().putExtra(android.hardware.usb.UsbManager.EXTRA_DEVICE, device).platformUsbDevice())
+        assertNull(Intent().putExtra("usbDevice", device).platformUsbDevice())
+    }
     @Test fun `deliberate Stop fences an already queued delivery failure`() {
         val owner = Robolectric.buildService(RecordingForegroundService::class.java).create()
         val service = owner.get()

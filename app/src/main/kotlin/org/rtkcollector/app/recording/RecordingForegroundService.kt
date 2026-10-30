@@ -419,6 +419,12 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private val runtimeLock = Any()
     private val receiverTx = ReceiverTxGate()
     private val usbIdentity = UsbReconnectIdentity()
+    private val usbReadFence = ReceiverReadRecoveryFence()
+    private val usbConsent = UsbRecoveryConsent()
+    private val usbRecoveryNeeded = AtomicBoolean(false)
+    @Volatile private var usbRecoveryStage: String? = null
+    private var usbPermissionRegistered = false
+    private var usbPermissionIntent: android.app.PendingIntent? = null
     private val stopDispatcher = RecordingStopDispatcher()
     private var ntripRateWindowStartedAtMillis: Long = 0L
     private var ntripRateWindowCorrectionBytes: Long = 0L
@@ -488,10 +494,57 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private var alarmUsbRegistered = false
     private val alarmUsbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val device = intent.usbDevice() ?: return
+            val device = intent.platformUsbDevice() ?: return
+            usbConsent.detached(device.deviceId)
             if (running.get() && usbIdentity.matches(device.deviceId)) {
-                alarmReceiverLost.set(true)
-                raiseAlarm(RecordingAlarmEvidence.CONNECTION, "USB receiver disconnected.")
+                usbReadFence.detached {
+                    usbRecoveryNeeded.set(true)
+                    alarmReceiverLost.set(true)
+                    state = state.copy(rawRecordingActive = false)
+                    raiseAlarm(RecordingAlarmEvidence.CONNECTION, "USB receiver disconnected.")
+                }
+            }
+        }
+    }
+
+    private val usbPermissionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            runCatching {
+                val ticket = usbConsentTicket(intent) ?: return
+                val device = intent.platformUsbDevice() ?: return
+                if (device.deviceId != ticket.deviceId || !running.get()) return
+                val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                if (!usbConsent.complete(ticket, granted)) return
+                recordRuntimeDiagnostic(DiagnosticCategory.USB, "NOTICE",
+                    { if (granted) "USB permission result: granted." else "USB permission result: denied." })
+            }.onFailure { recordRuntimeDiagnostic(DiagnosticCategory.USB, "ERROR", { "USB permission result could not be processed; recovery continues." }) }
+        }
+    }
+
+    @Synchronized private fun usbRecoveryStatus(stage: String, message: String) {
+        if (!running.get() || usbRecoveryStage == stage) return
+        usbRecoveryStage = stage
+        recordRuntimeDiagnostic(DiagnosticCategory.USB, "NOTICE", { "USB recovery: $message" })
+        state = state.copy(lastError = message, errorCategory = RecordingErrorCategory.USB,
+            errorSeverity = RecordingErrorSeverity.DEGRADED, rawRecordingActive = false)
+        runCatching { broadcastState() }
+    }
+
+    private fun requestRecoveryPermission(device: UsbDevice) {
+        val ticket = usbConsent.request() ?: return
+        usbRecoveryStatus("permission-pending", "Approve USB permission to resume receiver recording.")
+        alarmMain.post {
+            runCatching {
+                if (!running.get() || !usbConsent.isCurrent(ticket)) return@post
+                check(usbPermissionRegistered) { "USB permission receiver unavailable." }
+                usbPermissionIntent?.cancel()
+                val pending = usbConsentPendingIntent(this, ticket)
+                usbPermissionIntent = pending
+                if (!running.get() || !usbConsent.isCurrent(ticket)) { pending.cancel(); return@post }
+                (getSystemService(USB_SERVICE) as UsbManager).requestPermission(device, pending)
+            }.onFailure {
+                if (usbConsent.complete(ticket, false)) recordRuntimeDiagnostic(DiagnosticCategory.USB, "ERROR",
+                    { "USB permission request failed. Reconnect the receiver and approve USB access." })
             }
         }
     }
@@ -502,6 +555,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         routineNotificationDelivery = runCatching { RecordingNotificationRuntime.get(this) }.getOrNull()
         diagnosticSubscription = diagnosticsSettings.observeChanges { refreshDiagnostics() }
         refreshDiagnostics()
+        // USB recovery is independent of optional alarm initialization.
+        runCatching {
+            ContextCompat.registerReceiver(this, alarmUsbReceiver, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED), ContextCompat.RECEIVER_NOT_EXPORTED)
+            alarmUsbRegistered = true
+            ContextCompat.registerReceiver(this, usbPermissionReceiver, usbConsentFilter(), ContextCompat.RECEIVER_NOT_EXPORTED)
+            usbPermissionRegistered = true
+        }.onFailure { recordRuntimeDiagnostic(DiagnosticCategory.USB, "ERROR", { "USB recovery event registration failed; reconnect permission may require reopening the app." }) }
         runCatching {
             alarmEffects = AlarmEffectsRuntime.get(this).also { it.attach(this) }
             alarmStateBroadcaster = AlarmStateBroadcaster.get(this)
@@ -525,8 +585,6 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     }
                 }
             }
-            ContextCompat.registerReceiver(this, alarmUsbReceiver, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED), ContextCompat.RECEIVER_NOT_EXPORTED)
-            alarmUsbRegistered = true
             refreshAlarmSettings()
         }.onFailure { recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Alarm delivery initialization failed; recording remains available." }) }
     }
@@ -578,6 +636,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         runCatching { alarmSettingsSubscription?.close() }
         alarmSettingsIo.shutdownNow()
         if (alarmUsbRegistered) runCatching { unregisterReceiver(alarmUsbReceiver) }
+        if (usbPermissionRegistered) runCatching { unregisterReceiver(usbPermissionReceiver) }
+        usbPermissionIntent?.cancel()
         bestSolutionTicker?.cancel(false)
         bestSolutionTicker = null
         bestSolutionExecutor.shutdownNow()
@@ -1002,7 +1062,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             else startForeground(NOTIFICATION_ID, notification(lastNotificationText))
             acquireWakeLock()
             val usbDevice = intent.usbDevice() ?: error("No USB device supplied.")
-            usbIdentity.begin(usbDevice.deviceId)
+            usbIdentity.begin(usbDevice.deviceId).also { usbConsent.begin(it.generation) }
+            usbConsent.observe(usbDevice.deviceId)
+            usbRecoveryNeeded.set(false)
+            usbRecoveryStage = null
             val usbManager = getSystemService(USB_SERVICE) as UsbManager
             if (!usbManager.hasPermission(usbDevice)) {
                 error("USB permission has not been granted.")
@@ -1293,7 +1356,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             val startedCaptureThread = Thread(
                 {
                     try {
-                        captureLoop(recorder)
+                        runCaptureLoopWhileActive(running::get) { captureLoop(recorder) }
                     } finally {
                         synchronized(captureThreadLock) {
                             if (captureThread === Thread.currentThread()) {
@@ -1342,6 +1405,17 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
 
     private fun captureLoop(recorder: SessionRawRecorder) {
         while (running.get()) {
+            if (usbRecoveryNeeded.get()) {
+                try {
+                    synchronized(runtimeLock) { recorder.flushRawIfDue(SystemClock.elapsedRealtime()) }
+                } catch (failure: Throwable) {
+                    if (!stopForFatalRawStorageFailure(failure)) handleCaptureReadOrRawFlushFailure(failure, recorder)
+                    continue
+                }
+                if (!tryReconnectUsb(recorder) && running.get()) Thread.sleep(1_000)
+                continue
+            }
+            val readRevision = usbReadFence.beforeRead()
             val bytesRead = try {
                 synchronized(runtimeLock) {
                     runtime?.readOnce(READ_BUFFER_BYTES) ?: 0
@@ -1360,7 +1434,6 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 continue
             }
             if (!running.get()) return
-            if (bytesRead > 0 && alarmReceiverLost.getAndSet(false)) recoverAlarm(RecordingAlarmEvidence.CONNECTION)
             runCatching {
                 val receiverHealthEvents = recordingHealthMonitor.recordReceiverRead(bytesRead, nowMillis)
                 recordingHealthMonitor.recordReceiverProtocolBytes(bytesRead, nowMillis)
@@ -1373,7 +1446,14 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     nowMillis = nowMillis,
                     correctionsExpected = shouldExpectCorrectionBytes(),
                 )
-                state = state.copy(
+                var recovered = false
+                val published = usbReadFence.publish(readRevision, { !usbRecoveryNeeded.get() }) {
+                    if (bytesRead > 0 && alarmReceiverLost.getAndSet(false)) {
+                        recoverAlarm(RecordingAlarmEvidence.CONNECTION)
+                        usbRecoveryStage = null
+                        recovered = true
+                    }
+                    state = state.copy(
                     running = true,
                     receiverRxBytes = recorder.receiverRxBytes,
                     txToReceiverBytes = recorder.txToReceiverBytes,
@@ -1385,6 +1465,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 ).let { updated ->
                     if (bytesRead > 0 && !alarmProtocolLost.get()) updated.clearRecoverableUsbError() else updated
                 }
+                }
+                if (!published) return@runCatching
+                if (recovered) recordRuntimeDiagnostic(DiagnosticCategory.USB, "NOTICE", { "USB recovery: receiver bytes resumed." })
                 handleRecordingHealthEvents(receiverHealthEvents, recorder)
                 handleRecordingHealthEvents(receiverProtocolHealthEvents, recorder)
                 handleRecordingHealthEvents(correctionHealthEvents, recorder)
@@ -1397,8 +1480,11 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private fun handleCaptureReadOrRawFlushFailure(failure: Throwable, recorder: SessionRawRecorder) {
         if (!running.get()) return
         if (stopForFatalRawStorageFailure(failure)) return
-        alarmReceiverLost.set(true)
-        raiseAlarm(RecordingAlarmEvidence.CONNECTION, "USB capture unavailable; reconnecting.")
+        usbReadFence.detached {
+            alarmReceiverLost.set(true)
+            usbRecoveryNeeded.set(true)
+            raiseAlarm(RecordingAlarmEvidence.CONNECTION, "USB capture unavailable; reconnecting.")
+        }
         try {
             synchronized(runtimeLock) {
                 recorder.flushRawNow(SystemClock.elapsedRealtime())
@@ -1484,14 +1570,20 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             val usbManager = getSystemService(USB_SERVICE) as UsbManager
             val device = usbManager.deviceList.values.firstOrNull { candidate ->
                 candidate.vendorId == vid && candidate.productId == pid
-            } ?: return@attempt false
-            if (!usbManager.hasPermission(device)) {
-                state = state.copy(lastError = "USB receiver reconnected but permission is not granted. Approve USB permission to resume.",
-                    errorCategory = RecordingErrorCategory.USB, errorSeverity = RecordingErrorSeverity.DEGRADED,
-                    rawRecordingActive = false)
-                broadcastState()
+            }
+            usbConsent.observe(device?.deviceId)
+            if (device == null) {
+                usbRecoveryStatus("absent", "Receiver absent; waiting for USB reconnection.")
                 return@attempt false
             }
+            if (!usbManager.hasPermission(device)) {
+                if (usbConsent.denied) usbRecoveryStatus("permission-denied",
+                    "USB permission denied. Reconnect the receiver to request permission again.")
+                else requestRecoveryPermission(device)
+                return@attempt false
+            }
+            usbConsent.accessAvailable()
+            usbRecoveryStatus("opening", "USB access available; reopening and initializing receiver.")
             synchronized(runtimeLock) {
                 receiverTx.run({ running.get() && usbIdentity.isCurrent(lease) }) {
                     runCatching { transport?.close() }
@@ -1511,6 +1603,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                             activeSerialBaud = activeTargetBaud
                             transport = usbTransport
                             runtime = captureRuntime
+                            usbRecoveryNeeded.set(false)
                         }
                         check(promoted) { "Recording stopped during USB promotion." }
                     } finally {
@@ -1522,6 +1615,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             check(running.get() && usbIdentity.isCurrent(lease)) { "Recording stopped during USB reconnect." }
             recordSessionEvent("usb-reconnect-succeeded", "USB receiver reconnected and receiver profile was re-applied.")
             state = state.awaitReceiverBytesAfterReconnect(alarmProtocolLost.get())
+            usbRecoveryStatus("awaiting-rx", "Receiver reopened; waiting for receiver bytes.")
             broadcastState()
             true
             } finally { usbIdentity.finishAttempt(lease, SystemClock.elapsedRealtime()) }
@@ -1584,7 +1678,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     val txResult = if (sendCorrectionsToReceiver) {
                         runCatching {
                             val expected = runtime ?: error("USB runtime is not available.")
-                            receiverTx.run({ running.get() && runtime === expected }) {
+                            receiverTx.run({ running.get() && !usbRecoveryNeeded.get() && runtime === expected }) {
                                 expected.sendToReceiver(bytes)
                             }
                         }
@@ -1604,7 +1698,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         ntripRates = ntripRatesDisplay(),
                         txToReceiverBytes = recorder.txToReceiverBytes,
                         correctionsActive = txResult.isSuccess,
-                        lastError = txResult.exceptionOrNull()?.message ?: state.lastError,
+                        lastError = if (usbRecoveryNeeded.get()) state.lastError else txResult.exceptionOrNull()?.message ?: state.lastError,
                         errorCategory = if (txResult.isFailure) RecordingErrorCategory.USB else state.errorCategory,
                         errorSeverity = if (txResult.isFailure) RecordingErrorSeverity.DEGRADED else state.errorSeverity,
                     )
@@ -1958,13 +2052,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     updateForegroundNotification(force = true)
                 }
                 RecordingHealthEvent.ReceiverRxRecovered -> {
-                    alarmReceiverLost.set(false)
-                    recoverAlarm(RecordingAlarmEvidence.CONNECTION)
+                    // State/alarm recovery was already published with the read epoch.
+                    // This delayed advisory event must not undo a newer detach.
                     val message = "USB receiver bytes resumed."
                     recordSessionEvent("receiver-rx-recovered", message)
-                    state = state.copy(rawRecordingActive = true).let {
-                        if (!alarmProtocolLost.get()) it.clearRecoverableUsbError() else it
-                    }
                     broadcastState()
                     updateForegroundNotification(force = true)
                 }
@@ -2002,6 +2093,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 is RecordingHealthEvent.ReceiverProtocolRecovered -> {
                     val message = "Valid ${event.receiverFamily} receiver protocol frames resumed."
                     recordSessionEvent("receiver-protocol-recovered", message)
+                    usbReadFence.publish(usbReadFence.beforeRead(), { !usbRecoveryNeeded.get() && !alarmReceiverLost.get() }) {
                     if (state.errorCategory == RecordingErrorCategory.USB &&
                         state.errorSeverity == RecordingErrorSeverity.DEGRADED
                     ) {
@@ -2013,6 +2105,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         )
                     } else {
                         state = state.copy(rawRecordingActive = true)
+                    }
                     }
                     broadcastState()
                     updateForegroundNotification(force = true)
@@ -2721,6 +2814,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         }
         val wasRunning = running.getAndSet(false)
         usbIdentity.stop()
+        usbConsent.stop()
+        usbRecoveryNeeded.set(false)
+        alarmMain.post { usbPermissionIntent?.cancel(); usbPermissionIntent = null }
         activeSetupSessionId?.let(RecordingSetupBridge::stop)
         activeSetupSessionId = null
         lastSetupReceipt = null

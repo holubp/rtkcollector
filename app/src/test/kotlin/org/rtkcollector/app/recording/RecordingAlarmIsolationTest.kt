@@ -12,6 +12,37 @@ import java.util.concurrent.Executors
 
 class RecordingAlarmIsolationTest {
     @TempDir lateinit var directory: Path
+    @Test fun `active capture interruption preserves the same raw writer and subsequent bytes`() {
+        val active = java.util.concurrent.atomic.AtomicBoolean(true)
+        val entered = CountDownLatch(1)
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val uncaught = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val writers = PathRecordingSessionWriters.open(directory)
+        val first = byteArrayOf(0, 1, -1, 36)
+        val second = byteArrayOf(13, 10, -45, 0)
+        val worker = Thread {
+            runCaptureLoopWhileActive(active::get) {
+                if (attempts.incrementAndGet() == 1) {
+                    writers.appendReceiverRx(first)
+                    entered.countDown()
+                    Thread.sleep(60_000)
+                } else {
+                    writers.appendReceiverRx(second)
+                    active.set(false)
+                }
+            }
+        }.apply { uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> uncaught.set(error) } }
+        try {
+            worker.start()
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+            worker.interrupt()
+            worker.join(10_000)
+            assertFalse(worker.isAlive)
+            assertTrue(closeRecordingSessionWriters(writers, null).closeReport.issues.isEmpty())
+            assertArrayEquals(first + second, Files.readAllBytes(directory.resolve("receiver-rx.raw")))
+            assertNull(uncaught.get())
+        } finally { active.set(false); worker.interrupt(); worker.join(10_000); writers.closeAll() }
+    }
     @Test fun `blocked player creation after Stop cannot delay raw close or start late audio`() {
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val current = java.util.concurrent.atomic.AtomicBoolean(true)

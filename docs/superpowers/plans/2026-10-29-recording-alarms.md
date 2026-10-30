@@ -121,7 +121,7 @@ is intended on, and app stability. These are release prerequisites, not deferral
 | A2 | Astra-medium: focused audit and fix plan | Done | Eight concrete findings F1-F8 below; read-only review |
 | A3 | Controller: implement audit fixes | Done | Focused regressions and fresh clean full gate GREEN; Astra source-closed all fixes |
 | A4 | Same Astra: independent re-review | Source-closed | Astra re-reviewed original scope and all F1-F8, then epoch-retirement correction; no remaining material source findings. Tests/CI/device evidence separate. |
-| A5 | Controller: final gates and RC9 | Open | Fresh full gate, clean-host CI and stable-signed artifact verification |
+| A5 | Controller: final gates and RC9 | Done; field checks separate | Local 1,341/192 and host 2,470/346 GREEN; full release lint/native assembly/signing-tool checks pass. Stable build 41019722166, independent artifact verification and published RC9 confirmed. |
 
 Routing evidence: Astra child 01a18a4a-64a8-72a0-b4e5-b8db9eb4fb2f runtime
 turn_context reports model gpt-6-astra, effort medium. Initial reviewer falsely
@@ -201,7 +201,7 @@ A3 concrete implementation/test checkpoints:
   Test blocked TX, queued cancellation, transition/probe exclusion, no promotion
   after Stop and at-most-once shutdown. Update permission guidance and docs.
 - [x] A4 Astra re-review fixes and current DND/Bluetooth delta with actual receipts.
-- [ ] A5 one combined final local gate + GitHub CI; verify stable-signed RC9 APK.
+- [x] A5 one combined final local gate + GitHub CI; verify stable-signed RC9 APK.
 
 A3 receipts (local, ignored `.superpowers/sdd/2026-10-29-recording-alarms/`):
 `astra-audio-corrected.log`, `astra-integrated-green.log` and
@@ -282,13 +282,43 @@ the caller import. `saf-grants-corrected-green.log` passed all four storage test
 zero failures/errors/skips. The earlier `saf-grants-green.log` is a compilation
 RED receipt, not a pass. No lint baseline or global suppression was added.
 
+Final source gate: CI `41018587649` completed SUCCESS at
+`1bab0d21ffed6eef298a3e3c2d1e2faffc64a3c8`. Downloaded XML proves 2,470 tests /
+346 suites, zero failures/errors/skips. Both full release-lint tasks, pinned
+native debug assembly and disposable signing-tool checks passed. Lint XML has
+no errors. Alarm-related constant warnings are inlined values used behind
+SDK checks; the singleton context warning is application-context-only ownership,
+not a retained Activity. Style/dependency-update warnings do not waive any gate.
+Tag `v1.0-RC9` points to this tested source. Stable-signed draft build
+`41019722166` must finish and its APK be independently checked before publishing.
+
+Publication receipt: build `41019722166` completed SUCCESS. Downloaded APK
+checksum matched `e4378747c5745c204f0bc878f032263663c9d3f6c06083d1a852a2b53d590f43`;
+`apksigner` verified v2/v3 and existing certificate
+`d8047f43b2748198ae69ff773be13d3aa11c8ac36159dd4e6768a3ac2db3e329`.
+Package `org.rtkcollector.app`, version `1.0-RC9` / code `10`, native ARM ABIs,
+alarm WAVs/notices and merged permissions verified. Manifest-decoder type `0x12`
+is the expected connectedDevice/mediaPlayback bitmask, not symbolic text.
+GitHub confirms public prerelease `v1.0-RC9`, published 2026-10-30T07:28:50Z,
+with APK/checksum/signing record and tagged source archive links. Source/tooling
+provenance both equal `1bab0d21ffed6eef298a3e3c2d1e2faffc64a3c8`.
+Physical device, routing, watch, vendor power and high-rate checks remain open;
+publication is not their execution or a strict-assurance checker pass.
+
+Final documentation gate: `pre-push-final-release-record.log` passed on the
+unchanged released implementation. Specification consistency and diff checks
+were repeated after recording publication evidence. The published source ZIP
+was downloaded and its critical implementation/build/pinned-upstream files
+compared byte-for-byte to the release tag. Only this release-status record and
+matrix/plan documentation change after the tag; the APK source tag is not moved.
+
 | Checkpoint | Scope | State | Evidence required |
 | --- | --- | --- | --- |
-| B0 | Approval, canonical requirements and implementation plan | Approved; executing | Owner statement above; ANDROID-ALARM-007 |
-| B1 | Persistent toggle, UI and approved foreground qualifier | Implemented; host persistence checks pending | Focused UI/model and manifest GREEN; Robolectric store tests compile |
+| B0 | Approval, canonical requirements and implementation plan | Done | Owner statement above; ANDROID-ALARM-007 |
+| B1 | Persistent toggle, UI and approved foreground qualifier | Done; physical checks separate | Host SDK 26/27/33 persistence/platform tests GREEN; approved qualifier declared |
 | B2 | Pure device selection and route confirmation/fallback | Done | Focused route-policy and attempt-attribution tests GREEN; independent source review closed |
-| B3 | Routing-capable playback integration | Implemented; final gates pending | 27 focused tests GREEN; source/native-boundary review closed; SDK host/device checks pending |
-| B4 | Final audit, clean-host CI and RC9 release | Open | Full local/host gates; signed APK checksum/certificate receipt |
+| B3 | Routing-capable playback integration | Implemented, not field-tested | Focused and full host tests GREEN; source/native-boundary reviews closed; physical routing/audibility checks open |
+| B4 | Final audit, clean-host CI and RC9 release | Done; field checks separate | Local/host gates GREEN; stable APK independently verified and RC9 published |
 
 2026-10-30 execution checkpoint: B1 toggle/store/UI and approved foreground
 permission are implemented. B2 pure route policy and B3 clip ownership passed
@@ -502,12 +532,12 @@ are resolved in the approved design. No extra planning reviewer is required.
 | Checkpoint | Owner / scope | State | Required receipt |
 | --- | --- | --- | --- |
 | C0 | Controller: canonical contract and environment | Done | Canonical contract present; owner approved RC9-only alternate assurance gates and normal detached-device permission |
-| C1 | Pure policy + persistent settings | Implemented; host persistence test pending | `bdd99b7`; focused tests GREEN |
-| C2 | Independent effect lanes and Android adapters | Implemented; source audit corrections closed | `e9ff9d0`; close/invalidation RED then GREEN; host/device delivery still pending |
+| C1 | Pure policy + persistent settings | Done; device checks separate | `bdd99b7` foundation; final host policy/persistence tests GREEN |
+| C2 | Independent effect lanes and Android adapters | Implemented, not field-tested | `e9ff9d0` foundation; close/invalidation regressions and final host tests GREEN; source audit closed; physical delivery checks remain open |
 | C3 | Source evidence and detection | Implemented; not field-tested | Source selection and epoch/freshness tests GREEN |
-| C4 | Service lifecycle and terminal alerts | Implemented; host/device checks pending | Permission approved and declared; original review and Astra F1-F8 source-closed; SDK tests compile locally |
+| C4 | Service lifecycle and terminal alerts | Implemented, not field-tested | Permission approved and declared; original review and Astra F1-F8 source-closed; host tests GREEN; physical lifecycle checks open |
 | C5 | Settings, sound picker and operational actions | Implemented; device checks pending | Menu/controls wired; integrated Kotlin compilation GREEN |
-| C6 | Integration, docs and independent audit | In progress | Whole-delta source audits closed; final full gates and RC9 publication remain |
+| C6 | Integration, docs and independent audit | Done; field checks separate | Whole-delta source audits/gates closed; stable-signed RC9 published. Physical validation remains explicitly unexecuted. |
 
 Integration gate receipt: `pre-push-integration.log` completed successfully on
 2026-10-29 after a clean rebuild: 1,282 tests across 181 current app/core/receiver

@@ -11,6 +11,7 @@ class AlarmSettingsStore(context: Context) {
         val root = JSONObject(preferences.getString("snapshot", "{}") ?: "{}")
         val defaults = AlarmSettingsSnapshot.defaults()
         defaults.copy(positionLossDelayMillis = root.optLong("delay", 5_000).takeIf { it in 1_000..60_000 } ?: 5_000,
+            preferBluetoothAudio = root.optBoolean("preferBluetoothAudio", false),
             categories = AlarmCategory.entries.associateWith { category ->
                 val item = root.optJSONObject(category.name) ?: JSONObject()
                 val choice = item.optString("uri").takeIf(::isAlarmSoundUri)?.let(AlarmSoundChoice::SystemNotification)
@@ -22,6 +23,7 @@ class AlarmSettingsStore(context: Context) {
 
     fun write(snapshot: AlarmSettingsSnapshot) {
         val root = JSONObject().put("delay", snapshot.positionLossDelayMillis)
+            .put("preferBluetoothAudio", snapshot.preferBluetoothAudio)
         snapshot.categories.forEach { (category, value) ->
             val item = JSONObject().put("visual", value.visual).put("acoustic", value.acoustic)
             when (val sound = value.sound) {

@@ -229,6 +229,7 @@ import org.rtkcollector.app.ui.common.ProfileSingleLineTextField
 import org.rtkcollector.app.ui.diagnostics.AppDiagnosticsScreen
 import org.rtkcollector.app.ui.alarms.AlarmSettingsScreen
 import org.rtkcollector.app.ui.alarms.AlarmUiState
+import org.rtkcollector.app.ui.alarms.rememberAlarmDndWarning
 import org.rtkcollector.app.alarms.AlarmActions
 import org.rtkcollector.app.ui.profiles.SettingsSetListScreen
 import org.rtkcollector.app.ui.profiles.SettingsSetListState
@@ -1473,9 +1474,9 @@ fun RtkCollectorApp(
                         profileRevision++
                         val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
                         val message = if (granted) {
-                            UsbStartAccessDecision.permissionGrantedMessage()
+                            UsbStartAccessDecision.permissionGrantedMessage(state.isRecording)
                         } else {
-                            UsbStartAccessDecision.permissionDeniedMessage()
+                            UsbStartAccessDecision.permissionDeniedMessage(state.isRecording)
                         }
                         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                     }
@@ -1773,6 +1774,7 @@ fun RtkCollectorApp(
             }
             when (screen) {
                 AppScreen.HOME -> Column(modifier = Modifier.fillMaxSize()) {
+                    val alarmDndWarning = rememberAlarmDndWarning(state.isRecording)
                     val homeState = when (pendingSetupSelection?.option) {
                         ActiveSetupOptionKey.NTRIP_MOUNTPOINT -> state.copy(status = state.status.copy(
                             mountpoint = "${state.status.mountpoint} · Change pending",
@@ -1792,13 +1794,21 @@ fun RtkCollectorApp(
                             startInProgress = startInProgress,
                             recordingReliabilityWarning = batteryWarning.message.takeIf { batteryWarning.show },
                             loggingAdvisory = diagnosticLevel.advisory,
-                            alarmContent = if (alarmUiState.hasContent) ({
+                            alarmContent = if (alarmUiState.hasContent || alarmDndWarning != null) ({
                                 Column {
                                     (alarmUiState.message ?: "Recording stopped. Alarm active.".takeIf { alarmUiState.terminalPending })?.let {
                                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                                     }
                                     alarmUiState.delivery?.let {
                                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    alarmDndWarning?.let {
+                                        Surface(color = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.fillMaxWidth()) {
+                                            Text(it, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                                style = MaterialTheme.typography.labelMedium)
+                                        }
                                     }
                                     if (alarmUiState.hasActions) Row {
                                         TextButton(onClick = {
@@ -1877,7 +1887,7 @@ fun RtkCollectorApp(
                                 }
                             },
                             onUsbPermission = {
-                                requestSelectedUsbPermission(context, selectedSettingsSetId)
+                                requestSelectedUsbPermission(context, selectedSettingsSetId, state.isRecording)
                                 profileRevision++
                             },
                             onMockGps = {
@@ -3066,7 +3076,7 @@ fun RtkCollectorApp(
                                 ).also { consoleController = it }
                                 controller.connect().onFailure { error ->
                                     if (error.message == DEVICE_CONSOLE_PERMISSION_REQUIRED) {
-                                        requestUsbPermissionForProfile(context, profile.id)
+                                        requestUsbPermissionForProfile(context, profile.id, state.isRecording)
                                         Toast.makeText(
                                             context,
                                             "Approve USB access, then tap Connect again.",
@@ -3157,7 +3167,7 @@ fun RtkCollectorApp(
                                     )
                                     add(
                                         ProfileEditorAction(label = "Request USB permission", onClick = {
-                                            requestUsbPermissionForProfile(context, target.id)
+                                            requestUsbPermissionForProfile(context, target.id, state.isRecording)
                                             profileRevision++
                                         }),
                                     )
@@ -6246,13 +6256,13 @@ private fun persistentReceiverServiceIntent(
         targetBaud?.let { putExtra(RecordingForegroundService.EXTRA_PERSISTENT_TARGET_BAUD, it) }
     }
 
-private fun requestSelectedUsbPermission(context: Context, selectedSettingsSetId: String) {
+private fun requestSelectedUsbPermission(context: Context, selectedSettingsSetId: String, recordingActive: Boolean) {
     val profileStore = ProfileStores(context)
     val settingsSet = profileStore.settingsSets().firstOrNull { it.id == selectedSettingsSetId }
-    requestUsbPermissionForProfile(context, profileStore.activeProfileId(settingsSet, ActiveSetupOptionKey.USB_BAUD))
+    requestUsbPermissionForProfile(context, profileStore.activeProfileId(settingsSet, ActiveSetupOptionKey.USB_BAUD), recordingActive)
 }
 
-private fun requestUsbPermissionForProfile(context: Context, usbProfileId: String?) {
+private fun requestUsbPermissionForProfile(context: Context, usbProfileId: String?, recordingActive: Boolean) {
     val profileStore = ProfileStores(context)
     val usbProfile = usbProfileId?.let { id ->
         profileStore.usbBaudProfiles().firstOrNull { it.id == id }
@@ -6279,7 +6289,7 @@ private fun requestUsbPermissionForProfile(context: Context, usbProfileId: Strin
     requestUsbPermissionForDevice(context, device)
     Toast.makeText(
         context,
-        "USB permission requested. Approve the Android permission dialog, then press Start again.",
+        UsbStartAccessDecision.permissionRequestedMessage(recordingActive),
         Toast.LENGTH_LONG,
     ).show()
 }

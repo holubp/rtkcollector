@@ -12,8 +12,52 @@ import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [26, 27, 33])
 class AlarmPlatformTest {
+    @Test fun `recording notification snapshot adds Stop only for terminal alarm shell`() {
+        val context = RuntimeEnvironment.getApplication()
+        val regular = org.rtkcollector.app.recording.RecordingNotificationRuntime.notification(context, "Recording", null)
+        assertTrue(regular.actions.isNullOrEmpty())
+        val terminal = org.rtkcollector.app.recording.RecordingNotificationRuntime.notification(context, "Recording stopped. Alarm active.", 20)
+        assertEquals("Recording stopped. Alarm active.", terminal.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        assertEquals("Stop alarm", terminal.actions.single().title.toString())
+    }
+    @Test fun `device callback failures are isolated and callbacks after close are ignored`() {
+        val context = RuntimeEnvironment.getApplication()
+        val manager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        var queries = 0
+        val devices = AlarmAudioDevices(manager, android.os.Handler(android.os.Looper.getMainLooper())) {
+            queries++
+            if (queries > 1) error("device service unavailable")
+            emptyList()
+        }
+        val callback = AlarmAudioDevices::class.java.getDeclaredField("callback").let {
+            it.isAccessible = true; it.get(devices) as android.media.AudioDeviceCallback
+        }
+        callback.onAudioDevicesRemoved(emptyArray())
+        assertTrue(devices.devices.isEmpty())
+        val version = devices.version
+        assertEquals(2, queries)
+        devices.close()
+        callback.onAudioDevicesAdded(emptyArray())
+        assertEquals(2, queries)
+        assertEquals(version, devices.version)
+    }
+    @Test fun `routed local playback can be constructed and released without changing communication routing`() {
+        val context = RuntimeEnvironment.getApplication()
+        val manager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        val originalMode = manager.mode
+        val originalSpeaker = manager.isSpeakerphoneOn
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val devices = AlarmAudioDevices(manager, handler)
+        try {
+            val clip = Media3AlarmClip(context, handler,
+                AlarmAudioPlayer.builtinUri(context, BuiltInAlarmSound.SINGLE_LOW), true, devices) { true }
+            clip.stop()
+            assertEquals(originalMode, manager.mode)
+            assertEquals(originalSpeaker, manager.isSpeakerphoneOn)
+        } finally { devices.close() }
+    }
     @Test fun `late clear from an old generation cannot cancel a new recording alarm`() {
         val context = RuntimeEnvironment.getApplication()
         val publisher = AlarmNotificationPublisher(context)

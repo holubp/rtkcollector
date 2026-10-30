@@ -292,6 +292,13 @@ internal fun RecordingServiceState.clearRecoverableUsbError(): RecordingServiceS
         this
     }
 
+internal fun RecordingServiceState.awaitReceiverBytesAfterReconnect(protocolMissing: Boolean = false): RecordingServiceState =
+    copy(rawRecordingActive = false).let { waiting ->
+        if (!protocolMissing && errorCategory == RecordingErrorCategory.USB && errorSeverity == RecordingErrorSeverity.DEGRADED)
+            waiting.copy(lastError = "USB receiver reopened; waiting for receiver bytes.")
+        else waiting
+    }
+
 internal fun RecordingServiceState.recordingErrorSnapshot(): RecordingErrorSnapshot =
     RecordingErrorSnapshot(
         message = lastError,

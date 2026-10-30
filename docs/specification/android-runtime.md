@@ -2,6 +2,23 @@
 
 ## Recording Runtime
 
+### ANDROID-ALARM-008: Do Not Disturb Advisory
+
+Status: Normative
+
+While recording is active and at least one acoustic alarm category is enabled,
+the monitoring screen MUST show a persistent nonmodal advisory when Android Do
+Not Disturb is enabled: audible alarms may not work. The advisory MUST update
+when recording, acoustic settings or DND changes and disappear when any required
+condition no longer holds. Visual-only alarm settings MUST NOT produce this
+audible-alarm advisory. Unknown DND state MUST NOT be represented as confirmed
+on or off. This is an environment advisory, not a recording or connection error.
+Checking/displaying it MUST NOT alter DND, volume, recording or alarm episodes,
+request DND-bypass permission, or perform platform queries on capture workers.
+
+Verification: complete recording/acoustic/DND truth table, live monitoring
+integration and manual DND changes during a recording.
+
 ### ANDROID-ALARM-001: Trustworthy Loss Detection
 
 Status: Normative
@@ -81,6 +98,36 @@ MUST be bounded to 30 seconds. No alarm replay/resurrection after process death
 or guaranteed post-kill delivery may be claimed.
 
 Verification: foreground policy and service/audio tests; Android device validation.
+
+### ANDROID-ALARM-007: Opt-In Bluetooth Routing And Speaker Fallback
+
+Status: Normative
+
+Alarms MUST provide an app-wide persistent Bluetooth-audio toggle, initially
+off and defaulting off for older saved settings. Off MUST preserve normal
+Android routing. On MUST request a connected usable Bluetooth audio output for
+all acoustic categories and previews, verify actual rather than merely preferred
+routing, and immediately request the phone speaker when Bluetooth disconnects
+or cannot play. A failed/unavailable speaker MUST be an explicit audio delivery
+failure, never silent success. A connected notification-only watch is not an
+audio output; notification mirroring remains independent.
+
+Bluetooth becoming usable again MUST permit automatic return without a new alarm
+episode or duplicate playback. Rejected devices MUST NOT be retried on every
+tick: retry requires a device-availability change, new alarm or explicit user
+action. Multiple eligible devices MUST be selected deterministically and the
+current usable choice retained. Actual-route/fallback metadata MUST be separate
+from generic errors; absence of connected Bluetooth alone is not a playback error.
+
+Routing MUST be per-player, preserve SDK 26+, sound selection/fallback, focus,
+preview arbitration, Stop/recovery fences and bounded resource ownership. It MUST
+NOT change global communication/SCO/speakerphone mode, volume or DND. Device,
+provider, decoder and playback work MUST remain isolated from recording,
+correction routing and finalization. Tests MUST distinguish requested, confirmed
+and rejected routes; physical delivery is not proved by a preference setter.
+
+Verification: settings/route-policy/playback/isolation tests; SDK 26/27 and current
+host checks; manual Bluetooth disconnect/reconnect, speaker fallback and routing.
 
 ### ANDROID-SERVICE-001: Foreground Service Owns Recording
 
@@ -224,12 +271,20 @@ Verification:
 
 Status: Normative
 
-During an active recording, USB disconnect/reconnect handling SHOULD attempt to
-reopen the configured receiver and rerun required init sequencing without
-discarding existing session artifacts.
+While recording remains intended on, USB disconnect/reconnect handling MUST
+persistently retry reopening the configured receiver and required init sequencing,
+with bounded pacing and without discarding session artifacts. Recoverable
+enumeration, permission, reporting or open failures MUST NOT escape the capture
+worker. Missing permission requires actionable consent guidance, not an automatic
+recording stop. Stop MUST fence queued TX/re-init/promotion immediately and must
+not block the service callback on TX or native shutdown. Normal transport
+replacement, baud transitions, probes and correction writes MUST share one TX
+admission rule; cancellation-close remains available to interrupt blocked IO.
+Reconnected device identity MUST be published for subsequent detach detection.
 
 Verification:
 - Automated: reconnect policy tests where practical.
+- Automated: blocked TX/Stop/transition ordering and stale-promotion tests.
 - Manual: disconnect and reconnect receiver during recording.
 
 ### ANDROID-USB-003: Silent Receiver RX Stalls Are Degraded USB Failures

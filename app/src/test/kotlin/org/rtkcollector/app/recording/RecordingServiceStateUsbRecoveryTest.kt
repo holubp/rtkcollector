@@ -5,6 +5,18 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class RecordingServiceStateUsbRecoveryTest {
+    @Test fun `reopen without bytes remains degraded and preserves other failure evidence`() {
+        val usb = RecordingServiceState(lastError = "USB lost", errorCategory = RecordingErrorCategory.USB,
+            errorSeverity = RecordingErrorSeverity.DEGRADED, rawRecordingActive = true)
+            .awaitReceiverBytesAfterReconnect()
+        assertEquals(false, usb.rawRecordingActive)
+        assertEquals(RecordingErrorCategory.USB, usb.errorCategory)
+        assertEquals("USB receiver reopened; waiting for receiver bytes.", usb.lastError)
+        val correction = usb.copy(lastError = "Corrections missing", errorCategory = RecordingErrorCategory.NTRIP)
+        assertEquals("Corrections missing", correction.awaitReceiverBytesAfterReconnect().lastError)
+        assertEquals("Protocol missing", usb.copy(lastError = "Protocol missing")
+            .awaitReceiverBytesAfterReconnect(protocolMissing = true).lastError)
+    }
     @Test
     fun `successful usb io clears recoverable usb error`() {
         val recovered = RecordingServiceState(

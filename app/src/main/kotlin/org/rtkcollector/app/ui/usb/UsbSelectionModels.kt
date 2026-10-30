@@ -80,11 +80,17 @@ object UsbStartAccessDecision {
             )
         }
 
-    fun permissionDeniedMessage(): String =
-        "USB permission was denied. Approve USB access before starting recording."
+    fun permissionRequestedMessage(recordingActive: Boolean = false): String =
+        if (recordingActive) "USB permission requested. Approve the Android dialog; recording will retry reconnection automatically."
+        else "USB permission requested. Approve the Android permission dialog, then press Start again."
 
-    fun permissionGrantedMessage(): String =
-        "USB permission granted. Press Start again to begin recording."
+    fun permissionDeniedMessage(recordingActive: Boolean = false): String =
+        if (recordingActive) "USB permission was denied. Recording is waiting for USB access; approve it to resume."
+        else "USB permission was denied. Approve USB access before starting recording."
+
+    fun permissionGrantedMessage(recordingActive: Boolean = false): String =
+        if (recordingActive) "USB permission granted. Recording will retry reconnection automatically."
+        else "USB permission granted. Press Start again to begin recording."
 
     fun openFailureMessage(): String =
         "Android reports USB permission, but the receiver could not be opened. Reconnect the receiver, close other serial apps, then retry USB access."

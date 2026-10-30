@@ -1,0 +1,9 @@
+AndroidX Media3 ExoPlayer 1.11.1
+Copyright The Android Open Source Project
+https://github.com/androidx/media/tree/1.11.1
+Licensed under the Apache License, Version 2.0 (Apache-2.0.txt).
+
+Guava runtime support
+Copyright The Guava Authors
+https://github.com/google/guava
+Licensed under the Apache License, Version 2.0 (Apache-2.0.txt).

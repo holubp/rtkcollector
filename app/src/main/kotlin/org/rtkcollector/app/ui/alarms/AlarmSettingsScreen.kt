@@ -35,6 +35,7 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
     var pickerCategory by remember { mutableStateOf(AlarmCategory.POSITION_LOST) }
     var error by remember { mutableStateOf<String?>(null) }
     var audioStatus by remember { mutableStateOf<String?>(null) }
+    var routeStatus by remember { mutableStateOf<String?>(null) }
     var previewBlocked by remember { mutableStateOf(false) }
     var visualRestrictions by remember { mutableStateOf<String?>(null) }
     fun save(next: AlarmSettingsSnapshot) {
@@ -55,9 +56,13 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
         val listener = store.observeChanges { settings = store.read() }
         onDispose { listener.close(); player.stopPreview() }
     }
+    LaunchedEffect(settings.preferBluetoothAudio) {
+        player.setBluetoothPreference(settings.preferBluetoothAudio)
+    }
     LaunchedEffect(context) {
         while (true) {
             audioStatus = player.statusBrief; previewBlocked = player.isAlarmActive
+            routeStatus = player.routeBrief
             visualRestrictions = withContext(Dispatchers.IO) {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 runCatching {
@@ -81,6 +86,12 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
                 }
             }
             audioStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            routeStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Use Bluetooth audio for alarms", Modifier.weight(1f))
+                Switch(checked = settings.preferBluetoothAudio,
+                    onCheckedChange = { save(AlarmSettingsUiModel(settings).bluetooth(it)) })
+            }
             AlarmCategory.entries.forEach { category ->
                 val value = settings.categories.getValue(category)
                 Text(category.title, style = MaterialTheme.typography.titleMedium)
@@ -119,7 +130,10 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
                             })
                         }
                     }
-                    IconButton(onClick = { runCatching { player.preview(value.sound) }.onFailure { error = "Sound preview unavailable." } }, enabled = !previewBlocked) {
+                    IconButton(onClick = { runCatching {
+                        player.setBluetoothPreference(settings.preferBluetoothAudio)
+                        player.preview(value.sound)
+                    }.onFailure { error = "Sound preview unavailable." } }, enabled = !previewBlocked) {
                         Icon(painterResource(android.R.drawable.ic_media_play), "Preview ${category.title} sound")
                     }
                     IconButton(onClick = player::stopPreview) {

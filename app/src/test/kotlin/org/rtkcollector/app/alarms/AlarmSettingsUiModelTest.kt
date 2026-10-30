@@ -5,6 +5,16 @@ import org.junit.jupiter.api.Test
 import org.rtkcollector.app.ui.alarms.AlarmSettingsUiModel
 
 class AlarmSettingsUiModelTest {
+    @Test fun `Bluetooth preference defaults off and survives unrelated setting edits`() {
+        val defaults = AlarmSettingsSnapshot.defaults()
+        assertFalse(defaults.preferBluetoothAudio)
+        val enabled = AlarmSettingsUiModel(defaults).bluetooth(true)
+        assertTrue(enabled.preferBluetoothAudio)
+        assertEquals(defaults.categories, enabled.categories)
+        val changed = AlarmSettingsUiModel(enabled).delaySeconds(9)
+        assertTrue(AlarmSettingsUiModel(changed).visual(AlarmCategory.POSITION_LOST, false).preferBluetoothAudio)
+        assertFalse(AlarmSettingsUiModel(enabled).bluetooth(false).preferBluetoothAudio)
+    }
     @Test fun `independent controls preserve other categories and sound`() {
         val defaults = AlarmSettingsSnapshot.defaults()
         val system = AlarmSoundChoice.SystemNotification("content://settings/system/notification_sound")

@@ -186,12 +186,26 @@ unchanged.
   Position alarms use fresh selected-engine evidence, arm only after the first
   valid fix of that recording and never treat an RTK quality downgrade alone as
   position loss. Alarm permission/delivery failure must not fail raw capture.
+- Sound routing must respect native initialization order: source/output creation
+  precedes direct platform device selection. A queued preference is not actual
+  route confirmation. Test first playback, repeats, cancellation during creation
+  and pending native release; preserve one-player ownership on failed disposal.
+  Never transplant voice-recording SCO/global-mode setup or final-cue delays into
+  GNSS Stop, which must silence alarms without delaying raw finalization.
 - Empty USB reads during an active recording are not proof of healthy capture.
   If receiver-originated bytes stop beyond the configured stall threshold, the
   foreground service must persist a session event, report degraded USB capture
   and attempt receiver reconnect/re-init while preserving existing artifacts.
   Do not clear USB RX-stall state from unrelated NTRIP or serial TX activity;
-  clear it only when receiver bytes resume or reconnect succeeds.
+  clear it only when receiver bytes resume, not merely when a port reopens.
+- USB reconnect must contain enumeration/permission/platform failures, retain
+  session writers, retry while recording is intended on and update detach
+  identity after reattachment. Stop fences ownership before background teardown.
+  Normal port replacement, baud transitions and probes share receiver TX
+  exclusion with corrections; recheck cancellation after admission.
+- Routine notification delivery must stay off capture workers. Service teardown
+  must irrevocably retire its notification epoch, not merely enqueue a clear
+  that a delayed same-generation publisher can overwrite.
 - Do not broadcast full dashboard state from high-rate capture loops on every
   receiver read. Throttle routine UI state broadcasts; keep lifecycle, error,
   start, stop and reconnect state changes immediate.

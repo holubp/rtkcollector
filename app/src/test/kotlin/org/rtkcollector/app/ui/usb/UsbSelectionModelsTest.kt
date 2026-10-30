@@ -6,6 +6,13 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class UsbSelectionModelsTest {
+    @Test fun `active recording permission guidance never asks user to restart recording`() {
+        assertTrue(UsbStartAccessDecision.permissionRequestedMessage(true).contains("reconnect", ignoreCase = true))
+        assertTrue(UsbStartAccessDecision.permissionGrantedMessage(true).contains("automatically"))
+        assertTrue(!UsbStartAccessDecision.permissionDeniedMessage(true).contains("Start"))
+        assertTrue(!UsbStartAccessDecision.permissionRequestedMessage(true).contains("Start"))
+        assertTrue(UsbStartAccessDecision.permissionRequestedMessage(false).contains("Start"))
+    }
     @Test
     fun `baud selector exposes validated UM980 values`() {
         val state = BaudSelectorState()

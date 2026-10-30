@@ -30,6 +30,17 @@ class RecordingHealthMonitor(
     private var receiverProtocolStalled: Boolean = false
     private var correctionsStalled: Boolean = false
 
+    /** A recovery on another producer can supersede a queued health event. */
+    @Synchronized
+    fun isCurrent(event: RecordingHealthEvent): Boolean = when (event) {
+        is RecordingHealthEvent.ReceiverRxStalled -> receiverStalled
+        RecordingHealthEvent.ReceiverRxRecovered -> !receiverStalled
+        is RecordingHealthEvent.ReceiverProtocolStalled -> receiverProtocolStalled
+        is RecordingHealthEvent.ReceiverProtocolRecovered -> !receiverProtocolStalled
+        is RecordingHealthEvent.CorrectionsStalled -> correctionsStalled
+        RecordingHealthEvent.CorrectionsRecovered -> !correctionsStalled
+    }
+
     @Synchronized
     fun reset(nowMillis: Long) {
         lastReceiverBytesAtMillis = nowMillis

@@ -3,7 +3,6 @@ package org.rtkcollector.app.recording
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -43,7 +42,6 @@ import org.rtkcollector.app.profile.ntripSecurityPolicy
 import org.rtkcollector.app.profile.storageValue
 import org.rtkcollector.app.profile.validateUm980OutputFrequenciesForStart
 import org.rtkcollector.app.profile.validateWorkflowModeCommandsForStart
-import org.rtkcollector.app.ui.MainActivity
 import org.rtkcollector.app.receiver.isPlausibleUm980MaintenanceResponse
 import org.rtkcollector.app.receiver.isUm980CommandOkResponse
 import org.rtkcollector.app.receiver.um980VersionProbeBytes
@@ -419,12 +417,17 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private val persistentWriteThreadLock = Any()
     @Volatile private var persistentWriteThread: Thread? = null
     private val runtimeLock = Any()
-    private val txLock = Any()
+    private val receiverTx = ReceiverTxGate()
+    private val usbIdentity = UsbReconnectIdentity()
+    private val stopDispatcher = RecordingStopDispatcher()
     private var ntripRateWindowStartedAtMillis: Long = 0L
     private var ntripRateWindowCorrectionBytes: Long = 0L
     private var ntripRateWindowTxBytes: Long = 0L
     private var lastNotificationUpdateAtMillis: Long = 0L
     private var lastNotificationText: String = ""
+    private val notificationEpoch = RecordingNotificationDelivery.nextEpoch()
+    private val notificationRevision = java.util.concurrent.atomic.AtomicLong(0)
+    @Volatile private var routineNotificationDelivery: RecordingNotificationDelivery? = null
     @Volatile
     private var activeReceiverFamily: String = ""
     private val bestSolutionExecutor: java.util.concurrent.ScheduledExecutorService =
@@ -475,7 +478,6 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private var alarmSourceSelector = AlarmSourceSelector("generic", false)
     private var alarmSolutionEvidence = AlarmSolutionEvidence()
     private var alarmRtklibEpoch = AlarmRtklibEpochTracker()
-    private var alarmUsbDeviceId = -1
     @Volatile private var alarmLastDesired = AlarmDesiredState.EMPTY
     private val alarmPlaybackDeadline = AlarmPlaybackDeadline()
     private val alarmAudioStatus get() = alarmPlaybackDeadline.status
@@ -487,7 +489,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private val alarmUsbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val device = intent.usbDevice() ?: return
-            if (running.get() && device.deviceId == alarmUsbDeviceId) {
+            if (running.get() && usbIdentity.matches(device.deviceId)) {
                 alarmReceiverLost.set(true)
                 raiseAlarm(RecordingAlarmEvidence.CONNECTION, "USB receiver disconnected.")
             }
@@ -497,6 +499,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        routineNotificationDelivery = runCatching { RecordingNotificationRuntime.get(this) }.getOrNull()
         diagnosticSubscription = diagnosticsSettings.observeChanges { refreshDiagnostics() }
         refreshDiagnostics()
         runCatching {
@@ -567,6 +570,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
 
     override fun onDestroy() {
         alarmDestroyed = true
+        routineNotificationDelivery?.retire(notificationEpoch)
         stopRecording(sendShutdown = false, reason = RecordingStopReason.SERVICE_DESTROYED)
         alarmController?.close()
         alarmEffects?.detach(this)
@@ -595,7 +599,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     val next = alarmSettings.read()
                     alarmMain.post {
                         if (!alarmDestroyed) {
-                            alarmSettingsSnapshot = next; alarmSettingsReady = true
+                            alarmSettingsSnapshot = next
+                            alarmAudio.setBluetoothPreference(next.preferBluetoothAudio)
+                            alarmSettingsReady = true
                             alarmController?.post(AlarmCommand.SettingsChanged(alarmGeneration, next, SystemClock.elapsedRealtime()))
                             alarmController?.snapshot()?.let(::handleAlarmDesired)
                         }
@@ -706,6 +712,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             val text = if (ownsRecording) recordingNotificationText(state) else "Recording stopped. Alarm active."
             val mask = AlarmForegroundPolicy.types(ownsRecording, audio)
             val promoted = runCatching {
+                publishRecordingNotification(text, if (!ownsRecording && desired.terminalAlertPending) desired.generation else null)
                 if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification(text), mask)
                 else startForeground(NOTIFICATION_ID, notification(text))
                 alarmPlaybackForeground = audio
@@ -884,7 +891,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun startRecording(incoming: Intent) {
-        if (stopping.get()) {
+        if (stopping.get() || stopDispatcher.isBusy) {
             RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
             runCatching { broadcastState() }
             return
@@ -989,12 +996,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         lastNotificationText = recordingNotificationText(running = true, receiverRxBytes = 0, correctionInputBytes = 0)
         lastNotificationUpdateAtMillis = System.currentTimeMillis()
         try {
+            publishRecordingNotification(lastNotificationText, null)
             if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification(lastNotificationText),
                 AlarmForegroundPolicy.types(recordingOwnsService = true, audioEnabled = false))
             else startForeground(NOTIFICATION_ID, notification(lastNotificationText))
             acquireWakeLock()
             val usbDevice = intent.usbDevice() ?: error("No USB device supplied.")
-            alarmUsbDeviceId = usbDevice.deviceId
+            usbIdentity.begin(usbDevice.deviceId)
             val usbManager = getSystemService(USB_SERVICE) as UsbManager
             if (!usbManager.hasPermission(usbDevice)) {
                 error("USB permission has not been granted.")
@@ -1375,7 +1383,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     ntripTransferred = bytesDisplay(recorder.correctionInputBytes),
                     rawRecordingActive = if (bytesRead > 0) true else state.rawRecordingActive,
                 ).let { updated ->
-                    if (bytesRead > 0) updated.clearRecoverableUsbError() else updated
+                    if (bytesRead > 0 && !alarmProtocolLost.get()) updated.clearRecoverableUsbError() else updated
                 }
                 handleRecordingHealthEvents(receiverHealthEvents, recorder)
                 handleRecordingHealthEvents(receiverProtocolHealthEvents, recorder)
@@ -1458,83 +1466,66 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun tryReconnectUsb(recorder: SessionRawRecorder): Boolean {
-        if (!running.get()) return false
-        val vid = activeUsbVid ?: return false
-        val pid = activeUsbPid ?: return false
-        val plan = activeBaudPlan ?: return false
-        val eventSink = activeEventSink ?: return false
-        val fanout = advisoryFanout ?: return false
-        val usbManager = getSystemService(USB_SERVICE) as UsbManager
-        val device = usbManager.deviceList.values.firstOrNull { candidate ->
-            candidate.vendorId == vid && candidate.productId == pid
-        } ?: return false
-        if (!usbManager.hasPermission(device)) {
-            state = state.copy(
-                lastError = "USB receiver reconnected but permission is not granted.",
-                errorCategory = RecordingErrorCategory.USB,
-                errorSeverity = RecordingErrorSeverity.DEGRADED,
-                rawRecordingActive = false,
-            )
-            broadcastState()
-            return false
-        }
-        return runCatching {
+        return runUsbReconnectAttempt(running::get, { error ->
+            if (!stopForFatalRawStorageFailure(error) && running.get()) {
+                recordSessionEvent("usb-reconnect-failed", error.message ?: error.javaClass.simpleName)
+                recordRuntimeDiagnostic(DiagnosticCategory.USB, RecordingErrorSeverity.DEGRADED.name,
+                    { "USB reconnect failed: ${error.message ?: error.javaClass.simpleName}" })
+            }
+        }, attempt@{
+            val lease = usbIdentity.current() ?: return@attempt false
+            if (!usbIdentity.claimAttempt(lease, SystemClock.elapsedRealtime())) return@attempt false
+            try {
+            val vid = activeUsbVid ?: return@attempt false
+            val pid = activeUsbPid ?: return@attempt false
+            val plan = activeBaudPlan ?: return@attempt false
+            val eventSink = activeEventSink ?: return@attempt false
+            val fanout = advisoryFanout ?: return@attempt false
+            val usbManager = getSystemService(USB_SERVICE) as UsbManager
+            val device = usbManager.deviceList.values.firstOrNull { candidate ->
+                candidate.vendorId == vid && candidate.productId == pid
+            } ?: return@attempt false
+            if (!usbManager.hasPermission(device)) {
+                state = state.copy(lastError = "USB receiver reconnected but permission is not granted. Approve USB permission to resume.",
+                    errorCategory = RecordingErrorCategory.USB, errorSeverity = RecordingErrorSeverity.DEGRADED,
+                    rawRecordingActive = false)
+                broadcastState()
+                return@attempt false
+            }
             synchronized(runtimeLock) {
-                check(running.get()) { "Recording stopped during USB reconnect." }
-                runCatching { transport?.close() }
-                val usbTransport = AndroidUsbSerialTransport(
-                    usbManager = usbManager,
-                    device = device,
-                    options = UsbSerialOpenOptions(activeProfileBaud),
-                )
-                reconnectTransport = usbTransport
-                var promoted = false
-                try {
-                    val captureRuntime = CaptureRuntime(
-                        transport = usbTransport,
-                        recorder = recorder,
-                        eventSink = eventSink,
-                        advisoryFanout = fanout,
+                receiverTx.run({ running.get() && usbIdentity.isCurrent(lease) }) {
+                    runCatching { transport?.close() }
+                    val usbTransport = AndroidUsbSerialTransport(
+                        usbManager = usbManager, device = device, options = UsbSerialOpenOptions(activeProfileBaud),
                     )
-                    captureRuntime.open()
-                    check(running.get()) { "Recording stopped during USB reconnect." }
-                    executeBaudTransition(plan, captureRuntime, usbTransport)
-                    check(running.get()) { "Recording stopped during USB reconnect." }
-                    activeSerialBaud = activeTargetBaud
-                    transport = usbTransport
-                    runtime = captureRuntime
-                    promoted = true
-                } finally {
-                    if (reconnectTransport === usbTransport) {
-                        reconnectTransport = null
-                    }
-                    if (!promoted) {
-                        runCatching { usbTransport.close() }
+                    reconnectTransport = usbTransport
+                    var promoted = false
+                    try {
+                        val captureRuntime = CaptureRuntime(usbTransport, recorder, eventSink, fanout)
+                        val current = { running.get() && usbIdentity.isCurrent(lease) && reconnectTransport === usbTransport }
+                        captureRuntime.open()
+                        check(current()) { "Recording stopped during USB reconnect." }
+                        executeBaudTransition(plan, captureRuntime, usbTransport, current)
+                        check(current()) { "Recording stopped during USB reconnect." }
+                        promoted = usbIdentity.promote(lease, device.deviceId) {
+                            activeSerialBaud = activeTargetBaud
+                            transport = usbTransport
+                            runtime = captureRuntime
+                        }
+                        check(promoted) { "Recording stopped during USB promotion." }
+                    } finally {
+                        if (reconnectTransport === usbTransport) reconnectTransport = null
+                        if (!promoted) runCatching { usbTransport.close() }
                     }
                 }
             }
-            check(running.get()) { "Recording stopped during USB reconnect." }
+            check(running.get() && usbIdentity.isCurrent(lease)) { "Recording stopped during USB reconnect." }
             recordSessionEvent("usb-reconnect-succeeded", "USB receiver reconnected and receiver profile was re-applied.")
-            recordingHealthMonitor.reset(SystemClock.elapsedRealtime())
-            state = state.copy(
-                lastError = null,
-                errorCategory = RecordingErrorCategory.NONE,
-                errorSeverity = RecordingErrorSeverity.NONE,
-                rawRecordingActive = true,
-            )
+            state = state.awaitReceiverBytesAfterReconnect(alarmProtocolLost.get())
             broadcastState()
-        }.onFailure { error ->
-            if (stopForFatalRawStorageFailure(error)) return@onFailure
-            recordSessionEvent(
-                "usb-reconnect-failed",
-                error.message ?: error.javaClass.simpleName,
-            )
-            recordRuntimeDiagnostic(
-                category = DiagnosticCategory.USB,
-                severity = RecordingErrorSeverity.DEGRADED.name,
-                message = { "USB reconnect failed: ${error.message ?: error.javaClass.simpleName}" },
-            )
-        }.isSuccess
+            true
+            } finally { usbIdentity.finishAttempt(lease, SystemClock.elapsedRealtime()) }
+        })
     }
 
     private fun maybeStartNtrip(
@@ -1583,7 +1574,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 )
             },
             emit = ::handleNtripSnapshot,
-            onRtcmBytes = { bytes ->
+            onRtcmBytes = corrections@{ bytes ->
                 if (running.get()) {
                     val healthEvents = recordingHealthMonitor.recordCorrectionBytes(
                         byteCount = bytes.size,
@@ -1592,13 +1583,15 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     processNtripCorrectionBytes(bytes, recorder, ntripRtcmExtractor)
                     val txResult = if (sendCorrectionsToReceiver) {
                         runCatching {
-                            synchronized(txLock) {
-                                runtime?.sendToReceiver(bytes) ?: error("USB runtime is not available.")
+                            val expected = runtime ?: error("USB runtime is not available.")
+                            receiverTx.run({ running.get() && runtime === expected }) {
+                                expected.sendToReceiver(bytes)
                             }
                         }
                     } else {
                         Result.success(Unit)
                     }
+                    if (!running.get()) return@corrections
                     ntripRateWindowCorrectionBytes += bytes.size
                     if (sendCorrectionsToReceiver && txResult.isSuccess) {
                         ntripRateWindowTxBytes += bytes.size
@@ -1940,6 +1933,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         recorder: SessionRawRecorder?,
     ) {
         events.forEach { event ->
+            if (!recordingHealthMonitor.isCurrent(event)) return@forEach
             when (event) {
                 is RecordingHealthEvent.ReceiverRxStalled -> {
                     alarmReceiverLost.set(true)
@@ -1968,7 +1962,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     recoverAlarm(RecordingAlarmEvidence.CONNECTION)
                     val message = "USB receiver bytes resumed."
                     recordSessionEvent("receiver-rx-recovered", message)
-                    state = state.copy(rawRecordingActive = true).clearRecoverableUsbError()
+                    state = state.copy(rawRecordingActive = true).let {
+                        if (!alarmProtocolLost.get()) it.clearRecoverableUsbError() else it
+                    }
                     broadcastState()
                     updateForegroundNotification(force = true)
                 }
@@ -2563,28 +2559,25 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 """{"type":"persistent-receiver-write-started","label":"${label.jsonEscape()}","commandCount":${commands.size}}""",
             )
             synchronized(runtimeLock) {
-                if (targetBaud == null) {
-                    sendPersistentCommandLines(captureRuntime, commands)
-                } else {
-                    val plan = Um980PersistentBaudPlan.build(
-                        currentHostBaud = activeSerialBaud,
-                        targetBaud = targetBaud,
-                    )
-                    executePersistentBaudPlan(plan, captureRuntime, usbTransport)
-                    activeSerialBaud = targetBaud
-                    activeTargetBaud = targetBaud
-                    activeProfileBaud = targetBaud
+                receiverTx.run({ running.get() && runtime === captureRuntime && transport === usbTransport }) {
+                    if (targetBaud == null) {
+                        sendPersistentCommandLines(captureRuntime, commands)
+                    } else {
+                        val plan = Um980PersistentBaudPlan.build(currentHostBaud = activeSerialBaud, targetBaud = targetBaud)
+                        executePersistentBaudPlan(plan, captureRuntime, usbTransport)
+                        activeSerialBaud = targetBaud
+                        activeTargetBaud = targetBaud
+                        activeProfileBaud = targetBaud
+                    }
                 }
             }
             writers?.appendEventJson(
                 """{"type":"persistent-receiver-write-succeeded","label":"${label.jsonEscape()}"}""",
             )
-            if (running.get()) {
-                state = state.copy(
-                    lastError = null,
-                    errorCategory = RecordingErrorCategory.NONE,
-                    errorSeverity = RecordingErrorSeverity.NONE,
-                )
+            if (running.get() && runtime === captureRuntime) {
+                if (state.errorCategory == RecordingErrorCategory.RECEIVER_COMMAND &&
+                    state.errorSeverity == RecordingErrorSeverity.DEGRADED) state = state.copy(
+                        lastError = null, errorCategory = RecordingErrorCategory.NONE, errorSeverity = RecordingErrorSeverity.NONE)
                 broadcastState()
             }
         }.onFailure { error ->
@@ -2617,6 +2610,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         usbTransport: AndroidUsbSerialTransport,
     ) {
         plan.steps.forEach { step ->
+            check(running.get() && runtime === captureRuntime) { "Recording stopped or receiver connection replaced." }
             when (step) {
                 is Um980PersistentBaudStep.SendCommands -> sendCommandLines(captureRuntime, step.commands)
                 Um980PersistentBaudStep.PauseAfterDeviceBaudCommands -> Thread.sleep(500)
@@ -2642,7 +2636,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private fun verifyActiveReceiverConnection(captureRuntime: CaptureRuntime) {
         val initialBytes = collectActiveReceiverBytes(captureRuntime, 300)
         if (isPlausibleUm980MaintenanceResponse(initialBytes)) return
-        captureRuntime.sendToReceiver(um980VersionProbeBytes())
+        receiverTx.run({ running.get() && runtime === captureRuntime }) {
+            captureRuntime.sendToReceiver(um980VersionProbeBytes())
+        }
         val response = collectActiveReceiverBytes(captureRuntime, 1_200)
         require(isPlausibleUm980MaintenanceResponse(response)) {
             "Receiver did not respond after host baud reconfiguration."
@@ -2660,6 +2656,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         val deadline = System.currentTimeMillis() + timeoutMillis
         val response = ByteArrayOutputStream()
         while (System.currentTimeMillis() < deadline) {
+            check(running.get() && runtime === captureRuntime) { "Receiver operation canceled." }
             val bytes = captureRuntime.readReceiverBytesOnce(READ_BUFFER_BYTES)
             flushActiveRawIfDue()
             if (bytes.isNotEmpty()) {
@@ -2681,6 +2678,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         val deadline = System.currentTimeMillis() + timeoutMillis
         val response = ByteArrayOutputStream()
         while (System.currentTimeMillis() < deadline) {
+            check(running.get() && runtime === captureRuntime) { "Receiver operation canceled." }
             val bytes = captureRuntime.readReceiverBytesOnce(READ_BUFFER_BYTES)
             flushActiveRawIfDue()
             if (bytes.isNotEmpty()) {
@@ -2721,11 +2719,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             runCatching { broadcastState() }
             return
         }
-        val wasRunning = synchronized(ntripReconnectThreadLock) {
-            synchronized(ntripOperationLock) {
-                running.getAndSet(false)
-            }
-        }
+        val wasRunning = running.getAndSet(false)
+        usbIdentity.stop()
         activeSetupSessionId?.let(RecordingSetupBridge::stop)
         activeSetupSessionId = null
         lastSetupReceipt = null
@@ -2748,15 +2743,33 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         }
         routineStateBroadcastRateLimiter.reset()
         state = state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false)
+        stopDispatcher.request(fence = {
+            synchronized(captureThreadLock) { captureThread }?.interrupt()
+            persistentWriteThread?.interrupt()
+        }, cleanup = { finishRecordingStop(sendShutdown) }, failed = { error ->
+            stopping.set(true)
+            val cleanupState = if (stopDispatcher.isBusy) "cleanup failed and will retry" else
+                "cleanup worker could not start; restart the app after preserving existing files"
+            state = if (state.errorSeverity == RecordingErrorSeverity.FATAL) state.copy(lifecycle = RecordingLifecycleState.STOPPING,
+                running = false) else state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false,
+                lastError = "Stopping: $cleanupState. Existing files remain protected. ${error.message ?: error.javaClass.simpleName}",
+                errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE, errorSeverity = RecordingErrorSeverity.DEGRADED)
+            recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "ERROR", { "Recording $cleanupState; resources remain owned." })
+            runCatching { broadcastState() }
+        })
+    }
+
+    private fun finishRecordingStop(sendShutdown: Boolean) {
+        // Drain prior NTRIP admission off the service callback, after running was fenced false.
+        synchronized(ntripReconnectThreadLock) { synchronized(ntripOperationLock) { Unit } }
         recordSessionEvent("shutdown-started", "Stopping recording producers.")
         runCatching { broadcastState() }
-        persistentWriteThread?.interrupt()
         if (sendShutdown && shutdownSent.compareAndSet(false, true)) {
             runCatching {
                 runtime?.let { captureRuntime ->
-                    synchronized(txLock) {
+                    check(receiverTx.tryShutdown(100) {
                         sendCommandLines(captureRuntime, shutdownCommands, CompilePhase.STOP)
-                    }
+                    }) { "Receiver TX is blocked; shutdown commands skipped before cancellation-close." }
                 }
             }.onFailure { error ->
                 stopContext.request(RecordingStopReason.SHUTDOWN_COMMAND_FAILURE)
@@ -3167,12 +3180,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         captureRuntime: CaptureRuntime,
         commands: List<String>,
         phase: CompilePhase = CompilePhase.START,
+        current: () -> Boolean = { (phase == CompilePhase.STOP || running.get()) && runtime === captureRuntime },
     ) {
         if (commands.isEmpty()) return
         val script = commands.joinToString("\n")
         val compiled = compileReceiverCommands(phase, activeReceiverFamily, script)
         compiled.forEach { command ->
-            synchronized(txLock) {
+            receiverTx.run(current) {
                 captureRuntime.sendToReceiver(command.payload)
                 Thread.sleep(100)
             }
@@ -3183,14 +3197,18 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         plan: Um980BaudTransitionPlan,
         captureRuntime: CaptureRuntime,
         usbTransport: AndroidUsbSerialTransport,
+        current: () -> Boolean = { running.get() && runtime === captureRuntime },
     ) {
-        plan.steps.forEach { step ->
-            when (step) {
-                is Um980BaudStep.OpenHostAtProfileBaud -> Unit
-                is Um980BaudStep.SendCommands -> sendCommandLines(captureRuntime, step.commands)
-                Um980BaudStep.PauseAfterDeviceBaudCommand -> Thread.sleep(500)
-                is Um980BaudStep.ReconfigureHostBaud -> usbTransport.reconfigureBaud(step.baud)
-                Um980BaudStep.DrainTransitionalRx -> drainAfterProfile(captureRuntime)
+        receiverTx.run(current) {
+            plan.steps.forEach { step ->
+                check(current()) { "Receiver initialization canceled." }
+                when (step) {
+                    is Um980BaudStep.OpenHostAtProfileBaud -> Unit
+                    is Um980BaudStep.SendCommands -> sendCommandLines(captureRuntime, step.commands, current = current)
+                    Um980BaudStep.PauseAfterDeviceBaudCommand -> Thread.sleep(500)
+                    is Um980BaudStep.ReconfigureHostBaud -> usbTransport.reconfigureBaud(step.baud)
+                    Um980BaudStep.DrainTransitionalRx -> drainAfterProfile(captureRuntime, current)
+                }
             }
         }
     }
@@ -3326,9 +3344,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         }
     }
 
-    private fun drainAfterProfile(captureRuntime: CaptureRuntime) {
+    private fun drainAfterProfile(captureRuntime: CaptureRuntime, current: () -> Boolean) {
         val deadline = System.currentTimeMillis() + PROFILE_DRAIN_MILLIS
         while (System.currentTimeMillis() < deadline) {
+            check(current()) { "Receiver initialization canceled." }
             captureRuntime.readOnce(READ_BUFFER_BYTES)
             flushActiveRawIfDue()
         }
@@ -3447,35 +3466,19 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         }
     }
 
-    private fun notification(text: String): Notification {
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("RtkCollector")
-            .setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
-            .setContentIntent(pendingIntent)
-            .setOnlyAlertOnce(true)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .apply {
-                if (!running.get() && alarmLastDesired.terminalAlertPending) {
-                    val stop = Intent(this@RecordingForegroundService, RecordingForegroundService::class.java)
-                        .setAction(ACTION_STOP).setData(Uri.parse("rtkcollector://alarm/stop/$alarmGeneration"))
-                        .putExtra(AlarmActions.GENERATION, alarmGeneration)
-                    addAction(Notification.Action.Builder(null, "Stop alarm", PendingIntent.getService(
-                        this@RecordingForegroundService, 8299, stop, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)).build())
-                }
-            }
-            .build()
+    private fun notification(text: String): Notification = RecordingNotificationRuntime.notification(this, text,
+        alarmGeneration.takeIf { !running.get() && alarmLastDesired.terminalAlertPending })
+
+    private fun publishRecordingNotification(text: String, terminalGeneration: Long?) {
+        if (alarmDestroyed) return
+        routineNotificationDelivery?.offer(RecordingNotificationUpdate(notificationEpoch,
+            notificationRevision.incrementAndGet(), text, terminalGeneration))
     }
 
     private fun updateForegroundNotification(force: Boolean = false) {
         if (!running.get() && !force) return
-        val text = recordingNotificationText(state)
+        val terminal = !running.get() && alarmLastDesired.terminalAlertPending
+        val text = if (terminal) "Recording stopped. Alarm active." else recordingNotificationText(state)
         val now = System.currentTimeMillis()
         val becameActive = lastNotificationText == "Starting recording" && text.startsWith("Recording in progress")
         if (!force && text == lastNotificationText) {
@@ -3486,8 +3489,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         }
         lastNotificationText = text
         lastNotificationUpdateAtMillis = now
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, notification(text))
+        publishRecordingNotification(text, alarmGeneration.takeIf { terminal })
     }
 
     private fun recordRuntimeDiagnostic(
@@ -5064,8 +5066,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         const val EXTRA_STATE_MOCK_LOCATION_RATE_HZ = "mockLocationRateHz"
         const val EXTRA_STATE_UBLOX_FREQUENCY = "ubloxFrequency"
 
-        private const val CHANNEL_ID = "rtkcollector-recording"
-        private const val NOTIFICATION_ID = 101
+        private const val CHANNEL_ID = RecordingNotificationRuntime.CHANNEL_ID
+        private const val NOTIFICATION_ID = RecordingNotificationRuntime.NOTIFICATION_ID
         private const val NOTIFICATION_UPDATE_INTERVAL_MILLIS = 1_000L
         private const val READ_BUFFER_BYTES = 16 * 1024
         private const val ROUTINE_STATE_BROADCAST_INTERVAL_MILLIS = 250L

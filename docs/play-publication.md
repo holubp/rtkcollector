@@ -51,6 +51,11 @@ The Play listing must link to the published version of
 ## Permission Rationale
 
 - `INTERNET`: connects to user-configured NTRIP casters.
+- `CHANGE_NETWORK_STATE`: owner-approved normal-permission prerequisite for
+  connected-device foreground eligibility after USB permission is revoked on
+  detach. It requires no runtime permission prompt. The app does not invoke
+  network-changing APIs; the declaration supports alarm type transitions while
+  receiver reconnection continues.
 - `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_CONNECTED_DEVICE`: keep
   user-started recording, receiver reconnect and correction routing active while
   interacting with the external GNSS receiver.
@@ -80,7 +85,9 @@ The Play declaration and review video must cover both declared types, including
 configured acoustic alarms, automatic recovery, acknowledgement and deliberate
 Stop. Android restrictions still apply. Verify detached USB eligibility before
 release; merely declaring `mediaPlayback` does not satisfy `connectedDevice`
-prerequisites. See [Android foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types).
+prerequisites. The approved normal `CHANGE_NETWORK_STATE` declaration provides
+the documented alternative qualifier even after USB detach; it is not a claim
+that physical unplug/reconnect tests have run. See [Android foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types).
 
 ## Release Validation
 

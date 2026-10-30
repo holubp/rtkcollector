@@ -289,7 +289,8 @@ Complete all other App content declarations truthfully:
 4. **Target audience and content:** select the real intended audience; do not
    market the app to children.
 5. **Permissions and foreground services:** confirm the release manifest only
-   requests `INTERNET`, notification, wake-lock, and
+   requests `INTERNET`, the normal connected-device eligibility permission
+   `CHANGE_NETWORK_STATE`, notification, wake-lock, and
    `connectedDevice|mediaPlayback` foreground-service capabilities described in
    `docs/play-publication.md`. Complete the required foreground-service
    declaration for both types before review: declared type, user-facing core

@@ -11,7 +11,8 @@ sealed interface AlarmSoundChoice {
     data class SystemNotification(val uri: String) : AlarmSoundChoice
 }
 data class AlarmCategorySettings(val visual: Boolean, val acoustic: Boolean, val sound: AlarmSoundChoice)
-data class AlarmSettingsSnapshot(val categories: Map<AlarmCategory, AlarmCategorySettings>, val positionLossDelayMillis: Long = 5_000) {
+data class AlarmSettingsSnapshot(val categories: Map<AlarmCategory, AlarmCategorySettings>, val positionLossDelayMillis: Long = 5_000,
+    val preferBluetoothAudio: Boolean = false) {
     init {
         require(positionLossDelayMillis in 1_000..60_000)
         require(categories.keys.containsAll(AlarmCategory.entries))

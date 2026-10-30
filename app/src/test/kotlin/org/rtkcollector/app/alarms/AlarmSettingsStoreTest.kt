@@ -8,8 +8,20 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [26, 27, 33])
 class AlarmSettingsStoreTest {
+    @Test fun `old settings retain normal routing and Bluetooth choice survives recreation`() {
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("rtkcollector-alarms", 0).edit().clear()
+            .putString("snapshot", "{\"delay\":9000}").commit()
+        val store = AlarmSettingsStore(context)
+        val legacy = store.read()
+        assertFalse(legacy.preferBluetoothAudio)
+        assertEquals(9_000L, legacy.positionLossDelayMillis)
+        store.write(legacy.copy(preferBluetoothAudio = true))
+        assertTrue(AlarmSettingsStore(context).read().preferBluetoothAudio)
+        assertEquals(legacy.categories, AlarmSettingsStore(context).read().categories)
+    }
     @Test fun `settings survive recreation with independent outputs and selected sound`() {
         val context = RuntimeEnvironment.getApplication()
         val store = AlarmSettingsStore(context)

@@ -2,11 +2,26 @@
 
 ## Reliability Alarms
 
+Opt-in Bluetooth alarm routing uses local Media3 decoding and per-player
+AudioTrack preferences on the alarm Looper, not communication/SCO or global
+speakerphone changes. Actual output is checked before reporting a confirmed
+route. Device loss/rejected routing selects the built-in speaker; failure to
+confirm the speaker is an audio-delivery failure, not a recording failure.
+Optional Media3 network-state monitoring is disabled and its manifest permission
+removed. No Bluetooth pairing/connection-management permission is requested.
+
 Alarms run independently of Activity/Compose and mock-location resampling.
 Receiver reconnect does not prove position recovery: only newly decoded valid
 position evidence clears position loss. Deliberate Stop fences late callbacks
 before finalization. Alarm delivery, permission/provider failure or focus denial
 must never stop/restart capture. Terminal audio lifetime cannot retain raw writers.
+
+Routine recording notifications use a bounded latest-snapshot delivery worker,
+separate from USB capture. Stop invalidates pending reconnect/TX ownership before
+dispatching teardown; normal receiver replacement and baud transitions exclude
+correction writes. Recoverable reconnect failures remain paced retries in the
+same session until Stop. Reopening a port does not reset protocol/correction
+health or prove receiver-byte recovery.
 
 Screen-off/watch delivery, USB detach/reattach, DND/routes and foreground-type
 transitions require device testing. Do not claim coverage after process death.

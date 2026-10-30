@@ -8,11 +8,10 @@ import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
 import org.rtkcollector.app.R
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
@@ -25,12 +24,16 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
     private val canceledGeneration = AtomicLong(-1)
     private val suppressed = AtomicReference<AlarmAudioSelection?>(null)
     private val scheduled = AtomicBoolean(false)
-    private val executor = Executors.newSingleThreadScheduledExecutor { Thread(it, "rtkcollector-alarm-player").apply { isDaemon = true } }
+    private val bluetoothPreference = AtomicBoolean(false)
+    private val worker = HandlerThread("rtkcollector-alarm-player").apply { start() }
+    private val handler = Handler(worker.looper)
     private val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val policy = AlarmAudioPolicy()
     private val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
     @Volatile var onStatus: ((Long, Long, AlarmEffectStatus, String?) -> Unit)? = null
     @Volatile var statusBrief: String? = null
+        private set
+    @Volatile var routeBrief: String? = null
         private set
     @Volatile var lastProgressElapsedMillis: Long = SystemClock.elapsedRealtime()
         private set
@@ -38,7 +41,11 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
     @Volatile private var focus = AlarmFocusState.WAITING
     @Volatile private var selected: AlarmAudioSelection? = null
     private var request: AudioFocusRequest? = null
+    @Volatile private var focusToken: Any? = null
     private var ringtone: Ringtone? = null
+    private val routedClip = AlarmClipOwner()
+    private var devices: AlarmAudioDevices? = null
+    private var routed = false
     private var resolvedUri: Uri? = null
     private var nextCycle = 0L
     private var fallback = false
@@ -64,48 +71,62 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
         startTicks()
     }
     fun stopPreview() { preview.set(null); startTicks() }
+    fun setBluetoothPreference(enabled: Boolean) {
+        if (bluetoothPreference.getAndSet(enabled) != enabled) startTicks()
+    }
 
     private fun wanted(now: Long): AlarmAudioSelection? = real.get().takeIf { it.generation > canceledGeneration.get() }?.audio?.takeIf { it != suppressed.get() }
         ?: preview.get()?.takeIf { now < it.expires }?.selection
     private fun startTicks() {
-        if (scheduled.compareAndSet(false, true)) runCatching { executor.execute(::tick) }
-            .onFailure { scheduled.set(false); report(AlarmEffectStatus.FAILED, "Audio worker unavailable.") }
+        val origin = reportOrigin()
+        if (scheduled.compareAndSet(false, true)) runCatching { check(handler.post(::tick)) }
+            .onFailure { scheduled.set(false); report(origin, AlarmEffectStatus.FAILED, "Audio worker unavailable.") }
     }
     private fun tick() {
         val beforeReal = real.get()
         val beforePreview = preview.get()
-        try { updatePlayback() } catch (_: Exception) {
+        val beforeRouting = bluetoothPreference.get()
+        val origin = AlarmAudioReportOrigin(beforeReal, wanted(SystemClock.elapsedRealtime()))
+        try { updatePlayback(origin) } catch (_: Exception) {
             focus = AlarmFocusState.PERMANENTLY_LOST
-            runCatching { stopRingtone() }
-            report(AlarmEffectStatus.FAILED, "Alarm audio unavailable. Check sound and Android audio settings.")
+            report(origin, AlarmEffectStatus.FAILED, "Alarm audio unavailable. Check sound and Android audio settings.")
         }
         val now = SystemClock.elapsedRealtime()
+        if (focus == AlarmFocusState.PERMANENTLY_LOST) {
+            runCatching { cleanupFailedAlarmPlayback(::abandonFocus, ::stopRingtone) }
+        }
         if (wanted(now) != null && focus != AlarmFocusState.PERMANENTLY_LOST) {
-            runCatching { executor.schedule(::tick, 100, TimeUnit.MILLISECONDS) }
-                .onFailure { scheduled.set(false); report(AlarmEffectStatus.FAILED, "Audio scheduling unavailable.") }
+            runCatching { check(handler.postDelayed(::tick, 100)) }
+                .onFailure {
+                    scheduled.set(false)
+                    report(origin, AlarmEffectStatus.FAILED, "Audio scheduling unavailable.")
+                    runCatching { cleanupFailedAlarmPlayback(::abandonFocus, ::stopRingtone) }
+                }
         } else {
             if (wanted(now) == null) {
-                runCatching { stopRingtone(); abandonFocus() }
+                runCatching { cleanupFailedAlarmPlayback(::abandonFocus, ::stopRingtone) }
                 selected = null
                 policy.decide(null, now, AlarmFocusState.WAITING)
-                report(AlarmEffectStatus.IDLE, null)
+                report(origin, AlarmEffectStatus.IDLE, null)
             }
             scheduled.set(false)
-            if (real.get() !== beforeReal || preview.get() !== beforePreview) startTicks()
+            if (real.get() !== beforeReal || preview.get() !== beforePreview || bluetoothPreference.get() != beforeRouting) startTicks()
         }
     }
-    private fun updatePlayback() {
+    private fun updatePlayback(origin: AlarmAudioReportOrigin) {
         val now = SystemClock.elapsedRealtime()
-        val next = wanted(now)
+        if (!origin.accepts(real.get(), wanted(now))) return
+        val next = origin.selection
         if (next != selected) {
-            stopRingtone(); abandonFocus()
+            cleanupFailedAlarmPlayback(::abandonFocus, ::stopRingtone)
             selected = next; resolvedUri = null; fallback = false; focus = AlarmFocusState.WAITING; nextCycle = 0
             if (next != null) {
                 val identity = next
+                val token = Any().also { focusToken = it }
                 request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(attributes).setAcceptsDelayedFocusGain(true)
                     .setOnAudioFocusChangeListener({ change ->
-                        if (selected == identity) {
+                        if (selected == identity && focusToken === token) {
                             focus = when (change) {
                                 AudioManager.AUDIOFOCUS_GAIN -> AlarmFocusState.AVAILABLE
                                 AudioManager.AUDIOFOCUS_LOSS -> AlarmFocusState.PERMANENTLY_LOST
@@ -116,18 +137,25 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
                     }, Handler(Looper.getMainLooper())).build()
             }
         }
-        if (next == null) { report(AlarmEffectStatus.IDLE, null); return }
+        if (routed != bluetoothPreference.get()) {
+            stopRingtone()
+            routed = bluetoothPreference.get()
+            resolvedUri = null; fallback = false; nextCycle = 0
+        }
+        if (next == null) { report(origin, AlarmEffectStatus.IDLE, null); return }
         val decision = policy.decide(next, now, focus)
         if (decision.unavailable) {
-            stopRingtone(); abandonFocus(); focus = AlarmFocusState.PERMANENTLY_LOST
-            report(AlarmEffectStatus.FAILED, "Alarm sound could not obtain audio focus. Visual alert remains where enabled.")
+            focus = AlarmFocusState.PERMANENTLY_LOST
+            report(origin, AlarmEffectStatus.FAILED, "Alarm sound could not obtain audio focus. Visual alert remains where enabled.")
             return
         }
         if (decision.requestFocus) {
             val result = request?.let(manager::requestAudioFocus)
             if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) focus = AlarmFocusState.AVAILABLE
         }
-        if (!decision.play) { stopRingtone(); report(AlarmEffectStatus.PENDING, "Waiting for Android audio focus."); return }
+        if (!decision.play) { stopRingtone(); report(origin, AlarmEffectStatus.PENDING, "Waiting for Android audio focus."); return }
+        if (routed) { updateRoutedPlayback(origin, next, now); return }
+        routeBrief = null
         if (ringtone != null && ringtone?.isPlaying == false) {
             ringtone = null
             nextCycle = now + if (next.sound is AlarmSoundChoice.SystemNotification) 1_600 else 0
@@ -155,18 +183,61 @@ class AlarmAudioPlayer private constructor(private val context: Context) : Alarm
                 if (wanted(SystemClock.elapsedRealtime()) != next) stopRingtone()
             }
         }
-        report(AlarmEffectStatus.ACTIVE, if (fallback) "Selected sound unavailable; using built-in alarm." else null)
+        report(origin, AlarmEffectStatus.ACTIVE, if (fallback) "Selected sound unavailable; using built-in alarm." else null)
     }
-    private fun stopRingtone() { ringtone?.stop(); ringtone = null }
-    private fun abandonFocus() { request?.let { runCatching { manager.abandonAudioFocusRequest(it) } }; request = null }
-    private fun report(status: AlarmEffectStatus, message: String?) {
+    private fun updateRoutedPlayback(origin: AlarmAudioReportOrigin, next: AlarmAudioSelection, now: Long) {
+        fun current() = wanted(SystemClock.elapsedRealtime()) == next && bluetoothPreference.get()
+        if (!routedClip.hasClip) {
+            val audioDevices = devices ?: AlarmAudioDevices(manager, handler).also { devices = it }
+            val sound = next.sound
+            val uri = resolvedUri ?: when (sound) {
+                is AlarmSoundChoice.BuiltIn -> builtinUri(context, sound.pattern)
+                is AlarmSoundChoice.SystemNotification -> Uri.parse(sound.uri)
+            }
+            routedClip.install({ Media3AlarmClip(context, handler, uri,
+                fallback || sound is AlarmSoundChoice.BuiltIn, audioDevices, ::current) }, ::current)
+        }
+        val state = routedClip.poll(now) ?: return
+        if (origin.accepts(real.get(), wanted(SystemClock.elapsedRealtime()))) routeBrief = state.route
+        if (state.state == AlarmClipState.FAILED) {
+            if (!fallback && next.sound is AlarmSoundChoice.SystemNotification) {
+                routedClip.stop()
+                fallback = true
+                resolvedUri = builtinUri(context, if (next.episodeId.cause.category == AlarmCategory.POSITION_LOST)
+                    BuiltInAlarmSound.SINGLE_LOW else BuiltInAlarmSound.TRIPLE_HIGH)
+                report(origin, AlarmEffectStatus.PENDING, "Selected sound unavailable; using built-in alarm.")
+            } else {
+                focus = AlarmFocusState.PERMANENTLY_LOST
+                report(origin, AlarmEffectStatus.FAILED, state.warning ?: "Alarm audio unavailable.")
+            }
+            return
+        }
+        report(origin, if (state.state == AlarmClipState.PLAYING) AlarmEffectStatus.ACTIVE else AlarmEffectStatus.PENDING,
+            state.warning ?: if (fallback) "Selected sound unavailable; using built-in alarm." else null)
+    }
+    private fun stopRingtone() {
+        ringtone?.stop(); ringtone = null
+        routedClip.stop()
+        devices?.close(); devices = null
+        routeBrief = null
+    }
+    private fun abandonFocus() {
+        focusToken = null
+        val abandoned = request
+        request = null
+        abandoned?.let { runCatching { manager.abandonAudioFocusRequest(it) } }
+    }
+    private fun reportOrigin() = AlarmAudioReportOrigin(real.get(), wanted(SystemClock.elapsedRealtime()))
+    private fun report(origin: AlarmAudioReportOrigin, status: AlarmEffectStatus, message: String?) {
         lastProgressElapsedMillis = SystemClock.elapsedRealtime()
+        if (!origin.accepts(real.get(), wanted(lastProgressElapsedMillis))) return
         statusBrief = message
-        val state = real.get()
-        val report = listOf(state.generation, state.revision, status, message)
+        val report = listOf(origin.desired.generation, origin.desired.revision, origin.selection, status, message)
         if (report != lastReport) {
             lastReport = report
-            runCatching { onStatus?.invoke(state.generation, state.revision, status, message) }
+            origin.serviceIdentity()?.let { (generation, revision) ->
+                runCatching { onStatus?.invoke(generation, revision, status, message) }
+            }
         }
     }
     companion object {

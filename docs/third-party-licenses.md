@@ -9,6 +9,8 @@ the Gradle dependency graph used for the released AAB/APK.
 | --- | --- | --- |
 | Kotlin standard library | Kotlin runtime support | Apache-2.0 |
 | AndroidX Core KTX | Android compatibility helpers | Apache-2.0 |
+| AndroidX Media3 ExoPlayer 1.11.1 and its Media3 decoding/data-source modules | Local alarm sound decoding and per-player audio routing | Apache-2.0 |
+| Guava and its runtime support annotations | Media3 runtime support | Apache-2.0 (JSpecify annotations: Apache-2.0) |
 | AndroidX Activity Compose | Compose activity integration | Apache-2.0 |
 | Jetpack Compose UI | Compose UI runtime | Apache-2.0 |
 | Jetpack Compose Material 3 | Material components | Apache-2.0 |
@@ -62,8 +64,8 @@ project's GPL-3.0-or-later distribution.
 Run these reports and update this file if dependencies change:
 
 ```bash
-./gradlew :app:dependencies --configuration debugRuntimeClasspath
-./gradlew :app:dependencies --configuration releaseRuntimeClasspath
+sh gradlew :app:dependencies --configuration sideloadDebugRuntimeClasspath
+sh gradlew :app:dependencies --configuration googlePlayReleaseRuntimeClasspath
 ```
 
 No map, GIS, shapefile, advertising, analytics or crash-reporting SDK dependency

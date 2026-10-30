@@ -5,6 +5,16 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class RecordingHealthMonitorTest {
+    @Test fun `protocol recovery during reopen invalidates an already queued stall event`() {
+        val monitor = RecordingHealthMonitor(receiverProtocolStallMillis = 1_000)
+        monitor.reset(0)
+        monitor.recordReceiverProtocolBytes(10, 0)
+        val stalled = monitor.checkReceiverProtocol(1_000, true, "UM980").single()
+        assertTrue(monitor.isCurrent(stalled))
+        val recovered = monitor.recordValidReceiverProtocolFrame(1_001, "UM980").single()
+        assertTrue(!monitor.isCurrent(stalled))
+        assertTrue(monitor.isCurrent(recovered))
+    }
     @Test
     fun `receiver stall is reported after threshold and repeated at bounded cadence`() {
         val monitor = RecordingHealthMonitor(

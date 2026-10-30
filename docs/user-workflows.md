@@ -832,6 +832,15 @@ acoustic switches and its own sound selection:
 
 Both output types start enabled. Built-in sounds are defaults; choose another
 pattern or **Android notification sounds...** and use the play button to preview.
+**Use Bluetooth audio for alarms** is initially off. Turn it on to prefer a
+connected Bluetooth audio output for alarms and previews. If it disconnects or
+cannot carry the alarm, the app requests the phone speaker instead. It returns
+to Bluetooth when an audio device becomes available again. The Alarms screen
+shows the confirmed route, or that switching is still in progress. This does
+not change other apps' audio routing, volume or Do Not Disturb. Test the chosen
+sound with your headset before relying on it; Android/vendor routing and an
+inaudible or muted headset cannot be fully detected by an app.
+
 Preview is short and cannot interrupt a real alarm. Preferences are app-wide,
 survive restarts and do not change when you select a settings set.
 The visual switch controls Android notifications. Home still shows current
@@ -858,6 +867,21 @@ bounded; allowed visual evidence remains. A foreground status notification may
 still be required with visual alarms disabled. No app can guarantee an alarm
 after Android kills or force-stops its process, or the phone powers off.
 Raw capture does not wait for alarm delivery.
+
+While recording, Home warns when Do Not Disturb is on and any acoustic alarm
+is enabled: audible alarms may not work. It is an advisory, not a recording
+failure, and clears when the condition ends. The app does not change DND or
+volume. Check the phone and headset with a sound preview before relying on them.
+
+During a USB interruption, leave recording on: RtkCollector keeps trying to
+reopen and initialise the receiver, preserving the same session files. If Android
+asks for USB permission again, approve it and wait for reconnection; do not start
+a second recording. An opened port alone is not recovery: receiver bytes must
+resume, and the position alarm may remain until a fresh usable position arrives.
+Deliberate Stop cancels further recovery and queued receiver commands immediately;
+file finalisation continues in the background. If shutdown commands cannot gain
+access to a blocked USB writer, they are skipped rather than holding Stop open.
+Do not disconnect storage while the app is still finalising the session.
 
 ## App Logs
 

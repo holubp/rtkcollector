@@ -12,6 +12,38 @@ import java.util.concurrent.Executors
 
 class RecordingAlarmIsolationTest {
     @TempDir lateinit var directory: Path
+    @Test fun `blocked player creation after Stop cannot delay raw close or start late audio`() {
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val current = java.util.concurrent.atomic.AtomicBoolean(true)
+        val played = java.util.concurrent.atomic.AtomicBoolean(false)
+        val stopped = java.util.concurrent.atomic.AtomicBoolean(false)
+        val owner = AlarmClipOwner()
+        val worker = Executors.newSingleThreadExecutor()
+        val writers = PathRecordingSessionWriters.open(directory)
+        try {
+            val creation = worker.submit {
+                owner.install({
+                    entered.countDown(); release.await()
+                    object : AlarmClipPlayback {
+                        override fun play() { played.set(true) }
+                        override fun poll(now: Long) = AlarmClipStatus(AlarmClipState.PLAYING)
+                        override fun stop() { stopped.set(true) }
+                    }
+                }, current::get)
+            }
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+            val bytes = ByteArray(32_768) { it.toByte() }
+            writers.appendReceiverRx(bytes)
+            current.set(false)
+            assertTrue(closeRecordingSessionWriters(writers, null).closeReport.issues.isEmpty())
+            assertEquals(1L, release.count)
+            assertArrayEquals(bytes, Files.readAllBytes(directory.resolve("receiver-rx.raw")))
+            release.countDown()
+            creation.get(10, TimeUnit.SECONDS)
+            assertFalse(played.get())
+            assertTrue(stopped.get())
+        } finally { release.countDown(); worker.shutdownNow(); writers.closeAll() }
+    }
     @Test fun `blocked alarm state broadcast does not own raw finalization`() {
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val broadcaster = AlarmStateBroadcaster { entered.countDown(); release.await() }

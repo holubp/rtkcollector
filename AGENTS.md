@@ -279,6 +279,10 @@ tests and reporting exact results.
 
 ## Validation Expectations
 
+Use JDK 21 for host Android tests and CI: merged-manifest Robolectric tests may
+select API 36, which cannot run on Java 17. Do not lower SDK coverage to make an
+older test JVM pass. Production bytecode targets remain Java 17.
+
 Prefer the strongest feasible verification for the touched code:
 
 - Pure Kotlin model/parser/session/correction changes: run targeted module

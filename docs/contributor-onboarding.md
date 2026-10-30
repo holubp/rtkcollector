@@ -178,7 +178,8 @@ In this order, you will have a working mental model in roughly 90 minutes:
 ## Test layout and verification
 
 - Pure Kotlin modules (`core:*`, `receiver:*`): JUnit 5
-  (`useJUnitPlatform()`), runs anywhere with JDK 17. `./gradlew test` is fine.
+  (`useJUnitPlatform()`), run with JDK 17 or newer. The full `sh gradlew test`
+  also includes Android/Robolectric tests and requires JDK 21 for API 36.
 - `app/` JVM tests: also JUnit 5, but uses Android-named classes that compile
   against the debug Android variant. Compiling only `compileDebugKotlin` is not
   sufficient: it misses stale test calls, missing test fixtures and absent
@@ -219,7 +220,8 @@ disabled-output sentinel, pass a valid empty string, not `NULL`.
 
 Required host setup:
 
-- JDK 17.
+- JDK 21 for the full test/build pipeline (Robolectric API 36 requires it).
+  Application and library bytecode targets remain Java 17.
 - Android SDK platform 36.
 - Android NDK installed through Android Studio or `sdkmanager`, with
   `source.properties` present under `$ANDROID_HOME/ndk/<version>/`.

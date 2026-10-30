@@ -253,6 +253,19 @@ tests / 192 suites and zero failures/errors/skips. Both full release-lint task
 names dry-ran successfully. Astra source-closed the narrow annotations and
 reviewed CI ordering; it explicitly required actual host lint and SDK tests.
 
+Host run `41014653701` no longer reports the original SDK 26/27/33 alarm
+failures. Seven legacy default-SDK Robolectric suites instead fail sandbox
+initialization: merged resources selects manifest API 36, requiring JDK 21;
+CI was still on JDK 17. CI and release workflows now use JDK 21, as do host
+instructions; source/bytecode targets remain 17. No SDK coverage is lowered.
+The next exact-commit host run must establish complete GREEN, not infer it
+from the absence of the earlier three failures.
+
+Downloaded host XML positively confirms all 18 `AlarmPlatformTest` cases passed
+in run `41014653701`, zero failures/errors/skips. Astra narrow environment review
+found no conflicting test/toolchain pins; JDK 21 does not change bytecode targets.
+`pre-push-jdk21-ci.log` passed the full local gate before the workflow update push.
+
 | Checkpoint | Scope | State | Evidence required |
 | --- | --- | --- | --- |
 | B0 | Approval, canonical requirements and implementation plan | Approved; executing | Owner statement above; ANDROID-ALARM-007 |

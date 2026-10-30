@@ -95,7 +95,9 @@ access is enabled.
 Use a Windows machine with a current Android Studio installation. Install the
 Android SDK components requested by the project, plus an Android NDK and CMake
 through **Tools > SDK Manager**. Install Git for Windows and Python 3, and use
-Android Studio's bundled JDK or set `JAVA_HOME` to a supported JDK. The release
+Android Studio's bundled JDK 21 (or newer supported JDK), or set `JAVA_HOME` to
+JDK 21. Full Android/Robolectric tests include API 36, which requires Java 21;
+the app still targets Java 17 bytecode. The release
 build intentionally fails if it cannot package the RTKLIB native library.
 
 1. Clone or update the repository and switch to the reviewed release commit.

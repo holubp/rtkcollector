@@ -83,45 +83,50 @@ object RtklibSessionPostprocessor {
         )
     }
 
-    private fun publishOutputPair(
+    internal fun publishOutputPair(
         temporaryNmea: Path,
         temporaryPos: Path,
         outputNmea: Path,
         outputPos: Path,
+        fileOperations: PublicationFileOperations = NioPublicationFileOperations,
     ): RtklibPostprocessResult {
         val backupNmea = outputNmea.resolveSibling("${outputNmea.fileName}.bak")
         val backupPos = outputPos.resolveSibling("${outputPos.fileName}.bak")
-        Files.deleteIfExists(backupNmea)
-        Files.deleteIfExists(backupPos)
-        val hadNmea = Files.exists(outputNmea)
-        val hadPos = Files.exists(outputPos)
+        fileOperations.deleteIfExists(backupNmea)
+        fileOperations.deleteIfExists(backupPos)
+        val hadNmea = fileOperations.exists(outputNmea)
+        val hadPos = fileOperations.exists(outputPos)
         var publishedNmea = false
         var publishedPos = false
         return runCatching {
-            if (hadNmea) Files.move(outputNmea, backupNmea, StandardCopyOption.REPLACE_EXISTING)
-            if (hadPos) Files.move(outputPos, backupPos, StandardCopyOption.REPLACE_EXISTING)
-            Files.move(temporaryNmea, outputNmea, StandardCopyOption.REPLACE_EXISTING)
+            if (hadNmea) fileOperations.move(outputNmea, backupNmea)
+            if (hadPos) fileOperations.move(outputPos, backupPos)
+            fileOperations.move(temporaryNmea, outputNmea)
             publishedNmea = true
-            Files.move(temporaryPos, outputPos, StandardCopyOption.REPLACE_EXISTING)
+            fileOperations.move(temporaryPos, outputPos)
             publishedPos = true
-            Files.deleteIfExists(backupNmea)
-            Files.deleteIfExists(backupPos)
             RtklibPostprocessResult.success()
         }.getOrElse { error ->
-            Files.deleteIfExists(temporaryNmea)
-            Files.deleteIfExists(temporaryPos)
-            if (hadNmea && Files.exists(backupNmea)) {
-                Files.move(backupNmea, outputNmea, StandardCopyOption.REPLACE_EXISTING)
+            fileOperations.deleteIfExists(temporaryNmea)
+            fileOperations.deleteIfExists(temporaryPos)
+            if (hadNmea && fileOperations.exists(backupNmea)) {
+                fileOperations.move(backupNmea, outputNmea)
             } else if (publishedNmea) {
-                Files.deleteIfExists(outputNmea)
+                fileOperations.deleteIfExists(outputNmea)
             }
-            if (hadPos && Files.exists(backupPos)) {
-                Files.move(backupPos, outputPos, StandardCopyOption.REPLACE_EXISTING)
+            if (hadPos && fileOperations.exists(backupPos)) {
+                fileOperations.move(backupPos, outputPos)
             } else if (publishedPos) {
-                Files.deleteIfExists(outputPos)
+                fileOperations.deleteIfExists(outputPos)
             }
             RtklibPostprocessResult.failed(error.message ?: "RTKLIB postprocess outputs could not be published.")
         }
+            .also { result ->
+                if (result.success) {
+                    runCatching { fileOperations.deleteIfExists(backupNmea) }
+                    runCatching { fileOperations.deleteIfExists(backupPos) }
+                }
+            }
     }
 
     private fun sessionMetadata(sessionDirectory: Path): Result<SessionRtklibMetadata> = runCatching {
@@ -161,6 +166,24 @@ object RtklibSessionPostprocessor {
         val preset: RtklibPreset = RtklibPreset.ROVER_KINEMATIC_RTK,
         val frequencyCount: Int = 1,
     )
+}
+
+internal interface PublicationFileOperations {
+    fun exists(path: Path): Boolean
+    fun move(source: Path, target: Path)
+    fun deleteIfExists(path: Path)
+}
+
+private object NioPublicationFileOperations : PublicationFileOperations {
+    override fun exists(path: Path): Boolean = Files.exists(path)
+
+    override fun move(source: Path, target: Path) {
+        Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
+    }
+
+    override fun deleteIfExists(path: Path) {
+        Files.deleteIfExists(path)
+    }
 }
 
 private val RtklibPostprocessMode.outputNmeaFile: SessionArtifactFile

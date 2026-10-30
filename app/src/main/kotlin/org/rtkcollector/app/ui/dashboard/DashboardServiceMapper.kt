@@ -6,6 +6,8 @@ import org.rtkcollector.core.correction.NtripTransportMode
 
 fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
     val running = intent.getBooleanExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
+    val receiverBusy = running || intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_LIFECYCLE) in
+        setOf("STARTING", "RECORDING", "STOPPING")
     val lastError = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR)
     val errorCategory = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_CATEGORY) ?: "NONE"
     val errorSeverity = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_ERROR_SEVERITY) ?: "NONE"
@@ -166,6 +168,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
         ).copy(
+            receiverBusy = receiverBusy,
             correctionTransport = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_NTRIP_TRANSPORT_MODE)
                 ?.let { runCatching { NtripTransportMode.valueOf(it) }.getOrNull() },
             uploadTransport = intent.getStringExtra(RecordingForegroundService.EXTRA_STATE_UPLOAD_TRANSPORT_MODE)
@@ -190,7 +193,7 @@ fun dashboardStateFromRecordingIntent(intent: Intent): DashboardState {
             lastError = lastError,
             errorCategory = errorCategory,
             errorSeverity = errorSeverity,
-        )
+        ).copy(receiverBusy = receiverBusy)
     }
 }
 

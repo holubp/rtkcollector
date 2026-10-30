@@ -159,8 +159,13 @@ data class SettingsBackupFile(
         .putNullable("selectedWorkflowId", selectedWorkflowId)
         .putNullable("lastActiveNtripMountpointProfileId", lastActiveNtripMountpointProfileId)
         .also { json ->
+            // Preserve genuine omissions on round-trip, without discarding represented data.
+            SettingsBackupProfileFamily.entries.filterNot(includedProfileFamilies::contains).forEach { family ->
+                if (json.getJSONArray(family.jsonKey).length() == 0) json.remove(family.jsonKey)
+            }
             if (formatVersion >= 2) {
-                json.put("includedProfileFamilies", JSONArray(includedProfileFamilies.map { it.name }))
+                json.put("includedProfileFamilies", JSONArray(SettingsBackupProfileFamily.entries
+                    .filter { json.has(it.jsonKey) }.map { it.name }))
                 json.put("activeSetupSelections", JSONObject().also { selections ->
                     activeSetupSelections.forEach { (setId, state) ->
                         require(setId == state.settingsSetId) { "Selection state key must match its settings set." }
@@ -243,6 +248,11 @@ data class SettingsBackupFile(
             require(formatVersion in 1..CURRENT_FORMAT_VERSION) {
                 "Unsupported settings backup format version."
             }
+            SettingsBackupProfileFamily.entries.forEach { family ->
+                require(!json.has(family.jsonKey) || json.optJSONArray(family.jsonKey) != null) {
+                    "Settings backup contains invalid ${family.jsonKey}."
+                }
+            }
             val selections = if (formatVersion >= 2) {
                 requireNotNull(json.optJSONObject("activeSetupSelections")) {
                     "Settings backup is missing active setup selections."
@@ -296,10 +306,8 @@ data class SettingsBackupFile(
                     }
                 }.orEmpty(),
                 includedProfileFamilies = SettingsBackupProfileFamily.entries.filterTo(linkedSetOf()) { family ->
-                    json.optJSONArray(family.jsonKey) != null && (formatVersion < 2 ||
-                        json.optJSONArray("includedProfileFamilies")?.let { included ->
-                            (0 until included.length()).any { included.getString(it) == family.name }
-                        } != false)
+                    // Presence is authoritative; metadata cannot turn an array into an omission.
+                    json.has(family.jsonKey)
                 },
             ).let { retainPrivateLegacyInput(it, json) }
         }

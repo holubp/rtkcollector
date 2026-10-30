@@ -27,6 +27,14 @@ python3 -m unittest discover -s tools -p 'test_generate_alarm_sounds.py' -v
 echo "Checking recording alarm foreground declarations..."
 python3 -m unittest discover -s tools -p 'test_alarm_manifest.py' -v
 
+echo "Checking specification assurance tooling..."
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT/tools${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 -m unittest discover -s tools -p 'test_spec*.py' -v
+
+echo "Checking approved specification assurance, evidence and semantic review..."
+PYTHONDONTWRITEBYTECODE=1 \
+    python3 tools/specification/spec_check.py --root "$ROOT" --full --summary-json
+
 echo "Compiling Android test source sets and running feasible tests..."
 python3 tools/check_android_test_compilation.py --root "$ROOT" --mode auto
 

@@ -9,6 +9,244 @@ import kotlin.test.assertTrue
 
 class ProfileGraphJournalTest {
     @Test
+    fun `ordinary restore publishes disarmed graph before explicit passwords and enables only after success`() {
+        val backup = credentialBackup()
+        val target = FakeTarget(mapOf("owner" to "local-binding"))
+        val journal = ProfileGraphJournal(target)
+        val secrets = mutableMapOf("local-binding" to "local-password")
+        val publications = mutableListOf<String>()
+        val result = restoreProfilesThenCredentials(backup, { ids ->
+            assertTrue(ids.none(secrets::containsKey))
+        }, { graph ->
+            val binding = graph.ntripCasterProfiles.single().secretId
+            assertTrue(graph.plaintextPasswordsBySecretId.isEmpty())
+            journal.publish(mapOf("owner" to binding)) {}
+            publications += binding
+        }, { passwords ->
+            assertEquals(1, publications.size)
+            val binding = target.values.getValue("owner") as String
+            assertFalse(binding in passwords)
+            assertFalse(binding in secrets)
+            assertFalse(ProfileGraphJournal.JOURNAL_KEY in target.values)
+            assertEquals(mapOf("import-binding" to "explicit-password"), passwords)
+            secrets.putAll(passwords)
+        }, SettingsImportIdFactory { "$it-disarmed" })
+
+        assertEquals(SecretStoreImportOutcome.STORED, result)
+        assertEquals(2, publications.size)
+        assertEquals("import-binding", target.values["owner"])
+        assertEquals("explicit-password", secrets[target.values["owner"]])
+        assertEquals("local-password", secrets["local-binding"])
+    }
+
+    @Test
+    fun `confirmed and uncertain secret failures retain restored graph with unreachable credentials`() {
+        listOf(PreferenceRollbackStatus.RESTORED, PreferenceRollbackStatus.FAILED).forEach { rollback ->
+            val target = FakeTarget(mapOf("owner" to "local-binding"))
+            val secrets = mutableMapOf("local-binding" to "local-password")
+            var publications = 0
+            val result = restoreProfilesThenCredentials(credentialBackup(), { ids ->
+                assertTrue(ids.none(secrets::containsKey))
+            }, { graph ->
+                publications++
+                ProfileGraphJournal(target).publish(mapOf("owner" to graph.ntripCasterProfiles.single().secretId)) {}
+            }, { passwords ->
+                assertEquals(1, publications)
+                if (rollback == PreferenceRollbackStatus.FAILED) secrets.putAll(passwords)
+                throw PreferenceCommitException("private secret details", rollback)
+            }, SettingsImportIdFactory { "$it-disarmed" })
+
+            assertEquals(if (rollback == PreferenceRollbackStatus.RESTORED)
+                SecretStoreImportOutcome.PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED
+                else SecretStoreImportOutcome.PRIMARY_AND_ROLLBACK_FAILED, result)
+            assertEquals(1, publications)
+            assertFalse(target.values["owner"] == "local-binding")
+            assertFalse(target.values["owner"] in secrets)
+            val restarted = FakeTarget(target.durableValues())
+            ProfileGraphJournal(restarted).requireRecovered()
+            assertFalse(restarted.values["owner"] in secrets)
+            assertEquals("local-password", secrets["local-binding"])
+            assertTrue(result.userMessage.orEmpty().contains("Profiles restored"))
+            assertFalse(result.userMessage.orEmpty().contains("private secret details"))
+        }
+    }
+
+    @Test
+    fun `interruption after secret write leaves durable restored profiles disarmed`() {
+        val target = FakeTarget(mapOf("owner" to "local-binding"))
+        val secrets = mutableMapOf("local-binding" to "local-password")
+        assertFailsWith<SimulatedProcessDeath> {
+            restoreProfilesThenCredentials(credentialBackup(), {}, { graph ->
+                ProfileGraphJournal(target).publish(mapOf("owner" to graph.ntripCasterProfiles.single().secretId)) {}
+            }, { passwords ->
+                secrets.putAll(passwords)
+                throw SimulatedProcessDeath()
+            }, SettingsImportIdFactory { "$it-disarmed" })
+        }
+        val restarted = FakeTarget(target.durableValues())
+        ProfileGraphJournal(restarted).requireRecovered()
+        assertFalse(restarted.values["owner"] == "local-binding")
+        assertFalse(restarted.values["owner"] in secrets)
+        assertEquals("explicit-password", secrets["import-binding"])
+    }
+
+    @Test
+    fun `legacy migration still stages secrets before publishing reachable references`() {
+        val target = FakeTarget(mapOf("owner" to "old"))
+        var staged = false
+        ProfileGraphJournal(target).publish(mapOf("owner" to "new")) {
+            assertEquals("old", target.values["owner"])
+            assertTrue(ProfileGraphJournal.JOURNAL_KEY in target.values)
+            staged = true
+        }
+        assertTrue(staged)
+        assertEquals("new", target.values["owner"])
+    }
+
+    private fun credentialBackup() = SettingsBackupFile.fromProfiles(
+        commandProfiles = emptyList(), usbBaudProfiles = emptyList(),
+        ntripCasterProfiles = listOf(NtripCasterProfile(id = "imported", name = "Imported", secretId = "import-binding")),
+        ntripCasterUploadProfiles = emptyList(), ntripMountpointProfiles = emptyList(),
+        recordingPolicyProfiles = emptyList(), storageProfiles = emptyList(), settingsSets = emptyList(),
+        selectedSettingsSetId = null, selectedWorkflowId = null, lastActiveNtripMountpointProfileId = null,
+        passwordsBySecretId = mapOf("import-binding" to "explicit-password"),
+        options = SettingsSetExportOptions(includePlaintextPasswords = true),
+    )
+
+    @Test
+    fun `historically omitted upload family keeps local secrets and derived import across both publications`() {
+        val local = NtripCasterUploadProfile(id = "local-upload", name = "Local", secretId = "local-upload-secret")
+        val derived = local.copy(id = "derived-upload", name = "Imported", secretId = "derived-secret")
+        val backup = credentialBackup().copy(ntripCasterUploadProfiles = listOf(derived),
+            includedProfileFamilies = SettingsBackupProfileFamily.entries.toSet() - SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD,
+            plaintextPasswordsBySecretId = mapOf("derived-secret" to "explicit-upload-password"))
+        val publications = mutableListOf<SettingsBackupFile>()
+        val secrets = mutableMapOf("local-upload-secret" to "local-upload-password")
+        restoreProfilesThenCredentials(backup, { ids -> assertTrue(ids.none(secrets::containsKey)) }, { graph ->
+            publications += graph.withRetainedImportUploads(listOf(local))
+        }, { secrets.putAll(it) }, SettingsImportIdFactory { "$it-disarmed" })
+        assertEquals(2, publications.size)
+        publications.forEach { graph ->
+            assertEquals(listOf("local-upload", "derived-upload"), graph.ntripCasterUploadProfiles.map { it.id })
+            assertEquals(local, graph.ntripCasterUploadProfiles.first())
+        }
+        assertFalse(publications.first().ntripCasterUploadProfiles.last().secretId in secrets)
+        assertEquals("explicit-upload-password", secrets[publications.last().ntripCasterUploadProfiles.last().secretId])
+        assertEquals("local-upload-password", secrets[local.secretId])
+    }
+
+    @Test
+    fun `empty password import publishes once without any credential write`() {
+        var publications = 0
+        val result = restoreProfilesThenCredentials(credentialBackup().copy(plaintextPasswordsBySecretId = emptyMap()),
+            {}, { publications++ }, { error("No explicit passwords to import") })
+        assertEquals(SecretStoreImportOutcome.STORED, result)
+        assertEquals(1, publications)
+    }
+
+    @Test
+    fun `allocated binding rejects restore before graph publication or secret writes`() {
+        assertFailsWith<IllegalArgumentException> {
+            restoreProfilesThenCredentials(credentialBackup(), { ids ->
+                require("import-binding" !in ids) { "Allocated binding" }
+            }, { error("Must not publish") }, { error("Must not overwrite") })
+        }
+    }
+
+    @Test
+    fun `failed initial graph restore never attempts password persistence`() {
+        val target = FakeTarget(mapOf("owner" to "local-binding"), listOf(true, true, false, true))
+        assertFailsWith<GraphPublicationException> {
+            restoreProfilesThenCredentials(credentialBackup(), {}, { graph ->
+                ProfileGraphJournal(target).publish(mapOf("owner" to graph.ntripCasterProfiles.single().secretId)) {}
+            }, { error("Must not write passwords after graph failure") })
+        }
+        assertEquals("local-binding", target.values["owner"])
+    }
+
+    @Test
+    fun `activation publication failure restores the already imported disarmed graph`() {
+        val target = FakeTarget(mapOf("owner" to "local-binding"),
+            listOf(true, true, true, true, true, true, false, true))
+        val secrets = mutableMapOf("local-binding" to "local-password")
+        val result = restoreProfilesThenCredentials(credentialBackup(), {}, { graph ->
+            ProfileGraphJournal(target).publish(mapOf("owner" to graph.ntripCasterProfiles.single().secretId)) {}
+        }, { secrets.putAll(it) }, SettingsImportIdFactory { "$it-disarmed" })
+        assertEquals(SecretStoreImportOutcome.ACTIVATION_FAILED, result)
+        assertFalse(target.values["owner"] == "local-binding")
+        assertFalse(target.values["owner"] in secrets)
+        assertEquals("explicit-password", secrets["import-binding"])
+        assertEquals("local-password", secrets["local-binding"])
+    }
+
+    @Test
+    fun `uncertain activation recovery blocks graph reads and reports partial restore truthfully`() {
+        val target = FakeTarget(mapOf("owner" to "local-binding"),
+            listOf(true, true, true, true, true, true, false, false, false, true))
+        val failure = assertFailsWith<GraphRecoveryException> {
+            restoreProfilesThenCredentials(credentialBackup(), {}, { graph ->
+                ProfileGraphJournal(target).publish(mapOf("owner" to graph.ntripCasterProfiles.single().secretId)) {}
+            }, {}, SettingsImportIdFactory { "$it-disarmed" })
+        }
+        assertTrue(failure.message.orEmpty().contains("Profiles were restored"))
+        assertTrue(failure.message.orEmpty().contains("blocked"))
+        assertFailsWith<GraphRecoveryException> { ProfileGraphJournal(target).requireRecovered() }
+        ProfileGraphJournal(target).requireRecovered()
+        assertEquals("ntrip-import-disarmed-disarmed", target.values["owner"])
+    }
+
+    @Test
+    fun `activation interruption recovers disarmed graph or fully committed credential graph`() {
+        (5..8).forEach { boundary ->
+            val target = FakeTarget(mapOf("owner" to "local-binding"), crashAfterSuccessCommit = boundary)
+            val secrets = mutableMapOf("local-binding" to "local-password")
+            assertFailsWith<SimulatedProcessDeath> {
+                restoreProfilesThenCredentials(credentialBackup(), {}, { graph ->
+                    ProfileGraphJournal(target).publish(mapOf("owner" to graph.ntripCasterProfiles.single().secretId)) {}
+                }, { secrets.putAll(it) }, SettingsImportIdFactory { "$it-disarmed" })
+            }
+            val restarted = FakeTarget(target.durableValues())
+            ProfileGraphJournal(restarted).requireRecovered()
+            assertEquals(if (boundary == 8) "import-binding" else "ntrip-import-disarmed-disarmed", restarted.values["owner"])
+            assertEquals("local-password", secrets["local-binding"])
+        }
+    }
+
+    @Test
+    fun `batch commit failure and uncertain rollback cannot expose attempted passwords through restored bindings`() {
+        listOf(true, false).forEach { rollbackSucceeds ->
+            val secretValues = mutableMapOf("local-binding" to "local-password")
+            var commits = 0
+            val secretTarget = object : PreferenceCommitTarget {
+                override fun allValues(): Map<String, *> = secretValues.toMap()
+                override fun commit(changes: Map<String, StoredPreferenceValue?>): Boolean {
+                    commits++
+                    // Model primary commit(false) becoming visible, and a failed rollback retaining it.
+                    if (commits == 1 || rollbackSucceeds) changes.forEach { (id, value) ->
+                        if (value == null) secretValues.remove(id)
+                        else secretValues[id] = (value as StoredPreferenceValue.StringValue).value
+                    }
+                    return commits == 2 && rollbackSucceeds
+                }
+            }
+            val graph = FakeTarget(mapOf("owner" to "local-binding"))
+            val result = restoreProfilesThenCredentials(credentialBackup(), { ids ->
+                assertTrue(ids.none(secretValues::containsKey))
+            }, { backup ->
+                ProfileGraphJournal(graph).publish(mapOf("owner" to backup.ntripCasterProfiles.single().secretId)) {}
+            }, { passwords ->
+                commitStringChangesWithRollback(secretTarget, passwords, "Private details must not be shown")
+            }, SettingsImportIdFactory { "$it-disarmed" })
+            assertEquals(if (rollbackSucceeds) SecretStoreImportOutcome.PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED
+                else SecretStoreImportOutcome.PRIMARY_AND_ROLLBACK_FAILED, result)
+            assertEquals(2, commits)
+            assertEquals(!rollbackSucceeds, "import-binding" in secretValues)
+            assertFalse(graph.values["owner"] in secretValues)
+            assertEquals("local-password", secretValues["local-binding"])
+        }
+    }
+
+    @Test
     fun `interrupted repair restores blocking graph or complete repaired graph with its history`() {
         val oldSet = RecordingSettingsSet.builtInRoverNtrip().copy(id = "editable", isProtected = false,
             ntripCasterPolicyNeedsReview = true)

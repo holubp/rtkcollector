@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "kind": "review-checkpoint",
+  "state": "in-progress",
+  "workflow_role": "initializer | updater | checker",
+  "mode": "changed | full",
+  "scope_digest": "sha256:<checker-produced scope digest>",
+  "base_commit": "<trusted comparison base or null>",
+  "context_file": ".spec-assurance/review-context.json",
+  "context_command": "<exact checker command used to regenerate context>",
+  "trusted_base_controls": false,
+  "handoff_to": "<initializer | updater | checker | human | none>",
+  "reviewed_paths": ["path/to/reviewed-file"],
+  "reviewed_pairs": [
+    {
+      "path": "src/feature.ext",
+      "requirement_id": "CORE-FLOW-001"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "classification": "normative | non-normative",
+      "status": "open | resolved | blocked",
+      "path": "path/to/reviewed-file",
+      "requirement_id": "CORE-FLOW-001",
+      "summary": "Concrete progress finding."
+    }
+  ],
+  "limitations": ["Known review limitation or empty list."],
+  "next_action": "Regenerate context after the human decision.",
+  "reviewer": "model:reviewer-id",
+  "created_at": "<timezone-aware timestamp>",
+  "updated_at": "<timezone-aware timestamp>",
+  "resumed_at": "<timezone-aware timestamp or null>"
+}

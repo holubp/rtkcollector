@@ -1,0 +1,59 @@
+{
+  "schema_version": 5,
+  "mode": "changed",
+  "base_commit": "<from --review-context>",
+  "observed_head_commit": "<informational value from --review-context>",
+  "scope_digest": "<from --review-context>",
+  "capability_inventory_digest": "<from --review-context>",
+  "approval_policy_digest": "<from --review-context>",
+  "reviewed_paths": ["src/feature/example.py"],
+  "requirement_ids": ["CORE-FLOW-001", "UI-DOCS-001", "RELEASE-SIGN-001"],
+  "requirement_digests": {
+    "CORE-FLOW-001": "sha256:<checker-produced digest>",
+    "UI-DOCS-001": "sha256:<checker-produced digest>",
+    "RELEASE-SIGN-001": "sha256:<checker-produced digest>"
+  },
+  "implementation_digests": {
+    "CORE-FLOW-001": "sha256:<checker-produced digest>",
+    "UI-DOCS-001": "sha256:<checker-produced digest>",
+    "RELEASE-SIGN-001": "sha256:<checker-produced digest>"
+  },
+  "supporting_digests": {
+    "CORE-FLOW-001": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "UI-DOCS-001": "sha256:<checker-produced supporting realization digest>",
+    "RELEASE-SIGN-001": "sha256:<checker-produced supporting realization digest>"
+  },
+  "coverage_kinds": {
+    "CORE-FLOW-001": "implementation_required",
+    "UI-DOCS-001": "documentation",
+    "RELEASE-SIGN-001": "process"
+  },
+  "implementation_traceability": [
+    {
+      "path": "src/feature/example.py",
+      "requirement_ids": ["CORE-FLOW-001"]
+    }
+  ],
+  "requirement_traceability": [
+    {
+      "path": "docs/specification/requirements.md",
+      "requirement_ids": ["CORE-FLOW-001", "UI-DOCS-001", "RELEASE-SIGN-001"]
+    }
+  ],
+  "supporting_traceability": [
+    {
+      "path": "docs/operator/example.md",
+      "requirement_ids": ["UI-DOCS-001"]
+    },
+    {
+      "path": "tools/release/sign.sh",
+      "requirement_ids": ["RELEASE-SIGN-001"]
+    }
+  ],
+  "result": "pending",
+  "reviewer": "",
+  "reviewed_at": "",
+  "findings": [],
+  "limitations": ["Semantic review has not been performed."],
+  "conclusions": []
+}

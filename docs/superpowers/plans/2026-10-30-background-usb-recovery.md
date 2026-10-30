@@ -80,4 +80,7 @@ System permission UI while locked/backgrounded remains vendor/device validation.
   The private nested recorder test lookup compilation defect was fixed using
   method reflection and verified by the final gate. No source blocker remains.
 - Host Robolectric tests are compile-checked only here; CI, APK signing/artifact
-  inspection and GitHub publication await owner RC10 gate-exception approval.
+  inspection and GitHub publication remain pending.
+- The earlier checker-exception proposal is superseded by the owner's direction
+  to integrate and run the existing strict framework. Continue with
+  2026-10-30-rc10-specification-assurance.md; no RC10 waiver is assumed.

@@ -14,6 +14,10 @@ Verification:
 - Manual: binary UM980 session updates dashboard while `receiver-rx.raw`
   remains byte-exact.
 
+Provenance: AGENTS.md; docs/receiver-driver-api.md; docs/receiver-profiles.md; docs/supported-receivers.md; docs/superpowers/specs/2026-06-08-integrated-v1-usability-and-um980-telemetry-design.md
+
+Evidence obligations: EV-RX-UM980-001-AUTO, EV-RX-UM980-001-MANUAL
+
 ### RX-UM980-RTK-001: UM980 RTK Status Sources
 
 Status: Normative
@@ -25,6 +29,10 @@ future RTKLIB status.
 Verification:
 - Automated: BESTNAV/ADRNAV/RTKSTATUS/RTCMSTATUS parser tests.
 - Manual: rover + NTRIP session shows RTK float/fix and decoded RTCM state.
+
+Provenance: AGENTS.md; docs/receiver-driver-api.md; docs/receiver-profiles.md; docs/supported-receivers.md; docs/superpowers/specs/2026-06-08-integrated-v1-usability-and-um980-telemetry-design.md
+
+Evidence obligations: EV-RX-UM980-RTK-001-AUTO, EV-RX-UM980-RTK-001-MANUAL
 
 ### RX-UM980-PPP-001: UM980 PPP Status Requires Explicit PPP Telemetry
 
@@ -38,6 +46,10 @@ Verification:
 - Automated: PPPNAV parser and dashboard mapping tests.
 - Manual: PPP-enabled UM980 recording distinguishes no PPP telemetry, no PPP
   solution, converging and converged states.
+
+Provenance: AGENTS.md; docs/receiver-driver-api.md; docs/receiver-profiles.md; docs/supported-receivers.md; docs/superpowers/specs/2026-06-08-integrated-v1-usability-and-um980-telemetry-design.md
+
+Evidence obligations: EV-RX-UM980-PPP-001-AUTO, EV-RX-UM980-PPP-001-MANUAL
 
 ### RX-UM980-PROFILES-001: Built-In UM980 Profiles Are Protected Defaults
 
@@ -58,6 +70,10 @@ profiles SHOULD declare UM980 NMEA telemetry.
 
 Verification:
 - Automated: built-in command-profile default tests.
+
+Provenance: AGENTS.md; docs/receiver-driver-api.md; docs/receiver-profiles.md; docs/supported-receivers.md; docs/superpowers/specs/2026-06-08-integrated-v1-usability-and-um980-telemetry-design.md
+
+Evidence obligations: EV-RX-UM980-PROFILES-001-AUTO, EV-RX-UM980-PROFILES-001-REVIEW
 
 ### RX-UM980-RTKLIB-001: UM980 RTKLIB Input Routing Is Message-Specific
 
@@ -86,6 +102,10 @@ Verification:
 - Review: UM980 command profiles selected for RTKLIB live processing emit the
   format declared by the workflow route plan.
 
+Provenance: AGENTS.md; docs/receiver-driver-api.md; docs/receiver-profiles.md; docs/supported-receivers.md; docs/superpowers/specs/2026-06-08-integrated-v1-usability-and-um980-telemetry-design.md
+
+Evidence obligations: EV-RX-UM980-RTKLIB-001-AUTO, EV-RX-UM980-RTKLIB-001-REVIEW
+
 ## u-blox
 
 ### RX-UBLOX-M8T-001: M8T Is Raw/Timing/Post-Processing Receiver
@@ -101,6 +121,10 @@ status messages needed by monitoring.
 Verification:
 - Automated: receiver capability tests.
 - Manual: M8T profile records UBX RAWX/SFRBX/TIM where configured.
+
+Provenance: AGENTS.md; docs/receiver-driver-api.md; docs/receiver-profiles.md; docs/supported-receivers.md; docs/superpowers/specs/2026-06-13-ublox-m8t-and-mock-provider-design.md
+
+Evidence obligations: EV-RX-UBLOX-M8T-001-AUTO, EV-RX-UBLOX-M8T-001-MANUAL
 
 ### RX-UBLOX-RTKLIB-001: u-blox Raw Input Is First-Class RTKLIB Input
 
@@ -122,3 +146,63 @@ Verification:
 - Automated: RTKLIB input route tests for u-blox RAWX/SFRBX direct routing.
 - Manual: M8T/M8P replay sessions produce RTKLIB observation epochs without
   affecting receiver raw recording.
+
+Provenance: AGENTS.md; docs/receiver-driver-api.md; docs/receiver-profiles.md; docs/supported-receivers.md; docs/superpowers/specs/2026-06-13-ublox-m8t-and-mock-provider-design.md
+
+Evidence obligations: EV-RX-UBLOX-RTKLIB-001-AUTO, EV-RX-UBLOX-RTKLIB-001-MANUAL
+
+### RX-UM980-COMMANDS-001: Runtime Commands Are Nonpersistent And Single-Line
+
+Status: Normative
+
+UM980 runtime command compilation MUST reject blank commands, embedded CR/LF,
+shell metacharacters, unsupported command characters and persistent/destructive
+operations (including save, reset, restore, flash, update, erase and factory
+operations). Enabled runtime profiles MUST validate each command before emitting
+exactly one CRLF-terminated command. Disabled profiles MUST NOT emit commands.
+
+Verification:
+- Automated: Um980RuntimeProfileTest and Um980RuntimeCommandValidator tests.
+
+Provenance: AGENTS.md Receiver And Protocol Rules; docs/receiver-profiles.md; existing Um980RuntimeProfile validator and tests.
+
+Evidence obligations: EV-RX-UM980-COMMANDS-001-AUTO
+
+### RX-UM980-FREQUENCY-001: Unsupported Continuous Output Rates Are Reported
+
+Status: Normative
+
+UM980 continuous output commands MUST be checked for supported periods before
+recording starts. Supported fast periods are 1, 0.5, 0.2, 0.1, 0.05 and 0.02
+seconds (1, 2, 5, 10, 20 and 50 Hz); unsupported fast periods such as 0.25 seconds
+MUST produce a user-visible configuration warning. Slow ephemeris, ionosphere,
+UTC and RTCM observation schedules, and `ONCHANGED` outputs MUST NOT be
+misclassified as unsupported continuous-output rates. The check MUST NOT
+silently rewrite a user's command profile.
+
+Verification:
+- Automated: Um980OutputFrequencyValidatorTest and recording-start validation tests.
+
+Provenance: user decision to warn on unsupported UM980 output rates and change built-in 0.25 to 0.2 periods; docs/receiver-profiles.md; existing validator tests.
+
+Evidence obligations: EV-RX-UM980-FREQUENCY-001-AUTO
+
+### RX-MONITOR-001: Displayed Message Rates Measure Received Telemetry
+
+Status: Normative
+
+Receiver message-frequency monitoring MUST estimate rates from recently observed
+messages, separately by message family, rather than displaying configured output
+rates as if they had been measured. Expired samples MUST leave the observation
+window and missing observations MUST be represented as unavailable. UM980 rate
+windows SHOULD use receiver time when comparable timestamps are available so
+batched USB delivery does not masquerade as a receiver output-rate change.
+Rate tracking MUST remain advisory, separate from byte-exact capture and
+receiver command configuration.
+
+Verification:
+- Automated: Um980MessageFrequencyTrackerTest and UbloxMessageFrequencyTrackerTest.
+
+Provenance: approved live message-frequency monitoring and June 26 receiver-rate debugging; docs/architecture.md; existing receiver frequency trackers and tests.
+
+Evidence obligations: EV-RX-MONITOR-001-AUTO

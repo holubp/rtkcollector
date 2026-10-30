@@ -243,6 +243,9 @@ private fun RtklibInputStreamKind.nativeOrdinal(): Int =
 
 private fun Array<String>.toOutputBatch(): RtklibNativeOutputBatch {
     val parsed = NativeResult.from(this)
+    check(parsed.state != RtklibEngineState.FAILED) {
+        parsed.error ?: "RTKLIB native processing failed"
+    }
     return RtklibNativeOutputBatch(
         nmeaLines = parsed.nmeaLines,
         posLines = parsed.posLines,

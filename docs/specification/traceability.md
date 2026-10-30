@@ -6,6 +6,10 @@ requirements live under `docs/specification/`.
 
 | Source | Formal spec destination | Notes |
 | --- | --- | --- |
+| `docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md` | all formal specification files and assurance records | Reconcile the September framework with current RC10 without waivers or stale approvals; retain exact digest-matching approvals only. |
+| `docs/superpowers/plans/2026-10-30-background-usb-recovery.md` | `android-runtime.md`, `verification-matrix.md` | Confirmed Stop/retry crash, service-owned USB consent, stale callback rejection and epoch-fenced recovery publication. |
+| `docs/superpowers/specs/2026-10-29-recording-alarms-design.md`, `docs/superpowers/specs/2026-10-29-alarm-bluetooth-routing-design.md`, `docs/superpowers/plans/2026-10-30-muted-alarm-warning.md` | `android-runtime.md`, `verification-matrix.md` | Recording-isolated alarms, Bluetooth fallback, DND and confirmed-silence advisories. |
+| `docs/superpowers/specs/2026-10-26-tiered-diagnostics-design.md`, `docs/superpowers/plans/2026-10-26-tiered-diagnostics.md` | `android-runtime.md`, `security-privacy.md`, `verification-matrix.md` | Minimal always-present lifecycle evidence, optional diagnostic tiers, retention limits and redaction. |
 | `docs/sideload-signing.md`, `docs/superpowers/plans/2026-09-29-stable-sideload-signing.md` | `publication-readiness.md`, `verification-matrix.md` | Stable sideload signing, fail-closed publication and owner backup/update continuity checks. |
 | `docs/workflows.md` | `workflows.md` | Workflow concepts, lifecycle and validation. |
 | `docs/user-workflows.md` | `workflows.md`, `ui-requirements.md` | User workflow semantics and UI obligations. |

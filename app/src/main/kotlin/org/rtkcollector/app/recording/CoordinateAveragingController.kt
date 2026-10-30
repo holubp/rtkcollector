@@ -9,6 +9,8 @@ import org.rtkcollector.core.solution.SolutionCandidate
 
 internal class CoordinateAveragingController {
     private var averager: OnlineCoordinateAverager? = null
+    private var sessionStartedAtMillis: Long? = null
+    private var latestPrimaryCandidate: SolutionCandidate? = null
 
     var active: Boolean = false
         private set
@@ -16,18 +18,66 @@ internal class CoordinateAveragingController {
     var lastStopReason: String? = null
         private set
 
-    fun start(requiredFixClass: FixClass) {
-        averager = OnlineCoordinateAverager(requiredFixClass)
-        active = true
+    @Synchronized
+    fun beginSession(nowMillis: Long) {
+        endSession()
+        sessionStartedAtMillis = nowMillis
+    }
+
+    @Synchronized
+    fun endSession() {
+        sessionStartedAtMillis = null
+        latestPrimaryCandidate = null
+        averager = null
+        active = false
         lastStopReason = null
     }
 
+    @Synchronized
+    fun start(nowMillis: Long): CoordinateAverageAddResult {
+        val candidate = latestPrimaryCandidate
+        if (candidate == null || !candidate.isValidForSession(nowMillis)) {
+            val result = CoordinateAverageAddResult(false, "Cannot start averaging: no fresh valid primary solution in this recording.")
+            stop(result.reason)
+            return result
+        }
+        averager = OnlineCoordinateAverager(candidate.fixClass)
+        active = true
+        lastStopReason = null
+        return onSelectedSolution(candidate)
+    }
+
+    @Synchronized
     fun stop(reason: String? = null) {
         active = false
         lastStopReason = reason
     }
 
+    @Synchronized
     fun summary(): CoordinateAverageSummary? = averager?.summary()
+
+    @Synchronized
+    fun onPrimarySolution(candidate: SolutionCandidate?, nowMillis: Long): CoordinateAverageAddResult? {
+        if (sessionStartedAtMillis == null) return null
+        // Keep an invalid update too: a previous valid fix must not be reused after fix loss.
+        latestPrimaryCandidate = candidate
+        if (!active) return null
+        if (candidate == null || !candidate.isValidForSession(nowMillis)) {
+            val result = CoordinateAverageAddResult(false, "Selected primary solution is stale or invalid.")
+            stop(result.reason)
+            return result
+        }
+        return onSelectedSolution(candidate)
+    }
+
+    private fun SolutionCandidate.isValidForSession(nowMillis: Long): Boolean {
+        val startedAt = sessionStartedAtMillis ?: return false
+        return updatedAtMillis >= startedAt && updatedAtMillis <= nowMillis &&
+            nowMillis - updatedAtMillis <= org.rtkcollector.core.solution.BestSolutionSelector.DEFAULT_MAX_AGE_MILLIS &&
+            fixClass != FixClass.NONE && latDeg.isFinite() && latDeg in -90.0..90.0 &&
+            lonDeg.isFinite() && lonDeg in -180.0..180.0 &&
+            ellipsoidalHeightM?.isFinite() == true && mslAltitudeM?.isFinite() != false
+    }
 
     fun onNtripSourceChanged(
         casterLabel: String?,
@@ -40,7 +90,7 @@ internal class CoordinateAveragingController {
         mountpointLabel.hashCode()
     }
 
-    fun onSelectedSolution(candidate: SolutionCandidate): CoordinateAverageAddResult {
+    private fun onSelectedSolution(candidate: SolutionCandidate): CoordinateAverageAddResult {
         if (!active) return CoordinateAverageAddResult(false, "Averaging is not active.")
         val lat = candidate.latDeg
         val lon = candidate.lonDeg

@@ -39,6 +39,11 @@ __pycache__/
 .codex-tmp/
 .superpowers/
 .spec-skills-dev/
+.spec-assurance/
+
+# Pre-existing local drafts, not part of the reviewed release contract.
+docs/superpowers/plans/2026-10-02-settings-profile-ownership-review-plan.md
+docs/superpowers/specs/2026-10-02-settings-profile-ownership-review.md
 
 # Local field-test/debug captures
 samples/

@@ -549,7 +549,7 @@ class ProfileStores(context: Context) {
         lastActiveNtripMountpointProfileId: String?,
     ) {
         require(backup.plaintextPasswordsBySecretId.isEmpty()) {
-            "Credential-bearing imports require staged secret publication."
+            "Credential-bearing imports require isolated credential restore."
         }
         require(backup.privateRecoveryInput == null) { "Original input requires private staged recovery publication." }
         publishImportedSettings(
@@ -577,18 +577,27 @@ class ProfileStores(context: Context) {
         val liveBindings = prior.ntripCasterProfiles.map { it.secretId } + prior.ntripCasterUploadProfiles.map { it.secretId }
         require(bindings.none { it in liveBindings }) { "Imported secret bindings must not overwrite live owner bindings." }
         val privateRef = backup.privateRecoveryInput?.let { "profile-recovery-${UUID.randomUUID()}" }
-        publishImportedSettings(
-            backup, settingsSets, selectedSettingsSetId, selectedWorkflowId,
-            lastActiveNtripMountpointProfileId,
-            stageSecrets = {
-                secretStore.requireUnallocated(bindings + listOfNotNull(privateRef))
-                val original = backup.privateRecoveryInput
-                val privatePayload = if (original != null && privateRef != null) {
-                    mapOf(privateRef to original.contentForPrivateStorage())
-                } else emptyMap()
-                secretStore.putNewPasswords(backup.plaintextPasswordsBySecretId + privatePayload)
+        secretStore.requireUnallocated(bindings + listOfNotNull(privateRef))
+        // Private recovery evidence must precede its reference, not the imported passwords.
+        backup.privateRecoveryInput?.let { original ->
+            secretStore.putNewPasswords(mapOf(requireNotNull(privateRef) to original.contentForPrivateStorage()))
+        }
+        restoreProfilesThenCredentials(
+            backup = backup.copy(settingsSets = settingsSets),
+            requireUnallocated = { newBindings ->
+                require(newBindings.none { it in liveBindings }) {
+                    "Imported secret bindings must not reuse live owner bindings."
+                }
+                secretStore.requireUnallocated(newBindings)
             },
-            privateRecoveryRef = privateRef,
+            publishProfiles = { graph ->
+                val publication = graph.withRetainedImportUploads(prior.ntripCasterUploadProfiles)
+                publishImportedSettings(
+                    publication, publication.settingsSets, selectedSettingsSetId, selectedWorkflowId,
+                    lastActiveNtripMountpointProfileId, stageSecrets = {}, privateRecoveryRef = privateRef,
+                )
+            },
+            persistPasswords = secretStore::putNewPasswords,
         )
     }
 

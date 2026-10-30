@@ -22,6 +22,10 @@ Verification:
 - Automated: profile-store read/save/read and legacy migration tests.
 - Manual: Android profile editor and recording/upload smoke tests after migration.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-SEC-NTRIP-TLS-001-AUTO, EV-SEC-NTRIP-TLS-001-MANUAL
+
 ### SEC-NTRIP-TLS-002: Distribution And Service Intent Boundary
 
 Status: Normative
@@ -39,6 +43,10 @@ Verification:
   `RecordingForegroundServiceTest`.
 - Build: both Google Play and sideload debug compile and unit-test tasks on a
   full Android host.
+
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-SEC-NTRIP-TLS-002-AUTO, EV-SEC-NTRIP-TLS-002-TASK
 
 ### SEC-NTRIP-TLS-003: Verified Endpoint And Redacted Transport Failures
 
@@ -62,6 +70,10 @@ Verification:
 - Manual: real TLS correction and source-upload sessions with compatible
   casters; confirm receiver raw capture continues after TLS failure.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-SEC-NTRIP-TLS-003-AUTO, EV-SEC-NTRIP-TLS-003-MANUAL
+
 ### SEC-SECRETS-001: Session Metadata Excludes Secrets
 
 Status: Normative
@@ -72,6 +84,10 @@ credentials. It may contain redacted metadata or secret references.
 Verification:
 - Automated: session metadata and settings-export tests.
 - Review: all session metadata writers redact credentials.
+
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-SECRETS-001-AUTO, EV-SEC-SECRETS-001-REVIEW
 
 ### SEC-SECRETS-002: Committed Profile Owns Its Secret Binding
 
@@ -92,6 +108,10 @@ Verification:
 - Review: runtime credential lookup uses only the committed owner binding.
 - Manual: credential collision migration and consented password export.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-SEC-SECRETS-002-AUTO, EV-SEC-SECRETS-002-REVIEW, EV-SEC-SECRETS-002-MANUAL
+
 ### SEC-SETTINGS-001: Plaintext Password Export Is Explicit
 
 Status: Normative
@@ -103,6 +123,10 @@ passwords.
 Verification:
 - Automated: settings export tests.
 - Manual: export settings with and without password checkbox.
+
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-SETTINGS-001-AUTO, EV-SEC-SETTINGS-001-MANUAL
 
 ## Imports
 
@@ -116,6 +140,10 @@ password import MUST be explicit and user-visible.
 Verification:
 - Automated: settings import validation tests.
 - Manual: Android "open JSON with RtkCollector" import flow.
+
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-IMPORT-001-AUTO, EV-SEC-IMPORT-001-MANUAL
 
 ### SEC-IMPORT-002: Settings Restore Is Complete And Does Not Transfer SAF Authority
 
@@ -140,6 +168,10 @@ Verification:
   tests.
 - Manual: import on a second device requires selecting its SAF folder before
   recording.
+
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-IMPORT-002-AUTO, EV-SEC-IMPORT-002-MANUAL
 
 ### SEC-IMPORT-003: Profile Graph Restore Is One Validated Store Transaction
 
@@ -171,6 +203,10 @@ Verification:
 - Manual: interrupt or fail profile-store and Android Keystore operations and
   confirm distinct outcome messages.
 
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-IMPORT-003-AUTO, EV-SEC-IMPORT-003-REVIEW, EV-SEC-IMPORT-003-MANUAL
+
 ### SEC-IMPORT-004: Imported Credential Bindings Cannot Reuse Local Secrets
 
 Status: Normative
@@ -193,6 +229,10 @@ Verification:
   imported graph does not inherit local credentials; omit an optional family
   and verify its retained credentials remain.
 
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-IMPORT-004-AUTO, EV-SEC-IMPORT-004-MANUAL
+
 ### SEC-IMPORT-005: Present Optional Family Fields Are Strictly Typed
 
 Status: Normative
@@ -207,6 +247,10 @@ Verification:
 - Automated: `SettingsImportModelsTest` present-family malformed-field tests.
 - Manual: import backups with omitted, empty and malformed optional-family
   fields and confirm their distinct outcomes.
+
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-IMPORT-005-AUTO, EV-SEC-IMPORT-005-MANUAL
 
 ### SEC-IMPORT-006: Legacy Profile Migration Is Staged And Recoverable
 
@@ -248,6 +292,10 @@ Verification:
 - Manual: upgrade/import with legacy customizations, missing credentials,
   storage/Keystore failure and SAF reselection.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-SEC-IMPORT-006-AUTO, EV-SEC-IMPORT-006-REVIEW, EV-SEC-IMPORT-006-MANUAL
+
 ## Diagnostics
 
 ### SEC-DIAGNOSTICS-001: Diagnostics Are Opt-In And Redacted
@@ -264,3 +312,7 @@ diagnostics or session events.
 Verification:
 - Automated: diagnostics redaction and disabled-state tests.
 - Review: diagnostic call sites use guarded construction for hot-path records.
+
+Provenance: AGENTS.md; SECURITY.md; PRIVACY.md; docs/ntrip-and-corrections.md; docs/play-publication.md
+
+Evidence obligations: EV-SEC-DIAGNOSTICS-001-AUTO, EV-SEC-DIAGNOSTICS-001-REVIEW

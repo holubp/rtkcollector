@@ -131,7 +131,10 @@ class NtripRuntimeController(
         generation.incrementAndGet()
         val active = activeWorker
         active?.deactivate()
-        runCatching { active?.client?.cancel() }
+        active?.startCancellationIfNeeded()
+        val cancellationTerminated = active?.awaitCancellationTermination(
+            remainingNanos(startedAtNanos, timeoutNanos),
+        ) ?: true
         val currentWorker = worker
         val workerTerminated = awaitWorkerTermination(
             currentWorker,
@@ -140,7 +143,7 @@ class NtripRuntimeController(
         val callbacksQuiesced = active?.awaitCallbacksQuiesced(
             remainingNanos(startedAtNanos, timeoutNanos),
         ) ?: true
-        val terminated = workerTerminated && callbacksQuiesced
+        val terminated = cancellationTerminated && workerTerminated && callbacksQuiesced
         if (terminated && worker === currentWorker) {
             worker = null
             if (activeWorker === active) {
@@ -204,6 +207,21 @@ class NtripRuntimeController(
     ) {
         private val callbackState = AtomicLong(0L)
         private val callbacksQuiesced = CountDownLatch(1)
+        private var cancellationWorker: Thread? = null
+
+        fun startCancellationIfNeeded() {
+            if (cancellationWorker != null) return
+            cancellationWorker = Thread(
+                { runCatching { client.cancel() } },
+                CANCELLATION_WORKER_NAME,
+            ).also {
+                it.isDaemon = true
+                it.start()
+            }
+        }
+
+        fun awaitCancellationTermination(timeoutNanos: Long): Boolean =
+            awaitWorkerTermination(cancellationWorker, timeoutNanos)
 
         fun deactivate() {
             while (true) {
@@ -341,5 +359,6 @@ class NtripRuntimeController(
         const val CALLBACK_COUNT_MASK = Long.MAX_VALUE
         const val JOIN_TIMEOUT_MILLIS = 1_500L
         const val NANOS_PER_MILLISECOND = 1_000_000L
+        const val CANCELLATION_WORKER_NAME = "rtkcollector-ntrip-cancel"
     }
 }

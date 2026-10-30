@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "authority_ref": "AGENTS.md#Specification-First-Workflow",
+  "authorized_approvers": [
+    "human:holubp"
+  ],
+  "authorized_evidence_issuers": [
+    "ci:github-actions/spec-compliance",
+    "human:holubp"
+  ],
+  "authorized_semantic_reviewers": [
+    "human:holubp",
+    "model:codex-*"
+  ]
+}

@@ -12,6 +12,14 @@ internal data class RtklibStartValidation(
 }
 
 internal object RtklibStartValidator {
+    fun validateReceiverFrequency(receiverFamily: String, frequencyCount: Int) {
+        require(frequencyCount in 1..3) { "RTKLIB frequency count must be 1, 2 or 3." }
+        val family = receiverFamily.trim().lowercase()
+        require(family !in setOf("ublox-m8t", "ublox-m8p", "ublox-m8p0", "ublox-m8p2") || frequencyCount == 1) {
+            "u-blox M8T/M8P require single-frequency RTKLIB processing; select one frequency."
+        }
+    }
+
     fun validate(
         enabled: Boolean,
         receiverProfileId: String,

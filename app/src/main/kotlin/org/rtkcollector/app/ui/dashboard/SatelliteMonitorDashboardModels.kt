@@ -93,6 +93,9 @@ data class SatelliteMonitorDashboardState(
     val hasFrequencyGroups: Boolean
         get() = constellations.any { it.frequencies.isNotEmpty() }
 
+    val statusMessage: String?
+        get() = message.takeIf { it.isNotBlank() }
+
     companion object {
         fun unavailable(
             engineLabel: String = "In-device RTK",

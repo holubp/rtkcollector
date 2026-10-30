@@ -9,6 +9,15 @@ import org.rtkcollector.core.solution.SolutionEngine
 
 class SelectedSolutionDisplayTest {
     @Test
+    fun `source identity also identifies invalid primary updates without a candidate`() {
+        assertTrue(isPrimaryScreenSource("UM980-BESTNAV", "unicore-n4"))
+        assertTrue(isPrimaryScreenSource("UBX-NAV-PVT", "ublox-m8p"))
+        assertTrue(isPrimaryScreenSource("NMEA-GGA", "generic-nmea-rtcm"))
+        assertFalse(isPrimaryScreenSource("UM980-PPP", "um980"))
+        assertFalse(isPrimaryScreenSource("NMEA-GGA", "um980"))
+        assertFalse(isPrimaryScreenSource("NMEA-GGA", "ublox-m8p"))
+    }
+    @Test
     fun `um980 screen candidate is bestnav only`() {
         assertTrue(candidate("UM980-BESTNAV", "um980").isPrimaryScreenCandidateFor("um980"))
         assertFalse(candidate("NMEA-GGA", "um980").isPrimaryScreenCandidateFor("um980"))

@@ -15,6 +15,10 @@ Verification:
 - Review: controls are not buried inside vertically scrollable telemetry
   content.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-DASH-001-REVIEW, EV-UI-DASH-001-MANUAL
+
 ### UI-DASH-003: Portrait Monitoring Cards Avoid Content Clipping
 
 Status: Normative
@@ -28,6 +32,10 @@ Verification:
 - Review: dashboard layout selection depends on available width/orientation,
   not on recorded value length.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-DASH-003-REVIEW, EV-UI-DASH-003-MANUAL
+
 ### UI-DASH-002: Dashboard Values Must Not Jump Layout
 
 Status: Normative
@@ -38,6 +46,10 @@ that disrupts operation.
 Verification:
 - Manual: live UM980 session with high-rate position updates.
 - Review: fixed/minimum card dimensions and compact formatting.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-DASH-002-REVIEW, EV-UI-DASH-002-MANUAL
 
 ### UI-DASH-004: Mock GPS Control Is A First-Class Dashboard Chip
 
@@ -54,6 +66,10 @@ Verification:
 - Manual: top chip can switch between Off, `1 Hz`, `2 Hz`, `5 Hz` and `10 Hz`
   before recording and during recording.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-DASH-004-AUTO, EV-UI-DASH-004-MANUAL
+
 ### UI-DASH-005: Dashboard Labels And Units Are Consistent
 
 Status: Normative
@@ -69,6 +85,10 @@ fields.
 Verification:
 - Automated: dashboard formatter and layout preference tests.
 - Manual: live dashboard review in portrait and landscape.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-DASH-005-AUTO, EV-UI-DASH-005-MANUAL
 
 ### UI-DASH-006: Recording Reliability Warnings Stay In The Alert Area
 
@@ -99,6 +119,10 @@ Verification:
   and landscape layouts, use `Fix it`, change exemption and return; confirm the
   warning refreshes and settings navigation does not change recording state.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-DASH-006-REVIEW, EV-UI-DASH-006-MANUAL, EV-UI-DASH-006-AUTO
+
 ### UI-NTRIP-001: Transport Metadata Does Not Masquerade As Status
 
 Status: Normative
@@ -117,6 +141,10 @@ Verification:
 - Manual: inspect selected TLS and plaintext profiles before and during a
   recording, including a plaintext caster with GGA upload enabled.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-UI-NTRIP-001-AUTO, EV-UI-NTRIP-001-MANUAL
+
 ### UI-SATMON-001: Compact Satellite Card Uses Main Engine
 
 Status: Normative
@@ -130,6 +158,10 @@ Verification:
 - Automated: satellite monitor dashboard model tests.
 - Manual: dashboard visual review in portrait and landscape.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-UI-SATMON-001-AUTO, EV-UI-SATMON-001-MANUAL
+
 ### UI-SATMON-002: Compact Satellite Card Groups Constellation Then Frequency
 
 Status: Normative
@@ -141,6 +173,10 @@ with right-aligned `used/visible` counts.
 Verification:
 - Automated: satellite monitor dashboard model tests.
 - Manual: dashboard visual review with telemetry-capable command profiles.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-UI-SATMON-002-AUTO, EV-UI-SATMON-002-MANUAL
 
 ### UI-SATMON-003: Boxed Bars Encode Visible And Used Counts
 
@@ -155,6 +191,10 @@ Verification:
 - Automated: `SatelliteMonitorDashboardModelsTest` boxed segment tests.
 - Manual: dashboard visual review.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-UI-SATMON-003-AUTO, EV-UI-SATMON-003-MANUAL
+
 ### UI-SATMON-004: Source Freshness Labels Are Learnable
 
 Status: Normative
@@ -166,6 +206,10 @@ these labels and the `used/visible` boxed-bar semantics.
 
 Verification:
 - Manual: dashboard help review.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-UI-SATMON-004-MANUAL
 
 ### UI-SATMON-005: Satellite Card Has Light Default And Optional Dark Style
 
@@ -179,6 +223,10 @@ application theme.
 Verification:
 - Automated: dashboard layout preference tests.
 - Manual: dashboard visual review in light and satellite-card dark modes.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-UI-SATMON-005-AUTO, EV-UI-SATMON-005-MANUAL
 
 ### UI-SATMON-006: Detailed Satellite Monitor Supports Grouping Switch
 
@@ -195,6 +243,10 @@ Verification:
 - Automated: satellite monitor dashboard model grouping tests.
 - Manual: detailed screen visual review in both grouping modes.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-UI-SATMON-006-AUTO, EV-UI-SATMON-006-MANUAL
+
 ### UI-BASE-001: Base Coordinate Actions Are Compact And Explicit
 
 Status: Normative
@@ -209,6 +261,10 @@ Verification:
 - Automated: dashboard state tests for base candidate generation.
 - Manual: temporary-base dashboard review in portrait and landscape.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-BASE-001-AUTO, EV-UI-BASE-001-MANUAL
+
 ### UI-UPLOAD-001: Caster Upload Card Is Visible When Enabled
 
 Status: Normative
@@ -222,6 +278,10 @@ Verification:
 - Automated: dashboard visibility/model tests for upload card.
 - Manual: screenshot review shows card visible before session start and during
   active recording.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-UI-UPLOAD-001-AUTO, EV-UI-UPLOAD-001-MANUAL
 
 ### UI-UPLOAD-002: Upload Monitor Surfaces State, Errors, Retry and Throughput
 
@@ -245,6 +305,10 @@ Verification:
 - Manual: detailed upload monitor shows state/retry/volume/bitrate/RTCM rates and
   stop reason.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-UI-UPLOAD-002-AUTO, EV-UI-UPLOAD-002-MANUAL
+
 ## Profile Editors
 
 ### UI-SETUP-001: Active Settings Set Is Visible In Settings
@@ -258,6 +322,10 @@ from editing a settings-set profile.
 Verification:
 - Automated: active setup resolver and settings-set persistence tests.
 - Manual: settings hub review before and during recording.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-001-AUTO, EV-UI-SETUP-001-MANUAL
 
 ### UI-SETUP-002: Settings Set Options Have Explicit Application Policy
 
@@ -291,6 +359,10 @@ Verification:
   tests, including stale overrides and workflow selection before Start.
 - Manual: activate settings set, inspect fixed Home controls in compact and
   rail layouts, override changeable selectors and restart app.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-002-AUTO, EV-UI-SETUP-002-MANUAL
 
 ### UI-SETUP-009: Active Setup Policies Resolve Consistently
 
@@ -326,6 +398,10 @@ Verification:
   result.
 - Manual: restart/recovery and policy-selection smoke tests.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-UI-SETUP-009-AUTO, EV-UI-SETUP-009-REVIEW, EV-UI-SETUP-009-MANUAL
+
 ### UI-SETUP-003: Dashboard Setup Strip Keeps Essential Selectors
 
 Status: Normative
@@ -349,6 +425,10 @@ Verification:
 - Manual: dashboard selector review with no upload profile and with a configured
   upload profile.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-003-AUTO, EV-UI-SETUP-003-MANUAL, EV-UI-SETUP-003-REVIEW
+
 ### UI-SETUP-004: NTRIP Source Upload Credentials Are Role-Specific
 
 Status: Normative
@@ -361,6 +441,10 @@ without retyping it.
 Verification:
 - Automated: caster upload profile/editor tests where practical.
 - Manual: source-upload profile editor review.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-004-AUTO, EV-UI-SETUP-004-MANUAL
 
 ### UI-SETUP-005: Device Filter Controls Are Visible And Context-Preserving
 
@@ -382,6 +466,10 @@ Verification:
 - Review: Settings hub uses a button-style Device control.
 - Manual: open Settings, select Device `Any`, `UM980` or `u-blox M8T`, and
   confirm the app remains in Settings after the selector closes.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-005-AUTO, EV-UI-SETUP-005-REVIEW, EV-UI-SETUP-005-MANUAL
 
 ### UI-SETUP-006: Out-Of-Filter Active Profiles Are Preserved And Warned
 
@@ -406,6 +494,10 @@ Verification:
   profile remains visible with a warning, then select a compatible UM980 profile
   and confirm the warning clears.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-006-AUTO, EV-UI-SETUP-006-MANUAL
+
 ### UI-SETUP-007: Sessions Have A Dedicated Top-Level Group
 
 Status: Normative
@@ -420,6 +512,10 @@ Verification:
 - Automated: Settings hub source-structure test.
 - Manual: open Settings and reach recent sessions from the dedicated `Sessions`
   group immediately below `Active setup`.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-007-AUTO, EV-UI-SETUP-007-MANUAL
 
 ### UI-SETUP-008: Dashboard Setup Selectors Are Foldable And Self-Revealing
 
@@ -450,6 +546,10 @@ Verification:
 - Manual: collapse, restart, trigger/fix each setup warning and confirm the
   remembered collapsed preference returns after correction.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-SETUP-008-AUTO, EV-UI-SETUP-008-REVIEW, EV-UI-SETUP-008-MANUAL
+
 ### UI-KEYBOARD-002: Editable One-Line Profile Fields Use Shared Native Editor
 
 Status: Normative
@@ -465,6 +565,10 @@ Verification:
 - Manual: profile rename, settings edit, mountpoint edit and base-coordinate
   rename keyboard smoke test.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-KEYBOARD-002-AUTO, EV-UI-KEYBOARD-002-MANUAL
+
 ### UI-PROFILE-002: Profile Activation Is Separate From Editing
 
 Status: Normative
@@ -474,11 +578,19 @@ references that are constrained by receiver family or workflow compatibility
 MUST be selectable from controlled lists instead of free-text identifiers.
 Profile-selection dialogs MUST remain scrollable when the available built-in
 and user profile list exceeds the visible dialog area.
+Leaving an editor with unsaved changes MUST require an explicit discard decision;
+unchanged content MUST NOT prompt. Dirty-state comparison MUST distinguish
+different field/value boundaries, including multiline command text, rather than
+using ambiguous concatenation or changing active settings implicitly.
 
 Verification:
 - Automated: profile compatibility tests where practical.
 - Manual: settings/profile screens show Activate/Edit/Rename as distinct
   actions; long profile selectors can scroll to all entries.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-PROFILE-002-AUTO, EV-UI-PROFILE-002-MANUAL
 
 ### UI-PROFILE-003: Profile References Preserve Owner Content
 
@@ -508,6 +620,10 @@ Verification:
   owner fields through references.
 - Manual: shared-profile edit, typed mountpoint and mock-output workflows.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-UI-PROFILE-003-AUTO, EV-UI-PROFILE-003-REVIEW, EV-UI-PROFILE-003-MANUAL
+
 ### UI-PROFILE-001: Built-In Profiles Are Viewable And Copyable
 
 Status: Normative
@@ -519,6 +635,10 @@ Verification:
 - Automated: profile protection tests where practical.
 - Manual: built-in command-profile screen shows View/read-only behaviour and a
   copy action.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-PROFILE-001-AUTO, EV-UI-PROFILE-001-MANUAL
 
 ### UI-KEYBOARD-001: Multiline Command Editors Preserve Hardware Keyboard Semantics
 
@@ -535,6 +655,10 @@ Verification:
 - Manual: Bluetooth/hardware keyboard editing in init/shutdown command screens.
 - Review: command editor does not intercept arrow keys for field traversal.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-KEYBOARD-001-REVIEW, EV-UI-KEYBOARD-001-MANUAL
+
 ### UI-STORAGE-001: SAF Storage Uses Android Folder Picker
 
 Status: Normative
@@ -547,11 +671,40 @@ Verification:
 - Manual: create/edit storage profile with Selected Android folder.
 - Review: profile editor treats the tree URI as display-only routing data.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-STORAGE-001-REVIEW, EV-UI-STORAGE-001-MANUAL
+
+### UI-CONSOLE-001: Device Console Is Idle-Only And Session-Isolated
+
+Status: Normative
+
+The device console MUST be disabled while recording is active and MUST NOT
+compete with the foreground service for the USB receiver. Console commands MAY
+be sent only through an explicitly selected receiver and baud profile while the
+app is idle. Starting, STOPPING and finalization MUST NOT be treated as idle
+while the service still owns the receiver/session. Console connect and send MUST
+recheck that ownership, not rely only on a cached UI running flag.
+Console output MUST remain temporary and MUST NOT be inserted into
+recording session artifacts or represented as authoritative receiver capture.
+
+Verification:
+- Automated: device-console controller/model tests and recording-state gating
+  tests.
+- Manual: open the console while idle, then confirm it cannot be opened or used
+  during recording and that no session artifacts are created.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-14-device-console-design.md
+
+Evidence obligations: EV-UI-CONSOLE-001-AUTO, EV-UI-CONSOLE-001-MANUAL
+
 ## Documentation Separation
 
 ### UI-DOCS-001: User Documentation Is Separate From Formal Specs
 
 Status: Normative
+
+Coverage kind: documentation
 
 User-facing docs MUST explain workflows in task-oriented language for new users
 and power users. Formal specs MUST remain separate and may use precise
@@ -560,3 +713,24 @@ requirements language.
 Verification:
 - Review: user docs do not become requirement matrices; formal specs do not
   become tutorials.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md; docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md
+
+Evidence obligations: EV-UI-DOCS-001-REVIEW
+
+### UI-DASH-007: Transient Error Presentation Does Not Alter Recording
+
+Status: Normative
+
+Empty or explicitly absent errors MUST NOT appear as dashboard alerts. Nonfatal
+error snapshots MUST expire after the configured presentation interval (15
+seconds by default); fatal snapshots MUST remain visible while current.
+Presentation expiry MUST NOT clear the underlying runtime failure, change
+recording state or acknowledge a still-active alarm.
+
+Verification:
+- Automated: DashboardErrorVisibilityTest covers expiry boundaries and fatal persistence.
+
+Provenance: existing DashboardErrorVisibility implementation and tests; docs/android-background-operation.md; RC10 source-coverage reconciliation.
+
+Evidence obligations: EV-UI-DASH-007-AUTO

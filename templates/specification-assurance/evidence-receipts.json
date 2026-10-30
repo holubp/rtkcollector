@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "receipts": [
+    {
+      "id": "EV-CORE-FLOW-001-AUTO",
+      "requirement_id": "CORE-FLOW-001",
+      "requirement_digest": "sha256:<checker-produced digest>",
+      "implementation_digest": "sha256:<checker-produced digest>",
+      "supporting_digest": "sha256:<checker-produced per-requirement supporting realization digest; use sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945 when there are no supporting paths>",
+      "kind": "test",
+      "state": "not-run",
+      "target": "tests/test_feature.py#test_expected_behavior",
+      "verified_at": "<timezone-aware timestamp>",
+      "verified_commit": "<commit or worktree identifier>",
+      "runner": "ci:<authorized stable runner identity>",
+      "artifact_ref": "artifact:docs/specification/evidence/<Git-tracked committed artifact>",
+      "artifact_digest": "sha256:<checker-produced artifact digest>"
+    }
+  ]
+}

@@ -6,10 +6,17 @@
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
+#include <memory>
 #include <mutex>
+#include <new>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 extern "C" {
@@ -18,9 +25,11 @@ extern "C" {
 
 namespace {
 thread_local std::string rtklib_show_messages;
+thread_local bool rtklib_message_allocation_failed = false;
 
 static void reset_rtklib_messages() {
     rtklib_show_messages.clear();
+    rtklib_message_allocation_failed = false;
 }
 
 static std::string current_rtklib_messages() {
@@ -29,6 +38,7 @@ static std::string current_rtklib_messages() {
 }
 
 extern "C" int showmsg(const char *format, ...) {
+    if (rtklib_message_allocation_failed) return 1;
     if (!format || !*format) return 0;
 
     std::array<char, 2048> buffer{};
@@ -37,9 +47,15 @@ extern "C" int showmsg(const char *format, ...) {
     std::vsnprintf(buffer.data(), buffer.size(), format, args);
     va_end(args);
 
-    if (buffer[0] != '\0') {
-        if (!rtklib_show_messages.empty()) rtklib_show_messages.push_back('\n');
-        rtklib_show_messages.append(buffer.data());
+    try {
+        if (buffer[0] != '\0') {
+            if (!rtklib_show_messages.empty()) rtklib_show_messages.push_back('\n');
+            rtklib_show_messages.append(buffer.data());
+        }
+    } catch (const std::bad_alloc &) {
+        // Request a normal C-side abort so RTKLIB can release its resources first.
+        rtklib_message_allocation_failed = true;
+        return 1;
     }
     return 0;
 }
@@ -76,10 +92,60 @@ struct NativeResult {
     std::string satellite_usage;
 };
 
+template <typename T>
+class ScopedLocalRef {
+public:
+    ScopedLocalRef(JNIEnv *env, T value) : env_(env), value_(value) {}
+    ScopedLocalRef(const ScopedLocalRef &) = delete;
+    ScopedLocalRef &operator=(const ScopedLocalRef &) = delete;
+    ~ScopedLocalRef() {
+        if (value_) env_->DeleteLocalRef(value_);
+    }
+    T get() const { return value_; }
+    T release() { return std::exchange(value_, nullptr); }
+
+private:
+    JNIEnv *env_;
+    T value_;
+};
+
+static void throw_java_exception(JNIEnv *env, const char *type, const char *message) {
+    if (env->ExceptionCheck()) return;
+    ScopedLocalRef<jclass> exception_class(env, env->FindClass(type));
+    if (!exception_class.get() || env->ExceptionCheck()) return;
+    env->ThrowNew(exception_class.get(), message);
+}
+
+static void translate_native_exception(JNIEnv *env) {
+    // Called only from a JNI catch handler; never replace a pending Java exception.
+    if (env->ExceptionCheck()) return;
+    try {
+        throw;
+    } catch (const std::bad_alloc &) {
+        throw_java_exception(env, "java/lang/OutOfMemoryError", "RTKLIB native allocation failed");
+    } catch (...) {
+        throw_java_exception(env, "java/lang/IllegalStateException", "RTKLIB native operation failed");
+    }
+}
+
+static bool jni_allocation_ok(JNIEnv *env, jobject value) {
+    if (env->ExceptionCheck()) return false;
+    if (value) return true;
+    throw_java_exception(env, "java/lang/OutOfMemoryError", "RTKLIB JNI allocation failed");
+    return false;
+}
+
+static jstring new_java_string(JNIEnv *env, const char *value) {
+    if (env->ExceptionCheck()) return nullptr;
+    ScopedLocalRef<jstring> result(env, env->NewStringUTF(value));
+    if (!jni_allocation_ok(env, result.get())) return nullptr;
+    return result.release();
+}
+
 class ScopedUtfChars {
 public:
     ScopedUtfChars(JNIEnv *env, jstring value) : env_(env), value_(value) {
-        if (value_) chars_ = env_->GetStringUTFChars(value_, nullptr);
+        if (value_ && !env_->ExceptionCheck()) chars_ = env_->GetStringUTFChars(value_, nullptr);
     }
 
     ScopedUtfChars(const ScopedUtfChars &) = delete;
@@ -90,7 +156,7 @@ public:
     }
 
     bool ok() const {
-        return value_ != nullptr && chars_ != nullptr;
+        return value_ != nullptr && chars_ != nullptr && !env_->ExceptionCheck();
     }
 
     const char *c_str() const {
@@ -104,22 +170,73 @@ private:
 };
 
 static jstring jni_input_error(JNIEnv *env, const char *message) {
-    if (env->ExceptionCheck()) return nullptr;
-    return env->NewStringUTF(message);
+    return new_java_string(env, message);
 }
 
 struct RtklibEngineHandle {
     std::mutex mutex;
+    bool destroyed = false;
     rtksvr_t server{};
     prcopt_t prcopt{};
     solopt_t solopt[2]{};
     bool server_initialized = false;
     bool server_started = false;
+    bool server_start_pending = false;
     bool output_nmea = true;
     bool output_pos = true;
     uint64_t decoded_rover_epochs = 0;
     uint64_t decoded_correction_messages = 0;
     NativeResult latest;
+    ~RtklibEngineHandle();
+};
+
+static std::mutex engine_registry_mutex;
+static std::unordered_map<jlong, std::shared_ptr<RtklibEngineHandle>> engine_registry;
+// IDs are never recycled, including after destruction or a failed insertion.
+// Refuse exhaustion rather than wrapping into an earlier handle's generation.
+static uint64_t next_engine_id = 1;
+
+static jlong register_engine(std::shared_ptr<RtklibEngineHandle> engine) {
+    std::lock_guard<std::mutex> lock(engine_registry_mutex);
+    if (next_engine_id > static_cast<uint64_t>(std::numeric_limits<jlong>::max())) {
+        throw std::overflow_error("RTKLIB native handle IDs exhausted");
+    }
+    const jlong handle = static_cast<jlong>(next_engine_id++);
+    engine_registry.emplace(handle, engine);
+    return handle;
+}
+
+static std::shared_ptr<RtklibEngineHandle> find_engine(jlong handle) {
+    if (handle <= 0) return {};
+    std::lock_guard<std::mutex> lock(engine_registry_mutex);
+    auto it = engine_registry.find(handle);
+    return it == engine_registry.end() ? nullptr : it->second;
+}
+
+static std::shared_ptr<RtklibEngineHandle> take_engine(jlong handle) {
+    if (handle <= 0) return {};
+    std::lock_guard<std::mutex> lock(engine_registry_mutex);
+    auto it = engine_registry.find(handle);
+    if (it == engine_registry.end()) return {};
+    auto engine = std::move(it->second);
+    engine_registry.erase(it);
+    return engine;
+}
+
+class EngineAccess {
+public:
+    explicit EngineAccess(jlong handle)
+        : engine_(find_engine(handle)),
+          lock_(engine_ ? std::unique_lock<std::mutex>(engine_->mutex) : std::unique_lock<std::mutex>()) {}
+
+    RtklibEngineHandle *get() const {
+        return engine_ && !engine_->destroyed ? engine_.get() : nullptr;
+    }
+
+private:
+    // Release the per-engine lock before releasing the last shared owner.
+    std::shared_ptr<RtklibEngineHandle> engine_;
+    std::unique_lock<std::mutex> lock_;
 };
 
 static std::string fix_class_for(int stat) {
@@ -287,6 +404,7 @@ static bool convert_raw_to_rinex(
 
     reset_rtklib_messages();
     int status = convrnx(format, &rnxopt, input.c_str(), outputs.data());
+    if (rtklib_message_allocation_failed) throw std::bad_alloc();
     if (status <= 0) {
         *error = "RTKLIB convrnx failed for " + input + " (status=" + std::to_string(status) + ")";
         std::string messages = current_rtklib_messages();
@@ -337,6 +455,7 @@ static bool run_postpos_output(
         "",
         ""
     );
+    if (rtklib_message_allocation_failed) throw std::bad_alloc();
     if (status != 0 || !file_non_empty(output)) {
         *error = "RTKLIB postpos failed for " + output + " (status=" + std::to_string(status) + ")";
         if (!file_non_empty(output)) *error += ", output is empty";
@@ -347,19 +466,60 @@ static bool run_postpos_output(
     return true;
 }
 
+static void release_failed_server_start(rtksvr_t *server) {
+    // Pinned rtksvrstart early returns skip the worker's cleanup; rtksvrfree
+    // owns only nav/obs/rtk. No worker exists on this failed-start path.
+    for (int i = 0; i < MAXSTRRTK; ++i) {
+        if (server->stream[i].port) strclose(server->stream + i);
+    }
+    for (int i = 0; i < 3; ++i) {
+        std::free(server->buff[i]); server->buff[i] = nullptr;
+        std::free(server->pbuf[i]); server->pbuf[i] = nullptr;
+        server->nb[i] = server->npb[i] = 0;
+        // Decoder init failure may already have freed and nulled these fields.
+        free_raw(server->raw + i);
+        free_rtcm(server->rtcm + i);
+    }
+    for (int i = 0; i < 2; ++i) {
+        std::free(server->sbuf[i]); server->sbuf[i] = nullptr;
+        server->nsb[i] = 0;
+    }
+}
+
 static void release_rtklib_state(RtklibEngineHandle *engine) {
     if (engine->server_started) {
+        // rtksvrstop documents NULL command entries as "no command" and joins the worker.
         const char *cmds[3] = {nullptr, nullptr, nullptr};
         rtksvrstop(&engine->server, cmds);
         engine->server_started = false;
     }
     if (engine->server_initialized) {
+        if (engine->server_start_pending) {
+            release_failed_server_start(&engine->server);
+            engine->server_start_pending = false;
+        }
         rtksvrfree(&engine->server);
         engine->server_initialized = false;
     }
     engine->decoded_rover_epochs = 0;
     engine->decoded_correction_messages = 0;
 }
+
+RtklibEngineHandle::~RtklibEngineHandle() {
+    release_rtklib_state(this);
+}
+
+class ScopedServerStart {
+public:
+    explicit ScopedServerStart(RtklibEngineHandle *engine) : engine_(engine) {}
+    ScopedServerStart(const ScopedServerStart &) = delete;
+    ScopedServerStart &operator=(const ScopedServerStart &) = delete;
+    ~ScopedServerStart() { if (engine_) release_rtklib_state(engine_); }
+    void commit() { engine_ = nullptr; }
+
+private:
+    RtklibEngineHandle *engine_;
+};
 
 static void drain_stream_to_string(stream_t *stream, std::string *target) {
     uint8_t buff[4096] = {0};
@@ -376,6 +536,21 @@ static void drain_stream_to_string(stream_t *stream, std::string *target) {
 static void drain_solution_streams(RtklibEngineHandle *engine, NativeResult *result) {
     if (engine->output_nmea) drain_stream_to_string(engine->server.stream + SERVER_STREAM_NMEA, &result->nmea);
     if (engine->output_pos) drain_stream_to_string(engine->server.stream + SERVER_STREAM_POS, &result->pos);
+}
+
+static bool observe_server_failure(RtklibEngineHandle *engine, NativeResult *result) {
+    if (!engine->server_started) return false;
+    rtksvrlock(&engine->server);
+    const bool running = engine->server.state == 1;
+    rtksvrunlock(&engine->server);
+    if (running) return false;
+
+    // server_started owns the join, not worker health. Join before releasing state.
+    release_rtklib_state(engine);
+    result->state = "FAILED";
+    result->error = "RTKLIB server worker stopped";
+    engine->latest = *result;
+    return true;
 }
 
 static void update_result_from_server(RtklibEngineHandle *engine, NativeResult *result) {
@@ -445,9 +620,9 @@ static NativeResult feed_server_bytes(RtklibEngineHandle *engine, int stream_kin
     result.warning.clear();
     result.error.clear();
 
-    if (!engine->server_started) {
+    if (observe_server_failure(engine, &result) || !engine->server_started) {
         result.state = "FAILED";
-        result.error = "RTKLIB server is not started";
+        if (result.error.empty()) result.error = "RTKLIB server is not started";
         return result;
     }
 
@@ -462,7 +637,9 @@ static NativeResult feed_server_bytes(RtklibEngineHandle *engine, int stream_kin
         return result;
     }
 
-    int written = strwrite(engine->server.stream + stream_index, const_cast<uint8_t *>(bytes), length);
+    int written = length > 0
+        ? strwrite(engine->server.stream + stream_index, const_cast<uint8_t *>(bytes), length)
+        : 0;
     if (written < length) {
         result.warning = "RTKLIB memory stream accepted fewer bytes than offered";
     }
@@ -475,6 +652,7 @@ static NativeResult feed_server_bytes(RtklibEngineHandle *engine, int stream_kin
 }
 
 static jobjectArray to_java_result(JNIEnv *env, const RtklibEngineHandle *engine, const NativeResult &result) {
+    if (env->ExceptionCheck()) return nullptr;
     std::string decoded_rover = long_to_string(static_cast<long long>(engine ? engine->decoded_rover_epochs : 0));
     std::string decoded_correction = long_to_string(static_cast<long long>(engine ? engine->decoded_correction_messages : 0));
     std::string values[] = {
@@ -495,38 +673,36 @@ static jobjectArray to_java_result(JNIEnv *env, const RtklibEngineHandle *engine
         decoded_correction,
         result.satellite_usage,
     };
-    jclass string_class = env->FindClass("java/lang/String");
-    if (!string_class) return nullptr;
-    jstring empty = env->NewStringUTF("");
-    if (!empty) return nullptr;
-    jobjectArray array = env->NewObjectArray(16, string_class, empty);
-    env->DeleteLocalRef(empty);
-    if (!array) return nullptr;
+    ScopedLocalRef<jclass> string_class(env, env->FindClass("java/lang/String"));
+    if (!jni_allocation_ok(env, string_class.get())) return nullptr;
+    ScopedLocalRef<jobjectArray> array(env, env->NewObjectArray(16, string_class.get(), nullptr));
+    if (!jni_allocation_ok(env, array.get())) return nullptr;
     for (int i = 0; i < 16; i++) {
-        jstring item = env->NewStringUTF(values[i].c_str());
-        if (!item) return nullptr;
-        env->SetObjectArrayElement(array, i, item);
-        env->DeleteLocalRef(item);
+        ScopedLocalRef<jstring> item(env, new_java_string(env, values[i].c_str()));
+        if (!jni_allocation_ok(env, item.get())) return nullptr;
+        env->SetObjectArrayElement(array.get(), i, item.get());
         if (env->ExceptionCheck()) return nullptr;
     }
-    return array;
-}
-
-static RtklibEngineHandle *from_handle(jlong handle) {
-    return reinterpret_cast<RtklibEngineHandle *>(static_cast<intptr_t>(handle));
+    return array.release();
 }
 
 }  // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibVersion(JNIEnv *env, jclass) {
-    return env->NewStringUTF("RTKLIB-EX " PATCH_LEVEL);
+Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibVersion(JNIEnv *env, jclass) try {
+    return new_java_string(env, "RTKLIB-EX " PATCH_LEVEL);
+} catch (...) {
+    translate_native_exception(env);
+    return nullptr;
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibCreate(JNIEnv *, jclass) {
-    auto *engine = new RtklibEngineHandle();
-    return static_cast<jlong>(reinterpret_cast<intptr_t>(engine));
+Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibCreate(JNIEnv *env, jclass) try {
+    if (env->ExceptionCheck()) return 0;
+    return register_engine(std::make_shared<RtklibEngineHandle>());
+} catch (...) {
+    translate_native_exception(env);
+    return 0;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -543,12 +719,14 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibStart(
     jint server_cycle_millis,
     jint server_buffer_bytes,
     jint solution_buffer_bytes
-) {
-    auto *engine = from_handle(handle);
-    if (!engine) return env->NewStringUTF("RTKLIB native handle is null");
+) try {
+    if (env->ExceptionCheck()) return nullptr;
+    EngineAccess access(handle);
+    auto *engine = access.get();
+    if (!engine) return new_java_string(env, "RTKLIB native handle is invalid or closed");
 
-    std::lock_guard<std::mutex> lock(engine->mutex);
     release_rtklib_state(engine);
+    ScopedServerStart rollback(engine);
 
     ScopedUtfChars preset_chars(env, preset);
     ScopedUtfChars rover_chars(env, rover_format);
@@ -608,6 +786,7 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibStart(
         double nmeapos[3] = {0.0, 0.0, 0.0};
         char errmsg[2048] = {0};
 
+        engine->server_start_pending = true;
         if (!rtksvrstart(
                 &engine->server,
                 clamp_positive(server_cycle_millis, 1),
@@ -629,16 +808,21 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibStart(
             error = errmsg[0] ? errmsg : "RTKLIB server start failed";
         } else {
             engine->server_started = true;
+            engine->server_start_pending = false;
             engine->latest = NativeResult{};
             engine->latest.state = "RUNNING";
+            if (observe_server_failure(engine, &engine->latest)) error = engine->latest.error;
         }
     }
 
-    if (!error.empty()) {
-        release_rtklib_state(engine);
+    if (error.empty()) {
+        rollback.commit();
+        return nullptr;
     }
-    if (error.empty()) return nullptr;
-    return env->NewStringUTF(error.c_str());
+    return new_java_string(env, error.c_str());
+} catch (...) {
+    translate_native_exception(env);
+    return nullptr;
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
@@ -648,12 +832,14 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibFeed(
     jlong handle,
     jint stream_kind,
     jbyteArray bytes
-) {
-    auto *engine = from_handle(handle);
+) try {
+    if (env->ExceptionCheck()) return nullptr;
+    EngineAccess access(handle);
+    auto *engine = access.get();
     if (!engine) {
         NativeResult result;
         result.state = "FAILED";
-        result.error = "RTKLIB native handle is null";
+        result.error = "RTKLIB native handle is invalid or closed";
         return to_java_result(env, nullptr, result);
     }
     if (!bytes) {
@@ -663,32 +849,42 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibFeed(
         return to_java_result(env, engine, result);
     }
     jsize length = env->GetArrayLength(bytes);
+    if (env->ExceptionCheck()) return nullptr;
     std::vector<uint8_t> buffer(static_cast<size_t>(length));
-    env->GetByteArrayRegion(bytes, 0, length, reinterpret_cast<jbyte *>(buffer.data()));
-    std::lock_guard<std::mutex> lock(engine->mutex);
+    if (length > 0) {
+        env->GetByteArrayRegion(bytes, 0, length, reinterpret_cast<jbyte *>(buffer.data()));
+        if (env->ExceptionCheck()) return nullptr;
+    }
     NativeResult result = feed_server_bytes(engine, stream_kind, buffer.data(), length);
     return to_java_result(env, engine, result);
+} catch (...) {
+    translate_native_exception(env);
+    return nullptr;
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibSnapshot(JNIEnv *env, jclass, jlong handle) {
-    auto *engine = from_handle(handle);
+Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibSnapshot(JNIEnv *env, jclass, jlong handle) try {
+    if (env->ExceptionCheck()) return nullptr;
+    EngineAccess access(handle);
+    auto *engine = access.get();
     if (!engine) {
         NativeResult result;
         result.state = "STOPPED";
-        result.warning = "RTKLIB native handle is null";
+        result.warning = "RTKLIB native handle is invalid or closed";
         return to_java_result(env, nullptr, result);
     }
-    std::lock_guard<std::mutex> lock(engine->mutex);
     NativeResult result = engine->latest;
     result.nmea.clear();
     result.pos.clear();
-    if (engine->server_started) {
+    if (engine->server_started && !observe_server_failure(engine, &result)) {
         drain_solution_streams(engine, &result);
         update_result_from_server(engine, &result);
         engine->latest = result;
     }
     return to_java_result(env, engine, result);
+} catch (...) {
+    translate_native_exception(env);
+    return nullptr;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -703,7 +899,8 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
     jstring correction_rtcm3,
     jstring output_nmea,
     jstring output_pos
-) {
+) try {
+    if (env->ExceptionCheck()) return nullptr;
     ScopedUtfChars preset_chars(env, preset);
     ScopedUtfChars rover_chars(env, rover_format);
     ScopedUtfChars solution_type_chars(env, solution_type);
@@ -792,29 +989,36 @@ Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibPostprocess(
     }
 
     if (error.empty()) return nullptr;
-    return env->NewStringUTF(error.c_str());
+    return new_java_string(env, error.c_str());
+} catch (...) {
+    translate_native_exception(env);
+    return nullptr;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibStop(JNIEnv *, jclass, jlong handle) {
-    auto *engine = from_handle(handle);
+Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibStop(JNIEnv *env, jclass, jlong handle) try {
+    if (env->ExceptionCheck()) return;
+    EngineAccess access(handle);
+    auto *engine = access.get();
     if (!engine) return;
-    std::lock_guard<std::mutex> lock(engine->mutex);
     if (engine->server_started) {
         const char *cmds[3] = {nullptr, nullptr, nullptr};
         rtksvrstop(&engine->server, cmds);
         engine->server_started = false;
     }
     engine->latest.state = "STOPPED";
+} catch (...) {
+    translate_native_exception(env);
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibDestroy(JNIEnv *, jclass, jlong handle) {
-    auto *engine = from_handle(handle);
+Java_org_rtkcollector_core_rtklib_RtklibNativeBridgeKt_nativeRtklibDestroy(JNIEnv *env, jclass, jlong handle) try {
+    if (env->ExceptionCheck()) return;
+    auto engine = take_engine(handle);
     if (!engine) return;
-    {
-        std::lock_guard<std::mutex> lock(engine->mutex);
-        release_rtklib_state(engine);
-    }
-    delete engine;
+    std::lock_guard<std::mutex> lock(engine->mutex);
+    engine->destroyed = true;
+    release_rtklib_state(engine.get());
+} catch (...) {
+    translate_native_exception(env);
 }

@@ -24,9 +24,9 @@ internal object UbloxSatelliteMapping {
             else -> null
         }
         SatelliteConstellation.GALILEO -> when (signalId) {
-            0 -> UbloxBandAndSignal("L1", "E1")
-            5 -> UbloxBandAndSignal("L5", "E5a")
-            in 6..7 -> UbloxBandAndSignal("L5", "E5a")
+            in 0..1 -> UbloxBandAndSignal("L1", "E1")
+            in 3..4 -> UbloxBandAndSignal("L5", "E5a")
+            in 5..6 -> UbloxBandAndSignal("L7", "E5b")
             else -> null
         }
         SatelliteConstellation.BEIDOU -> when (signalId) {

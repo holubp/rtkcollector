@@ -1,0 +1,3505 @@
+{
+  "schema_version": 3,
+  "file_classifications": [
+    {
+      "pattern": "app/build.gradle.kts",
+      "category": "implementation",
+      "reason": "Release application behavior and dependency packaging."
+    },
+    {
+      "pattern": "app/src/main/AndroidManifest.xml",
+      "category": "implementation",
+      "reason": "Runtime and release application contract."
+    },
+    {
+      "pattern": "app/src/main/cpp/**",
+      "category": "implementation",
+      "reason": "Native RTKLIB bridge implementation."
+    },
+    {
+      "pattern": "app/src/main/kotlin/*.kt",
+      "category": "implementation",
+      "reason": "Android application implementation."
+    },
+    {
+      "pattern": "core/*/src/main/kotlin/*.kt",
+      "category": "implementation",
+      "reason": "Reusable domain implementation."
+    },
+    {
+      "pattern": "receiver/*/src/main/kotlin/*.kt",
+      "category": "implementation",
+      "reason": "Receiver driver and protocol implementation."
+    },
+    {
+      "pattern": "app/src/test/kotlin/*.kt",
+      "category": "test",
+      "reason": "Android application JVM tests."
+    },
+    {
+      "pattern": "core/*/src/test/kotlin/*.kt",
+      "category": "test",
+      "reason": "Reusable domain tests."
+    },
+    {
+      "pattern": "receiver/*/src/test/kotlin/*.kt",
+      "category": "test",
+      "reason": "Receiver protocol tests."
+    },
+    {
+      "pattern": "tools/test_*.py",
+      "category": "test",
+      "reason": "Python tooling and build-contract tests."
+    },
+    {
+      "pattern": "testdata/**",
+      "category": "test",
+      "reason": "Tracked test-data documentation and fixtures."
+    },
+    {
+      "pattern": "docs/specification/*.md",
+      "category": "specification",
+      "reason": "Canonical requirements, traceability and assurance records."
+    },
+    {
+      "pattern": "docs/specification/*.json",
+      "category": "specification",
+      "reason": "Machine-readable specification assurance records."
+    },
+    {
+      "pattern": "docs/specification/*.yaml",
+      "category": "specification",
+      "reason": "Specification checker configuration."
+    },
+    {
+      "pattern": "docs/specification/evidence/**",
+      "category": "specification",
+      "reason": "Committed specification evidence artifacts."
+    },
+    {
+      "pattern": "docs/releases/*.md",
+      "category": "documentation",
+      "reason": "Release documentation."
+    },
+    {
+      "pattern": "README.md",
+      "category": "documentation",
+      "reason": "Primary user and project documentation."
+    },
+    {
+      "pattern": "GPLAY.md",
+      "category": "documentation",
+      "reason": "Google Play publication runbook."
+    },
+    {
+      "pattern": "PRIVACY.md",
+      "category": "documentation",
+      "reason": "Published privacy policy."
+    },
+    {
+      "pattern": "SECURITY.md",
+      "category": "documentation",
+      "reason": "Security policy and reporting guidance."
+    },
+    {
+      "pattern": "CONTRIBUTING.md",
+      "category": "documentation",
+      "reason": "Contributor guidance."
+    },
+    {
+      "pattern": "docs/android-background-operation.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/architecture.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/base-calibration-workflow.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/contributor-onboarding.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/ntrip-and-corrections.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/play-publication.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/product-requirements.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/receiver-driver-api.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/receiver-profiles.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/session-format.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/supported-receivers.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/testing-plan.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/third-party-licenses.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/user-workflows.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "docs/workflows.md",
+      "category": "documentation",
+      "reason": "Tracked project and user documentation."
+    },
+    {
+      "pattern": "AGENTS.md",
+      "category": "metadata",
+      "reason": "Repository governance for agent and contributor work."
+    },
+    {
+      "pattern": "LICENSE",
+      "category": "metadata",
+      "reason": "Project license metadata."
+    },
+    {
+      "pattern": "NOTICE",
+      "category": "metadata",
+      "reason": "Project notice metadata."
+    },
+    {
+      "pattern": ".gitignore",
+      "category": "configuration",
+      "reason": "Repository-local exclusion policy."
+    },
+    {
+      "pattern": ".github/**",
+      "category": "configuration",
+      "reason": "GitHub workflow, ownership and contribution configuration."
+    },
+    {
+      "pattern": "build.gradle.kts",
+      "category": "configuration",
+      "reason": "Root Gradle configuration."
+    },
+    {
+      "pattern": "settings.gradle.kts",
+      "category": "configuration",
+      "reason": "Gradle module configuration."
+    },
+    {
+      "pattern": "gradle.properties",
+      "category": "configuration",
+      "reason": "Gradle build properties."
+    },
+    {
+      "pattern": "gradle/**",
+      "category": "configuration",
+      "reason": "Tracked Gradle wrapper configuration."
+    },
+    {
+      "pattern": "gradlew",
+      "category": "tooling",
+      "reason": "Gradle wrapper launcher."
+    },
+    {
+      "pattern": "gradlew.bat",
+      "category": "tooling",
+      "reason": "Windows Gradle wrapper launcher."
+    },
+    {
+      "pattern": "core/*/build.gradle.kts",
+      "category": "configuration",
+      "reason": "Core module build configuration."
+    },
+    {
+      "pattern": "receiver/*/build.gradle.kts",
+      "category": "configuration",
+      "reason": "Receiver module build configuration."
+    },
+    {
+      "pattern": "app/src/debug/AndroidManifest.xml",
+      "category": "configuration",
+      "reason": "Debug-only manifest configuration."
+    },
+    {
+      "pattern": "app/src/main/res/**",
+      "category": "asset",
+      "reason": "Android resources and branding assets."
+    },
+    {
+      "pattern": "logos/**",
+      "category": "asset",
+      "reason": "Project branding source assets."
+    },
+    {
+      "pattern": "scripts/**",
+      "category": "tooling",
+      "reason": "Repository validation scripts."
+    },
+    {
+      "pattern": "templates/**",
+      "category": "metadata",
+      "reason": "Vendored specification assurance templates."
+    },
+    {
+      "pattern": "third_party/rtklib-ex/README.md",
+      "category": "vendor",
+      "reason": "Pinned RTKLIB-EX integration documentation."
+    },
+    {
+      "pattern": "third_party/rtklib-ex/android/**",
+      "category": "vendor",
+      "reason": "Pinned RTKLIB-EX Android integration build source."
+    },
+    {
+      "pattern": "third_party/rtklib-ex/patches/**",
+      "category": "vendor",
+      "reason": "Pinned RTKLIB-EX patch documentation."
+    },
+    {
+      "pattern": "third_party/rtklib-ex/snapshot.json",
+      "category": "vendor",
+      "reason": "Pinned RTKLIB-EX source identity."
+    },
+    {
+      "pattern": "tools/analyze_um980_session_gaps.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": "tools/check_android_test_compilation.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": "tools/check_spec_requirements.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": "tools/generate_brand_assets.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": "tools/rtklib_replay_session_check.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": "tools/rtklib_solution_summary.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": "tools/um980_rtklib_sample_check.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": "tools/update_rtklib_ex.py",
+      "category": "tooling",
+      "reason": "Tracked repository or specification tooling."
+    },
+    {
+      "pattern": ".gradle/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "build/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/build/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "local.properties",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.log",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*~",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".*.un~",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "captures/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/captures/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".externalNativeBuild/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/.externalNativeBuild/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".cxx/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/.cxx/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.aab",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.apk",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/output-metadata.json",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.iml",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".idea/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/.idea/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "misc.xml",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "deploymentTargetDropDown.xml",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "render.experimental.xml",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".kotlin/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/.kotlin/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "out/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/out/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "__pycache__/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".pytest_cache/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "**/__pycache__/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.pyc",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.pyo",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".worktrees/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".codex-tmp/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".superpowers/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": ".spec-assurance/**",
+      "category": "local",
+      "reason": "Ignored machine-local review context and checkpoint state; pathname only."
+    },
+    {
+      "pattern": ".spec-skills-dev/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "samples/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "third_party/rtklib-ex/upstream/**",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.jks",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.keystore",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "google-services.json",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "*.hprof",
+      "category": "local",
+      "reason": "Ignored machine-local, generated, secret or field-evidence path; pathname only."
+    },
+    {
+      "pattern": "docs/superpowers/plan-status.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-06-rtkcollector-bootstrap.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-06-rtkcollector-simple-ui.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-06-rtkcollector-v1-workflows.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-07-profiled-recording-fixes.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-07-rtkcollector-experimental-e2e-v1.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-07-um980-complete-e2e-v1.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-08-compose-dashboard-ui.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-08-field-test-hardening.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-08-integrated-v1-usability-and-um980-telemetry.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-09-profile-editor-selection-controls.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-10-app-wide-ui-tidy.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-11-logo-branding-assets.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-11-session-browser-archive.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-11-um980-rtk-monitoring-and-editor-input.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-11-visual-fidelity-followup.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-12-android-json-settings-import.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-12-clipboard-copy-affordances.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-12-field-hardening-settings-telemetry.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-12-persistent-receiver-writes.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-12-usb-access-permission.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-13-ublox-m8t-and-mock-provider.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-14-device-console.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-14-google-play-readiness.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-14-review-followup.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-14-session-nmea-export-error-expiry-and-dashboard-overflow.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-16-base-workflow-coordinate-actions.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-16-pr-1-ublox-mock-provider-integration.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-17-formal-specification-system.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-17-ntrip-caster-refresh-and-temporary-base-ntrip.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-17-recording-safe-telemetry-isolation.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-18-base-rtcm-ntrip-caster-upload.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-19-rtklib-ex-native-and-obsvmcmpb-completion.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-19-rtklib-ex-realtime-mvp.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-20-active-setup-rtklib-and-profile-compatibility.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-21-app-logs-and-performance-monitoring.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-21-receiver-protocol-health-recovery.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-21-rtklib-rtksvr-native-backend.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-22-mock-provider-api-maximization.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-22-rtklib-card-and-ublox-dop-monitoring.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-22-rtklib-solution-output-and-mock.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-22-source-aware-nmea-sharing-and-regeneration.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-25-satellite-frequency-monitor.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-25-satellite-monitor-bars-completion.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-27-ntrip-caster-upload-monitor-and-safety.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-28-base-workflow-upload-and-profile-cleanup.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-28-dashboard-upload-fixed-base-gap-closure.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-06-29-corr-upload-redaction-gap.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-07-06-device-filter-and-fixed-base-handoff.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-07-27-dashboard-sessions-shortcut-and-rc2.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-09-23-ntrip-tls-completion.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-09-25-ntrip-rc4.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-09-29-stable-sideload-signing.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-01-locked-active-setup-rc5.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-02-settings-profile-ownership.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-26-tiered-diagnostics.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-29-recording-alarms.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-30-background-usb-recovery.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-30-muted-alarm-warning.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-06-rtkcollector-bootstrap-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-06-rtkcollector-simple-ui-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-07-profiled-recording-fixes-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-07-rtkcollector-experimental-e2e-v1.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-07-um980-complete-e2e-v1-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-08-compose-dashboard-ui-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-08-field-test-hardening-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-08-integrated-v1-usability-and-um980-telemetry-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-09-profile-editor-selection-controls.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-10-app-wide-ui-tidy-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-11-logo-branding-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-11-session-browser-archive-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-11-um980-rtk-monitoring-and-editor-input-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-12-android-json-settings-import-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-12-field-hardening-settings-telemetry-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-12-persistent-receiver-writes-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-12-usb-access-permission-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-13-ublox-m8t-and-mock-provider-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-14-device-console-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-14-review-followup-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-14-session-nmea-export-error-expiry-and-dashboard-overflow-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-20-active-setup-rtklib-and-profile-compatibility-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-21-diagnostics-share-logs-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-22-rtklib-card-and-ublox-dop-monitoring-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-22-rtklib-solution-output-and-mock-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-23-rtklib-completed-session-regeneration-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-07-27-dashboard-sessions-shortcut-and-rc2-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-09-23-ntrip-tls-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-10-02-settings-profile-ownership-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-10-26-tiered-diagnostics-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-10-29-alarm-bluetooth-routing-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-10-29-recording-alarms-design.md",
+      "category": "documentation",
+      "reason": "Tracked design and plan history."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-02-settings-profile-ownership-review-plan.md",
+      "category": "local",
+      "reason": "Ignored local ownership-review draft; pathname only."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-10-02-settings-profile-ownership-review.md",
+      "category": "local",
+      "reason": "Ignored local ownership-review draft; pathname only."
+    },
+    {
+      "pattern": "tools/specification/*.py",
+      "category": "tooling",
+      "reason": "Vendored specification assurance tooling."
+    },
+    {
+      "pattern": "app/src/main/assets/licenses/Apache-2.0.txt",
+      "category": "asset",
+      "reason": "Distributed third-party license text."
+    },
+    {
+      "pattern": "app/src/main/assets/licenses/Media3-NOTICE.txt",
+      "category": "asset",
+      "reason": "Distributed third-party notice."
+    },
+    {
+      "pattern": "core/correction/src/test/resources/tls/localhost.crt",
+      "category": "test",
+      "reason": "Localhost TLS integration-test certificate fixture."
+    },
+    {
+      "pattern": "core/correction/src/test/resources/tls/localhost.p12",
+      "category": "test",
+      "reason": "Localhost TLS integration-test keystore fixture; not production key."
+    },
+    {
+      "pattern": "docs/sideload-signing.md",
+      "category": "documentation",
+      "reason": "Sideload release signing procedure."
+    },
+    {
+      "pattern": "tools/generate_alarm_sounds.py",
+      "category": "tooling",
+      "reason": "Deterministic alarm asset generator."
+    },
+    {
+      "pattern": "tools/sign_sideload_apk.py",
+      "category": "tooling",
+      "reason": "Sideload APK signing and verification tool."
+    },
+    {
+      "pattern": "app/src/main/assets/**",
+      "category": "asset",
+      "reason": "Application-distributed assets."
+    },
+    {
+      "pattern": "app/src/test/resources/**",
+      "category": "test",
+      "reason": "Application test resources and fixtures."
+    },
+    {
+      "pattern": "core/*/src/test/resources/**",
+      "category": "test",
+      "reason": "Core module test resources and fixtures."
+    },
+    {
+      "pattern": "receiver/*/src/test/resources/**",
+      "category": "test",
+      "reason": "Receiver module test resources and fixtures."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md",
+      "category": "documentation",
+      "reason": "Current checkpointed RC10 assurance reconciliation plan."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-10-30-supporting-requirement-coverage-design.md",
+      "category": "documentation",
+      "reason": "Proposed supporting-coverage assurance design; not self-realization or approval."
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "CAP-CAPTURE-RUNTIME-001",
+      "name": "Byte-exact capture and Android recording runtime",
+      "status": "active",
+      "requirement_ids": [
+        "ANDROID-ALARM-001",
+        "ANDROID-ALARM-002",
+        "ANDROID-ALARM-003",
+        "ANDROID-ALARM-004",
+        "ANDROID-ALARM-005",
+        "ANDROID-ALARM-006",
+        "ANDROID-ALARM-007",
+        "ANDROID-ALARM-008",
+        "ANDROID-ALARM-009",
+        "ANDROID-CAPTURE-001",
+        "ANDROID-CONFIG-001",
+        "ANDROID-JNI-001",
+        "ANDROID-SERVICE-001",
+        "ANDROID-SERVICE-002",
+        "ANDROID-STATE-001",
+        "ANDROID-STATE-002",
+        "ANDROID-STORAGE-001",
+        "ANDROID-USB-001",
+        "ANDROID-USB-002",
+        "ANDROID-USB-003",
+        "ANDROID-USB-004",
+        "ARCH-RAW-001",
+        "ARCH-RAW-002",
+        "ARCH-RAW-003",
+        "ARCH-RAW-004",
+        "ARCH-TX-001",
+        "ARCH-WRITER-001",
+        "ARCH-WRITER-002"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/AndroidManifest.xml",
+          "requirement_ids": [
+            "ANDROID-SERVICE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/cpp/rtklib_bridge.cpp",
+          "requirement_ids": [
+            "ANDROID-JNI-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmAudioDevices.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-007"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmAudioPlayer.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmAudioPolicy.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-006",
+            "ANDROID-ALARM-007"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmAudioReporting.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-009"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmClipPlayback.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmDndWarning.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-008"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmEffectDispatcher.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-003",
+            "ANDROID-ALARM-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmEffectsRuntime.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-005",
+            "ANDROID-ALARM-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmForegroundPolicy.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-001",
+            "ANDROID-ALARM-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmModels.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmNotificationPublisher.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmPlaybackDeadline.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmPlaybackProgress.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmRoutingPolicy.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-007"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmSettingsStore.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/AlarmStateBroadcaster.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/Media3AlarmClip.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/RecordingAlarmController.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-001",
+            "ANDROID-ALARM-003",
+            "ANDROID-ALARM-004",
+            "ANDROID-ALARM-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/RecordingAlarmEvidence.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-001",
+            "ANDROID-ALARM-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/alarms/RecordingAlarmPolicy.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-001",
+            "ANDROID-ALARM-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ActiveRecordingConfig.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ReceiverBaudTransition.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/receiver/PersistentReceiverCommands.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/receiver/PersistentReceiverWritePolicy.kt",
+          "requirement_ids": [
+            "ANDROID-USB-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/receiver/Um980MaintenanceConnectionCheck.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/ReceiverRecoveryOwnership.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002",
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
+          "requirement_ids": [
+            "ANDROID-CAPTURE-001",
+            "ANDROID-CONFIG-001",
+            "ANDROID-SERVICE-001",
+            "ANDROID-SERVICE-002",
+            "ANDROID-STATE-001",
+            "ANDROID-STATE-002",
+            "ANDROID-USB-001",
+            "ANDROID-USB-002",
+            "ANDROID-USB-003",
+            "ANDROID-USB-004",
+            "ARCH-RAW-001",
+            "ARCH-RAW-002",
+            "ARCH-RAW-003",
+            "ARCH-RAW-004",
+            "ARCH-TX-001",
+            "ARCH-WRITER-001",
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingNotificationDelivery.kt",
+          "requirement_ids": [
+            "ARCH-RAW-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingNotificationRuntime.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingServiceState.kt",
+          "requirement_ids": [
+            "ANDROID-STATE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingSessionFinalization.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-001",
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingSessionWriters.kt",
+          "requirement_ids": [
+            "ARCH-RAW-001",
+            "ARCH-RAW-003",
+            "ARCH-RAW-004",
+            "ARCH-TX-001",
+            "ARCH-WRITER-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingSetupBridge.kt",
+          "requirement_ids": [
+            "ANDROID-CONFIG-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RunningSetupConfiguration.kt",
+          "requirement_ids": [
+            "ANDROID-CONFIG-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SessionDiagnosticOwner.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/StateBroadcastRateLimiter.kt",
+          "requirement_ids": [
+            "ANDROID-STATE-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/Um980BaudTransition.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/UsbRecoveryConsent.kt",
+          "requirement_ids": [
+            "ANDROID-USB-001",
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/UsbRecoveryPlatform.kt",
+          "requirement_ids": [
+            "ANDROID-USB-001",
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/storage/RecordingStorage.kt",
+          "requirement_ids": [
+            "ANDROID-STORAGE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/alarms/AlarmAudibilityWarningState.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-009"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/alarms/AlarmSettingsScreen.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/alarms/AlarmSettingsUiModel.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/alarms/AlarmUiState.kt",
+          "requirement_ids": [
+            "ANDROID-ALARM-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/usb/UsbSelectionModels.kt",
+          "requirement_ids": [
+            "ANDROID-USB-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/usb/AndroidUsbSerialTransport.kt",
+          "requirement_ids": [
+            "ANDROID-USB-001",
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/usb/UsbSerialModels.kt",
+          "requirement_ids": [
+            "ANDROID-USB-001"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/AdvisoryFanout.kt",
+          "requirement_ids": [
+            "ARCH-RAW-002",
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/CaptureContracts.kt",
+          "requirement_ids": [
+            "ARCH-RAW-001",
+            "ARCH-TX-001"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/CaptureRuntime.kt",
+          "requirement_ids": [
+            "ANDROID-CAPTURE-001",
+            "ARCH-RAW-001",
+            "ARCH-RAW-002",
+            "ARCH-TX-001"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/RawRecordingDurability.kt",
+          "requirement_ids": [
+            "ARCH-RAW-003",
+            "ARCH-RAW-004"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/RecordingHealthMonitor.kt",
+          "requirement_ids": [
+            "ANDROID-USB-003",
+            "ANDROID-USB-004"
+          ]
+        },
+        {
+          "pattern": "core/quality/src/main/kotlin/org/rtkcollector/core/quality/QualityContracts.kt",
+          "requirement_ids": [
+            "ARCH-RAW-002"
+          ]
+        },
+        {
+          "pattern": "core/quality/src/main/kotlin/org/rtkcollector/core/quality/QualityModels.kt",
+          "requirement_ids": [
+            "ARCH-RAW-002"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibEngine.kt",
+          "requirement_ids": [
+            "ARCH-RAW-002",
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibInputModels.kt",
+          "requirement_ids": [
+            "ARCH-RAW-002"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibNativeBridge.kt",
+          "requirement_ids": [
+            "ANDROID-JNI-001"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibOutputWriters.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-001"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibWorker.kt",
+          "requirement_ids": [
+            "ARCH-RAW-002",
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionWriterLifecycle.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-001"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionWriters.kt",
+          "requirement_ids": [
+            "ARCH-RAW-001",
+            "ARCH-RAW-003",
+            "ARCH-RAW-004",
+            "ARCH-TX-001",
+            "ARCH-WRITER-001"
+          ]
+        },
+        {
+          "pattern": "core/transport/src/main/kotlin/org/rtkcollector/core/transport/SerialTransport.kt",
+          "requirement_ids": [
+            "ARCH-RAW-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxBaudCommands.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980PersistentBaudPlan.kt",
+          "requirement_ids": [
+            "ANDROID-USB-002"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
+    {
+      "id": "CAP-CORRECTIONS-UPLOAD-001",
+      "name": "NTRIP correction intake and caster source upload",
+      "status": "active",
+      "requirement_ids": [
+        "ANDROID-CORRECTION-001",
+        "ANDROID-CORRECTION-002",
+        "ANDROID-CORRECTION-003",
+        "ANDROID-CORRECTION-004",
+        "ANDROID-UPLOAD-001",
+        "ANDROID-UPLOAD-002",
+        "ANDROID-UPLOAD-003",
+        "ANDROID-UPLOAD-004",
+        "ANDROID-UPLOAD-005",
+        "ARCH-CORR-001",
+        "CORR-REFERENCE-001",
+        "CORR-UPLOAD-001",
+        "CORR-UPLOAD-002",
+        "CORR-UPLOAD-003",
+        "CORR-UPLOAD-004",
+        "CORR-UPLOAD-005",
+        "CORR-UPLOAD-006",
+        "CORR-UPLOAD-007",
+        "CORR-UPLOAD-008",
+        "CORR-UPLOAD-009",
+        "CORR-UPLOAD-010",
+        "UI-NTRIP-001",
+        "UI-UPLOAD-001",
+        "UI-UPLOAD-002"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ActiveRecordingConfig.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-010"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/CasterUploadEventJson.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-007"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
+          "requirement_ids": [
+            "ANDROID-CORRECTION-001",
+            "ANDROID-CORRECTION-002",
+            "ANDROID-CORRECTION-003",
+            "ANDROID-CORRECTION-004",
+            "ANDROID-UPLOAD-001",
+            "ANDROID-UPLOAD-002",
+            "ANDROID-UPLOAD-003",
+            "ANDROID-UPLOAD-004",
+            "ANDROID-UPLOAD-005",
+            "ARCH-CORR-001",
+            "CORR-REFERENCE-001",
+            "CORR-UPLOAD-001",
+            "CORR-UPLOAD-002",
+            "CORR-UPLOAD-003",
+            "CORR-UPLOAD-005",
+            "CORR-UPLOAD-006",
+            "CORR-UPLOAD-007",
+            "CORR-UPLOAD-010"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardModels.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-003",
+            "UI-UPLOAD-001",
+            "UI-UPLOAD-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardServiceMapper.kt",
+          "requirement_ids": [
+            "ANDROID-CORRECTION-002",
+            "ANDROID-UPLOAD-005",
+            "CORR-UPLOAD-003",
+            "UI-UPLOAD-001",
+            "UI-UPLOAD-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/HomeDashboard.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-003",
+            "UI-NTRIP-001",
+            "UI-UPLOAD-001",
+            "UI-UPLOAD-002"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/CaptureContracts.kt",
+          "requirement_ids": [
+            "ARCH-CORR-001"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/CaptureRuntime.kt",
+          "requirement_ids": [
+            "ARCH-CORR-001"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/RecordingHealthMonitor.kt",
+          "requirement_ids": [
+            "ANDROID-CORRECTION-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/CorrectionContracts.kt",
+          "requirement_ids": [
+            "ANDROID-CORRECTION-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClient.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-007",
+            "CORR-UPLOAD-008",
+            "CORR-UPLOAD-009"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadController.kt",
+          "requirement_ids": [
+            "ANDROID-UPLOAD-001",
+            "ANDROID-UPLOAD-002",
+            "ANDROID-UPLOAD-003",
+            "ANDROID-UPLOAD-005",
+            "CORR-UPLOAD-002",
+            "CORR-UPLOAD-003",
+            "CORR-UPLOAD-004",
+            "CORR-UPLOAD-005"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadPolicy.kt",
+          "requirement_ids": [
+            "ANDROID-UPLOAD-002",
+            "ANDROID-UPLOAD-003",
+            "CORR-UPLOAD-004",
+            "CORR-UPLOAD-005"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripClient.kt",
+          "requirement_ids": [
+            "ANDROID-CORRECTION-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripRuntimeController.kt",
+          "requirement_ids": [
+            "ANDROID-CORRECTION-003",
+            "ANDROID-CORRECTION-004"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/Rtcm3Extractor.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/Rtcm3ReferenceStationParser.kt",
+          "requirement_ids": [
+            "CORR-REFERENCE-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/RtcmBaseOutputSanity.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-010"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/RtcmBitReader.kt",
+          "requirement_ids": [
+            "CORR-REFERENCE-001"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionWriters.kt",
+          "requirement_ids": [
+            "ARCH-CORR-001"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
+    {
+      "id": "CAP-WORKFLOWS-PROFILES-001",
+      "name": "Validated workflows, settings sets and receiver profiles",
+      "status": "active",
+      "requirement_ids": [
+        "WF-BUILTIN-SETTINGS-001",
+        "WF-FIXEDBASE-001",
+        "WF-FIXEDBASE-002",
+        "WF-FIXEDBASE-003",
+        "WF-FIXEDBASE-004",
+        "WF-PROFILE-FILTER-001",
+        "WF-REPLAY-001",
+        "WF-ROVER-001",
+        "WF-ROVER-NTRIP-001",
+        "WF-SETTINGS-DEPENDENCY-001",
+        "WF-SETTINGS-OWNERSHIP-001",
+        "WF-TEMPBASE-001",
+        "WF-TEMPBASE-002",
+        "WF-TEMPBASE-HEIGHT-001",
+        "WF-UPLOAD-UI-001"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/AcceptedBaseCoordinate.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-001",
+            "WF-TEMPBASE-HEIGHT-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/AcceptedBaseCoordinateStore.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/BaseCoordinateForm.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-001",
+            "WF-TEMPBASE-HEIGHT-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/BasePositionJsonCodec.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-001",
+            "WF-TEMPBASE-HEIGHT-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/FixedBaseCommandProfileSelection.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/FixedBaseCommandValidator.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/FixedBaseHandoffPlanner.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/base/FixedBaseProfileMaterializer.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/MainActivity.kt",
+          "requirement_ids": [
+            "WF-REPLAY-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ActiveRecordingConfig.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ActiveSetupModels.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001",
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ActiveSetupResolver.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001",
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileCompatibility.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileDeviceFilter.kt",
+          "requirement_ids": [
+            "WF-PROFILE-FILTER-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileModels.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileReferences.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileStores.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001",
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/RecordingProfileStore.kt",
+          "requirement_ids": [
+            "WF-ROVER-NTRIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/SettingsSetModels.kt",
+          "requirement_ids": [
+            "WF-BUILTIN-SETTINGS-001",
+            "WF-SETTINGS-DEPENDENCY-001",
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/StartSelectionLease.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/WorkflowActivationPolicy.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/CoordinateAveragingController.kt",
+          "requirement_ids": [
+            "WF-TEMPBASE-002",
+            "WF-TEMPBASE-HEIGHT-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/NtripUpdatePolicy.kt",
+          "requirement_ids": [
+            "WF-ROVER-NTRIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingSetupBridge.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001",
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingStartPreflight.kt",
+          "requirement_ids": [
+            "WF-BUILTIN-SETTINGS-001",
+            "WF-FIXEDBASE-001",
+            "WF-FIXEDBASE-002",
+            "WF-FIXEDBASE-003",
+            "WF-FIXEDBASE-004",
+            "WF-PROFILE-FILTER-001",
+            "WF-REPLAY-001",
+            "WF-ROVER-001",
+            "WF-ROVER-NTRIP-001",
+            "WF-TEMPBASE-001",
+            "WF-TEMPBASE-002",
+            "WF-TEMPBASE-HEIGHT-001",
+            "WF-UPLOAD-UI-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RunningSetupConfiguration.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001",
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardModels.kt",
+          "requirement_ids": [
+            "WF-TEMPBASE-HEIGHT-001",
+            "WF-UPLOAD-UI-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
+          "requirement_ids": [
+            "WF-BUILTIN-SETTINGS-001",
+            "WF-FIXEDBASE-001",
+            "WF-FIXEDBASE-002",
+            "WF-FIXEDBASE-003",
+            "WF-FIXEDBASE-004",
+            "WF-PROFILE-FILTER-001",
+            "WF-REPLAY-001",
+            "WF-ROVER-001",
+            "WF-ROVER-NTRIP-001",
+            "WF-TEMPBASE-001",
+            "WF-TEMPBASE-002",
+            "WF-TEMPBASE-HEIGHT-001",
+            "WF-UPLOAD-UI-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/NtripProfileResolution.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/LiveSetupRetryPolicy.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-OWNERSHIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/UploadSelectionLabel.kt",
+          "requirement_ids": [
+            "WF-UPLOAD-UI-001"
+          ]
+        },
+        {
+          "pattern": "core/solution/src/main/kotlin/org/rtkcollector/core/solution/OnlineCoordinateAverager.kt",
+          "requirement_ids": [
+            "WF-TEMPBASE-002",
+            "WF-TEMPBASE-HEIGHT-001"
+          ]
+        },
+        {
+          "pattern": "core/workflow/src/main/kotlin/org/rtkcollector/core/workflow/ReceiverCommandPlan.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-002",
+            "WF-REPLAY-001",
+            "WF-ROVER-001"
+          ]
+        },
+        {
+          "pattern": "core/workflow/src/main/kotlin/org/rtkcollector/core/workflow/WorkflowDryRunSession.kt",
+          "requirement_ids": [
+            "WF-REPLAY-001"
+          ]
+        },
+        {
+          "pattern": "core/workflow/src/main/kotlin/org/rtkcollector/core/workflow/WorkflowExamples.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-001",
+            "WF-REPLAY-001",
+            "WF-ROVER-001",
+            "WF-ROVER-NTRIP-001",
+            "WF-TEMPBASE-001"
+          ]
+        },
+        {
+          "pattern": "core/workflow/src/main/kotlin/org/rtkcollector/core/workflow/WorkflowModel.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001"
+          ]
+        },
+        {
+          "pattern": "core/workflow/src/main/kotlin/org/rtkcollector/core/workflow/WorkflowValidator.kt",
+          "requirement_ids": [
+            "WF-SETTINGS-DEPENDENCY-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980CommandBuilder.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-002",
+            "WF-FIXEDBASE-003",
+            "WF-ROVER-001",
+            "WF-TEMPBASE-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980CommandModels.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-001",
+            "WF-TEMPBASE-HEIGHT-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980ModeParser.kt",
+          "requirement_ids": [
+            "WF-FIXEDBASE-002",
+            "WF-ROVER-001"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
+    {
+      "id": "CAP-RECEIVER-PROTOCOLS-001",
+      "name": "Receiver drivers, commands and protocol telemetry",
+      "status": "active",
+      "requirement_ids": [
+        "PRODUCT-RX-001",
+        "RX-MONITOR-001",
+        "RX-UBLOX-M8T-001",
+        "RX-UBLOX-RTKLIB-001",
+        "RX-UM980-001",
+        "RX-UM980-COMMANDS-001",
+        "RX-UM980-FREQUENCY-001",
+        "RX-UM980-PPP-001",
+        "RX-UM980-PROFILES-001",
+        "RX-UM980-RTK-001",
+        "RX-UM980-RTKLIB-001",
+        "SATMON-PROFILE-001",
+        "UI-CONSOLE-001"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/cpp/CMakeLists.txt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001",
+            "RX-UM980-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/console/DeviceConsoleController.kt",
+          "requirement_ids": [
+            "UI-CONSOLE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/console/DeviceConsoleModels.kt",
+          "requirement_ids": [
+            "UI-CONSOLE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ActiveRecordingConfig.kt",
+          "requirement_ids": [
+            "RX-UM980-FREQUENCY-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileModels.kt",
+          "requirement_ids": [
+            "SATMON-PROFILE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileStoreMigrations.kt",
+          "requirement_ids": [
+            "RX-UM980-PROFILES-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/RtklibStartValidation.kt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001",
+            "RX-UM980-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/receiver/PersistentReceiverCommands.kt",
+          "requirement_ids": [
+            "RX-UM980-COMMANDS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/receiver/PersistentReceiverWritePolicy.kt",
+          "requirement_ids": [
+            "RX-UM980-COMMANDS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/receiver/Um980MaintenanceConnectionCheck.kt",
+          "requirement_ids": [
+            "RX-UM980-COMMANDS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
+          "requirement_ids": [
+            "RX-UM980-COMMANDS-001",
+            "RX-UM980-FREQUENCY-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SatelliteMonitorServiceStatus.kt",
+          "requirement_ids": [
+            "SATMON-PROFILE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileEditorModels.kt",
+          "requirement_ids": [
+            "RX-UM980-COMMANDS-001"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibConfig.kt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001",
+            "RX-UM980-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "core/workflow/src/main/kotlin/org/rtkcollector/core/workflow/RtklibInputRouter.kt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001",
+            "RX-UM980-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/api/src/main/kotlin/org/rtkcollector/receiver/api/GnssReceiverDriver.kt",
+          "requirement_ids": [
+            "PRODUCT-RX-001"
+          ]
+        },
+        {
+          "pattern": "receiver/generic-nmea-rtcm/src/main/kotlin/org/rtkcollector/receiver/generic/GenericNmeaRtcmDriver.kt",
+          "requirement_ids": [
+            "PRODUCT-RX-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxFrame.kt",
+          "requirement_ids": [
+            "PRODUCT-RX-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxM8Driver.kt",
+          "requirement_ids": [
+            "PRODUCT-RX-001",
+            "RX-UBLOX-M8T-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxM8tProfiles.kt",
+          "requirement_ids": [
+            "RX-UBLOX-M8T-001",
+            "RX-UBLOX-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxMessageFrequencyTracker.kt",
+          "requirement_ids": [
+            "RX-MONITOR-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxNavSatParser.kt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxRawxParser.kt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxSatelliteMapping.kt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxScriptCompiler.kt",
+          "requirement_ids": [
+            "PRODUCT-RX-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxStreamParser.kt",
+          "requirement_ids": [
+            "RX-UBLOX-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980BinaryParser.kt",
+          "requirement_ids": [
+            "RX-UM980-001",
+            "RX-UM980-PPP-001",
+            "RX-UM980-RTK-001",
+            "RX-UM980-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980CommandBuilder.kt",
+          "requirement_ids": [
+            "RX-UM980-FREQUENCY-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980CommandModels.kt",
+          "requirement_ids": [
+            "RX-UM980-FREQUENCY-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980LiveParsers.kt",
+          "requirement_ids": [
+            "RX-UM980-001",
+            "RX-UM980-RTK-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980MessageFrequencyTracker.kt",
+          "requirement_ids": [
+            "RX-MONITOR-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980OutputFrequencyValidator.kt",
+          "requirement_ids": [
+            "RX-UM980-FREQUENCY-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980RuntimeProfile.kt",
+          "requirement_ids": [
+            "RX-UM980-COMMANDS-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980RuntimeProfiles.kt",
+          "requirement_ids": [
+            "RX-UM980-COMMANDS-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980SatelliteMapping.kt",
+          "requirement_ids": [
+            "RX-UM980-RTKLIB-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980SolutionAdapter.kt",
+          "requirement_ids": [
+            "RX-UM980-PPP-001",
+            "RX-UM980-RTK-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980StreamParser.kt",
+          "requirement_ids": [
+            "RX-UM980-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980Telemetry.kt",
+          "requirement_ids": [
+            "RX-UM980-PPP-001",
+            "RX-UM980-RTK-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/UnicoreN4Driver.kt",
+          "requirement_ids": [
+            "PRODUCT-RX-001"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
+    {
+      "id": "CAP-SOLUTION-MONITOR-001",
+      "name": "Solution selection, RTKLIB and satellite monitoring",
+      "status": "active",
+      "requirement_ids": [
+        "ANDROID-MOCK-001",
+        "ANDROID-MOCK-003",
+        "ANDROID-MOCK-004",
+        "SATMON-ARCH-001",
+        "SATMON-STATE-001",
+        "WF-SOLUTION-001"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/mocklocation/MockLocationPublisher.kt",
+          "requirement_ids": [
+            "ANDROID-MOCK-001",
+            "ANDROID-MOCK-003",
+            "ANDROID-MOCK-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/BestSolutionTickLogic.kt",
+          "requirement_ids": [
+            "ANDROID-MOCK-003",
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RtklibSessionPostprocessor.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RtklibSolutionCandidateMapper.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SatelliteMonitorController.kt",
+          "requirement_ids": [
+            "SATMON-ARCH-001",
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SatelliteMonitorRtcmMapping.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SatelliteMonitorServiceStatus.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SelectedSolutionDisplay.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardModels.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardServiceMapper.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/SatelliteMonitorDashboardModels.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/satellite/SatelliteMonitorScreen.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/Rtcm3MsmCompatibility.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/Rtcm3MsmParser.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/RtcmSignalMapping.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "core/quality/src/main/kotlin/org/rtkcollector/core/quality/SatelliteMonitorAggregator.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "core/quality/src/main/kotlin/org/rtkcollector/core/quality/SatelliteMonitorModels.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibOutputModels.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001",
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibPostprocess.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibSolutionOutputSynthesizer.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "core/solution/src/main/kotlin/org/rtkcollector/core/solution/BestSolutionSelector.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "core/solution/src/main/kotlin/org/rtkcollector/core/solution/SolutionModels.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxNavDopParser.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxNavPvtParser.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxNavSatParser.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxRawxParser.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxSatelliteMapping.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxTelemetry.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980LiveParsers.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980SatelliteMapping.kt",
+          "requirement_ids": [
+            "SATMON-STATE-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980SolutionAdapter.kt",
+          "requirement_ids": [
+            "WF-SOLUTION-001"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
+    {
+      "id": "CAP-SESSIONS-ARTIFACTS-001",
+      "name": "Session artifacts, archives and sharing",
+      "status": "active",
+      "requirement_ids": [
+        "SESSION-ARCHIVE-001",
+        "SESSION-ARCHIVE-002",
+        "SESSION-ARCHIVE-003",
+        "SESSION-ARCHIVE-004",
+        "SESSION-FILES-001",
+        "SESSION-META-001",
+        "SESSION-NMEA-001",
+        "SESSION-NMEA-002",
+        "SESSION-RTCM-001",
+        "SESSION-SHARE-001"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/ReceiverNmeaReexporter.kt",
+          "requirement_ids": [
+            "SESSION-NMEA-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingSessionWriters.kt",
+          "requirement_ids": [
+            "SESSION-FILES-001",
+            "SESSION-META-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RtklibSessionPostprocessor.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SessionNmeaExporter.kt",
+          "requirement_ids": [
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SessionZipExporter.kt",
+          "requirement_ids": [
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/sessions/ActiveRecordingSessionRegistry.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-001",
+            "SESSION-ARCHIVE-004",
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/sessions/FilesystemSessionBrowser.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-001",
+            "SESSION-ARCHIVE-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/sessions/SafSessionActions.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-001",
+            "SESSION-ARCHIVE-002",
+            "SESSION-ARCHIVE-003",
+            "SESSION-ARCHIVE-004",
+            "SESSION-NMEA-002",
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/sessions/SafSessionBrowser.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-001",
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/sessions/SessionArchiveManager.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-001",
+            "SESSION-ARCHIVE-002",
+            "SESSION-ARCHIVE-003",
+            "SESSION-ARCHIVE-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/sessions/SessionBrowserModels.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-001",
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/share/SessionShareModels.kt",
+          "requirement_ids": [
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/sessions/SessionBrowserModels.kt",
+          "requirement_ids": [
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/sessions/SessionsScreen.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-001",
+            "SESSION-SHARE-001"
+          ]
+        },
+        {
+          "pattern": "core/rtklib/src/main/kotlin/org/rtkcollector/core/rtklib/RtklibSnapshot.kt",
+          "requirement_ids": [
+            "SESSION-META-001"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/ArchiveIntegrity.kt",
+          "requirement_ids": [
+            "SESSION-ARCHIVE-002",
+            "SESSION-ARCHIVE-003"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionArtifacts.kt",
+          "requirement_ids": [
+            "SESSION-FILES-001"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionModels.kt",
+          "requirement_ids": [
+            "SESSION-META-001"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionWriters.kt",
+          "requirement_ids": [
+            "SESSION-FILES-001",
+            "SESSION-META-001",
+            "SESSION-RTCM-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxNmeaExporter.kt",
+          "requirement_ids": [
+            "SESSION-NMEA-001"
+          ]
+        },
+        {
+          "pattern": "receiver/ublox-m8/src/main/kotlin/org/rtkcollector/receiver/ublox/UbloxStreamParser.kt",
+          "requirement_ids": [
+            "SESSION-NMEA-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/NmeaSentenceExtractor.kt",
+          "requirement_ids": [
+            "SESSION-NMEA-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980NmeaExporter.kt",
+          "requirement_ids": [
+            "SESSION-NMEA-001"
+          ]
+        },
+        {
+          "pattern": "receiver/unicore-n4/src/main/kotlin/org/rtkcollector/receiver/unicore/Um980NmeaReexporter.kt",
+          "requirement_ids": [
+            "SESSION-NMEA-001"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
+    {
+      "id": "CAP-SECURITY-DIAGNOSTICS-001",
+      "name": "Secrets, validated imports and redacted diagnostics",
+      "status": "active",
+      "requirement_ids": [
+        "ANDROID-DIAGNOSTICS-001",
+        "ANDROID-DIAGNOSTICS-002",
+        "ANDROID-DIAGNOSTICS-003",
+        "ANDROID-DIAGNOSTICS-004",
+        "CORR-UPLOAD-007",
+        "PLAY-SECRETS-001",
+        "SEC-DIAGNOSTICS-001",
+        "SEC-IMPORT-001",
+        "SEC-IMPORT-002",
+        "SEC-IMPORT-003",
+        "SEC-IMPORT-004",
+        "SEC-IMPORT-005",
+        "SEC-IMPORT-006",
+        "SEC-NTRIP-TLS-001",
+        "SEC-NTRIP-TLS-002",
+        "SEC-NTRIP-TLS-003",
+        "SEC-SECRETS-001",
+        "SEC-SECRETS-002",
+        "SEC-SETTINGS-001"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticPolicy.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-002",
+            "ANDROID-DIAGNOSTICS-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsModels.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsRedaction.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-004",
+            "CORR-UPLOAD-007",
+            "SEC-DIAGNOSTICS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsSettings.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-002",
+            "SEC-DIAGNOSTICS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsStore.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-002",
+            "ANDROID-DIAGNOSTICS-003",
+            "SEC-DIAGNOSTICS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsZipExporter.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-004",
+            "SEC-DIAGNOSTICS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/PerformanceDiagnostics.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-001",
+            "ANDROID-DIAGNOSTICS-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/RecoveryDiagnostics.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-003",
+            "SEC-DIAGNOSTICS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/RuntimeDiagnostics.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-001",
+            "ANDROID-DIAGNOSTICS-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnostics.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-001",
+            "ANDROID-DIAGNOSTICS-003",
+            "ANDROID-DIAGNOSTICS-004",
+            "SEC-DIAGNOSTICS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/SessionTaskDiagnostics.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/LegacyMigrationRepair.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-006",
+            "SEC-NTRIP-TLS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/LegacyProfileMigrationPlanner.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-006",
+            "SEC-NTRIP-TLS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/LegacyRecoveryPrivacy.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileGraphJournal.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileModels.kt",
+          "requirement_ids": [
+            "SEC-NTRIP-TLS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileStoreMigrations.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-006",
+            "SEC-NTRIP-TLS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/ProfileStores.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-001",
+            "SEC-IMPORT-002",
+            "SEC-IMPORT-003",
+            "SEC-IMPORT-004",
+            "SEC-IMPORT-005",
+            "SEC-NTRIP-TLS-001",
+            "SEC-SETTINGS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/SettingsBackupModels.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-002",
+            "SEC-SETTINGS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/SettingsImportModels.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-001",
+            "SEC-IMPORT-002",
+            "SEC-IMPORT-003",
+            "SEC-IMPORT-004",
+            "SEC-IMPORT-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/SettingsSetExportModels.kt",
+          "requirement_ids": [
+            "SEC-SETTINGS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/profile/SharedPreferencesTransactions.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-001",
+            "ANDROID-DIAGNOSTICS-002",
+            "ANDROID-DIAGNOSTICS-003",
+            "ANDROID-DIAGNOSTICS-004",
+            "SEC-NTRIP-TLS-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingStopContext.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/SessionDiagnosticOwner.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-001",
+            "ANDROID-DIAGNOSTICS-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/secrets/NtripSecretStore.kt",
+          "requirement_ids": [
+            "CORR-UPLOAD-007",
+            "PLAY-SECRETS-001",
+            "SEC-IMPORT-003",
+            "SEC-IMPORT-004",
+            "SEC-SECRETS-001",
+            "SEC-SECRETS-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/sessions/SessionCompletion.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/share/SettingsBackupSharePolicy.kt",
+          "requirement_ids": [
+            "SEC-SETTINGS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/diagnostics/AppDiagnosticsScreen.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-002",
+            "ANDROID-DIAGNOSTICS-004",
+            "SEC-DIAGNOSTICS-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/imports/SettingsImportIntentReader.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/imports/SettingsImportScreen.kt",
+          "requirement_ids": [
+            "SEC-IMPORT-001",
+            "SEC-IMPORT-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/NtripCredentialEdit.kt",
+          "requirement_ids": [
+            "SEC-SECRETS-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileListModels.kt",
+          "requirement_ids": [
+            "SEC-NTRIP-TLS-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClient.kt",
+          "requirement_ids": [
+            "SEC-NTRIP-TLS-003"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripClient.kt",
+          "requirement_ids": [
+            "SEC-NTRIP-TLS-001",
+            "SEC-NTRIP-TLS-003"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripTlsFailure.kt",
+          "requirement_ids": [
+            "SEC-NTRIP-TLS-003"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripTransportSecurity.kt",
+          "requirement_ids": [
+            "SEC-NTRIP-TLS-001",
+            "SEC-NTRIP-TLS-003"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
+    {
+      "id": "CAP-UI-OPERATIONS-001",
+      "name": "Dashboard, editors and operator controls",
+      "status": "active",
+      "requirement_ids": [
+        "UI-BASE-001",
+        "UI-CONSOLE-001",
+        "UI-DASH-001",
+        "UI-DASH-002",
+        "UI-DASH-003",
+        "UI-DASH-004",
+        "UI-DASH-005",
+        "UI-DASH-006",
+        "UI-DASH-007",
+        "UI-DOCS-001",
+        "UI-KEYBOARD-001",
+        "UI-KEYBOARD-002",
+        "UI-NTRIP-001",
+        "UI-PROFILE-001",
+        "UI-PROFILE-002",
+        "UI-PROFILE-003",
+        "UI-SATMON-001",
+        "UI-SATMON-002",
+        "UI-SATMON-003",
+        "UI-SATMON-004",
+        "UI-SATMON-005",
+        "UI-SATMON-006",
+        "UI-SETUP-001",
+        "UI-SETUP-002",
+        "UI-SETUP-003",
+        "UI-SETUP-004",
+        "UI-SETUP-005",
+        "UI-SETUP-006",
+        "UI-SETUP-007",
+        "UI-SETUP-008",
+        "UI-SETUP-009",
+        "UI-STORAGE-001",
+        "UI-UPLOAD-001",
+        "UI-UPLOAD-002"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/permissions/BatteryOptimisationSettings.kt",
+          "requirement_ids": [
+            "UI-DASH-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/permissions/RecordingPermissionModel.kt",
+          "requirement_ids": [
+            "UI-DASH-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/common/HelpOverlay.kt",
+          "requirement_ids": [
+            "UI-BASE-001",
+            "UI-SATMON-004"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/common/ProfileTextFields.kt",
+          "requirement_ids": [
+            "UI-KEYBOARD-001",
+            "UI-KEYBOARD-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/common/TidyUi.kt",
+          "requirement_ids": [
+            "UI-DASH-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/console/DeviceConsoleScreen.kt",
+          "requirement_ids": [
+            "UI-CONSOLE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardErrorVisibility.kt",
+          "requirement_ids": [
+            "UI-DASH-007"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardFormatters.kt",
+          "requirement_ids": [
+            "UI-DASH-002",
+            "UI-DASH-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardLayoutModels.kt",
+          "requirement_ids": [
+            "UI-DASH-002",
+            "UI-DASH-003",
+            "UI-DASH-005",
+            "UI-SATMON-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardModels.kt",
+          "requirement_ids": [
+            "UI-BASE-001",
+            "UI-DASH-002",
+            "UI-DASH-003",
+            "UI-SETUP-003",
+            "UI-SETUP-005",
+            "UI-SETUP-006",
+            "UI-SETUP-008"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardServiceMapper.kt",
+          "requirement_ids": [
+            "UI-DASH-007"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/DashboardUiPreferences.kt",
+          "requirement_ids": [
+            "UI-SETUP-008"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/HomeDashboard.kt",
+          "requirement_ids": [
+            "UI-BASE-001",
+            "UI-DASH-001",
+            "UI-DASH-002",
+            "UI-DASH-003",
+            "UI-DASH-004",
+            "UI-DASH-005",
+            "UI-DASH-006",
+            "UI-DASH-007",
+            "UI-NTRIP-001",
+            "UI-SATMON-001",
+            "UI-SATMON-002",
+            "UI-SATMON-003",
+            "UI-SATMON-004",
+            "UI-SATMON-005",
+            "UI-SETUP-003",
+            "UI-SETUP-005",
+            "UI-SETUP-006",
+            "UI-SETUP-008",
+            "UI-UPLOAD-001",
+            "UI-UPLOAD-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/NtripSecurityDisclosure.kt",
+          "requirement_ids": [
+            "UI-NTRIP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/dashboard/SatelliteMonitorDashboardModels.kt",
+          "requirement_ids": [
+            "UI-SATMON-001",
+            "UI-SATMON-002",
+            "UI-SATMON-003",
+            "UI-SATMON-004",
+            "UI-SATMON-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
+          "requirement_ids": [
+            "UI-BASE-001",
+            "UI-CONSOLE-001",
+            "UI-DASH-004",
+            "UI-PROFILE-001",
+            "UI-PROFILE-002",
+            "UI-PROFILE-003",
+            "UI-SETUP-001",
+            "UI-SETUP-003",
+            "UI-SETUP-005",
+            "UI-SETUP-006",
+            "UI-SETUP-007",
+            "UI-SETUP-008",
+            "UI-STORAGE-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/LiveSetupRetryPolicy.kt",
+          "requirement_ids": [
+            "UI-PROFILE-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileListModels.kt",
+          "requirement_ids": [
+            "UI-PROFILE-001",
+            "UI-SETUP-004",
+            "UI-SETUP-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/ProfileScreens.kt",
+          "requirement_ids": [
+            "UI-PROFILE-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/SettingsSetLockEditor.kt",
+          "requirement_ids": [
+            "UI-PROFILE-003",
+            "UI-SETUP-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/SettingsSetSelectionPolicyEditor.kt",
+          "requirement_ids": [
+            "UI-PROFILE-003",
+            "UI-SETUP-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/UnsavedEditorState.kt",
+          "requirement_ids": [
+            "UI-PROFILE-002"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/profiles/UploadSelectionLabel.kt",
+          "requirement_ids": [
+            "UI-SETUP-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/satellite/SatelliteMonitorScreen.kt",
+          "requirement_ids": [
+            "UI-SATMON-006"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/settings/SettingsHub.kt",
+          "requirement_ids": [
+            "UI-SETUP-001",
+            "UI-SETUP-007",
+            "UI-SETUP-009"
+          ]
+        }
+      ],
+      "supporting_mappings": [
+        {
+          "pattern": "README.md",
+          "requirement_ids": [
+            "UI-DOCS-001"
+          ],
+          "coverage_kind": "documentation",
+          "reason": "Operator/contributor documentation remains task-oriented and separate from canonical requirements."
+        },
+        {
+          "pattern": "docs/user-workflows.md",
+          "requirement_ids": [
+            "UI-DOCS-001"
+          ],
+          "coverage_kind": "documentation",
+          "reason": "Operator/contributor documentation remains task-oriented and separate from canonical requirements."
+        },
+        {
+          "pattern": "CONTRIBUTING.md",
+          "requirement_ids": [
+            "UI-DOCS-001"
+          ],
+          "coverage_kind": "documentation",
+          "reason": "Operator/contributor documentation remains task-oriented and separate from canonical requirements."
+        }
+      ]
+    },
+    {
+      "id": "CAP-PUBLICATION-001",
+      "name": "Release build, permissions, disclosures and licensing",
+      "status": "active",
+      "requirement_ids": [
+        "PLAY-BUILD-001",
+        "PLAY-BUILD-002",
+        "PLAY-DATA-001",
+        "PLAY-DISCLOSURE-001",
+        "PLAY-FGS-001",
+        "PLAY-IMPORT-001",
+        "PLAY-LICENSE-001",
+        "PLAY-NOTIFICATION-001",
+        "PLAY-PERM-001",
+        "PLAY-SECRETS-001",
+        "PRODUCT-NONGOAL-001",
+        "PRODUCT-RX-001",
+        "PRODUCT-USB-001",
+        "RELEASE-SIGN-001"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/build.gradle.kts",
+          "requirement_ids": [
+            "PLAY-BUILD-001",
+            "PLAY-BUILD-002",
+            "PLAY-FGS-001",
+            "PLAY-IMPORT-001",
+            "PLAY-LICENSE-001",
+            "PLAY-NOTIFICATION-001",
+            "PLAY-PERM-001",
+            "PLAY-SECRETS-001",
+            "PRODUCT-NONGOAL-001",
+            "PRODUCT-RX-001",
+            "PRODUCT-USB-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/AndroidManifest.xml",
+          "requirement_ids": [
+            "PLAY-FGS-001",
+            "PLAY-IMPORT-001",
+            "PLAY-LICENSE-001",
+            "PLAY-NOTIFICATION-001",
+            "PLAY-PERM-001",
+            "PLAY-SECRETS-001",
+            "PRODUCT-NONGOAL-001",
+            "PRODUCT-RX-001",
+            "PRODUCT-USB-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/cpp/CMakeLists.txt",
+          "requirement_ids": [
+            "PLAY-BUILD-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/permissions/RecordingPermissionModel.kt",
+          "requirement_ids": [
+            "PLAY-NOTIFICATION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingNotificationDelivery.kt",
+          "requirement_ids": [
+            "PLAY-NOTIFICATION-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingNotificationRuntime.kt",
+          "requirement_ids": [
+            "PLAY-NOTIFICATION-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadClient.kt",
+          "requirement_ids": [
+            "PLAY-DATA-001"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripClient.kt",
+          "requirement_ids": [
+            "PLAY-DATA-001"
+          ]
+        }
+      ],
+      "supporting_mappings": [
+        {
+          "pattern": "PRIVACY.md",
+          "requirement_ids": [
+            "PLAY-DISCLOSURE-001"
+          ],
+          "coverage_kind": "documentation",
+          "reason": "Actual privacy and Google Play publication sources for release disclosures."
+        },
+        {
+          "pattern": "GPLAY.md",
+          "requirement_ids": [
+            "PLAY-DISCLOSURE-001"
+          ],
+          "coverage_kind": "documentation",
+          "reason": "Actual privacy and Google Play publication sources for release disclosures."
+        },
+        {
+          "pattern": "docs/play-publication.md",
+          "requirement_ids": [
+            "PLAY-DISCLOSURE-001"
+          ],
+          "coverage_kind": "documentation",
+          "reason": "Actual privacy and Google Play publication sources for release disclosures."
+        },
+        {
+          "pattern": ".github/workflows/release-debug-apk.yml",
+          "requirement_ids": [
+            "RELEASE-SIGN-001"
+          ],
+          "coverage_kind": "process",
+          "reason": "Signing execution, certificate verification and operator key/release procedure."
+        },
+        {
+          "pattern": "tools/sign_sideload_apk.py",
+          "requirement_ids": [
+            "RELEASE-SIGN-001"
+          ],
+          "coverage_kind": "process",
+          "reason": "Signing execution, certificate verification and operator key/release procedure."
+        },
+        {
+          "pattern": "docs/sideload-signing.md",
+          "requirement_ids": [
+            "RELEASE-SIGN-001"
+          ],
+          "coverage_kind": "process",
+          "reason": "Signing execution, certificate verification and operator key/release procedure."
+        }
+      ]
+    },
+    {
+      "id": "CAP-NONNORMATIVE-FUTURE-001",
+      "name": "Informative, experimental and future workflow contracts",
+      "status": "planned",
+      "requirement_ids": [
+        "ANDROID-MOCK-002",
+        "SESSION-RTKLIB-001",
+        "WF-ROVER-RTKLIB-001",
+        "WF-RTKLIB-001"
+      ],
+      "implementation_mappings": [],
+      "supporting_mappings": []
+    }
+  ],
+  "approval": {
+    "inventory_digest": "sha256:9675e61473ccc89b160f7cbe775d550d13b36cc962987594a03b318fc8ad2aa2",
+    "state": "approved",
+    "approved_by": "human:holubp",
+    "approved_at": "2026-10-30T18:06:55Z",
+    "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+  },
+  "previous_approval": {
+    "inventory_digest": "sha256:17ae9240cdee51b9647ef4f0eec48a433e2dbbc1d1d609cd0b7703bdb9628b33",
+    "state": "approved",
+    "approved_by": "human:holubp",
+    "approved_at": "2026-09-23T14:02:05Z",
+    "decision_ref": "2026-09-23-specification-assurance-approval"
+  }
+}

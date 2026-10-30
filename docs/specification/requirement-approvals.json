@@ -1,0 +1,1405 @@
+{
+  "schema_version": 1,
+  "approvals": [
+    {
+      "requirement_id": "ANDROID-ALARM-009",
+      "requirement_digest": "sha256:b8a9bfa41e4788672739dc0284ff997883856c8680cdee9fa0e0fa10eccb3e78",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-008",
+      "requirement_digest": "sha256:294f8d4c1b791146197b87e1003b889ae7c930fa8971e1366779aea8c2bcb1ff",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-001",
+      "requirement_digest": "sha256:c72d3d5d49c8320ed7e13df19d594d7438c49d7395e7f71879517bc83603ba98",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-002",
+      "requirement_digest": "sha256:fae89de68bec2ff6bdaa71cf30fe53d4dd4c1e787cdc24d5846c9fd798f8001f",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-003",
+      "requirement_digest": "sha256:c5af775d0cd6bd4b8942c96e7efe172675999b54d5a9a7877c2e9b8d8739cca6",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-004",
+      "requirement_digest": "sha256:74f08834d16b9ec43f4b99b774545b95ca1d66a479a15523b1819f9bfa90fd15",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-005",
+      "requirement_digest": "sha256:1115818e78f93d03b88995805ac716a42833023206f38a04c20248e1da14d3dd",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-006",
+      "requirement_digest": "sha256:cdd51f85803a777b3d8c0b88b6568c409a9f074b2aad4c11bd434db8b335d784",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-ALARM-007",
+      "requirement_digest": "sha256:7bffa837551d27d2c2ed2fae15593d51e0ff453193293d2c128753752a044b4d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-SERVICE-001",
+      "requirement_digest": "sha256:6d040801a6b5e6c54c89194578850c0188f047733359c7653852fe695f7cff3b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-SERVICE-002",
+      "requirement_digest": "sha256:d8cd73c33423e71d1c513eb3bfcc12cf2028867595bcad9deafe1cb5695dae56",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-CAPTURE-001",
+      "requirement_digest": "sha256:25ee2b3a2ff82ecad110a06a445b300b8d7fbe9b8903e797092ddf5f0b28f0eb",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-DIAGNOSTICS-001",
+      "requirement_digest": "sha256:1d40c315f82bfd0b31dc9b28ddec60bf691bd61f64af8f13fb8a9bd010056054",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "ANDROID-DIAGNOSTICS-001",
+        "requirement_digest": "sha256:9717937f62f64fd58b6d867dc970573c9d8a6e5d0fe050885550ea5f5c0444ef",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "ANDROID-DIAGNOSTICS-002",
+      "requirement_digest": "sha256:1a9b2017729f9ecc8dec04706f8d3b12c12bde1297fb8525c78ea3dde797e6ed",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-DIAGNOSTICS-003",
+      "requirement_digest": "sha256:b26a4d241e0c4221769efd1def600d325edbf9eda6e9c1c9507c92673c83ea83",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-DIAGNOSTICS-004",
+      "requirement_digest": "sha256:ac5f5e4d53e1703538721f505c600ac726c24d92244ed5fb921b8c754d87f88a",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-JNI-001",
+      "requirement_digest": "sha256:8b91f8e8bdbe2a124dfff22dc594561ed239673d9ac5c4334ba0169495f67f3b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-USB-001",
+      "requirement_digest": "sha256:6ac89e5754f6e5744a4ff199b5f793c750b4cfe6789f08d738114ebe5eb41c5b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-USB-002",
+      "requirement_digest": "sha256:9a47a1e9106dd06346913b88c5f653e3b61e433bf2ce049541d0d1eede09d16d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "ANDROID-USB-002",
+        "requirement_digest": "sha256:4b3d3afe0a6bbaad944e246876d7601f68c19b428aa8ba222bafe2a57d900030",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "ANDROID-USB-003",
+      "requirement_digest": "sha256:23b7480ce07338155736d51fdb8849a8ef2c5ba7fd7953db875559ede2b2aa49",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-USB-004",
+      "requirement_digest": "sha256:bd07f9dae2ef568bdfaf66900f59b04eb77f3f2ded142aba5b5482e35a6cc68b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-CORRECTION-001",
+      "requirement_digest": "sha256:c3a241c48fe7540e5afbb5dbda9c75136e1f5ed65ce6faae7242cd37020c7004",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-CORRECTION-002",
+      "requirement_digest": "sha256:102c2791521c678409e9b9f7f39df19a570e4bff51a189fd2da70499e828057e",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-CORRECTION-003",
+      "requirement_digest": "sha256:faa9cc6f952acae816b6c603cc9632316e26a9a1ad168290590f0b1dd7392797",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-CORRECTION-004",
+      "requirement_digest": "sha256:c207fc7731e08cf01b99c20600d1fdeefc9c5e695be8f5e3de6a5fce2f8e5ade",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-UPLOAD-001",
+      "requirement_digest": "sha256:9e2f3d47e814257f5dea7a5c4b9d3d84007b9d32972eddbdca296766499489e7",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-UPLOAD-002",
+      "requirement_digest": "sha256:bacba71fe3b75fd7c8f0365a51d57b81bdc0533d217e40d388d1ff7dc6c1865a",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-UPLOAD-003",
+      "requirement_digest": "sha256:ab6f70594a5c380b714ba0c4392838e5193791b9ce6ec87217e853767c928361",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-UPLOAD-004",
+      "requirement_digest": "sha256:584acb9bb1694b6b1e5d4c01dd114f2160642cd89c11c91bddf86fb1a7917240",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-UPLOAD-005",
+      "requirement_digest": "sha256:d0ff6c7ff4263bdbcfaf556dbf2b4c2c4abe912436771d06448d1f35e5f7ff11",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-STORAGE-001",
+      "requirement_digest": "sha256:d15b7f363747213202bcb1e5a252c63f729775a0375acaebbeada48af0f4deb1",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-CONFIG-001",
+      "requirement_digest": "sha256:4b48e0fc77aed93bd97057798b989a5f8f447236b7614498a952b509dce23b66",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ANDROID-STATE-001",
+      "requirement_digest": "sha256:832764baec8329920e62bbe0dc00c223029b46f2025434fab6dd4d98e52946f5",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-MOCK-001",
+      "requirement_digest": "sha256:4798c796bd932f42229ff364daeabd5abfc631507546aef12253af21310fb90d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-MOCK-004",
+      "requirement_digest": "sha256:ff687bfe3cccb5a02abef03b5ee7e7ef58adb39eb045e30121409b8a076e6fc5",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-MOCK-003",
+      "requirement_digest": "sha256:6631558a185340a1aaa6ab8332b6043888632a5ab23d46f3c8470f2843ef9f58",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ANDROID-STATE-002",
+      "requirement_digest": "sha256:22cccc52db9192e4efb6524b657053fe69a06661437d195c2004f97a32414616",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "ARCH-RAW-001",
+      "requirement_digest": "sha256:b3393c40af84b5c29f269bfab101bf7353bb993d107b9b1f50f4351da6819813",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ARCH-RAW-002",
+      "requirement_digest": "sha256:74d08e4ea94c7ede76a014ecb590069fd3a05705b2568e59f50c9f15ff2a1114",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ARCH-RAW-003",
+      "requirement_digest": "sha256:0446922d30f8943b526a07f5665c8493b1ab35b058dc0efb0d5ac1d291183a30",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ARCH-RAW-004",
+      "requirement_digest": "sha256:78c6710ab0f345c7717a1dc8733331c7ba1552866724fe31f1f6bee2809bb9c8",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ARCH-TX-001",
+      "requirement_digest": "sha256:50bcd663582504ca30d254a7fbb5849e861339e854822c7bd5530e6e9b4195c0",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ARCH-CORR-001",
+      "requirement_digest": "sha256:51aa6eb103d00d18c95931408520ce5f118b23149fa08c6ab64b2570e99bdc27",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ARCH-WRITER-001",
+      "requirement_digest": "sha256:45a91f8cde39ac8fdaf49e541325ed89667263d09715718bdfbde72f64f2abec",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "ARCH-WRITER-002",
+      "requirement_digest": "sha256:2bdef8e5e0f784fca0f8e81a0b8e0564bd940e8b71a2f03c4eea544bd45b5a12",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "ARCH-WRITER-002",
+        "requirement_digest": "sha256:9223e3160113bf0e8ca0d4c1b9921f95b66d6689f6cda43c9c6af2c6b8a12a9d",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-001",
+      "requirement_digest": "sha256:6f6e415ad376574dd3924c132f4f564b5935380d79f0d7a4c11f7d0a802c4dba",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "CORR-UPLOAD-001",
+        "requirement_digest": "sha256:a6b01898083453d22433b1ee85f78905a4a7aabd923b95de55473a5429d8e763",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-002",
+      "requirement_digest": "sha256:658bf3e451ecf4029d921cb751da9d97e5b72212cf9cf61b7faa05f20456d252",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-003",
+      "requirement_digest": "sha256:9e3dba0b18cc95cddfd3852443a2e5a85d5bb9ed0291b7a306d884e23db2103a",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-004",
+      "requirement_digest": "sha256:f8571cc7fff8313a948e96b08701686226d1bdb579b8045826721e48ecb24791",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-005",
+      "requirement_digest": "sha256:68049ed476a07603011af73fa9ab2ffed4b71363caa70f6116853c793b29f574",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-006",
+      "requirement_digest": "sha256:c20afa90c32e54cc29f62b521e9484416ef3906846d25af0052bc878e219c662",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-007",
+      "requirement_digest": "sha256:e1adfb98f0d7b8298decf3f2eb79412b10f893870f08e2b8188b1575285f843b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-008",
+      "requirement_digest": "sha256:54d568a4a88d95f26bab6275094605e53cd7b88d315442c47a8325eb14b37df8",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-009",
+      "requirement_digest": "sha256:c7b2f99103d0a4d44fa94cac0319d4d2e549d9ade8609397573da93aa4e34dab",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PRODUCT-NONGOAL-001",
+      "requirement_digest": "sha256:1a8230829b354e84c5bd53656fba535e487fc42537a3a800e9c5d5344e6c78ac",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PRODUCT-USB-001",
+      "requirement_digest": "sha256:cf61c720fedc4fb4cd9a60092bab581a6fee2fed61131d9cbeed88229aae2096",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PRODUCT-RX-001",
+      "requirement_digest": "sha256:75c74ee01c2152eb1900bf6c2f34cc2ed40294782832b2b9967c16746a99ee33",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SATMON-ARCH-001",
+      "requirement_digest": "sha256:10533372c7fbfa0b08992b418ad8429a96a28dfe8d6815eeba0e265c357b5afd",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SATMON-STATE-001",
+      "requirement_digest": "sha256:42a87443a67abd7123c380262fead7d20c732c1db109968cd11df183412656f2",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SATMON-PROFILE-001",
+      "requirement_digest": "sha256:b38daf76b82bd56378a34468b686604a443b94f2fdd404e18fc96634150119ec",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "CORR-UPLOAD-010",
+      "requirement_digest": "sha256:a36ca48e18d77a2c5dc5b1feb8dc5ad19ca80f919384609701ac564a2742c76e",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "CORR-REFERENCE-001",
+      "requirement_digest": "sha256:79fc1e81a0cf93561ccdcd191aa3e914b140fbf06d0ef8493f07b7e9194ed77e",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "RELEASE-SIGN-001",
+      "requirement_digest": "sha256:8d7bc421ab2f5ab00d73490e6d2c4c66bbcf3bb7dfc81e2aa091589f7a2a73b5",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "PLAY-DISCLOSURE-001",
+      "requirement_digest": "sha256:9f5cbf9f685926786e4af20bd37c033348ddcb965f7f42a16d50dee0ef70029c",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "PLAY-DISCLOSURE-001",
+        "requirement_digest": "sha256:ad143d5ff047873d5d205e2b19b5e6d81b1ae8cd5e003ee05f5cb3294183635d",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "PLAY-DATA-001",
+      "requirement_digest": "sha256:f86e0890b50a3e4f62a0d2d911a3a5b62f52e756374129bdb0d1d20ac33acb8b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "PLAY-DATA-001",
+        "requirement_digest": "sha256:2b171931078603b01b4b535245388f23468be6873c526fd93c52637355a1cb96",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "PLAY-PERM-001",
+      "requirement_digest": "sha256:32c4cd3c984266047c7606356541d12d4c3dbc8b30ca78df2a2dff42c31dc6d7",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PLAY-NOTIFICATION-001",
+      "requirement_digest": "sha256:840cda93d86f892860be54a5c874d33ee6222fdd07ee63191018dfa56dfbae6d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PLAY-FGS-001",
+      "requirement_digest": "sha256:0e492c8cc4d3cbf6e6e618ad68428ec5a71c043f636134e3ab4fdb4358643ce6",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PLAY-SECRETS-001",
+      "requirement_digest": "sha256:1c3cf29b70a5f516060fcfccf6e61779b0a323869f61f98edb967d08c2a571e1",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PLAY-IMPORT-001",
+      "requirement_digest": "sha256:30b72a65db4cef8be44eb496362e95efc7e8cd3c0314c80e935711d88bcf9d97",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PLAY-BUILD-001",
+      "requirement_digest": "sha256:76101738a7380eeae7811fd0e3fa5bede7edd3a8571e81ad282c03f311218cdc",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PLAY-BUILD-002",
+      "requirement_digest": "sha256:505470befea28498162cc5e2b765379e13fec81baf61d15c53f39707f2909b41",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "PLAY-LICENSE-001",
+      "requirement_digest": "sha256:c42a2d3e563dd81343cae69b4bbac65ae0c9f420ad886be4321bd0e5e8e1ccb0",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "PLAY-LICENSE-001",
+        "requirement_digest": "sha256:228bbd2d5adacebe979b6aa28d7c1b655e3e26024ae298b6561871a762db9a71",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "RX-UM980-001",
+      "requirement_digest": "sha256:fc7d8405d4e5a6175656196b8955c5f72b96b069f37b22d8123812cf4fad0d92",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "RX-UM980-RTK-001",
+      "requirement_digest": "sha256:ccc1e5e71e2612c03d0ea9c91f3ae22c83578357cf54d51fc6422b519c67154c",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "RX-UM980-PPP-001",
+      "requirement_digest": "sha256:27295f0cf74082f3cc07cdf7fbea9e977d7340271813b414c117b697c154c48d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "RX-UM980-PROFILES-001",
+      "requirement_digest": "sha256:a9503be34cadb4d7e987fe090c3899a574945920fb796f18a4cc89d49d5cfe02",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "RX-UM980-RTKLIB-001",
+      "requirement_digest": "sha256:5b5ac52b22a4f7793ed59949dfce727d7dedd7ce0368d96c7b89ded438c3a31b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "RX-UBLOX-M8T-001",
+      "requirement_digest": "sha256:7c1c2e189c8a6a294c85683a84311c3c5d91f09f0f1296565f41bb4d11da839a",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "RX-UBLOX-RTKLIB-001",
+      "requirement_digest": "sha256:8d1bb6892d1c1928a2b75197b1570e18c279ce20d2fe32dbc31d739dc4e37149",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "RX-UM980-COMMANDS-001",
+      "requirement_digest": "sha256:c09aa6678eff3c5c86473397bdc28e6c5946b1c2de8b01b32848215e342d76f9",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "RX-UM980-FREQUENCY-001",
+      "requirement_digest": "sha256:979507ce439efbfb9edfd18e8656b3feaa9d3c3a54382b488df1797a3a29716e",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "RX-MONITOR-001",
+      "requirement_digest": "sha256:256a70fef317a578a7f3e97e2c9716f6efee6205d8ab2200edecc4cdc70baf25",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "SEC-NTRIP-TLS-001",
+      "requirement_digest": "sha256:ccb88787ec18a6215cb4d8780e98054b4dcc16d505a43b6b9e65c170640e2094",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "SEC-NTRIP-TLS-002",
+      "requirement_digest": "sha256:a197ab944e0f2250ded50563428a16b8cfeedfd5da7bae56cc0b2cd91f5a7517",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "SEC-NTRIP-TLS-003",
+      "requirement_digest": "sha256:863a96abe70c7115d3fd122bc884898640b6014e6525ae5573902c1a8495c989",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "SEC-SECRETS-001",
+      "requirement_digest": "sha256:d23e9f8c77d83c97c4feacc907fb6bef7005e6918b3c82414c7d07a27502674c",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SEC-SECRETS-002",
+      "requirement_digest": "sha256:9f22b94a537d2918fb7c9a92e2ac0d1ddbb4bbf92a3bb7963aa470b4e82154f2",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "SEC-SETTINGS-001",
+      "requirement_digest": "sha256:cd6e1169d82f98bb962a10c6eaa23a2b4365baa8121f042ffc5c9fc64dd841a2",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SEC-IMPORT-001",
+      "requirement_digest": "sha256:19a50bec169970472d00acd5a3656a0a53c4bd6f054fcf4a8a6f20d69afdd130",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SEC-IMPORT-002",
+      "requirement_digest": "sha256:90fe291a07e8b5e9c945428849e918b7f852ef9f0ac5c638de7d4804277fad60",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SEC-IMPORT-003",
+      "requirement_digest": "sha256:64361acf25d55101939ae0d0d54c67045de0a2ede6c2aa473faf4782dc3bf79d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SEC-IMPORT-004",
+      "requirement_digest": "sha256:2149e56a6ee5a04fbee6a395b6cb441b83d7d7cd94ffab035f38dcb35a29bb8b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SEC-IMPORT-005",
+      "requirement_digest": "sha256:cf459a15daff4592f262dd31b7b2efa5200fcc32516c127e277072bda11b3a32",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "SEC-IMPORT-005",
+        "requirement_digest": "sha256:67e5b8e82aca971be98d50fb4de81ea23966f06eac34cae76939044776097556",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "SEC-IMPORT-006",
+      "requirement_digest": "sha256:c1eb5c31b8cdb17baefea27ea1259c9a39230f4aecb6e431f84fd4732573efcb",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "SEC-DIAGNOSTICS-001",
+      "requirement_digest": "sha256:d108fab59b92ac711aa3351ef90606d2bbb76d2e34ce80c8bb21dfe13026adb8",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "SEC-DIAGNOSTICS-001",
+        "requirement_digest": "sha256:7e4997733a03df3cdeb88d5e1814387dd44b750eec02717f78cd3af0313a52bd",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "SESSION-FILES-001",
+      "requirement_digest": "sha256:764c0ca6caa6dddba2edf95c58f5663ff5e615508cdecb8d62b66295acba53d7",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-META-001",
+      "requirement_digest": "sha256:2eab32d1398a6e2c0b144f20b7ffc70551df0be8715ea343fe9300a8d455cb79",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-NMEA-001",
+      "requirement_digest": "sha256:993d811095a0f2cadde28a32be84579daa7a06111a56cd18c3bd617a3cca1e11",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-RTCM-001",
+      "requirement_digest": "sha256:d5dbb1e9dd29a426fe4b8fee197474d6d5bde681045a363add15301a3513346f",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-ARCHIVE-001",
+      "requirement_digest": "sha256:2a37fda23c71d837c281c8a9a6b317c94dd85913cc1e0feca69edb9143c1ad47",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-ARCHIVE-004",
+      "requirement_digest": "sha256:76a6a425e4c940dfb81e677a9f5ba5d673dbc43b4d770dcae28598f0f15022ba",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-SHARE-001",
+      "requirement_digest": "sha256:7859ecf4f4e9ff0ae3115b570ff319b7a591e6fff88a82354ffcf0f1b997c0da",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-ARCHIVE-002",
+      "requirement_digest": "sha256:aaeaa21d317ccaa5ac9f8549ccd92c1c4ac7e86c22e5914ced6505e7db437832",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-ARCHIVE-003",
+      "requirement_digest": "sha256:3f60d4a373f5233c43c9453b6f179f4782063424efc35c7df866fe7bf984fffb",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "SESSION-NMEA-002",
+      "requirement_digest": "sha256:b42e07f4f8b637136ca2bba5512534d16b7ebdbdd110199750e971e0aea80b8c",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-DASH-001",
+      "requirement_digest": "sha256:8c7dd5cc34e4d69ebc69557f8f86a603279d20bb7a22c82e2a07320e2da78aff",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-DASH-003",
+      "requirement_digest": "sha256:274d6f43a0389e252e495febe506569cef91b6089b90c7512e70a03993a72a46",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-DASH-002",
+      "requirement_digest": "sha256:ad5b5da40d1ec2f49384323b17c0c101c5e69a5783912b7ce7d9ec915eab95ae",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-DASH-004",
+      "requirement_digest": "sha256:00a48c455237c33c18480cf685ee205969cee79180488f05339dbc70a23fb2e2",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-DASH-005",
+      "requirement_digest": "sha256:525a6797dc7a78f994a491880226f3895cbbe385737771fc01d8419b5fc34df3",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-DASH-006",
+      "requirement_digest": "sha256:a82c427fbfac116a5b1a847f16ca87ea7d8c9ae753321a871efbee8292976dd0",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-DASH-006",
+        "requirement_digest": "sha256:2ba1594cc716dd0dc6092901c952652ee47678325324f6d9c3731c28a51c3018",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-NTRIP-001",
+      "requirement_digest": "sha256:806de4433ecc20ede3f15495e9bf06a9062c20ba277a1ff63867d452d4fd1d24",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-NTRIP-001",
+        "requirement_digest": "sha256:86c5f4439348ab829e8393979e095b609c6d75fcac1d2fa6cfafed4ee6a13621",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-SATMON-001",
+      "requirement_digest": "sha256:0d110244933fc85cf11e612c7854624eae66848509dbfc34fd94f8b8466ca69d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SATMON-002",
+      "requirement_digest": "sha256:3f0283c08d75cfa3a1c4cbbf334a61c3b71a2642ed94c39cfa73e6da60f31311",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SATMON-003",
+      "requirement_digest": "sha256:b944848a70ecfca9d8651eb918074f718aa686c1d10eb3606fad0582a506601d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SATMON-004",
+      "requirement_digest": "sha256:a5025ea866e56caa95a6e7ca1fac693577ab1f08132e4a6e3096438ce26b1ade",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SATMON-005",
+      "requirement_digest": "sha256:b1326da4cf66828943e689e323221e240a51df817594994166ca18588b88779b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SATMON-006",
+      "requirement_digest": "sha256:b3a99e52fd61c42b9aea9f61b26c7f8a5a5cfff5e864dd2156610796e2b89756",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-BASE-001",
+      "requirement_digest": "sha256:893b40f5cb7a99a3c2c6324409215ed17a0690d0eaf2f4e7c6e98842b90a1dba",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-UPLOAD-001",
+      "requirement_digest": "sha256:41bf86dd3a7fae3441f99e1fe8380ed173b6a7d2722a2accdf64b1d37858f5d1",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-UPLOAD-002",
+      "requirement_digest": "sha256:79bd1c419df3892284b885327bf9685c905f31440ba8df61a595683c9a665ee1",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SETUP-001",
+      "requirement_digest": "sha256:21f2dec66a5563969055ab0d173f0e276f2e4b7e97da8edbc4459d136a9edb2d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SETUP-002",
+      "requirement_digest": "sha256:a392a8a0bdf3b4edf5fce3bf4df5aa4b8ca89ed55acc68f7a0cd565def3e0f91",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-SETUP-002",
+        "requirement_digest": "sha256:c0d7bd47e0523897602eaa3fc3ebd56d28493cf38a89efa483d3e36fbf118b5b",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-SETUP-009",
+      "requirement_digest": "sha256:6528b4783f684d187ffd00cf66b33f16e6b01dd43c29117abc5d03541e3e44ed",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "UI-SETUP-003",
+      "requirement_digest": "sha256:c0828630be76ccd2cda2b219bf9446b07ce0a5ea49583284ed21c5419b4e3fe9",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-SETUP-003",
+        "requirement_digest": "sha256:313ee8a7ff8b284a4b0263bb4a7115195c8ede12b3a33215713f2f8e85c870d3",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-SETUP-004",
+      "requirement_digest": "sha256:84724395036239c87febfbb62c3eb811d52f8bec2fc462924049c1fc3814fe42",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SETUP-005",
+      "requirement_digest": "sha256:bb1b6827a14e7f2caa6c97f0d0b22f816d363fa1102ebaee42a7b5a82f2b8916",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SETUP-006",
+      "requirement_digest": "sha256:43d50cfd6ba7c9e52348993ac4278be762e4559f68fe4d9659e6fe175818f6a8",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SETUP-007",
+      "requirement_digest": "sha256:a7ffed4c2b215b1ecb02b60692fd78207af53a0c666a7867d43d1b3a7ba559dd",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-SETUP-008",
+      "requirement_digest": "sha256:00b99fcff6bbdcb71907d694938054637961b0cb49f7b0eafc1c9095cd759588",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-SETUP-008",
+        "requirement_digest": "sha256:1514d1fab26393afb7c2f884d8babe9fafb3f6631f867e106709e92f8b776ce7",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-KEYBOARD-002",
+      "requirement_digest": "sha256:463deb673df2acaf21d3c1b8b6805e53e36174d7b01a83dc627ebd31be6f4274",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-PROFILE-002",
+      "requirement_digest": "sha256:3c51c32e8602d687b153db76a30d7a09139a0aa77be3d2e864f34efba2add8e7",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-PROFILE-002",
+        "requirement_digest": "sha256:1ecbeb15b5b438f116ea1fd2264f519d76dbe09bb8a4a1dd56558bc2ee773026",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-PROFILE-003",
+      "requirement_digest": "sha256:1bd286c70e5da4d5409653c51e7a7c3d078c0304c18de6348e2be9c227e09ad1",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "UI-PROFILE-001",
+      "requirement_digest": "sha256:8e3022aef69e10a0689b3eebb673f119501cc6cc5ecc3678972a94504c1f2678",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-KEYBOARD-001",
+      "requirement_digest": "sha256:d35c789542fc33bc0f514e07fb3b2fae35ec7dedb48cacaac13ee9ac7e1b0b86",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "UI-STORAGE-001",
+      "requirement_digest": "sha256:5bccc007bbb0964f9eee55ea5e4afc003a804d9eed3d197bf79cb7d6e2c9568d",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-STORAGE-001",
+        "requirement_digest": "sha256:fcccac1ac6aca6ee6afe54754e03810bfc8b936002c7c2add637337b37ffa884",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-CONSOLE-001",
+      "requirement_digest": "sha256:1003b199ff994cbd0a9c857166a021d3d8f0f51476311604fd9700cc41bdd892",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-CONSOLE-001",
+        "requirement_digest": "sha256:aca5bf947b41f0aa810d205d6bff320c268b033ccff0dd36e9ea7a6453de79d3",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-DOCS-001",
+      "requirement_digest": "sha256:cfa3ef3a12d5bb34b186ac8159f1dc6ff0ecb43988c58be4fad04ac0c07fcdf4",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "UI-DOCS-001",
+        "requirement_digest": "sha256:94903f7e85a72ddc5538adb6075934d4de14dd9140cb116e71814922572c2803",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "UI-DASH-007",
+      "requirement_digest": "sha256:86d6af5b5716428c16a0066169feee6256ece72b031c19160b809d87b33b75fc",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "WF-ROVER-001",
+      "requirement_digest": "sha256:a03b55ba07b395e2a5454c8387d08a0fe65eae0d13e7c0305254f73fb7926c1b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-ROVER-NTRIP-001",
+      "requirement_digest": "sha256:2f428a3aa0321bb777988a01e4246e39dc52f0f1e4116779198e5efa206050cc",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-TEMPBASE-001",
+      "requirement_digest": "sha256:55d6470c620fcb2cd0095e58f6c8498766719853df4863864ac00ac409201ede",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-TEMPBASE-002",
+      "requirement_digest": "sha256:561d27c965eae884917af2ecac8cd4ebd1ce8fd32ac6e8baea1334d0b7e82b6a",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-TEMPBASE-HEIGHT-001",
+      "requirement_digest": "sha256:7e4e38cbe9d62663967f7d2835cf8db5aa4b06d98f7b029b8555582764c80d89",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-FIXEDBASE-001",
+      "requirement_digest": "sha256:e15606352035019976ec77b511108c3ffaaac21763c4f194c9f2dac7131a1207",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-FIXEDBASE-002",
+      "requirement_digest": "sha256:a54d4e21aafd0d77a3a39e1839fd79eed7dbb7e43fc029b232230214eb9b6560",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-FIXEDBASE-003",
+      "requirement_digest": "sha256:26505205e9da8a667d5f56a043b4673adb819d3ff1bee8a37c23d931599970a1",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-FIXEDBASE-004",
+      "requirement_digest": "sha256:6fb73ea42c5c0ae774726f7ad8155fd39937f26a6bd81e930dacdde367c5da0c",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-PROFILE-FILTER-001",
+      "requirement_digest": "sha256:70b9edfe8caba300fdebf8edb8c66fbfff760d6f62b2cbfb6a44682980ed9eda",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-UPLOAD-UI-001",
+      "requirement_digest": "sha256:5ab0fcfb6c8e05755905118a522638ea245f37770c32b53138cf3bbae9339c44",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-BUILTIN-SETTINGS-001",
+      "requirement_digest": "sha256:dc0da7ea3df4bcf5bcef8ca7b785c3fc945035de770ac5e4a88d893be8944ebf",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval",
+      "previous_approval": {
+        "requirement_id": "WF-BUILTIN-SETTINGS-001",
+        "requirement_digest": "sha256:1f4dccca613f435b3237a5367dae7fcb85ea14172d3d8d1e6c67b45f355bc7cd",
+        "state": "approved",
+        "approved_by": "human:holubp",
+        "approved_at": "2026-09-23T14:02:05Z",
+        "decision_ref": "2026-09-23-specification-assurance-approval"
+      }
+    },
+    {
+      "requirement_id": "WF-SETTINGS-OWNERSHIP-001",
+      "requirement_digest": "sha256:42f545a9ae6c8999d534c68fe4bdc8d9985d34295f139a8b0d5a7bd1c8f2c0c5",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "WF-SETTINGS-DEPENDENCY-001",
+      "requirement_digest": "sha256:933106011575aac30d80b8c2598f8f498988407a8b8cd42a310cfe43adf53ba8",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    },
+    {
+      "requirement_id": "WF-REPLAY-001",
+      "requirement_digest": "sha256:52836747e7c243bd7e6fcd355b7d3211b53b5e17d8ff89b398c426cc46a4e17b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    },
+    {
+      "requirement_id": "WF-SOLUTION-001",
+      "requirement_digest": "sha256:d2893aa074180bfb84fdca65260285c83d53558a435e257df028a3e0d438a97b",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-09-23T14:02:05Z",
+      "decision_ref": "2026-09-23-specification-assurance-approval"
+    }
+  ]
+}

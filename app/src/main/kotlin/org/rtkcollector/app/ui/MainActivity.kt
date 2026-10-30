@@ -112,8 +112,7 @@ import org.rtkcollector.app.profile.ProfileDeviceFilter
 import org.rtkcollector.app.profile.ProfileStores
 import org.rtkcollector.app.profile.storageValue
 import org.rtkcollector.app.profile.ProfileReference
-import org.rtkcollector.app.profile.PreferenceCommitException
-import org.rtkcollector.app.profile.PreferenceRollbackStatus
+import org.rtkcollector.app.profile.SecretStoreImportOutcome
 import org.rtkcollector.app.profile.RecordingPolicyProfile
 import org.rtkcollector.app.profile.RecordingSettingsSet
 import org.rtkcollector.app.profile.RetainedSettingsProfileIds
@@ -344,33 +343,6 @@ private data class SettingsImportOutcome(
     val safTreeUriReselectionCount: Int,
     val secretStoreOutcome: SecretStoreImportOutcome,
 )
-
-internal enum class SecretStoreImportOutcome(
-    val userMessage: String?,
-) {
-    STORED(null),
-    PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED(
-        "NTRIP passwords could not be stored securely; previous password values were restored. Enter them again.",
-    ),
-    PRIMARY_AND_ROLLBACK_FAILED(
-        "NTRIP passwords could not be stored securely; persisted password state may be inconsistent. Check and enter them again.",
-    ),
-    FAILED("NTRIP passwords could not be stored securely; enter them again."),
-}
-
-internal fun classifySecretStoreImportFailure(error: Throwable): SecretStoreImportOutcome =
-    when (error.preferenceCommitFailure()?.rollbackStatus) {
-        PreferenceRollbackStatus.FAILED ->
-            SecretStoreImportOutcome.PRIMARY_AND_ROLLBACK_FAILED
-        PreferenceRollbackStatus.RESTORED ->
-            SecretStoreImportOutcome.PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED
-        null -> SecretStoreImportOutcome.FAILED
-    }
-
-private fun Throwable.preferenceCommitFailure(): PreferenceCommitException? =
-    generateSequence(this) { it.cause }
-        .filterIsInstance<PreferenceCommitException>()
-        .firstOrNull()
 
 private data class PendingStorageFolderSelection(
     val target: ProfileEditorTarget,
@@ -3039,7 +3011,7 @@ fun RtkCollectorApp(
                             selectedUsbProfileId = selectedUsbProfile?.id,
                             selectedCommandProfileId = selectedCommandProfile?.id,
                         ),
-                        recordingActive = state.isRecording,
+                        recordingActive = state.receiverBusy || startInProgress || ActiveRecordingSessionRegistry.isAnyActive(),
                         deviceFilterLabel = selectedDeviceFilter.displayName,
                         usbProfiles = usbProfiles.map { DeviceConsoleOption(it.id, it.name) },
                         commandProfiles = filteredCommandProfiles.map { DeviceConsoleOption(it.id, it.name) },
@@ -3066,7 +3038,7 @@ fun RtkCollectorApp(
                             } else {
                                 val controller = consoleController ?: createDeviceConsoleController(
                                     context = context,
-                                    isRecording = { state.isRecording },
+                                    isRecording = { state.receiverBusy || startInProgress || ActiveRecordingSessionRegistry.isAnyActive() },
                                     usbProfile = profile,
                                     onState = { nextState ->
                                         runOnMain(context) {
@@ -4063,7 +4035,7 @@ private fun importSettingsBackup(context: Context, backup: SettingsBackupFile): 
         ?.takeIf { id -> importedSettingsSets.any { it.id == id } }
         ?: importedSettingsSets.first().id
     val secretStore = NtripSecretStore(context)
-    profileStore.publishImportedSettings(
+    val secretStoreOutcome = profileStore.publishImportedSettings(
         backup = sanitizedBackup,
         settingsSets = importedSettingsSets,
         selectedSettingsSetId = importedSelectedSettingsSetId,
@@ -4074,7 +4046,7 @@ private fun importSettingsBackup(context: Context, backup: SettingsBackupFile): 
     )
     return SettingsImportOutcome(
         safTreeUriReselectionCount = importPlan.safTreeUriReselectionCount,
-        secretStoreOutcome = SecretStoreImportOutcome.STORED,
+        secretStoreOutcome = secretStoreOutcome,
     )
 }
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 REQUIREMENT_HEADING = re.compile(r"^###\s+([A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+-\d{3}):\s+", re.MULTILINE)
+REQUIREMENT_STATUS = re.compile(r"^Status:\s*(\S.*?)\s*$", re.MULTILINE)
 MATRIX_ID = re.compile(r"`([A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+-\d{3})`")
 
 
@@ -28,6 +29,22 @@ def find_requirement_ids(files: list[Path]) -> dict[str, list[Path]]:
     return dict(found)
 
 
+def find_requirement_statuses(files: list[Path]) -> dict[str, list[tuple[Path, str | None]]]:
+    """Map each requirement ID to its defining path and lifecycle status."""
+    found: dict[str, list[tuple[Path, str | None]]] = defaultdict(list)
+    for path in files:
+        if path.name == "verification-matrix.md":
+            continue
+        text = path.read_text(encoding="utf-8")
+        matches = list(REQUIREMENT_HEADING.finditer(text))
+        for index, match in enumerate(matches):
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+            status_match = REQUIREMENT_STATUS.search(text, match.end(), end)
+            status = status_match.group(1).strip() if status_match else None
+            found[match.group(1)].append((path, status))
+    return dict(found)
+
+
 def find_matrix_ids(matrix: Path) -> set[str]:
     """Return requirement IDs referenced from the verification matrix."""
     if not matrix.exists():
@@ -36,9 +53,10 @@ def find_matrix_ids(matrix: Path) -> set[str]:
 
 
 def validate_spec_tree(root: Path) -> list[str]:
-    """Validate requirement ID uniqueness and matrix coverage."""
+    """Validate ID uniqueness and normative-only matrix coverage."""
     files = markdown_files(root)
     requirements = find_requirement_ids(files)
+    requirement_statuses = find_requirement_statuses(files)
     matrix_ids = find_matrix_ids(root / "verification-matrix.md")
     errors: list[str] = []
 
@@ -51,9 +69,24 @@ def validate_spec_tree(root: Path) -> list[str]:
         if matrix_id not in requirements:
             errors.append(f"Matrix references missing requirement ID {matrix_id}")
 
-    for requirement_id in sorted(requirements):
-        if requirement_id not in matrix_ids:
+    for requirement_id, records in sorted(requirement_statuses.items()):
+        if any(status is None for _, status in records):
+            errors.append(f"Requirement ID {requirement_id} has no lifecycle Status")
+            continue
+        statuses = {status for _, status in records}
+        if len(statuses) != 1:
+            errors.append(
+                f"Requirement ID {requirement_id} has conflicting lifecycle statuses: "
+                + ", ".join(sorted(status for status in statuses if status is not None))
+            )
+            continue
+        status = next(iter(statuses))
+        if status == "Normative" and requirement_id not in matrix_ids:
             errors.append(f"Requirement ID {requirement_id} missing from verification matrix")
+        elif status != "Normative" and requirement_id in matrix_ids:
+            errors.append(
+                f"Non-normative requirement ID {requirement_id} ({status}) must not appear in verification matrix"
+            )
 
     return errors
 

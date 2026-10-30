@@ -6,9 +6,10 @@ import org.junit.jupiter.api.Test
 
 class SessionShareModelsTest {
     @Test
-    fun `zip sharing is disabled while recording unless partial snapshot is explicit`() {
+    fun `zip sharing stays disabled for active sessions even with a legacy partial flag`() {
         assertFalse(SessionShareState(isRecording = true, allowPartialSnapshot = false).zipEnabled)
-        assertTrue(SessionShareState(isRecording = true, allowPartialSnapshot = true).zipEnabled)
+        assertFalse(SessionShareState(isRecording = true, allowPartialSnapshot = true).zipEnabled)
         assertTrue(SessionShareState(isRecording = false, allowPartialSnapshot = false).zipEnabled)
+        assertTrue(SessionShareState(isRecording = false, allowPartialSnapshot = true).zipEnabled)
     }
 }

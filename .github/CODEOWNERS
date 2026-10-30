@@ -1,0 +1,11 @@
+# BEGIN SPECIFICATION ASSURANCE
+# Managed by install_spec_assurance.py. The owner is supplied at install time.
+docs/specification/** @holubp
+tools/specification/** @holubp
+.github/workflows/spec-compliance.yml @holubp
+templates/semantic-review.md @holubp
+templates/specification-assurance/** @holubp
+tools/test_spec*.py @holubp
+scripts/pre_push_check.sh @holubp
+.github/CODEOWNERS @holubp
+# END SPECIFICATION ASSURANCE

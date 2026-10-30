@@ -12,6 +12,37 @@ import org.rtkcollector.core.workflow.SessionArtifact
 
 class ActiveRecordingConfigTest {
     @Test
+    fun `M8 receiver variants reject generic multi-frequency RTKLIB profiles before IO`() {
+        for (family in listOf("ublox-m8t", "ublox-m8p", "ublox-m8p0", "ublox-m8p2")) {
+            val single = configWithRtklibFrequency(family, 1)
+            single.validateForStart()
+            assertEquals(1, single.rtklib.frequencyCount)
+            for (frequencies in 2..3) {
+                val error = assertThrows(IllegalArgumentException::class.java) {
+                    configWithRtklibFrequency(family, frequencies).validateForStart()
+                }
+                assertTrue(error.message.orEmpty().contains("single-frequency"))
+            }
+        }
+        val multi = configWithRtklibFrequency("um980-n4", 3)
+        multi.validateForStart()
+        assertEquals(3, multi.rtklib.frequencyCount)
+    }
+
+    private fun configWithRtklibFrequency(family: String, frequencies: Int): ActiveRecordingConfig = ActiveRecordingConfig.resolve(
+        settingsSet = recordingSet().copy(workflowId = "rover-rtklib", receiverProfileId = family,
+            rtklibProfileRef = ProfileReference("rtklib", "RTKLIB")),
+        commandProfile = CommandProfile("commands", "Commands", receiverFamily = family,
+            runtimeScript = if (family.startsWith("ublox")) "!UBX CFG-MSG 2 21 0 0 0 1 0 0" else "OBSVMB COM1 1"),
+        usbBaudProfile = UsbBaudProfile("baud", "Baud"),
+        ntripCasterProfile = NtripCasterProfile("caster", "Caster", host = "caster.example.org"),
+        ntripMountpointProfile = NtripMountpointProfile("mount", "Mount", casterProfileId = "caster", mountpoint = "BASE0"),
+        recordingPolicyProfile = RecordingPolicyProfile("record", "Record"),
+        storageProfile = StorageProfile("storage", "Storage"),
+        rtklibProfile = RtklibProfile("rtklib", "RTKLIB", enabled = true, frequencyCount = frequencies),
+        workflowName = "Rover + RTKLIB", workflowUsesNtrip = true, passwordLookup = { null },
+    )
+    @Test
     fun `unsupported receiver family baud transition is rejected before IO`() {
         listOf("generic-nmea-rtcm", "custom-receiver", "um980-custom").forEach { family ->
             assertEquals(emptyList<String>(), configWithBaud(family, 230400).baudSwitchCommands)

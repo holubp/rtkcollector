@@ -2,6 +2,7 @@ package org.rtkcollector.app.recording
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,6 +15,55 @@ import org.rtkcollector.core.rtklib.RtklibPostprocessRequest
 import org.rtkcollector.core.rtklib.RtklibPostprocessResult
 
 class RtklibSessionPostprocessorTest {
+    @Test
+    fun `backup cleanup failure preserves the complete published pair`() {
+        val session = createTempDirectory("rtklib-publish-cleanup")
+        val temporaryNmea = TestFiles.writeString(session.resolve("new.nmea.tmp"), "new nmea\n")
+        val temporaryPos = TestFiles.writeString(session.resolve("new.pos.tmp"), "new pos\n")
+        val outputNmea = TestFiles.writeString(session.resolve("new.nmea"), "old nmea\n")
+        val outputPos = TestFiles.writeString(session.resolve("new.pos"), "old pos\n")
+        val fileOperations = FaultingPublicationFileOperations(
+            failDelete = { path -> path == outputPos.resolveSibling("new.pos.bak") && Files.exists(path) },
+        )
+
+        val result = RtklibSessionPostprocessor.publishOutputPair(
+            temporaryNmea,
+            temporaryPos,
+            outputNmea,
+            outputPos,
+            fileOperations,
+        )
+
+        assertTrue(result.success)
+        assertEquals("new nmea\n", TestFiles.readString(outputNmea))
+        assertEquals("new pos\n", TestFiles.readString(outputPos))
+        assertTrue(Files.exists(outputPos.resolveSibling("new.pos.bak")))
+    }
+
+    @Test
+    fun `publication failure restores both previous outputs`() {
+        val session = createTempDirectory("rtklib-publish-failure")
+        val temporaryNmea = TestFiles.writeString(session.resolve("new.nmea.tmp"), "new nmea\n")
+        val temporaryPos = TestFiles.writeString(session.resolve("new.pos.tmp"), "new pos\n")
+        val outputNmea = TestFiles.writeString(session.resolve("new.nmea"), "old nmea\n")
+        val outputPos = TestFiles.writeString(session.resolve("new.pos"), "old pos\n")
+        val fileOperations = FaultingPublicationFileOperations(
+            failMove = { source, target -> source == temporaryPos && target == outputPos },
+        )
+
+        val result = RtklibSessionPostprocessor.publishOutputPair(
+            temporaryNmea,
+            temporaryPos,
+            outputNmea,
+            outputPos,
+            fileOperations,
+        )
+
+        assertFalse(result.success)
+        assertEquals("old nmea\n", TestFiles.readString(outputNmea))
+        assertEquals("old pos\n", TestFiles.readString(outputPos))
+    }
+
     @Test
     fun `forward postprocess uses receiver raw and rtcm3 corrections`() {
         val session = ubloxRtklibSession()
@@ -165,6 +215,23 @@ class RtklibSessionPostprocessorTest {
             TestFiles.writeString(request.outputNmea, "\$GPGGA,new\n")
             TestFiles.writeString(request.outputPos, "")
             return RtklibPostprocessResult.success()
+        }
+    }
+
+    private class FaultingPublicationFileOperations(
+        private val failDelete: (Path) -> Boolean = { false },
+        private val failMove: (Path, Path) -> Boolean = { _, _ -> false },
+    ) : PublicationFileOperations {
+        override fun exists(path: Path): Boolean = Files.exists(path)
+
+        override fun move(source: Path, target: Path) {
+            if (failMove(source, target)) error("injected publication failure")
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
+        }
+
+        override fun deleteIfExists(path: Path) {
+            if (failDelete(path)) error("injected backup cleanup failure")
+            Files.deleteIfExists(path)
         }
     }
 }

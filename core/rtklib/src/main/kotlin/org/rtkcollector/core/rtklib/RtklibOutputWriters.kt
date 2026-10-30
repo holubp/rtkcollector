@@ -28,20 +28,26 @@ class RtklibOutputWriters private constructor(
     @Synchronized
     fun flush() {
         if (closed) return
-        nmeaOutput?.flush()
-        posOutput?.flush()
+        attemptAll({ nmeaOutput?.flush() }, { posOutput?.flush() })
     }
 
     @Synchronized
     override fun close() {
         if (closed) return
-        try {
-            flush()
-        } finally {
-            nmeaOutput?.close()
-            posOutput?.close()
-            closed = true
+        closed = true
+        attemptAll({ nmeaOutput?.flush() }, { posOutput?.flush() },
+            { nmeaOutput?.close() }, { posOutput?.close() })
+    }
+
+    private fun attemptAll(vararg actions: () -> Unit) {
+        var failure: Throwable? = null
+        for (action in actions) {
+            try { action() } catch (error: Throwable) {
+                val first = failure
+                if (first == null) failure = error else if (first !== error) first.addSuppressed(error)
+            }
         }
+        failure?.let { throw it }
     }
 
     private interface LineOutput : Closeable {

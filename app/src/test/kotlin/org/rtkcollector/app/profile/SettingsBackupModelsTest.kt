@@ -7,6 +7,27 @@ import kotlin.test.assertTrue
 
 class SettingsBackupModelsTest {
     @Test
+    fun `historical omission survives serialization without inventing a present empty family`() {
+        val backup = SettingsBackupFile.fromProfiles(
+            commandProfiles = emptyList(), usbBaudProfiles = emptyList(), ntripCasterProfiles = emptyList(),
+            ntripCasterUploadProfiles = emptyList(), ntripMountpointProfiles = emptyList(),
+            recordingPolicyProfiles = emptyList(), storageProfiles = emptyList(), settingsSets = emptyList(),
+            selectedSettingsSetId = null, selectedWorkflowId = null, lastActiveNtripMountpointProfileId = null,
+            passwordsBySecretId = emptyMap(), options = SettingsSetExportOptions(),
+        )
+        listOf(1, 2).forEach { format ->
+            val json = backup.copy(formatVersion = format).toJson()
+            listOf("ntripCasterUploadProfiles", "rtklibProfiles", "solutionPolicyProfiles").forEach(json::remove)
+            val parsed = SettingsBackupFile.fromJson(json)
+            val roundTrip = parsed.toJson()
+            listOf("ntripCasterUploadProfiles", "rtklibProfiles", "solutionPolicyProfiles").forEach { key ->
+                assertFalse(roundTrip.has(key))
+            }
+            assertEquals(parsed.includedProfileFamilies, SettingsBackupFile.fromJson(roundTrip).includedProfileFamilies)
+        }
+    }
+
+    @Test
     fun `unclassified input stays private through migration and is absent from portable recovery`() {
         val set = RecordingSettingsSet.builtInRoverNtrip()
         val json = SettingsBackupFile.fromProfiles(

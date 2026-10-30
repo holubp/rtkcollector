@@ -2,7 +2,10 @@ package org.rtkcollector.app.recording
 
 import org.rtkcollector.core.solution.SolutionCandidate
 
-internal fun SolutionCandidate.isPrimaryScreenCandidateFor(activeReceiverFamily: String): Boolean {
+internal fun SolutionCandidate.isPrimaryScreenCandidateFor(activeReceiverFamily: String): Boolean =
+    isPrimaryScreenSource(sourceId, activeReceiverFamily)
+
+internal fun isPrimaryScreenSource(sourceId: String, activeReceiverFamily: String): Boolean {
     val family = activeReceiverFamily.lowercase()
     return when {
         family.startsWith("um980") || family.startsWith("unicore") ->

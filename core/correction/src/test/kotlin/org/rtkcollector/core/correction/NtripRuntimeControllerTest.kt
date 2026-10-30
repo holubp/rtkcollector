@@ -101,7 +101,12 @@ class NtripRuntimeControllerTest {
         assertTrue(first.started.await(2, TimeUnit.SECONDS))
         assertTrue(
             controller.update(
-                NtripRuntimeConfig(NtripRequest(host = "caster.example", port = 2101, mountpoint = "NEW")),
+                NtripRuntimeConfig(
+                    NtripRequest(
+                        policy = NtripEndpointSecurityPolicy.systemTrust("caster.example", 2101),
+                        mountpoint = "NEW",
+                    ),
+                ),
             ),
         )
 
@@ -202,7 +207,40 @@ class NtripRuntimeControllerTest {
 
         client.release.countDown()
         assertTrue(controller.stop(timeoutMillis = 2_000))
-        assertEquals(2, client.cancelCalls.get())
+        assertEquals(1, client.cancelCalls.get())
+    }
+
+    @Test
+    fun `blocked cancellation is bounded zero-timeout retries reuse one owned operation`() {
+        val client = BlockedCancelRuntimeClient()
+        val factoryCalls = AtomicInteger(0)
+        val controller = NtripRuntimeController(
+            clientFactory = {
+                factoryCalls.incrementAndGet()
+                client
+            },
+            emit = {},
+        )
+
+        controller.start(NtripRuntimeConfig(defaultRequest()))
+        assertTrue(client.started.await(2, TimeUnit.SECONDS))
+        assertFalse(controller.stop(timeoutMillis = 25))
+        assertTrue(client.cancelEntered.await(2, TimeUnit.SECONDS))
+
+        assertFalse(controller.stop(timeoutMillis = 0))
+        assertFalse(controller.update(NtripRuntimeConfig(defaultRequest()), timeoutMillis = 0))
+        assertEquals(1, client.cancelCalls.get())
+        assertEquals(1, factoryCalls.get())
+        assertEquals(1, Thread.getAllStackTraces().keys.count {
+            it.name == "rtkcollector-ntrip-cancel" && it.isAlive
+        })
+
+        client.releaseCancel.countDown()
+        assertTrue(controller.stop(timeoutMillis = 2_000))
+        assertEquals(1, client.cancelCalls.get())
+        assertEquals(0, Thread.getAllStackTraces().keys.count {
+            it.name == "rtkcollector-ntrip-cancel" && it.isAlive
+        })
     }
 
     @Test
@@ -230,7 +268,10 @@ class NtripRuntimeControllerTest {
     }
 
     private fun defaultRequest(): NtripRequest =
-        NtripRequest(host = "caster.example", port = 2101, mountpoint = "MOUNT")
+        NtripRequest(
+            policy = NtripEndpointSecurityPolicy.systemTrust("caster.example", 2101),
+            mountpoint = "MOUNT",
+        )
 
     private class FakeRuntimeClient(private val result: NtripConnectionResult) : NtripRuntimeClient {
         var cancelled = false
@@ -312,6 +353,35 @@ class NtripRuntimeControllerTest {
 
         override fun cancel() {
             cancelCalls.incrementAndGet()
+        }
+    }
+
+    private class BlockedCancelRuntimeClient : NtripRuntimeClient {
+        val started = CountDownLatch(1)
+        val cancelEntered = CountDownLatch(1)
+        val releaseCancel = CountDownLatch(1)
+        val cancelCalls = AtomicInteger(0)
+
+        override fun run(
+            ggaLines: Iterable<String>,
+            onState: (CorrectionStatus) -> Unit,
+            onRtcmBytes: (ByteArray) -> Unit,
+        ): NtripConnectionResult {
+            started.countDown()
+            cancelEntered.await(3, TimeUnit.SECONDS)
+            return NtripConnectionResult.Failure(
+                NtripFailure(
+                    kind = NtripFailureKind.CANCELLED,
+                    state = NtripConnectionState.STOPPED,
+                    message = "cancelled",
+                ),
+            )
+        }
+
+        override fun cancel() {
+            cancelCalls.incrementAndGet()
+            cancelEntered.countDown()
+            releaseCancel.await(3, TimeUnit.SECONDS)
         }
     }
 

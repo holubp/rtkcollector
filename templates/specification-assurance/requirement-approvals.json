@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "approvals": [
+    {
+      "requirement_id": "CORE-FLOW-001",
+      "requirement_digest": "sha256:<checker-produced digest>",
+      "state": "pending",
+      "approved_by": "",
+      "approved_at": "",
+      "decision_ref": ""
+    }
+  ]
+}

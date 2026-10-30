@@ -101,6 +101,24 @@ add or update formal requirements first or in the same branch. Keep
 `docs/specification/verification-matrix.md` aligned with tests, manual checks
 and known gaps.
 
+### Owner And External-Contributor Governance
+
+Owner decision `2026-10-30-owner-external-pr-governance`: GitHub-level required
+review/protection is intended for externally authored pull requests, not work
+authored by `holubp`. Owner-authorized direct changes and releases do not require
+a second GitHub reviewer or universal branch protection. This does not waive
+approved requirements, local pre-push checks, independent code/specification
+review, clean-host CI or release signing/artifact verification.
+
+External pull requests require trusted-base specification checking and owner
+review before merge. Classify them by the authenticated PR author, not commit
+author text or who performs the merge; an owner merging somebody else's PR does
+not make it owner-authored. Do not claim GitHub-enforced protection until the
+actual repository settings have been configured and verified. Never silently
+use owner bypass privileges for an external PR. The generic assurance checker's
+universal protected-enforcement boundary remains distinct from this explicitly
+approved owner-governance exception.
+
 ## Plan Status Tracking
 
 `docs/superpowers/plan-status.md` is the GitHub-tracked source of truth for

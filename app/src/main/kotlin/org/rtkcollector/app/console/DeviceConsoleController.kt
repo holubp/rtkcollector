@@ -2,6 +2,7 @@ package org.rtkcollector.app.console
 
 import org.rtkcollector.core.transport.SerialTransport
 import java.util.concurrent.atomic.AtomicBoolean
+import org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry
 
 class DeviceConsoleController(
     private val recordingActive: () -> Boolean,
@@ -27,7 +28,7 @@ class DeviceConsoleController(
     }
 
     fun connect(): Result<Unit> {
-        if (recordingActive()) {
+        if (receiverOwned()) {
             val message = "Stop recording before opening the device console."
             update { it.copy(lastError = message, status = DeviceConsoleConnectionStatus.DISCONNECTED) }
             return Result.failure(IllegalStateException(message))
@@ -55,11 +56,14 @@ class DeviceConsoleController(
 
     fun send(text: String, lineEnding: DeviceConsoleLineEnding): Result<Unit> =
         runCatching {
+            check(!receiverOwned()) { "Wait for recording to finish before using the device console." }
             val opened = transport ?: error("Device console is not connected.")
             opened.write(DeviceConsoleCommandEncoder.encode(text, lineEnding))
         }.onFailure { error ->
             update { it.copy(lastError = error.message ?: "Device console send failed.") }
         }
+
+    private fun receiverOwned(): Boolean = recordingActive() || ActiveRecordingSessionRegistry.isAnyActive()
 
     fun disconnect() {
         keepReading.set(false)

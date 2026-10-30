@@ -22,6 +22,67 @@ string(REPLACE
 )
 file(WRITE "${RTKLIB_GENERATED_DIR}/unicore_obsvmcmp.c" "${RTKCOLLECTOR_UNICORE_SOURCE}")
 
+# RC10_PINNED_SERVER_ADAPTATION_BEGIN
+# RTKLIB-EX 8dfabc9a106b2e74c069bc80f0d7743f314e6ab4 only.
+# Keep the upstream checkout immutable; normalize Windows autocrlf before pin checks.
+file(READ "${RTKLIB_SRC}/rtksvr.c" RTKCOLLECTOR_RTKSVR_SOURCE)
+string(REPLACE "\r\n" "\n" RTKCOLLECTOR_RTKSVR_SOURCE "${RTKCOLLECTOR_RTKSVR_SOURCE}")
+string(SHA256 RTKCOLLECTOR_RTKSVR_SHA256 "${RTKCOLLECTOR_RTKSVR_SOURCE}")
+if(NOT RTKCOLLECTOR_RTKSVR_SHA256 STREQUAL "e1685aa9c990a3df672770dcaa122e1f4bbdec191f07b40f793a727e1d5e8b5b")
+    message(FATAL_ERROR "RTKLIB rtksvr.c normalized source SHA256 mismatch; review the pinned server adaptation")
+endif()
+
+function(rtkcollector_patch_server expected before after)
+    string(LENGTH "${RTKCOLLECTOR_RTKSVR_SOURCE}" original_length)
+    string(REPLACE "${before}" "" without_anchor "${RTKCOLLECTOR_RTKSVR_SOURCE}")
+    string(LENGTH "${without_anchor}" stripped_length)
+    string(LENGTH "${before}" anchor_length)
+    math(EXPR anchor_count "(${original_length} - ${stripped_length}) / ${anchor_length}")
+    if(NOT anchor_count EQUAL expected)
+        message(FATAL_ERROR "RTKLIB rtksvr.c anchor count mismatch: expected ${expected}, found ${anchor_count}")
+    endif()
+    string(REPLACE "${before}" "${after}" adapted "${RTKCOLLECTOR_RTKSVR_SOURCE}")
+    set(RTKCOLLECTOR_RTKSVR_SOURCE "${adapted}" PARENT_SCOPE)
+endfunction()
+
+rtkcollector_patch_server(1 [=[/* rtk server thread ---------------------------------------------------------*/]=] [=[
+/* State publication is shared by start, stop, worker exit and telemetry. */
+static int rtkcollector_server_running(rtksvr_t *svr)
+{
+    int running;
+    rtksvrlock(svr);
+    running=svr->state;
+    rtksvrunlock(svr);
+    return running;
+}
+static void rtkcollector_server_state(rtksvr_t *svr, int state)
+{
+    rtksvrlock(svr);
+    svr->state=state;
+    rtksvrunlock(svr);
+}
+/* rtk server thread ---------------------------------------------------------*/]=])
+rtkcollector_patch_server(1 [=[        init_raw(svr->raw+i,formats[i]);
+        init_rtcm(svr->rtcm+i);]=] [=[        if (!init_raw(svr->raw+i,formats[i])||!init_rtcm(svr->rtcm+i)) {
+            sprintf(errmsg,"rtk server decoder allocation error");
+            return 0;
+        }]=])
+rtkcollector_patch_server(1 [=[      trace(1, "rtksvrthread: obsd_t alloc failed\n");
+      return 0;]=] [=[      trace(1, "rtksvrthread: obsd_t alloc failed\n");
+      goto rtkcollector_worker_cleanup;]=])
+# Only start may publish running; a delayed worker must never undo Stop.
+rtkcollector_patch_server(1 "    svr->state=1;\n" "")
+rtkcollector_patch_server(1 "for (cycle=0;svr->state;cycle++)" "for (cycle=0;rtkcollector_server_running(svr);cycle++)")
+rtkcollector_patch_server(1 "    free(data);\n" "rtkcollector_worker_cleanup:\n    rtkcollector_server_state(svr,0);\n    free(data);\n")
+rtkcollector_patch_server(1 "    /* create rtk server thread */" "    rtkcollector_server_state(svr,1);\n    /* create rtk server thread */")
+rtkcollector_patch_server(1 [=[        sprintf(errmsg,"thread create error\n");]=] [=[        rtkcollector_server_state(svr,0);
+        sprintf(errmsg,"thread create error\n");]=])
+rtkcollector_patch_server(1 "    svr->state=0;" "    rtkcollector_server_state(svr,0);")
+rtkcollector_patch_server(1 "if (svr->state)" "if (rtkcollector_server_running(svr))")
+rtkcollector_patch_server(4 "!svr->state" "!rtkcollector_server_running(svr)")
+file(WRITE "${RTKLIB_GENERATED_DIR}/rtksvr.c" "${RTKCOLLECTOR_RTKSVR_SOURCE}")
+# RC10_PINNED_SERVER_ADAPTATION_END
+
 add_library(
     rtkcollector_rtklib
     SHARED
@@ -45,7 +106,7 @@ add_library(
     "${RTKLIB_SRC}/rtcm3e.c"
     "${RTKLIB_SRC}/rtkcmn.c"
     "${RTKLIB_SRC}/rtkpos.c"
-    "${RTKLIB_SRC}/rtksvr.c"
+    "${RTKLIB_GENERATED_DIR}/rtksvr.c"
     "${RTKLIB_SRC}/sbas.c"
     "${RTKLIB_SRC}/sofa.c"
     "${RTKLIB_SRC}/solution.c"

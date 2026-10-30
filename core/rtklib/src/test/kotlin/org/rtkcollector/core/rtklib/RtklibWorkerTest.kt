@@ -6,12 +6,702 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.rtkcollector.core.workflow.ReceiverCapabilityFixtures
 import org.rtkcollector.core.workflow.RtklibInputRouter
 import org.rtkcollector.core.workflow.WorkflowExamples
 
 class RtklibWorkerTest {
+    @Test
+    fun `failed native snapshot fences input and publishes failure without blocking producers`() {
+        val sampling = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val failedStatus = CountDownLatch(1)
+        val closed = CountDownLatch(1)
+        val feeds = java.util.concurrent.atomic.AtomicInteger()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig) = RtklibStartResult.started()
+            override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+                feeds.incrementAndGet()
+                return RtklibNativeOutputBatch()
+            }
+            override fun snapshot(): RtklibEngineSnapshot {
+                sampling.countDown()
+                release.await()
+                return RtklibEngineSnapshot(state = RtklibEngineState.FAILED, lastError = "native worker exited")
+            }
+            override fun stop() = Unit
+            override fun close() { closed.countDown() }
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+            RtklibOutputWriters(null, null), statusSink = {
+                if (it.state == RtklibEngineState.FAILED) failedStatus.countDown()
+            })
+        try {
+            assertTrue(worker.startAsync(validConfig()).started)
+            assertTrue(sampling.await(2, TimeUnit.SECONDS))
+            assertTrue(worker.offerRoverBytes(byteArrayOf(1, 2), 10).accepted)
+            repeat(100) { assertEquals(RtklibEngineState.RUNNING, worker.snapshot().state) }
+            release.countDown()
+            assertTrue(failedStatus.await(2, TimeUnit.SECONDS))
+            assertEquals(RtklibEngineState.FAILED, worker.snapshot().state)
+            assertEquals("native worker exited", worker.snapshot().lastError)
+            assertFalse(worker.offerRoverBytes(byteArrayOf(3), 11).accepted)
+            assertEquals(0, feeds.get())
+            assertEquals(2L, worker.snapshot().droppedRoverBytes)
+            assertTrue(closed.await(2, TimeUnit.SECONDS))
+        } finally {
+            release.countDown()
+            assertTrue(worker.shutdown(2_000))
+        }
+    }
+
+    @Test
+    fun `native failed feed result is not an empty successful batch`() {
+        val api = object : FakeNativeApi() {
+            override fun feed(handle: Long, streamKind: Int, bytes: ByteArray): Array<String> =
+                Array(16) { "" }.also { it[0] = "FAILED"; it[2] = "native feed failed" }
+        }
+        val backend = RtklibNativeBridge(loadLibrary = {}, nativeApi = api).create()
+        try {
+            assertTrue(backend.start(validConfig()).started)
+            val error = assertFailsWith<IllegalStateException> {
+                backend.feed(RtklibInputChunk(RtklibInputStreamKind.ROVER, byteArrayOf(1), 10))
+            }
+            assertEquals("native feed failed", error.message)
+        } finally { backend.close() }
+    }
+
+    @Test
+    fun `feed failure caused by deliberate Stop does not report unexpected failure`() {
+        val feeding = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig) = RtklibStartResult.started()
+            override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+                feeding.countDown()
+                release.await()
+                error("normal cancellation")
+            }
+            override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            override fun stop() { release.countDown() }
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+            RtklibOutputWriters(null, null))
+        try {
+            assertTrue(worker.start(validConfig()).started)
+            assertTrue(worker.offerRoverBytes(byteArrayOf(1), 10).accepted)
+            assertTrue(feeding.await(2, TimeUnit.SECONDS))
+            assertTrue(worker.shutdown(2_000))
+            assertEquals(RtklibEngineState.STOPPED, worker.snapshot().state)
+            assertEquals(null, worker.snapshot().lastError)
+        } finally {
+            release.countDown()
+            assertTrue(worker.shutdown(2_000))
+        }
+    }
+
+    @Test
+    fun `blocked startup accepts bounded early rover and correction input then feeds FIFO only after init`() {
+        val initEntered = CountDownLatch(1)
+        val releaseInit = CountDownLatch(1)
+        val offered = CountDownLatch(1)
+        val fed = CountDownLatch(4)
+        val received = java.util.concurrent.CopyOnWriteArrayList<RtklibInputChunk>()
+        val producerFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val nativeSnapshots = java.util.concurrent.atomic.AtomicInteger()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig): RtklibStartResult {
+                initEntered.countDown()
+                releaseInit.await()
+                return RtklibStartResult.started()
+            }
+            override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+                received.add(chunk)
+                fed.countDown()
+                return RtklibNativeOutputBatch()
+            }
+            override fun snapshot(): RtklibEngineSnapshot {
+                nativeSnapshots.incrementAndGet()
+                return RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            }
+            override fun stop() = Unit
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+            RtklibOutputWriters(null, null))
+        val producer = Thread {
+            try {
+                val initialRover = byteArrayOf(1, 2)
+                assertTrue(worker.offerRoverBytes(initialRover, 11, 0).accepted)
+                initialRover[0] = 99
+                assertTrue(worker.offerCorrectionBytes(byteArrayOf(8), 12, 3).accepted)
+                assertTrue(worker.offerRoverBytes(byteArrayOf(3), 13, 2).accepted)
+                assertTrue(worker.offerCorrectionBytes(byteArrayOf(9), 14, 4).accepted)
+                assertEquals(RtklibOfferStatus.DROPPED_FULL, worker.offerRoverBytes(byteArrayOf(4), 15).status)
+                assertEquals(RtklibOfferStatus.DROPPED_FULL, worker.offerCorrectionBytes(byteArrayOf(10, 11), 16).status)
+                repeat(100) { worker.snapshot() }
+            } catch (error: Throwable) { producerFailure.set(error) }
+            finally { offered.countDown() }
+        }
+        try {
+            assertTrue(worker.startAsync(validConfig().copy(maxRoverQueueBytes = 3, maxCorrectionQueueBytes = 2)).started)
+            assertTrue(initEntered.await(2, TimeUnit.SECONDS))
+            producer.start()
+            assertTrue(offered.await(1, TimeUnit.SECONDS), "Early admission cannot wait for native init")
+            assertEquals(null, producerFailure.get())
+            val queued = worker.snapshot()
+            assertEquals(RtklibEngineState.STARTING, queued.state)
+            assertEquals(3, queued.roverQueueBytes)
+            assertEquals(2, queued.correctionQueueBytes)
+            assertEquals(1L, queued.droppedRoverBytes)
+            assertEquals(2L, queued.droppedCorrectionBytes)
+            assertEquals(0, nativeSnapshots.get())
+            assertTrue(received.isEmpty(), "No backend feed before successful native init")
+            releaseInit.countDown()
+            assertTrue(fed.await(2, TimeUnit.SECONDS))
+            assertEquals(listOf(listOf<Byte>(1, 2), listOf<Byte>(8), listOf<Byte>(3), listOf<Byte>(9)), received.map { it.bytes.toList() })
+            assertEquals(listOf(RtklibInputStreamKind.ROVER, RtklibInputStreamKind.CORRECTION,
+                RtklibInputStreamKind.ROVER, RtklibInputStreamKind.CORRECTION), received.map { it.streamKind })
+            assertEquals(listOf(11L, 12L, 13L, 14L), received.map { it.timestampMillis })
+            assertEquals(listOf(0L, 3L, 2L, 4L), received.map { it.sessionOffsetBytes })
+            assertEquals(0, worker.snapshot().roverQueueBytes)
+            assertEquals(0, worker.snapshot().correctionQueueBytes)
+        } finally {
+            releaseInit.countDown()
+            producer.join(2_000)
+            assertTrue(worker.shutdown(2_000))
+        }
+    }
+
+    @Test
+    fun `Stop discards early queued input and retains ownership until init and close quiesce`() {
+        val initEntered = CountDownLatch(1)
+        val releaseInit = CountDownLatch(1)
+        val closeEntered = CountDownLatch(1)
+        val releaseClose = CountDownLatch(1)
+        val feeds = java.util.concurrent.atomic.AtomicInteger()
+        val outputs = CloseTrackingOutputStream()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig): RtklibStartResult {
+                initEntered.countDown(); releaseInit.await()
+                return RtklibStartResult.started()
+            }
+            override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+                feeds.incrementAndGet(); return RtklibNativeOutputBatch()
+            }
+            override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            override fun stop() = Unit
+            override fun close() { closeEntered.countDown(); releaseClose.await() }
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+            RtklibOutputWriters(outputs, null))
+        try {
+            assertTrue(worker.startAsync(validConfig().copy(maxRoverQueueBytes = 3, maxCorrectionQueueBytes = 3)).started)
+            assertTrue(initEntered.await(2, TimeUnit.SECONDS))
+            assertTrue(worker.offerRoverBytes(byteArrayOf(1, 2), 10).accepted)
+            assertTrue(worker.offerCorrectionBytes(byteArrayOf(3, 4, 5), 11).accepted)
+            assertEquals(RtklibOfferStatus.DROPPED_FULL, worker.offerRoverBytes(byteArrayOf(6, 7), 12).status)
+            assertEquals(RtklibOfferStatus.DROPPED_FULL, worker.offerCorrectionBytes(byteArrayOf(8), 13).status)
+            assertFalse(worker.shutdown(20))
+            val discarded = worker.snapshot()
+            assertEquals(0, discarded.roverQueueBytes)
+            assertEquals(0, discarded.correctionQueueBytes)
+            assertEquals(4L, discarded.droppedRoverBytes)
+            assertEquals(4L, discarded.droppedCorrectionBytes)
+            assertEquals(RtklibOfferStatus.STOPPED, worker.offerRoverBytes(byteArrayOf(9), 14).status)
+            assertFalse(outputs.closed)
+            releaseInit.countDown()
+            assertTrue(closeEntered.await(2, TimeUnit.SECONDS))
+            assertFalse(worker.shutdown(20))
+            assertFalse(outputs.closed)
+            assertEquals(0, feeds.get())
+            assertFalse(worker.snapshot().state == RtklibEngineState.RUNNING)
+        } finally {
+            releaseInit.countDown(); releaseClose.countDown()
+            assertTrue(worker.shutdown(2_000))
+        }
+        assertEquals(0, feeds.get())
+        assertEquals(4L, worker.snapshot().droppedRoverBytes)
+        assertEquals(4L, worker.snapshot().droppedCorrectionBytes)
+        assertEquals(1, outputs.closeCalls)
+    }
+
+    @Test
+    fun `refused or throwing init fences and counts early discard without feeding or releasing active close`() {
+        for (throws in listOf(false, true)) {
+            val initEntered = CountDownLatch(1)
+            val releaseInit = CountDownLatch(1)
+            val closeEntered = CountDownLatch(1)
+            val releaseClose = CountDownLatch(1)
+            val feeds = java.util.concurrent.atomic.AtomicInteger()
+            val outputs = CloseTrackingOutputStream()
+            val backend = object : RtklibBackend {
+                override fun start(config: RtklibConfig): RtklibStartResult {
+                    initEntered.countDown(); releaseInit.await()
+                    if (throws) error("init failed")
+                    return RtklibStartResult.failed("init refused")
+                }
+                override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+                    feeds.incrementAndGet(); return RtklibNativeOutputBatch()
+                }
+                override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.FAILED)
+                override fun stop() = Unit
+                override fun close() { closeEntered.countDown(); releaseClose.await() }
+            }
+            val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+                RtklibOutputWriters(outputs, null))
+            try {
+                assertTrue(worker.startAsync(validConfig().copy(maxRoverQueueBytes = 2, maxCorrectionQueueBytes = 1)).started)
+                assertTrue(initEntered.await(2, TimeUnit.SECONDS))
+                assertTrue(worker.offerRoverBytes(byteArrayOf(1, 2), 10).accepted)
+                assertTrue(worker.offerCorrectionBytes(byteArrayOf(3), 11).accepted)
+                assertEquals(RtklibOfferStatus.DROPPED_FULL, worker.offerRoverBytes(byteArrayOf(4), 12).status)
+                assertEquals(RtklibOfferStatus.DROPPED_FULL, worker.offerCorrectionBytes(byteArrayOf(5, 6), 13).status)
+                releaseInit.countDown()
+                assertTrue(closeEntered.await(2, TimeUnit.SECONDS))
+                val failed = worker.snapshot()
+                assertEquals(RtklibEngineState.FAILED, failed.state)
+                assertEquals(0, failed.roverQueueBytes)
+                assertEquals(0, failed.correctionQueueBytes)
+                assertEquals(3L, failed.droppedRoverBytes)
+                assertEquals(3L, failed.droppedCorrectionBytes)
+                assertEquals(RtklibOfferStatus.STOPPED, worker.offerRoverBytes(byteArrayOf(7), 14).status)
+                assertFalse(worker.shutdown(20))
+                assertFalse(outputs.closed)
+                assertEquals(0, feeds.get())
+            } finally {
+                releaseInit.countDown(); releaseClose.countDown()
+                assertTrue(worker.shutdown(2_000))
+            }
+            assertEquals(0, feeds.get())
+            assertEquals(1, outputs.closeCalls)
+            assertFalse(worker.startAsync(validConfig()).started)
+        }
+    }
+
+    @Test
+    fun `Stop during blocked factory retains ownership and skips late native start`() {
+        val creating = CountDownLatch(1)
+        val releaseFactory = CountDownLatch(1)
+        val starts = java.util.concurrent.atomic.AtomicInteger()
+        val closes = java.util.concurrent.atomic.AtomicInteger()
+        val outputs = CloseTrackingOutputStream()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig): RtklibStartResult {
+                starts.incrementAndGet()
+                return RtklibStartResult.started()
+            }
+            override fun feed(chunk: RtklibInputChunk) = RtklibNativeOutputBatch()
+            override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            override fun stop() = Unit
+            override fun close() { closes.incrementAndGet() }
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory {
+            override fun create(): RtklibBackend {
+                creating.countDown()
+                releaseFactory.await()
+                return backend
+            }
+        }, RtklibOutputWriters(outputs, null))
+        try {
+            assertTrue(worker.startAsync(validConfig()).started)
+            assertTrue(creating.await(2, TimeUnit.SECONDS))
+            assertFalse(worker.shutdown(20))
+            assertFalse(outputs.closed)
+            assertEquals(RtklibOfferStatus.STOPPED, worker.offerRoverBytes(byteArrayOf(1), 10).status)
+            assertFalse(worker.startAsync(validConfig()).started)
+        } finally {
+            releaseFactory.countDown()
+            assertTrue(worker.shutdown(2_000))
+        }
+        assertEquals(0, starts.get())
+        assertEquals(1, closes.get())
+        assertEquals(1, outputs.closeCalls)
+        assertEquals(RtklibEngineState.STOPPED, worker.snapshot().state)
+    }
+
+    @Test
+    fun `factory load failure is optional FAILED status and leaves raw writer available`() {
+        val failed = CountDownLatch(1)
+        val raw = CloseTrackingOutputStream()
+        val worker = RtklibWorker(object : RtklibBackendFactory {
+            override fun create(): RtklibBackend = throw UnsatisfiedLinkError("native unavailable")
+        }, RtklibOutputWriters(null, null), statusSink = {
+            if (it.state == RtklibEngineState.FAILED) failed.countDown()
+        })
+        try {
+            assertTrue(worker.startAsync(validConfig()).started)
+            repeat(100) { raw.write(it); worker.snapshot() }
+            assertTrue(failed.await(2, TimeUnit.SECONDS))
+            assertEquals(100, raw.size())
+            assertFalse(raw.closed)
+            assertEquals(RtklibEngineState.FAILED, worker.snapshot().state)
+            assertTrue(worker.snapshot().lastError.orEmpty().contains("native unavailable"))
+        } finally {
+            assertTrue(worker.shutdown(2_000))
+            raw.close()
+        }
+    }
+
+    @Test
+    fun `owner waits for blocked cancellation before close and shutdown retains writers through both`() {
+        val feedEntered = CountDownLatch(1)
+        val releaseFeed = CountDownLatch(1)
+        val feedReturned = CountDownLatch(1)
+        val cancelEntered = CountDownLatch(1)
+        val releaseCancel = CountDownLatch(1)
+        val closeEntered = CountDownLatch(1)
+        val releaseClose = CountDownLatch(1)
+        val outputs = CloseTrackingOutputStream()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig) = RtklibStartResult.started()
+            override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+                feedEntered.countDown()
+                releaseFeed.await()
+                feedReturned.countDown()
+                return RtklibNativeOutputBatch()
+            }
+            override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            override fun stop() { cancelEntered.countDown(); releaseCancel.await() }
+            override fun close() { closeEntered.countDown(); releaseClose.await() }
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+            RtklibOutputWriters(outputs, null))
+        try {
+            assertTrue(worker.start(validConfig()).started)
+            assertTrue(worker.offerRoverBytes(byteArrayOf(1), 10).accepted)
+            assertTrue(feedEntered.await(2, TimeUnit.SECONDS))
+            assertFalse(worker.shutdown(20))
+            assertTrue(cancelEntered.await(2, TimeUnit.SECONDS))
+            releaseFeed.countDown()
+            assertTrue(feedReturned.await(2, TimeUnit.SECONDS))
+            assertFalse(worker.shutdown(20))
+            assertEquals(1L, closeEntered.count, "Native close cannot race active cancellation")
+            assertFalse(outputs.closed)
+            releaseCancel.countDown()
+            assertTrue(closeEntered.await(2, TimeUnit.SECONDS))
+            assertFalse(worker.shutdown(20))
+            assertFalse(outputs.closed)
+        } finally {
+            releaseFeed.countDown()
+            releaseCancel.countDown()
+            releaseClose.countDown()
+            assertTrue(worker.shutdown(2_000))
+        }
+        assertEquals(1, outputs.closeCalls)
+    }
+
+    @Test
+    fun `never-started writer flush also runs only on owned cleanup thread`() {
+        val flushing = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val output = object : ByteArrayOutputStream() {
+            @Volatile var closed = false
+            override fun flush() { flushing.countDown(); release.await() }
+            override fun close() { closed = true }
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory {
+            override fun create(): RtklibBackend = error("Cleanup must not initialize a backend")
+        }, RtklibOutputWriters(output, null))
+        try {
+            assertFalse(worker.shutdown(20))
+            assertTrue(flushing.await(2, TimeUnit.SECONDS))
+            assertFalse(output.closed)
+            assertFalse(worker.startAsync(validConfig()).started)
+            assertFalse(worker.shutdown(0))
+        } finally {
+            release.countDown()
+            assertTrue(worker.shutdown(2_000))
+        }
+        assertTrue(output.closed)
+    }
+
+    @Test
+    fun `blocked backend init cannot hold raw start control or resurrect after Stop`() {
+        val initEntered = CountDownLatch(1)
+        val releaseInit = CountDownLatch(1)
+        val rawStarted = CountDownLatch(1)
+        val raw = CloseTrackingOutputStream()
+        val outputs = CloseTrackingOutputStream()
+        val feeds = java.util.concurrent.atomic.AtomicInteger()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig): RtklibStartResult {
+                initEntered.countDown()
+                releaseInit.await()
+                return RtklibStartResult.started()
+            }
+            override fun feed(chunk: RtklibInputChunk): RtklibNativeOutputBatch {
+                feeds.incrementAndGet()
+                return RtklibNativeOutputBatch()
+            }
+            override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            override fun stop() = Unit
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+            RtklibOutputWriters(outputs, null))
+        val control = Thread {
+            worker.startAsync(validConfig())
+            repeat(100) { raw.write(it); worker.snapshot(); worker.offerRoverBytes(byteArrayOf(1), 10) }
+            rawStarted.countDown()
+        }
+        try {
+            control.start()
+            assertTrue(initEntered.await(2, TimeUnit.SECONDS))
+            assertTrue(rawStarted.await(1, TimeUnit.SECONDS), "Raw start control must not wait for optional backend init")
+            assertEquals(100, raw.size())
+            assertEquals(RtklibEngineState.STARTING, worker.snapshot().state)
+            repeat(20) { assertFalse(worker.startAsync(validConfig()).started) }
+            val stopped = worker.shutdown(20)
+            if (stopped) raw.close()
+            assertFalse(stopped)
+            assertFalse(raw.closed)
+            assertFalse(outputs.closed)
+        } finally {
+            releaseInit.countDown()
+            control.join(2_000)
+            assertTrue(worker.shutdown(2_000))
+        }
+        assertEquals(0, feeds.get())
+        assertEquals(RtklibEngineState.STOPPED, worker.snapshot().state)
+        assertEquals(RtklibOfferStatus.STOPPED, worker.offerRoverBytes(byteArrayOf(1), 10).status)
+        assertFalse(worker.startAsync(validConfig()).started)
+        assertTrue(outputs.closed)
+        raw.close()
+    }
+
+    @Test
+    fun `throwing init and close are contained instead of preventing raw start`() {
+        val raw = CloseTrackingOutputStream()
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val complete = CountDownLatch(1)
+        val failedStatus = CountDownLatch(1)
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig): RtklibStartResult = error("init exploded")
+            override fun feed(chunk: RtklibInputChunk) = RtklibNativeOutputBatch()
+            override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.FAILED)
+            override fun stop() = Unit
+            override fun close(): Unit = error("close exploded")
+        }
+        val worker = RtklibWorker(
+            object : RtklibBackendFactory { override fun create() = backend }, RtklibOutputWriters(null, null),
+            statusSink = { if (it.state == RtklibEngineState.FAILED) failedStatus.countDown() },
+        )
+        val control = Thread {
+            try { worker.startAsync(validConfig()); repeat(100) { raw.write(it) } }
+            catch (error: Throwable) { failure.set(error) }
+            finally { complete.countDown() }
+        }
+        try {
+            control.start()
+            assertTrue(complete.await(2, TimeUnit.SECONDS))
+            assertEquals(null, failure.get(), "Optional init/close exceptions must not reach raw start")
+            assertEquals(100, raw.size())
+            assertFalse(raw.closed)
+            assertTrue(failedStatus.await(2, TimeUnit.SECONDS))
+            val snapshot = worker.snapshot()
+            assertEquals(RtklibEngineState.FAILED, snapshot.state)
+            assertTrue(snapshot.lastError.orEmpty().contains("init exploded"))
+            assertTrue(snapshot.lastError.orEmpty().contains("close exploded"))
+        } finally {
+            control.join(2_000)
+            assertTrue(worker.shutdown(2_000))
+            raw.close()
+        }
+    }
+
+    @Test
+    fun `blocked backend close cannot overrun bounded shutdown or release writers`() {
+        val closeEntered = CountDownLatch(1)
+        val releaseClose = CountDownLatch(1)
+        val stopReturned = CountDownLatch(1)
+        val stopped = java.util.concurrent.atomic.AtomicBoolean(true)
+        val outputs = CloseTrackingOutputStream()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig) = RtklibStartResult.started()
+            override fun feed(chunk: RtklibInputChunk) = RtklibNativeOutputBatch()
+            override fun snapshot() = RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            override fun stop() = Unit
+            override fun close() { closeEntered.countDown(); releaseClose.await() }
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory { override fun create() = backend },
+            RtklibOutputWriters(outputs, null))
+        assertTrue(worker.start(validConfig()).started)
+        val stop = Thread { stopped.set(worker.shutdown(20)); stopReturned.countDown() }
+        try {
+            stop.start()
+            assertTrue(closeEntered.await(2, TimeUnit.SECONDS))
+            assertTrue(stopReturned.await(1, TimeUnit.SECONDS), "Shutdown caller must not execute blocked backend close")
+            assertFalse(stopped.get())
+            assertFalse(outputs.closed)
+        } finally {
+            releaseClose.countDown()
+            stop.join(2_000)
+            assertTrue(worker.shutdown(2_000))
+        }
+        assertTrue(outputs.closed)
+    }
+
+    @Test
+    fun `snapshot and capture advisory offer do not enter a blocked backend snapshot`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val completed = CountDownLatch(1)
+        val outputs = CloseTrackingOutputStream()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig) = RtklibStartResult.started()
+            override fun feed(chunk: RtklibInputChunk) = RtklibNativeOutputBatch()
+            override fun snapshot(): RtklibEngineSnapshot {
+                entered.countDown()
+                release.await()
+                return RtklibEngineSnapshot(state = RtklibEngineState.RUNNING)
+            }
+            override fun stop() = Unit
+        }
+        val worker = RtklibWorker(object : RtklibBackendFactory {
+            override fun create() = backend
+        }, RtklibOutputWriters(outputs, null))
+        assertTrue(worker.start(validConfig().copy(maxRoverQueueBytes = 2)).started)
+        val capture = Thread {
+            worker.snapshot()
+            repeat(100) {
+                worker.offerRoverBytes(byteArrayOf(1), 10L)
+            }
+            completed.countDown()
+        }
+        try {
+            capture.start()
+            assertTrue(entered.await(2, TimeUnit.SECONDS))
+            assertTrue(completed.await(1, TimeUnit.SECONDS), "Capture must not wait for backend snapshot")
+            assertFalse(worker.shutdown(20), "Blocked snapshot still owns worker resources")
+            assertFalse(outputs.closed)
+            assertEquals(RtklibOfferStatus.STOPPED, worker.offerRoverBytes(byteArrayOf(1), 10L).status)
+        } finally {
+            release.countDown()
+            capture.join(2_000)
+            assertTrue(worker.shutdown(2_000))
+            assertTrue(outputs.closed)
+        }
+    }
+
+    @Test
+    fun `blocked status sidecar allows raw append and bounded offers but fences writer release`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val completed = CountDownLatch(1)
+        val sidecarFinished = CountDownLatch(1)
+        val outputs = CloseTrackingOutputStream()
+        val raw = CloseTrackingOutputStream()
+        val backend = FakeBackend(RtklibNativeOutputBatch(), CountDownLatch(1))
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory {
+                override fun create() = backend
+            },
+            outputWriters = RtklibOutputWriters(outputs, null),
+            statusSink = {
+                entered.countDown()
+                release.await()
+                assertFalse(raw.closed, "Stop must retain session writers during status IO")
+                outputs.write(42)
+                sidecarFinished.countDown()
+            },
+        )
+        assertTrue(worker.start(validConfig().copy(maxRoverQueueBytes = 2)).started)
+        val capture = Thread {
+            repeat(100) {
+                raw.write(it)
+                worker.snapshot()
+                worker.offerRoverBytes(byteArrayOf(1), 10L)
+            }
+            completed.countDown()
+        }
+        try {
+            assertTrue(entered.await(2, TimeUnit.SECONDS))
+            capture.start()
+            assertTrue(completed.await(1, TimeUnit.SECONDS))
+            assertEquals(100, raw.size())
+            assertEquals(2, worker.snapshot().roverQueueBytes)
+            assertEquals(98, worker.snapshot().droppedRoverBytes)
+            // Mirrors the service's existing tryStopRtklib -> completeRecordingStop barrier.
+            val stopped = worker.shutdown(20)
+            if (stopped) raw.close()
+            assertFalse(stopped)
+            assertFalse(raw.closed)
+            assertFalse(outputs.closed)
+        } finally {
+            release.countDown()
+            capture.join(2_000)
+            val stopped = worker.shutdown(2_000)
+            if (stopped) raw.close()
+            assertTrue(stopped)
+        }
+        assertEquals(0, sidecarFinished.count)
+        assertTrue(raw.closed)
+        assertEquals(1, outputs.closeCalls)
+        assertTrue(worker.shutdown(0))
+    }
+
+    @Test
+    fun `status sink failure remains advisory and snapshot contains its warning`() {
+        val attempted = CountDownLatch(1)
+        val backend = FakeBackend(RtklibNativeOutputBatch(), CountDownLatch(1))
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory { override fun create() = backend },
+            outputWriters = RtklibOutputWriters(null, null),
+            statusSink = { attempted.countDown(); error("blocked provider failed") },
+        )
+        try {
+            assertTrue(worker.start(validConfig()).started)
+            assertTrue(attempted.await(2, TimeUnit.SECONDS))
+            assertTrue(worker.offerRoverBytes(byteArrayOf(1), 10L).accepted)
+            assertTrue(backend.await())
+            assertTrue(worker.snapshot().lastWarning.orEmpty().contains("status write failed"))
+        } finally {
+            assertTrue(worker.shutdown(2_000))
+        }
+    }
+
+    @Test
+    fun `idle backend cache refresh and status sampling use the existing single worker`() {
+        val now = java.util.concurrent.atomic.AtomicLong(1_000)
+        val firstStatus = CountDownLatch(1)
+        val nextStatus = CountDownLatch(1)
+        val statuses = java.util.concurrent.atomic.AtomicInteger()
+        val backend = object : RtklibBackend {
+            override fun start(config: RtklibConfig) = RtklibStartResult.started()
+            override fun feed(chunk: RtklibInputChunk) = RtklibNativeOutputBatch()
+            override fun snapshot() = RtklibEngineSnapshot(
+                state = RtklibEngineState.RUNNING, decodedRoverEpochs = now.get(),
+            )
+            override fun stop() = Unit
+        }
+        val worker = RtklibWorker(
+            backendFactory = object : RtklibBackendFactory { override fun create() = backend },
+            outputWriters = RtklibOutputWriters(null, null),
+            clockMillis = now::get,
+            statusSink = { snapshot ->
+                check(Thread.currentThread().name == "rtkcollector-rtklib-worker")
+                when (statuses.incrementAndGet()) {
+                    1 -> { check(snapshot.decodedRoverEpochs == 1_000L); firstStatus.countDown() }
+                    2 -> { check(snapshot.decodedRoverEpochs == 2_000L); nextStatus.countDown() }
+                    else -> error("Frozen clock must not create further status work")
+                }
+            },
+        )
+        try {
+            assertTrue(worker.start(validConfig()).started)
+            assertTrue(firstStatus.await(2, TimeUnit.SECONDS))
+            assertEquals(1_000L, worker.snapshot().decodedRoverEpochs)
+            repeat(1_000) { worker.snapshot() }
+            assertEquals(1, statuses.get(), "Snapshot reads cannot schedule jobs")
+            now.set(2_000)
+            assertTrue(nextStatus.await(2, TimeUnit.SECONDS), "Idle worker must refresh native-server telemetry")
+            assertEquals(2_000L, worker.snapshot().decodedRoverEpochs)
+        } finally {
+            assertTrue(worker.shutdown(2_000))
+        }
+    }
+
     @Test
     fun `worker writes backend NMEA and POS output separately`() {
         val nmea = ByteArrayOutputStream()
@@ -121,7 +811,7 @@ class RtklibWorkerTest {
             outputWriters = RtklibOutputWriters(nmea, pos),
         )
 
-        assertTrue(worker.shutdown(timeoutMillis = 0L))
+        assertTrue(worker.shutdown(timeoutMillis = 2_000L))
         assertTrue(worker.shutdown(timeoutMillis = 0L))
 
         assertEquals(1, nmea.closeCalls)

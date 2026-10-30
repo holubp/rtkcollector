@@ -44,7 +44,10 @@ object UbloxNmeaExporter {
         val parts = time.split(':')
         if (parts.size < 3) return null
         val second = parts[2].substringBefore('.')
-        return parts[0] + parts[1] + second.padStart(2, '0') + ".000"
+        val fraction = parts[2].substringAfter('.', missingDelimiterValue = "")
+        // Keep GGA UTC at millisecond precision while preserving its sub-second value.
+        val milliseconds = fraction.take(3).padEnd(3, '0')
+        return parts[0] + parts[1] + second.padStart(2, '0') + "." + milliseconds
     }
 
     private fun nmeaLatitude(value: Double): String {

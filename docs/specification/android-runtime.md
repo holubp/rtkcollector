@@ -24,6 +24,10 @@ recovery cases, host Android stream reads, and manual phone/headset checks.
 Sources: Android AudioManager getStreamVolume/isStreamMute and NotificationManager
 INTERRUPTION_FILTER_NONE API contracts.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-009-REVIEW
+
 ### ANDROID-ALARM-008: Do Not Disturb Advisory
 
 Status: Normative
@@ -42,6 +46,10 @@ The confirmed-silence advisory in ANDROID-ALARM-009 may replace this weaker text
 Verification: complete recording/acoustic/DND truth table, live monitoring
 integration and manual DND changes during a recording.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-008-REVIEW
+
 ### ANDROID-ALARM-001: Trustworthy Loss Detection
 
 Status: Normative
@@ -57,6 +65,10 @@ receiver-silence detection remains unchanged.
 Verification: `RecordingAlarmPolicyTest`, `RecordingAlarmEvidenceTest`; manual
 initial acquisition, main-engine and receiver-disconnection tests.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-001-REVIEW
+
 ### ANDROID-ALARM-002: Independent Persistent Configuration
 
 Status: Normative
@@ -68,6 +80,10 @@ Built-in and Android notification sounds with preview MUST be available. Delay
 MUST be selectable from 1-60 seconds. Profile changes MUST NOT reset alarms.
 
 Verification: policy/store/UI tests; manual sound selection and restart.
+
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-002-REVIEW
 
 ### ANDROID-ALARM-003: Distinct And Private Outputs
 
@@ -84,6 +100,10 @@ independently of notification filtering and acoustic arbitration.
 
 Verification: notification/audio tests; manual locked-screen/watch/settings tests.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-003-REVIEW
+
 ### ANDROID-ALARM-004: Recovery And Stop Semantics
 
 Status: Normative
@@ -97,6 +117,10 @@ or a new accepted recording. Initial acquisition remains silent.
 
 Verification: policy/controller and service tests, including delayed callbacks.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-004-REVIEW
+
 ### ANDROID-ALARM-005: Alarm Isolation
 
 Status: Normative
@@ -108,6 +132,10 @@ effect lanes MUST isolate blocked/rejected/throwing platform calls. Alarms MUST
 NOT stop/restart recording, mutate raw artifacts or retain session writers.
 
 Verification: blocked-effect, saturation, raw byte-exactness and shutdown tests.
+
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-005-REVIEW
 
 ### ANDROID-ALARM-006: Explicit Playback Lifetime
 
@@ -121,6 +149,10 @@ MUST be bounded to 30 seconds. No alarm replay/resurrection after process death
 or guaranteed post-kill delivery may be claimed.
 
 Verification: foreground policy and service/audio tests; Android device validation.
+
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-006-REVIEW
 
 ### ANDROID-ALARM-007: Opt-In Bluetooth Routing And Speaker Fallback
 
@@ -152,6 +184,10 @@ and rejected routes; physical delivery is not proved by a preference setter.
 Verification: settings/route-policy/playback/isolation tests; SDK 26/27 and current
 host checks; manual Bluetooth disconnect/reconnect, speaker fallback and routing.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-ALARM-007-REVIEW
+
 ### ANDROID-SERVICE-001: Foreground Service Owns Recording
 
 Status: Normative
@@ -163,6 +199,10 @@ MUST NOT own the capture lifecycle.
 Verification:
 - Review: recording loop and writers live in service/runtime code.
 - Manual: recording continues with screen off and app backgrounded.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-SERVICE-001-REVIEW, EV-ANDROID-SERVICE-001-MANUAL
 
 ### ANDROID-SERVICE-002: UI State Queries Respect Background Start Restrictions
 
@@ -178,6 +218,10 @@ Verification:
 - Review: Activity lifecycle and service-query call sites.
 - Manual: background and restore the app while recording and while idle.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-SERVICE-002-AUTO, EV-ANDROID-SERVICE-002-REVIEW, EV-ANDROID-SERVICE-002-MANUAL
+
 ### ANDROID-CAPTURE-001: Capture Path Is Independent Of UI
 
 Status: Normative
@@ -188,6 +232,10 @@ dashboard rendering, parser success, NTRIP state or future RTKLIB state.
 Verification:
 - Review: capture loop has no UI dependencies.
 - Manual: background/minimised recording continues to grow `receiver-rx.raw`.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-CAPTURE-001-REVIEW, EV-ANDROID-CAPTURE-001-MANUAL
 
 ### ANDROID-DIAGNOSTICS-001: Diagnostics Do Not Block Recording
 
@@ -202,6 +250,10 @@ failures MUST NOT stop recording or mutate raw session artifacts.
 Verification:
 - Automated: diagnostics controller disabled-state tests.
 - Review: service hooks are guarded and outside receiver byte loops.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-DIAGNOSTICS-001-AUTO, EV-ANDROID-DIAGNOSTICS-001-REVIEW
 
 ### ANDROID-DIAGNOSTICS-002: Persistent Levels And Bounded Optional Logs
 
@@ -219,6 +271,10 @@ MUST remain with the session and not be deleted by app-log maintenance.
 Verification:
 - Automated: diagnostics policy, settings, store and export tests.
 - Manual: settings persistence, live edits and sharing during recording.
+
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-DIAGNOSTICS-002-AUTO, EV-ANDROID-DIAGNOSTICS-002-MANUAL
 
 ### ANDROID-DIAGNOSTICS-003: Stop Evidence And Honest Recovery
 
@@ -239,6 +295,10 @@ Verification:
 - Automated: stop context, event queue, recovery and service lifecycle tests.
 - Manual: process termination, USB loss, repeated start/stop and Activity recreation.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-DIAGNOSTICS-003-AUTO, EV-ANDROID-DIAGNOSTICS-003-MANUAL
+
 ### ANDROID-DIAGNOSTICS-004: Logging Disclosure And Privacy
 
 Status: Normative
@@ -253,6 +313,10 @@ Deleting app logs MUST preserve session events and the selected logging level.
 Verification:
 - Automated: redaction, export, UI-model and maintenance isolation tests.
 - Manual: light/dark, portrait/landscape and diagnostic failure presentation.
+
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-DIAGNOSTICS-004-AUTO, EV-ANDROID-DIAGNOSTICS-004-MANUAL
 
 ### ANDROID-JNI-001: JNI And Native Boundaries Are Explicitly Sanitized
 
@@ -276,6 +340,10 @@ Verification:
 - Manual: native features that call external libraries are exercised on a host
   or device with a working native build.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-JNI-001-AUTO, EV-ANDROID-JNI-001-REVIEW, EV-ANDROID-JNI-001-MANUAL
+
 ## USB
 
 ### ANDROID-USB-001: USB Permission And Open Access Are Separate Gates
@@ -289,6 +357,10 @@ receive a clear actionable error.
 Verification:
 - Automated: USB permission decision model tests.
 - Manual: Huawei/vendor Android USB smoke test.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-USB-001-AUTO, EV-ANDROID-USB-001-MANUAL
 
 ### ANDROID-USB-002: USB Reconnect Attempts Do Not Stop Recording Session State
 
@@ -314,6 +386,10 @@ required. While waiting, a dead handle MUST NOT overwrite permission guidance
 with repeated read errors. Recovery-stage changes MUST enter minimal diagnostics.
 Expected Stop interruption MUST NOT escape the capture thread and kill the app;
 unexpected interruption while still active MUST not leave a silently dead worker.
+UM980 baud transitions MUST send pre-switch initialization and the receiver baud
+command before reconfiguring the host bridge, then drain receiver bytes through
+the recorded RX path before post-switch mode/log commands. Host reconfiguration
+MUST NOT purge receiver RX or queued TX bytes.
 
 Verification:
 - Automated: reconnect policy tests where practical.
@@ -321,6 +397,10 @@ Verification:
 - Automated: Stop during retry sleep, active interruption, consent deduplication,
   stale callbacks and real platform USB extra extraction.
 - Manual: disconnect and reconnect receiver during recording.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-USB-002-AUTO, EV-ANDROID-USB-002-MANUAL
 
 ### ANDROID-USB-003: Silent Receiver RX Stalls Are Degraded USB Failures
 
@@ -337,6 +417,10 @@ NTRIP or TX activity.
 Verification:
 - Automated: recording health monitor stall/recovery tests.
 - Manual: long-running session with receiver disconnect/silence and reconnect.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-USB-003-AUTO, EV-ANDROID-USB-003-MANUAL
 
 ### ANDROID-USB-004: Receiver Protocol Stalls Are Degraded USB Failures
 
@@ -359,6 +443,10 @@ Verification:
 - Manual: long-running UM980 binary session where USB keeps producing bytes but
   valid UM980 sync disappears.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-USB-004-AUTO, EV-ANDROID-USB-004-MANUAL
+
 ### ANDROID-CORRECTION-001: Correction Stream Stalls Are Reconnected Without Stopping Raw Capture
 
 Status: Normative
@@ -373,6 +461,10 @@ Verification:
 - Automated: NTRIP reconnect tests for unexpected stream end and correction
   stall/recovery monitor tests.
 - Manual: rover + NTRIP session with transient network/caster interruption.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-CORRECTION-001-AUTO, EV-ANDROID-CORRECTION-001-MANUAL
 
 ### ANDROID-CORRECTION-002: Correction Last-Update Display Uses Wall-Clock Time
 
@@ -389,6 +481,10 @@ Verification:
 - Manual: rover + NTRIP dashboard last update stays near current UTC time
   during receiver RTCM telemetry updates.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-CORRECTION-002-AUTO, EV-ANDROID-CORRECTION-002-MANUAL
+
 ### ANDROID-CORRECTION-003: Correction Callback Failure Has Explicit State
 
 Status: Normative
@@ -401,6 +497,10 @@ receiver raw recording MUST remain independent.
 Verification:
 - Automated: NTRIP runtime callback-exception test.
 - Review: callback exceptions cannot escape the worker without a final state.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-CORRECTION-003-AUTO, EV-ANDROID-CORRECTION-003-REVIEW
 
 ### ANDROID-CORRECTION-004: NTRIP Shutdown Is Bounded And Confirmed
 
@@ -429,6 +529,10 @@ Verification:
   scopes deferred status to correction intake, and finalisation retries unconfirmed
   coordinator and NTRIP shutdown.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-CORRECTION-004-AUTO, EV-ANDROID-CORRECTION-004-REVIEW
+
 ## Base Caster Upload
 
 ### ANDROID-UPLOAD-001: Upload Must Remain Advisory and Not Block Capture
@@ -446,6 +550,10 @@ Verification:
 - Manual: force upload outage while recording is active; `receiver-rx.raw` growth
   remains continuous.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-UPLOAD-001-AUTO, EV-ANDROID-UPLOAD-001-MANUAL
+
 ### ANDROID-UPLOAD-002: Upload Retry Policy Is Bounded and 10-Second Minimum
 
 Status: Normative
@@ -460,6 +568,10 @@ Verification:
 - Automated: profile validation tests and controller retry-schedule tests.
 - Review: service/runtime policy mapping enforces lower bounds before controller
   start.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-UPLOAD-002-AUTO, EV-ANDROID-UPLOAD-002-REVIEW
 
 ### ANDROID-UPLOAD-003: Upload No-Data Watchdog and Safety Stops Are Explicit
 
@@ -476,6 +588,10 @@ Verification:
 - Manual: offline caster and high-rate upload simulation show explicit safety stop
   reason.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-UPLOAD-003-AUTO, EV-ANDROID-UPLOAD-003-MANUAL
+
 ### ANDROID-UPLOAD-004: RTK2go Hosts Force Safety Rules
 
 Status: Normative
@@ -487,6 +603,10 @@ from user-disabled safety.
 Verification:
 - Automated: mapping tests for RTK2go host detection and forced safety flag.
 - Review: runtime policy payload carries forced safety state to service monitor.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-UPLOAD-004-AUTO, EV-ANDROID-UPLOAD-004-REVIEW
 
 ### ANDROID-UPLOAD-005: Upload Telemetry Uses Actual RTCM Frames
 
@@ -501,6 +621,10 @@ Verification:
 - Automated: uploader controller snapshot tests and dashboard mapper tests.
 - Manual: detailed monitor shows total and per-message rates while upload is
   active.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-UPLOAD-005-AUTO, EV-ANDROID-UPLOAD-005-MANUAL
 
 ## Storage
 
@@ -518,6 +642,10 @@ Verification:
 - Manual: select a SAF folder, restart the app and start a recording.
 - Review: service start path validates SAF write access before session writers
   are opened.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-STORAGE-001-REVIEW, EV-ANDROID-STORAGE-001-MANUAL
 
 ### ANDROID-CONFIG-001: Running Configuration Uses A Service-Owned Snapshot
 
@@ -550,6 +678,10 @@ Verification:
 - Manual: profile edit/Re-apply during recording and live source/mock update,
   failure and retry.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-ANDROID-CONFIG-001-AUTO, EV-ANDROID-CONFIG-001-REVIEW, EV-ANDROID-CONFIG-001-MANUAL
+
 ### ANDROID-STATE-001: Recording State Delivery Is App-Private
 
 Status: Normative
@@ -565,6 +697,10 @@ Verification:
 - Review: private dynamic receivers use the AndroidX non-exported contract on
   all supported APIs.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-STATE-001-AUTO, EV-ANDROID-STATE-001-REVIEW
+
 ## Mock Location
 
 ### ANDROID-MOCK-001: Mock Location Uses Ellipsoidal Height
@@ -579,6 +715,10 @@ Verification:
 - Automated: mock-location mapper tests.
 - Manual: compare mock altitude against dashboard ellipsoidal height.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-MOCK-001-AUTO, EV-ANDROID-MOCK-001-MANUAL
+
 ### ANDROID-MOCK-002: Satellite Status Is Best-Effort Metadata
 
 Status: Informative
@@ -590,6 +730,10 @@ API.
 
 Verification:
 - Review: user docs and UI do not promise synthetic `GnssStatus` injection.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-MOCK-002-REVIEW
 
 ### ANDROID-MOCK-004: Mock Location Uses Maximum Safe Public Location Fields
 
@@ -612,6 +756,10 @@ Verification:
 - Manual: compare mock altitude, vertical accuracy and MSL altitude behaviour
   on a device where consumer apps expose these fields.
 
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-MOCK-004-AUTO, EV-ANDROID-MOCK-004-REVIEW, EV-ANDROID-MOCK-004-MANUAL
+
 ### ANDROID-MOCK-003: Mock Provider Publishing Is Observable
 
 Status: Normative
@@ -630,3 +778,24 @@ Verification:
 - Manual: enabled mock provider shows status/rate/last-interval on the Fix
   card during recording and the top dashboard chip shows Off or the selected
   rate.
+
+Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.md; docs/superpowers/specs/2026-06-17-recording-safe-telemetry-isolation-design.md
+
+Evidence obligations: EV-ANDROID-MOCK-003-AUTO, EV-ANDROID-MOCK-003-MANUAL
+
+### ANDROID-STATE-002: Routine Dashboard Delivery Is Bounded
+
+Status: Normative
+
+Routine dashboard snapshots MUST be throttled outside the authoritative raw
+capture append path. Lifecycle, start, stop, reconnect and error transitions MUST
+remain immediately publishable; routine throttling MUST NOT suppress them.
+Settings/profile stores MUST NOT be read, migrated or normalized on each
+high-rate receiver read or service-state delivery.
+
+Verification:
+- Automated: StateBroadcastRateLimiterTest and cached dashboard configuration tests.
+
+Provenance: AGENTS.md Android Implementation Rules; docs/architecture.md; RC10 source-coverage reconciliation of existing recording behavior.
+
+Evidence obligations: EV-ANDROID-STATE-002-AUTO

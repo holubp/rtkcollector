@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "kind": "specification-assurance-handoff",
+  "state": "pending",
+  "from_role": "initializer | updater | checker",
+  "to_role": "updater | checker | human",
+  "repository_ref": "<repository URL or durable project identifier>",
+  "mode": "changed | full",
+  "base_commit": "<trusted comparison commit or null>",
+  "scope_digest": "sha256:<checker-produced scope digest>",
+  "context_file": ".spec-assurance/review-context.json",
+  "checkpoint_file": ".spec-assurance/review-checkpoint.json",
+  "canonical_artifacts": {
+    "config": "docs/specification/spec-config.yaml",
+    "requirements": ["docs/specification/requirements.md"],
+    "matrix": "docs/specification/verification-matrix.md",
+    "approval_policy": "docs/specification/approval-policy.json",
+    "requirement_approvals": "docs/specification/requirement-approvals.json",
+    "capability_map": "docs/specification/capability-map.json",
+    "evidence_receipts": "docs/specification/evidence-receipts.json",
+    "semantic_review": "docs/specification/semantic-review.json"
+  },
+  "validation": {
+    "command": "<exact validation command>",
+    "exit_code": null,
+    "result": "pending",
+    "ran_at": ""
+  },
+  "unresolved_findings": [],
+  "next_action": "<next role action>",
+  "created_by": "<model or human identity>",
+  "created_at": "<timezone-aware timestamp>"
+}

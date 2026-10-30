@@ -1450,6 +1450,15 @@ private fun SatelliteMonitorCard(
                 )
             }
             SatelliteMonitorSourceDots(state.sources, colors)
+            state.statusMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.mutedText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (state.hasFrequencyGroups) {
                 state.constellations.forEach { constellation ->
                     SatelliteConstellationGroupRow(
@@ -1457,14 +1466,6 @@ private fun SatelliteMonitorCard(
                         colors = colors,
                     )
                 }
-            } else {
-                Text(
-                    text = state.message,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.mutedText,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
         }
     }

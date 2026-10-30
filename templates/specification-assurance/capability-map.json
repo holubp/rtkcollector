@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "file_classifications": [
+    {
+      "pattern": "src/**",
+      "category": "implementation",
+      "reason": "Product implementation source."
+    },
+    {
+      "pattern": "tests/**",
+      "category": "test",
+      "reason": "Automated verification source."
+    },
+    {
+      "pattern": "docs/specification/**",
+      "category": "specification",
+      "reason": "Canonical specification and assurance records."
+    },
+    {
+      "pattern": "README.md",
+      "category": "documentation",
+      "reason": "User-facing project documentation."
+    },
+    {
+      "pattern": ".spec-assurance/**",
+      "category": "local",
+      "reason": "Ignored review context and checkpoint state; pathname only, never content."
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "CAP-CORE-FLOW-001",
+      "name": "Example capability",
+      "status": "active",
+      "requirement_ids": ["CORE-FLOW-001", "UI-DOCS-001", "RELEASE-SIGN-001"],
+      "implementation_mappings": [
+        {
+          "pattern": "src/feature/**",
+          "requirement_ids": ["CORE-FLOW-001"]
+        }
+      ],
+      "supporting_mappings": [
+        {
+          "pattern": "docs/operator/**",
+          "requirement_ids": ["UI-DOCS-001"],
+          "coverage_kind": "documentation",
+          "reason": "Operator guidance realizes the approved documentation obligation."
+        },
+        {
+          "pattern": "tools/release/**",
+          "requirement_ids": ["RELEASE-SIGN-001"],
+          "coverage_kind": "process",
+          "reason": "Release tooling/configuration implements the approved signing process; operator guidance may additionally be mapped."
+        }
+      ]
+    }
+  ],
+  "approval": {
+    "inventory_digest": "sha256:<checker-produced digest>",
+    "state": "pending",
+    "approved_by": "",
+    "approved_at": "",
+    "decision_ref": ""
+  }
+}

@@ -3,6 +3,9 @@ package org.rtkcollector.receiver.ublox
 import org.rtkcollector.core.solution.FixClass
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.time.DateTimeException
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 object UbloxNavPvtParser {
     fun parse(frame: ByteArray, nowMillis: Long): UbloxTelemetry? {
@@ -43,20 +46,32 @@ object UbloxNavPvtParser {
         val second = payload.get(10).toInt() and 0xff
         if (year !in 1980..2099 || month !in 1..12 || day !in 1..31) return null
         if (hour !in 0..23 || minute !in 0..59 || second !in 0..60) return null
-        return "%04d-%02d-%02dT%02d:%02d:%02dZ".format(year, month, day, hour, minute, second)
+        val nano = payload.getInt(16)
+        if (nano !in -1_000_000_000..1_000_000_000) return null
+        if (second == 60 && nano == 0) {
+            return "%04d-%02d-%02dT%02d:%02d:%02dZ".format(year, month, day, hour, minute, second)
+        }
+        return try {
+            LocalDateTime.of(year, month, day, hour, minute, second.coerceAtMost(59))
+                .plusSeconds(if (second == 60) 1 else 0)
+                .plusNanos(nano.toLong())
+                .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z"
+        } catch (_: DateTimeException) {
+            null
+        }
     }
 
     private fun fixClass(fixType: Int, flags: Int): FixClass {
         val gnssFixOk = flags and 0x01 != 0
-        val valid3dFix = fixType >= 3
+        val validPositionFix = fixType in 3..4
         val differential = flags and 0x02 != 0
         val carrSoln = (flags ushr 6) and 0x03
         return when {
             fixType < 2 -> FixClass.NONE
-            valid3dFix && gnssFixOk && carrSoln == 2 -> FixClass.RTK_FIXED
-            valid3dFix && gnssFixOk && carrSoln == 1 -> FixClass.RTK_FLOAT
-            valid3dFix && gnssFixOk && differential -> FixClass.DGPS
-            fixType >= 3 -> FixClass.SINGLE
+            validPositionFix && gnssFixOk && carrSoln == 2 -> FixClass.RTK_FIXED
+            validPositionFix && gnssFixOk && carrSoln == 1 -> FixClass.RTK_FLOAT
+            validPositionFix && gnssFixOk && differential -> FixClass.DGPS
+            validPositionFix && gnssFixOk -> FixClass.SINGLE
             else -> FixClass.NONE
         }
     }

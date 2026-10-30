@@ -5,5 +5,5 @@ data class SessionShareState(
     val allowPartialSnapshot: Boolean,
 ) {
     val zipEnabled: Boolean
-        get() = !isRecording || allowPartialSnapshot
+        get() = !isRecording
 }

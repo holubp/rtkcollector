@@ -57,11 +57,12 @@ includes authentication information and device location among personal and
 sensitive data and requires modern cryptography for their transmission. The
 [Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469)
 requires the encryption declaration to cover all applicable off-device data.
-RC4's optional plaintext credentials/GGA may therefore prevent Play approval;
+The app's optional plaintext credentials/GGA may therefore prevent Play approval;
 answering "No" to encryption does not itself waive the User Data policy.
 Do not submit the Play AAB until this policy conflict is resolved through
 authoritative Play review or a changed Play transport policy. This does not
-affect the RC4 source or debug-sideload release.
+affect source or debug-sideload releases, which retain their own test, CI and
+signing gates.
 
 ## 1. Create And Verify The Developer Account
 

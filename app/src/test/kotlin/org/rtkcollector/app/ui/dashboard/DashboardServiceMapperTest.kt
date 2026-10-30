@@ -15,6 +15,20 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class DashboardServiceMapperTest {
     @Test
+    fun `stopping is not idle receiver ownership even when running is false`() {
+        for (lifecycle in listOf("STARTING", "STOPPING")) {
+            val state = dashboardStateFromRecordingIntent(Intent()
+                .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
+                .putExtra(RecordingForegroundService.EXTRA_STATE_LIFECYCLE, lifecycle))
+            assertFalse(state.isRecording)
+            assertTrue(state.receiverBusy)
+        }
+        val idle = dashboardStateFromRecordingIntent(Intent()
+            .putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, false)
+            .putExtra(RecordingForegroundService.EXTRA_STATE_LIFECYCLE, "STOPPED"))
+        assertFalse(idle.receiverBusy)
+    }
+    @Test
     fun `active dashboard retains transport metadata without an error`() {
         val intent = Intent().apply {
             putExtra(RecordingForegroundService.EXTRA_STATE_RUNNING, true)

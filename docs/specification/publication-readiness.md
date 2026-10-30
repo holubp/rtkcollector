@@ -8,6 +8,8 @@ workflow specifications; they do not weaken recording architecture rules.
 
 Status: Normative
 
+Coverage kind: process
+
 Published GitHub sideload APKs MUST use a persistent owner-provisioned signing
 key, independent of runner-generated Android debug certificates. Publication
 MUST fail if signing credentials or the pinned public certificate SHA-256 are
@@ -39,11 +41,17 @@ Traceability:
   with stable key (2026-09-29).
 - Source: `docs/sideload-signing.md`.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-RELEASE-SIGN-001-AUTO, EV-RELEASE-SIGN-001-MANUAL, EV-RELEASE-SIGN-001-OWNER
+
 ## Publication Disclosure
 
 ### PLAY-DISCLOSURE-001: Privacy Policy And Play Checklist Are Release Sources
 
 Status: Normative
+
+Coverage kind: documentation
 
 Every Google Play release MUST have repository-tracked privacy and publication
 checklist sources. The Play listing, Data safety answers, foreground-service
@@ -67,6 +75,10 @@ Verification:
 Traceability:
 - Source: `docs/superpowers/plans/2026-06-14-google-play-readiness.md`.
 - Source: `docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md`.
+
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-DISCLOSURE-001-REVIEW, EV-PLAY-DISCLOSURE-001-MANUAL
 
 ### PLAY-DATA-001: Data Safety Claims Must Be Truthful Per Build
 
@@ -105,6 +117,10 @@ Traceability:
 - Source: `docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md`.
 - Source: `docs/superpowers/specs/2026-09-23-ntrip-tls-design.md`.
 
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-DATA-001-REVIEW, EV-PLAY-DATA-001-MANUAL, EV-PLAY-DATA-001-AUTO
+
 ## Permissions And Manifest
 
 ### PLAY-PERM-001: Release Manifest Uses Only Release-Justified Permissions
@@ -132,6 +148,10 @@ Verification:
 
 Traceability:
 - Source: `docs/superpowers/plans/2026-06-14-google-play-readiness.md`.
+
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-PERM-001-AUTO, EV-PLAY-PERM-001-REVIEW, EV-PLAY-PERM-001-MANUAL
 
 ### PLAY-NOTIFICATION-001: Recording Must Not Silently Start Without Visible Notification
 
@@ -161,6 +181,10 @@ Traceability:
 - Source: `docs/android-background-operation.md`.
 - Source: `docs/superpowers/plans/2026-06-14-google-play-readiness.md`.
 
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-NOTIFICATION-001-AUTO, EV-PLAY-NOTIFICATION-001-MANUAL
+
 ### PLAY-FGS-001: Foreground Service Type And Rationale Are Publication-Ready
 
 Status: Normative
@@ -185,6 +209,10 @@ Verification:
 
 Traceability:
 - Source: `docs/superpowers/plans/2026-06-14-google-play-readiness.md`.
+
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-FGS-001-REVIEW, EV-PLAY-FGS-001-MANUAL
 
 ## Secrets, Imports And Sharing
 
@@ -215,6 +243,10 @@ Traceability:
 - Source: `docs/superpowers/plans/2026-06-14-google-play-readiness.md`.
 - Source: `docs/superpowers/specs/2026-06-12-android-json-settings-import-design.md`.
 
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-SECRETS-001-AUTO, EV-PLAY-SECRETS-001-MANUAL
+
 ### PLAY-IMPORT-001: External JSON Import Remains Explicit And Validated
 
 Status: Normative
@@ -241,6 +273,10 @@ Verification:
 Traceability:
 - Source: `docs/superpowers/specs/2026-06-12-android-json-settings-import-design.md`.
 - Source: `docs/superpowers/plans/2026-06-14-google-play-readiness.md`.
+
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-IMPORT-001-AUTO, EV-PLAY-IMPORT-001-MANUAL
 
 ## Release Build And Licences
 
@@ -274,6 +310,10 @@ Verification:
 Traceability:
 - Source: `app/build.gradle.kts`.
 - Source: `docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md`.
+
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-BUILD-001-AUTO, EV-PLAY-BUILD-001-MANUAL
 
 ### PLAY-BUILD-002: Android Test Sources Must Compile Before Push
 
@@ -328,6 +368,10 @@ Traceability:
 - Source: `tools/check_android_test_compilation.py`.
 - Source: `.github/workflows/android.yml`.
 
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-BUILD-002-AUTO
+
 ### PLAY-LICENSE-001: Third-Party Licence Documentation Matches Release Dependencies
 
 Status: Normative
@@ -352,3 +396,7 @@ Verification:
 
 Traceability:
 - Source: `docs/superpowers/plans/2026-06-14-google-play-readiness.md`.
+
+Provenance: AGENTS.md; PRIVACY.md; docs/play-publication.md; docs/third-party-licenses.md; docs/superpowers/specs/2026-07-08-google-play-readiness-execution-design.md
+
+Evidence obligations: EV-PLAY-LICENSE-001-REVIEW, EV-PLAY-LICENSE-001-MANUAL, EV-PLAY-LICENSE-001-AUTO

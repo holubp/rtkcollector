@@ -30,6 +30,7 @@ data class DashboardState(
     val errorSeverity: String = "NONE",
     val correctionTransport: NtripTransportMode? = null,
     val uploadTransport: NtripTransportMode? = null,
+    val receiverBusy: Boolean = isRecording,
 ) {
     fun withRecordingLocks(previous: DashboardState, planned: DashboardState): DashboardState =
         if (!isRecording) this else {

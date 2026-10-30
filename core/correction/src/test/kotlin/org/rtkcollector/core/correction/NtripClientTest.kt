@@ -410,6 +410,104 @@ class NtripClientTest {
     }
 
     @Test
+    fun `response header exceeding 64 kib is rejected without exposing header bytes`() {
+        val marker = "untrusted-header-marker"
+        val response = "ICY 200 OK\r\nX-Test: $marker" + "a".repeat(65_536) + "\r\n\r\n"
+        val result = NtripClient(defaultRequest(), FakeNtripSocketConnector(FakeNtripSocket(response.toByteArray())))
+            .connectOnce()
+
+        assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+        val failure = (result as NtripConnectionResult.Failure).failure
+        assertEquals(NtripFailureKind.STREAM_FAILED, failure.kind)
+        assertFalse(failure.message.contains(marker))
+        assertFalse(failure.toString().contains(marker))
+    }
+
+    @Test
+    fun `chunk size metadata line exceeding 8 kib is rejected without exposing line`() {
+        val marker = "untrusted-chunk-marker"
+        val response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" +
+            marker + "a".repeat(8_192) + "\r\n"
+        val input = PrefixThenEofInputStream(response.toByteArray())
+        val result = NtripClient(defaultRequest(), FakeNtripSocketConnector(FakeNtripSocket(input)))
+            .connectOnce()
+
+        assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+        val failure = (result as NtripConnectionResult.Failure).failure
+        assertEquals(NtripFailureKind.STREAM_FAILED, failure.kind)
+        assertFalse(failure.toString().contains(marker))
+        assertTrue(input.bytesConsumed < response.length)
+    }
+
+    @Test
+    fun `chunk trailers have a bounded aggregate size`() {
+        val trailers = (1..9).joinToString(separator = "") { "X-$it: ${"a".repeat(8_000)}\r\n" }
+        val response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n" + trailers + "\r\n"
+        val result = NtripClient(defaultRequest(), FakeNtripSocketConnector(FakeNtripSocket(response.toByteArray())))
+            .connectOnce()
+
+        assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+        assertEquals(NtripFailureKind.STREAM_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
+    }
+
+    @Test
+    fun `chunk sizes reject negative malformed and overflowing values without echoing input`() {
+        listOf("-1", "not-hex-secret", "8000000000000000").forEach { sizeLine ->
+            val response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n$sizeLine\r\n"
+            val result = NtripClient(
+                defaultRequest(),
+                FakeNtripSocketConnector(FakeNtripSocket(response.toByteArray())),
+            ).connectOnce()
+
+            assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+            val failure = (result as NtripConnectionResult.Failure).failure
+            assertEquals(NtripFailureKind.STREAM_FAILED, failure.kind)
+            assertFalse(failure.toString().contains(sizeLine))
+        }
+    }
+
+    @Test
+    fun `large declared chunk reads payload incrementally with bounded read requests`() {
+        val header = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n100000\r\n"
+            .toByteArray(Charsets.US_ASCII)
+        val input = PrefixThenEofInputStream(header + byteArrayOf(0xD3.toByte(), 0x01))
+        val result = NtripClient(defaultRequest(), FakeNtripSocketConnector(FakeNtripSocket(input)))
+            .connectOnce()
+
+        assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+        assertTrue(input.maxRequestedRead <= 4_096, "read request was ${input.maxRequestedRead} bytes")
+    }
+
+    @Test
+    fun `valid one mebibyte chunk streams without a whole chunk size ceiling`() {
+        val payload = ByteArray(1_048_576) { (it % 251).toByte() }
+        val response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n100000\r\n"
+            .toByteArray(Charsets.US_ASCII) + payload + "\r\n0\r\n\r\n".toByteArray(Charsets.US_ASCII)
+        val input = PrefixThenEofInputStream(response)
+        val streamed = ByteArrayOutputStream()
+        val result = NtripClient(defaultRequest(), FakeNtripSocketConnector(FakeNtripSocket(input)))
+            .connectOnce(onRtcmBytes = { streamed.write(it) })
+
+        assertInstanceOf(NtripConnectionResult.Completed::class.java, result)
+        assertEquals(payload.size.toLong(), (result as NtripConnectionResult.Completed).bytesRead)
+        assertArrayEquals(payload, streamed.toByteArray())
+        assertTrue(input.maxRequestedRead <= 4_096, "read request was ${input.maxRequestedRead} bytes")
+    }
+
+    @Test
+    fun `truncated chunk payload and missing payload terminator fail cleanly`() {
+        listOf("3\r\nab\r\n", "1\r\naXX").forEach { chunkTail ->
+            val response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n$chunkTail"
+            val result = NtripClient(
+                defaultRequest(),
+                FakeNtripSocketConnector(FakeNtripSocket(response.toByteArray())),
+            ).connectOnce()
+            assertInstanceOf(NtripConnectionResult.Failure::class.java, result)
+            assertEquals(NtripFailureKind.STREAM_FAILED, (result as NtripConnectionResult.Failure).failure.kind)
+        }
+    }
+
+    @Test
     fun `optional gga lines are written to socket output after request`() {
         val socket = FakeNtripSocket(inputBytes = "ICY 200 OK\r\n\r\n".toByteArray())
         val connector = FakeNtripSocketConnector(socket)
@@ -542,15 +640,37 @@ class NtripClientTest {
         userAgent = "RtkCollectorTest/1",
     )
 
-    private class FakeNtripSocket(inputBytes: ByteArray) : NtripSocket {
+    private class FakeNtripSocket private constructor(private val inputFactory: () -> InputStream) : NtripSocket {
+        constructor(inputBytes: ByteArray) : this({ ByteArrayInputStream(inputBytes) })
+        constructor(input: InputStream) : this({ input })
+
         private val outputBuffer = ByteArrayOutputStream()
 
-        override val input: InputStream = ByteArrayInputStream(inputBytes)
+        override val input: InputStream = inputFactory()
         override val output: OutputStream = outputBuffer
 
         override fun close() = Unit
 
         fun outputText(): String = outputBuffer.toString(Charsets.US_ASCII.name())
+    }
+
+    private class PrefixThenEofInputStream(private val bytes: ByteArray) : InputStream() {
+        private var offset = 0
+        val bytesConsumed: Int
+            get() = offset
+        var maxRequestedRead: Int = 0
+            private set
+
+        override fun read(): Int = if (offset < bytes.size) bytes[offset++].toInt() and 0xff else -1
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            maxRequestedRead = maxOf(maxRequestedRead, length)
+            if (this.offset >= bytes.size) return -1
+            val count = minOf(length, bytes.size - this.offset)
+            bytes.copyInto(buffer, offset, this.offset, this.offset + count)
+            this.offset += count
+            return count
+        }
     }
 
     private class FakeNtripSocketConnector(private val socket: NtripSocket) : NtripSocketConnector {

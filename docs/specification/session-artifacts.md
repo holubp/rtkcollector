@@ -15,6 +15,10 @@ Verification:
 - Manual: completed session contains expected files for selected recording
   outputs.
 
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-FILES-001-AUTO, EV-SESSION-FILES-001-MANUAL
+
 ### SESSION-META-001: Session Metadata Records Workflow Context
 
 Status: Normative
@@ -27,6 +31,10 @@ identifier plus the screen and mock-location source policies.
 Verification:
 - Automated: session metadata writer tests.
 - Review: metadata fields align with `docs/session-format.md`.
+
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-META-001-AUTO, EV-SESSION-META-001-REVIEW
 
 ## Generated Exports
 
@@ -45,6 +53,10 @@ Verification:
   regeneration tests; source-aware NMEA sharing tests.
 - Manual: compare generated NMEA against known high-rate recording.
 
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-NMEA-001-AUTO, EV-SESSION-NMEA-001-MANUAL
+
 ### SESSION-RTCM-001: NTRIP RTCM Is Exportable
 
 Status: Normative
@@ -55,6 +67,10 @@ input bytes in a form usable by downstream post-processing tools.
 Verification:
 - Automated: correction-input raw/RTCM3 extraction tests.
 - Manual: replay correction stream through the downstream pipeline.
+
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-RTCM-001-AUTO, EV-SESSION-RTCM-001-MANUAL
 
 ## Archive And Restore
 
@@ -73,6 +89,10 @@ Verification:
 - Manual: recreate the Activity during recording and confirm the current
   session cannot be archived or deleted.
 
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-ARCHIVE-001-AUTO, EV-SESSION-ARCHIVE-001-MANUAL
+
 ### SESSION-ARCHIVE-004: Destructive Operations Lease The Session Atomically
 
 Status: Normative
@@ -89,6 +109,10 @@ Verification:
   test and filesystem/SAF destructive-operation tests.
 - Review: all filesystem and SAF archive/delete entry points acquire the lease
   before destructive work.
+
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-ARCHIVE-004-AUTO, EV-SESSION-ARCHIVE-004-REVIEW
 
 ### SESSION-SHARE-001: Temporary Shares Reject Active Sessions At Execution
 
@@ -107,6 +131,10 @@ Verification:
 - Manual: queue a share while recording starts and confirm no partial share is
   produced.
 
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-SHARE-001-AUTO, EV-SESSION-SHARE-001-MANUAL
+
 ### SESSION-ARCHIVE-002: Source Deletion Requires Content Verification
 
 Status: Normative
@@ -121,6 +149,10 @@ output.
 Verification:
 - Automated: archive corruption, truncated-copy and restore verification tests.
 - Manual: SAF provider failure test retains the original session or archive.
+
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-ARCHIVE-002-AUTO, EV-SESSION-ARCHIVE-002-MANUAL
 
 ### SESSION-ARCHIVE-003: Archive Import Is Bounded And Path-Safe
 
@@ -137,6 +169,10 @@ Verification:
   expanded-size and compression-ratio tests.
 - Review: filesystem and SAF restore use the same bounded archive policy.
 
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-ARCHIVE-003-AUTO, EV-SESSION-ARCHIVE-003-REVIEW
+
 ### SESSION-NMEA-002: SAF NMEA Replacement Is Rollback-Safe
 
 Status: Normative
@@ -150,6 +186,10 @@ Verification:
 - Automated: replacement-state/helper tests and SAF action source review.
 - Manual: provider without rename support preserves the old export on fallback
   failure.
+
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-NMEA-002-AUTO, EV-SESSION-NMEA-002-MANUAL
 
 ### SESSION-RTKLIB-001: RTKLIB Outputs Are Separate Advisory Artifacts
 
@@ -176,3 +216,7 @@ Verification:
 - Automated: workflow artifact validation and RTKLIB output writer tests.
 - Manual: RTKLIB-enabled session contains RTKLIB NMEA/POS artifacts while
   receiver raw and receiver solution artifacts remain separate.
+
+Provenance: AGENTS.md; docs/session-format.md; docs/architecture.md; docs/superpowers/specs/2026-06-11-session-browser-archive-design.md
+
+Evidence obligations: EV-SESSION-RTKLIB-001-AUTO, EV-SESSION-RTKLIB-001-MANUAL

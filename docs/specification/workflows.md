@@ -14,6 +14,10 @@ Verification:
 - Automated: workflow validator tests.
 - Manual: start plain rover without NTRIP and confirm no NTRIP connection opens.
 
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md
+
+Evidence obligations: EV-WF-ROVER-001-AUTO, EV-WF-ROVER-001-MANUAL
+
 ### WF-ROVER-NTRIP-001: Rover With NTRIP To Receiver
 
 Status: Normative
@@ -26,6 +30,10 @@ solutions.
 Verification:
 - Automated: NTRIP client/request/routing tests.
 - Manual: EUREF/CORS mountpoint session reaches receiver RTK float/fix.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md
+
+Evidence obligations: EV-WF-ROVER-NTRIP-001-AUTO, EV-WF-ROVER-NTRIP-001-MANUAL
 
 ### WF-ROVER-RTKLIB-001: Rover With NTRIP To RTKLIB
 
@@ -41,6 +49,10 @@ Verification:
 - Automated: workflow classification and active recording configuration tests.
 - Manual: u-blox M8T RAWX/SFRBX recording with an EUREF/CORS mountpoint starts
   RTKLIB without sending RTCM corrections to receiver TX.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md
+
+Evidence obligations: EV-WF-ROVER-RTKLIB-001-AUTO, EV-WF-ROVER-RTKLIB-001-MANUAL
 
 ## Base Workflows
 
@@ -58,6 +70,10 @@ Verification:
 - Manual: temporary-base session can accept an averaged/current coordinate and
   transition toward fixed-base use.
 
+Provenance: AGENTS.md; docs/workflows.md; docs/base-calibration-workflow.md; docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md; docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md
+
+Evidence obligations: EV-WF-TEMPBASE-001-AUTO, EV-WF-TEMPBASE-001-MANUAL
+
 ### WF-TEMPBASE-002: Temporary Base Averaging Survives NTRIP Source Changes
 
 Status: Normative
@@ -71,6 +87,10 @@ Verification:
 - Automated: coordinate averaging controller tests.
 - Manual: temporary-base session can continue averaging after switching between
   two NTRIP mountpoints.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/base-calibration-workflow.md; docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md; docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md
+
+Evidence obligations: EV-WF-TEMPBASE-002-AUTO, EV-WF-TEMPBASE-002-MANUAL
 
 ### WF-TEMPBASE-HEIGHT-001: Temporary Base Candidate Preserves Height Semantics
 
@@ -86,6 +106,10 @@ Verification:
 - Automated: dashboard base-coordinate candidate tests.
 - Review: UM980 `MODE BASE` generation uses MSL altitude only.
 
+Provenance: AGENTS.md; docs/workflows.md; docs/base-calibration-workflow.md; docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md; docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md
+
+Evidence obligations: EV-WF-TEMPBASE-HEIGHT-001-AUTO, EV-WF-TEMPBASE-HEIGHT-001-REVIEW
+
 ### WF-FIXEDBASE-001: Fixed Base Requires Accepted Coordinate
 
 Status: Normative
@@ -98,6 +122,10 @@ Verification:
 - Automated: workflow validator and start-preflight tests.
 - Manual: fixed-base UI shows the exact coordinate before start.
 
+Provenance: AGENTS.md; docs/workflows.md; docs/base-calibration-workflow.md; docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md; docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md
+
+Evidence obligations: EV-WF-FIXEDBASE-001-AUTO, EV-WF-FIXEDBASE-001-MANUAL
+
 ### WF-FIXEDBASE-002: Fixed Base Must Not Run Rover Mode Commands
 
 Status: Normative
@@ -109,6 +137,10 @@ Verification:
 - Automated: active recording configuration validation tests.
 - Review: generated fixed-base command injection cannot be followed by
   `MODE ROVER`.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/base-calibration-workflow.md; docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md; docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md
+
+Evidence obligations: EV-WF-FIXEDBASE-002-AUTO, EV-WF-FIXEDBASE-002-REVIEW
 
 ### WF-FIXEDBASE-003: Fixed Base Profile Must Match Accepted UM980 Coordinate
 
@@ -125,6 +157,10 @@ Verification:
 - Automated: fixed-base command validator tests.
 - Review: fixed-base start preflight rejects non-UM980 profiles, `MODE BASE
   TIME`, and accepted-coordinate drift from the visible command profile.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/base-calibration-workflow.md; docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md; docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md
+
+Evidence obligations: EV-WF-FIXEDBASE-003-AUTO, EV-WF-FIXEDBASE-003-REVIEW
 
 ### WF-FIXEDBASE-004: Fixed Base Command Materialisation Is Explicit
 
@@ -152,6 +188,10 @@ Verification:
   set choice and final confirmation; start preflight uses the selected command
   profile as-is.
 
+Provenance: AGENTS.md; docs/workflows.md; docs/base-calibration-workflow.md; docs/superpowers/specs/2026-06-28-base-workflow-upload-and-profile-cleanup-design.md; docs/superpowers/specs/2026-07-06-device-filter-and-fixed-base-handoff-design.md
+
+Evidence obligations: EV-WF-FIXEDBASE-004-AUTO, EV-WF-FIXEDBASE-004-REVIEW
+
 ### WF-PROFILE-FILTER-001: Device Filter Scopes Profile Selection
 
 Status: Normative
@@ -167,6 +207,10 @@ Verification:
 - Review: Home and Menu Device selector changes visible profile choices without
   deleting current selections.
 
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-20-active-setup-rtklib-and-profile-compatibility-design.md
+
+Evidence obligations: EV-WF-PROFILE-FILTER-001-AUTO, EV-WF-PROFILE-FILTER-001-REVIEW
+
 ### WF-UPLOAD-UI-001: Upload Selector Is Base-Workflow Scoped
 
 Status: Normative
@@ -179,6 +223,10 @@ Verification:
 - Automated: dashboard status tests.
 - Review: plain-rover and rover-with-NTRIP dashboard show upload as not needed,
   while fixed-base and temporary-base workflows allow explicit upload selection.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md
+
+Evidence obligations: EV-WF-UPLOAD-UI-001-AUTO, EV-WF-UPLOAD-UI-001-REVIEW
 
 ### WF-BUILTIN-SETTINGS-001: Built-In Rover Settings Require Explicit NTRIP Selection
 
@@ -202,6 +250,10 @@ Verification:
 - Automated: built-in settings-set and profile-store migration tests.
 - Manual: selecting `UM980 rover + NTRIP` shows Mountpoint unresolved and Upload
   as `Off` until the user explicitly chooses a mountpoint.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-20-active-setup-rtklib-and-profile-compatibility-design.md
+
+Evidence obligations: EV-WF-BUILTIN-SETTINGS-001-AUTO, EV-WF-BUILTIN-SETTINGS-001-MANUAL
 
 ### WF-SETTINGS-OWNERSHIP-001: Settings Sets Own Defaults And Selection Policy
 
@@ -232,6 +284,10 @@ Verification:
   owner-field copies; all runtime consumers use the resolved identity.
 - Manual: shared coordinate edit, explicit fixed-base handoff and Start reject.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-WF-SETTINGS-OWNERSHIP-001-AUTO, EV-WF-SETTINGS-OWNERSHIP-001-REVIEW, EV-WF-SETTINGS-OWNERSHIP-001-MANUAL
+
 ### WF-SETTINGS-DEPENDENCY-001: Correction Source Owns Its Caster Reference
 
 Status: Normative
@@ -261,6 +317,28 @@ Verification:
 - Manual: filtered source selection, mismatch repair and inactive optional
   profile start.
 
+Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
+
+Evidence obligations: EV-WF-SETTINGS-DEPENDENCY-001-AUTO, EV-WF-SETTINGS-DEPENDENCY-001-REVIEW, EV-WF-SETTINGS-DEPENDENCY-001-MANUAL
+
+### WF-REPLAY-001: Replay/Test Does Not Control A Live Receiver
+
+Status: Normative
+
+A replay/test workflow MUST use an empty receiver command plan and MUST NOT
+open a live receiver-control path merely to exercise parsers, quality monitors
+or workflow validation. Replay-derived telemetry and failures MUST remain
+advisory and MUST NOT be represented as a live byte-exact receiver recording.
+
+Verification:
+- Automated: workflow validator and dry-run/replay command-plan tests.
+- Review: replay/test activation cannot send init, shutdown or correction bytes
+  to a receiver transport.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md
+
+Evidence obligations: EV-WF-REPLAY-001-AUTO, EV-WF-REPLAY-001-REVIEW
+
 ## Future In-Phone Solution
 
 ### WF-SOLUTION-001: Device And RTKLIB Solutions Stay Separately Selectable
@@ -276,6 +354,10 @@ solution output policies where the relevant engine exists.
 Verification:
 - Automated: best-solution selector and recording tick-policy tests.
 - Review: session metadata records screen and mock-location source policy.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md
+
+Evidence obligations: EV-WF-SOLUTION-001-AUTO, EV-WF-SOLUTION-001-REVIEW
 
 ### WF-RTKLIB-001: In-Phone RTKLIB Is Future Work
 
@@ -328,3 +410,7 @@ Verification:
 - Review: no V1 feature requires RTKLIB to record, feed NTRIP or prepare a base.
 - Automated: RTKLIB input route tests cover direct u-blox, direct Unicore,
   named converter/shim Unicore compact observations and RTCM3 corrections.
+
+Provenance: AGENTS.md; docs/workflows.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-06-rtkcollector-workflow-design.md
+
+Evidence obligations: EV-WF-RTKLIB-001-AUTO, EV-WF-RTKLIB-001-REVIEW

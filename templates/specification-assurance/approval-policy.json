@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "authority_ref": "<durable repository governance reference>",
+  "authorized_approvers": ["human:<stable-id>"],
+  "authorized_evidence_issuers": ["ci:<stable-runner-id>"],
+  "authorized_semantic_reviewers": ["human:<stable-id>", "model:<approved-pattern>"]
+}

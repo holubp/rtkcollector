@@ -1,0 +1,22 @@
+# Specification Change Impact
+
+- Source decision:
+- Comparison base:
+- Changed files:
+- Affected requirement IDs:
+- Adjacent requirements reviewed:
+- Classification:
+- Provenance:
+- User-facing impact:
+- Implementation impact:
+- Evidence to add/update:
+- Conflicts requiring approval:
+- Human approval state and decision reference:
+- Requirement revisions whose approval will become stale:
+- Capability inventory revision and approval impact:
+- Implementation paths added, changed, moved or removed:
+- Evidence receipts invalidated by requirement/implementation digests:
+- Evidence receipts and semantic context invalidated by supporting-file/mapping digests:
+- Semantic-review scope and attestation state:
+- CI enforcement result:
+- Reason no specification change is needed, if applicable:

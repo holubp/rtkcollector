@@ -147,6 +147,22 @@ class ReceiverCommandPlanTest {
     }
 
     @Test
+    fun `replay rejects live commands in every sequence`() {
+        val workflow = WorkflowExamples.replayTest(ReceiverCapabilityFixtures.um980N4())
+        val empty = ReceiverCommandPlanExamples.replayPlan(workflow.receiverProfileId)
+        val plans = listOf(
+            empty.copy(initSequence = empty.initSequence.copy(commands = listOf("UNLOG COM1"))),
+            empty.copy(modeSequence = empty.modeSequence.copy(commands = listOf("MODE ROVER"))),
+            empty.copy(shutdownSequence = empty.shutdownSequence.copy(commands = listOf("SAVECONFIG"))),
+        )
+        plans.forEach { plan ->
+            val result = validator.validate(workflow, plan)
+            assertFalse(result.valid)
+            assertTrue(result.errors.any { it.code == "REPLAY_REQUIRES_EMPTY_COMMAND_PLAN" })
+        }
+    }
+
+    @Test
     fun `safe reference plan uses selected receiver profile id`() {
         val plan = ReceiverCommandPlanExamples.safeReferencePlan(
             receiverProfileId = "ublox-m8p2",

@@ -1,0 +1,66 @@
+name: Specification compliance
+
+on:
+  pull_request_target:
+  push:
+    tags:
+      - "v*"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changed:
+    # Owner-approved governance: external authors require the trusted PR gate.
+    # The merge actor is irrelevant; owner merging someone else's PR is external.
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.user.login != 'holubp'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: trusted-base
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Checkout PR candidate by SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          path: candidate
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Ensure base commit exists in candidate clone
+        run: |
+          cd "${{ github.workspace }}/candidate"
+          if ! git cat-file -e "${{ github.event.pull_request.base.sha }}^{commit}"; then
+            git fetch --no-tags --depth=1 \
+              "https://github.com/${{ github.event.pull_request.base.repo.full_name }}.git" \
+              "${{ github.event.pull_request.base.sha }}"
+          fi
+
+      - name: Run trusted checker on PR candidate
+        run: >-
+          python3 "${{ github.workspace }}/trusted-base/tools/specification/spec_check.py"
+          --root "${{ github.workspace }}/candidate"
+          --changed-only
+          --base "${{ github.event.pull_request.base.sha }}"
+          --trusted-base-controls
+          --summary-json
+
+  full:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run trusted full assurance
+        run: python3 tools/specification/spec_check.py --root . --full --summary-json

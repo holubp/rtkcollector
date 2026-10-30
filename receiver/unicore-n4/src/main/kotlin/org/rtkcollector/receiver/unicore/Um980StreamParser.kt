@@ -6,6 +6,66 @@ data class Um980StreamRecord(
     val text: String? = null,
 )
 
+/** Strict service admission and health validation; standalone text parsers stay permissive. */
+object ReceiverProtocolHealth {
+    internal const val MAX_NMEA_RECORD_BYTES = 8 * 1024
+    // Advisory retention policy, not a protocol maximum: OBSVMA has variable observations.
+    internal const val MAX_UNICORE_ASCII_RECORD_BYTES = 64 * 1024
+
+    fun isValidNmea(bytes: ByteArray): Boolean {
+        val line = printableLine(bytes, MAX_NMEA_RECORD_BYTES) ?: return false
+        if (!line.startsWith('$')) return false
+        val star = line.indexOf('*')
+        if (star < 0 || star + 3 != line.length) return false
+        val checksum = line.substring(star + 1)
+        if (!checksum.all(::isHex)) return false
+        val comma = line.indexOf(',')
+        if (comma < 0 || comma >= star - 1) return false
+        val address = line.substring(1, comma)
+        // Includes standard talker/formatter, Unicore extensions and u-blox PUBX.
+        val addressLength = if (address.startsWith('P')) 4..8 else 5..8
+        if (address.length !in addressLength || !address.take(2).all { it in 'A'..'Z' } ||
+            !address.all { it in 'A'..'Z' || it in '0'..'9' }
+        ) return false
+        val body = line.substring(1, star)
+        if (body.any { it == '$' || it == '#' }) return false
+        val expected = body.fold(0) { crc, char -> crc xor char.code }
+        return expected == checksum.toInt(16)
+    }
+
+    fun isValidUnicoreAscii(bytes: ByteArray): Boolean {
+        val line = printableLine(bytes, MAX_UNICORE_ASCII_RECORD_BYTES) ?: return false
+        if (!line.startsWith('#')) return false
+        val star = line.lastIndexOf('*')
+        if (star < 0 || star + 9 != line.length) return false
+        val checksum = line.substring(star + 1)
+        if (!checksum.all(::isHex)) return false
+        val comma = line.indexOf(',')
+        val separator = line.indexOf(';')
+        if (comma !in 2..33 || separator <= comma + 1 || separator >= star - 1) return false
+        if (!line.substring(1, comma).all { it in 'A'..'Z' || it in '0'..'9' }) return false
+        // N4 reference manual 7.3 / Appendix 1: exclude #, *CRC and CR/LF;
+        // reflected CRC-32, initial value zero, no final complement.
+        var crc = 0u
+        for (i in 1 until star) {
+            crc = crc xor line[i].code.toUInt()
+            repeat(8) {
+                crc = if ((crc and 1u) != 0u) (crc shr 1) xor 0xEDB88320u else crc shr 1
+            }
+        }
+        return crc == checksum.toUInt(16)
+    }
+
+    private fun printableLine(bytes: ByteArray, maxBytes: Int): String? {
+        if (bytes.size !in 2..maxBytes || bytes.last() != '\n'.code.toByte()) return null
+        val end = bytes.size - if (bytes[bytes.lastIndex - 1] == '\r'.code.toByte()) 2 else 1
+        if ((0 until end).any { bytes[it].toInt() !in 0x20..0x7e }) return null
+        return bytes.decodeToString(0, end)
+    }
+
+    private fun isHex(char: Char): Boolean = char in '0'..'9' || char in 'A'..'F' || char in 'a'..'f'
+}
+
 class Um980StreamParser {
     private var pending = ByteArray(0)
 
@@ -16,25 +76,24 @@ class Um980StreamParser {
         var index = 0
         while (index < data.size) {
             when {
-                data[index] == '$'.code.toByte() -> {
-                    val end = findLineEnd(data, index)
-                    if (end < 0) {
+                data[index] == '$'.code.toByte() || data[index] == '#'.code.toByte() -> {
+                    val nmea = data[index] == '$'.code.toByte()
+                    val maxLength = if (nmea) ReceiverProtocolHealth.MAX_NMEA_RECORD_BYTES
+                        else ReceiverProtocolHealth.MAX_UNICORE_ASCII_RECORD_BYTES
+                    val end = findLineEnd(data, index, maxLength)
+                    if (end < 0 && data.size - index <= maxLength) {
                         pending = data.copyOfRange(index, data.size)
                         index = data.size
+                    } else if (end < 0) {
+                        val next = nextKnownStart(data, index + 1)
+                        val keep = partialBinarySyncSuffixLength(data, index, next)
+                        val noiseEnd = next - keep
+                        records += Um980StreamRecord("noise", data.copyOfRange(index, noiseEnd))
+                        if (keep > 0) pending = data.copyOfRange(noiseEnd, data.size)
+                        index = next
                     } else {
                         val bytes = data.copyOfRange(index, end)
-                        records += Um980StreamRecord("nmea", bytes, bytes.decodeToString())
-                        index = end
-                    }
-                }
-                data[index] == '#'.code.toByte() -> {
-                    val end = findLineEnd(data, index)
-                    if (end < 0) {
-                        pending = data.copyOfRange(index, data.size)
-                        index = data.size
-                    } else {
-                        val bytes = data.copyOfRange(index, end)
-                        records += Um980StreamRecord("unicore_ascii", bytes, bytes.decodeToString())
+                        records += Um980StreamRecord(if (nmea) "nmea" else "unicore_ascii", bytes, bytes.decodeToString())
                         index = end
                     }
                 }
@@ -82,8 +141,8 @@ class Um980StreamParser {
         return mergeAdjacentNoise(records)
     }
 
-    private fun findLineEnd(input: ByteArray, start: Int): Int {
-        for (i in start until input.size) {
+    private fun findLineEnd(input: ByteArray, start: Int, maxLength: Int): Int {
+        for (i in start until start + minOf(maxLength, input.size - start)) {
             if (input[i] == '\n'.code.toByte()) return i + 1
         }
         return -1

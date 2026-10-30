@@ -19,6 +19,10 @@ Verification:
 - Review: parser, UI, NTRIP and RTKLIB paths must not write into
   `receiver-rx.raw`.
 
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-RAW-001-AUTO, EV-ARCH-RAW-001-REVIEW, EV-ARCH-RAW-001-MANUAL
+
 ### ARCH-RAW-002: Advisory Failures Must Not Stop Raw Capture
 
 Status: Normative
@@ -30,6 +34,10 @@ Verification:
 - Automated: parser-failure isolation test.
 - Manual: run recording with malformed mixed stream and confirm raw file grows.
 - Review: capture loop does not wait on advisory consumers.
+
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-RAW-002-AUTO, EV-ARCH-RAW-002-REVIEW, EV-ARCH-RAW-002-MANUAL
 
 ### ARCH-RAW-003: Raw Storage Failure Is Fatal And Distinct From USB Failure
 
@@ -47,6 +55,10 @@ Verification:
 - Review: service startup, reconnect and persistent-maintenance failure paths.
 - Manual: storage-full or revoked-provider test reports storage failure and
   preserves the partial session.
+
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-RAW-003-AUTO, EV-ARCH-RAW-003-REVIEW, EV-ARCH-RAW-003-MANUAL
 
 ### ARCH-RAW-004: Raw Writes Have A Bounded Flush Window
 
@@ -66,6 +78,10 @@ Verification:
 - Manual: process-termination smoke test confirms loss is bounded by the
   documented flush policy.
 
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-RAW-004-AUTO, EV-ARCH-RAW-004-MANUAL
+
 ### ARCH-TX-001: App TX Is Recorded Separately
 
 Status: Normative
@@ -79,6 +95,10 @@ Verification:
 - Review: all serial write paths pass through TX recording or documented
   exceptions.
 
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-TX-001-AUTO, EV-ARCH-TX-001-REVIEW
+
 ### ARCH-CORR-001: Correction Input Is Recorded Separately
 
 Status: Normative
@@ -89,6 +109,10 @@ NTRIP or other correction-source bytes received by the app SHOULD be recorded in
 Verification:
 - Automated: NTRIP runtime/session writer tests.
 - Manual: rover + NTRIP session contains usable RTCM3 correction stream.
+
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-CORR-001-AUTO, EV-ARCH-CORR-001-MANUAL
 
 ### ARCH-WRITER-001: Session Finalisation Is Failure-Isolated
 
@@ -104,6 +128,10 @@ Verification:
   attempted and the report names the failing artifact.
 - Review: app-private and SAF writer implementations use equivalent failure
   isolation semantics.
+
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-WRITER-001-AUTO, EV-ARCH-WRITER-001-REVIEW
 
 ### ARCH-WRITER-002: Finalisation Waits For Writer-Using Workers
 
@@ -137,6 +165,10 @@ Verification:
   `RtklibWorkerTest` and existing writer close tests.
 - Review: service stop ordering and worker ownership.
 
+Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/android-background-operation.md
+
+Evidence obligations: EV-ARCH-WRITER-002-AUTO, EV-ARCH-WRITER-002-REVIEW
+
 ### CORR-UPLOAD-001: Caster Upload Uses RTCM3 Frames Only
 
 Status: Normative
@@ -155,6 +187,10 @@ Verification:
 - Manual: replay session with mixed OBSVM/RTCM confirms only RTCM bytes are offered
   to upload.
 
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-001-AUTO, EV-CORR-UPLOAD-001-MANUAL
+
 ### CORR-UPLOAD-002: Caster Upload Is Isolated From Receiver Capture
 
 Status: Normative
@@ -169,6 +205,10 @@ Verification:
 - Manual: live upload outage while recording keeps `receiver-rx.raw` growing and
   upload state degrades only.
 
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-002-AUTO, EV-CORR-UPLOAD-002-MANUAL
+
 ### CORR-UPLOAD-003: Caster Upload Monitor Is Always Discoverable When Configured
 
 Status: Normative
@@ -182,6 +222,10 @@ Verification:
 - Automated: dashboard state/model mapper tests.
 - Manual: home dashboard and detailed upload monitor show upload telemetry.
 
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-003-AUTO, EV-CORR-UPLOAD-003-MANUAL
+
 ### CORR-UPLOAD-004: Caster Upload Uses Bounded Retry Policy
 
 Status: Normative
@@ -193,6 +237,10 @@ delay MUST be at least `10s`.
 Verification:
 - Automated: upload policy and controller retry tests.
 - Manual: network interruption reproduces capped bounded reconnect in logs/monitor.
+
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-004-AUTO, EV-CORR-UPLOAD-004-MANUAL
 
 ### CORR-UPLOAD-005: Caster Upload Safety Is Enforced and Bounded
 
@@ -214,6 +262,10 @@ Verification:
 - Review: service runtime path maps controller stop reasons to persisted redacted
   session metadata and state.
 
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-005-AUTO, EV-CORR-UPLOAD-005-REVIEW
+
 ### CORR-UPLOAD-006: RTK2go Hosts Must Enforce Safety
 
 Status: Normative
@@ -226,6 +278,10 @@ Verification:
 - Automated: RTK2go host unit coverage and active-config mapping tests.
 - Review: runtime extras and service config show `safetyForced` and selected host.
 
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-006-AUTO, EV-CORR-UPLOAD-006-REVIEW
+
 ### CORR-UPLOAD-007: Credentials Are Redacted From Upload Metadata
 
 Status: Normative
@@ -237,6 +293,10 @@ session metadata, and exported artifacts.
 Verification:
 - Automated: session metadata/event redaction tests where available.
 - Manual: confirm session metadata and events omit plaintext credentials.
+
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-007-AUTO, EV-CORR-UPLOAD-007-MANUAL
 
 ### CORR-UPLOAD-008: Classic V1 Source Upload Uses NtripServer Syntax
 
@@ -259,6 +319,10 @@ Verification:
   normalisation/rejection, fake caster success and negative-response coverage.
 - Manual: BKG Professional NtripCaster accepts `/UM980BASE` source upload and
   logs an accepted source, not an NTRIP client/listener request.
+
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-008-AUTO, EV-CORR-UPLOAD-008-MANUAL
 
 ### CORR-UPLOAD-009: V2 Source Upload Uses HTTP POST Syntax
 
@@ -283,6 +347,10 @@ Verification:
 - Manual: NTRIP v2-capable caster logs an accepted source for the requested
   mountpoint.
 
+Provenance: AGENTS.md; docs/ntrip-and-corrections.md; docs/superpowers/specs/2026-06-17-base-rtcm-ntrip-caster-upload-design.md; docs/superpowers/specs/2026-06-27-ntrip-caster-upload-monitor-and-safety-design.md
+
+Evidence obligations: EV-CORR-UPLOAD-009-AUTO, EV-CORR-UPLOAD-009-MANUAL
+
 ## Product Boundaries
 
 ### PRODUCT-NONGOAL-001: No GIS Application Scope
@@ -294,6 +362,10 @@ collection or cartographic survey project-management dependencies.
 
 Verification:
 - Review: dependency and UI review for every feature branch.
+
+Provenance: AGENTS.md; README.md; docs/product-requirements.md; docs/supported-receivers.md
+
+Evidence obligations: EV-PRODUCT-NONGOAL-001-REVIEW
 
 ### PRODUCT-USB-001: External USB Receiver Scope Is Explicit
 
@@ -307,6 +379,29 @@ specification explicitly adds that workflow.
 Verification:
 - Review: user-facing copy and UI labels avoid Android internal GNSS input
   claims.
+
+Provenance: AGENTS.md; README.md; docs/product-requirements.md; docs/supported-receivers.md
+
+Evidence obligations: EV-PRODUCT-USB-001-REVIEW
+
+### PRODUCT-RX-001: Receiver Support Claims Distinguish Validated And Experimental Devices
+
+Status: Normative
+
+User-facing receiver support claims MUST identify UM980 and u-blox M8T as the
+current primary focus. M8P and compatible F9P-class devices MAY be described as
+experimental where generic USB, NMEA/RTCM, UBX or M8T-like paths can apply, but
+the app and documentation MUST NOT claim author-tested precise-positioning
+support for receiver families that have not received hardware validation.
+
+Verification:
+- Review: `README.md`, `docs/supported-receivers.md`, profile labels and release
+  notes use consistent support language.
+- Manual: inspect the supported-device guidance in the release candidate.
+
+Provenance: AGENTS.md; README.md; docs/product-requirements.md; docs/supported-receivers.md
+
+Evidence obligations: EV-PRODUCT-RX-001-REVIEW, EV-PRODUCT-RX-001-MANUAL
 
 ## Satellite Monitoring
 
@@ -324,6 +419,10 @@ Verification:
 - Review: satellite monitor call sites run after raw byte persistence and
   remain advisory.
 
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-SATMON-ARCH-001-AUTO, EV-SATMON-ARCH-001-REVIEW
+
 ### SATMON-STATE-001: Satellite Source Semantics Stay Separate
 
 Status: Normative
@@ -335,6 +434,10 @@ unsupported, unavailable or stale rather than inferred from another source.
 Verification:
 - Automated: satellite monitor model tests.
 - Manual: receiver/caster smoke tests for supported profiles.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-SATMON-STATE-001-AUTO, EV-SATMON-STATE-001-MANUAL
 
 ### SATMON-PROFILE-001: Satellite Telemetry Capability Is Explicit
 
@@ -351,3 +454,43 @@ Verification:
 - Automated: command-profile JSON/default-profile tests.
 - Manual: built-in telemetry-capable profiles show a supported waiting state
   while unsupported profiles show an explicit unsupported state.
+
+Provenance: AGENTS.md; docs/user-workflows.md; docs/superpowers/specs/2026-06-23-satellite-frequency-monitor-design.md
+
+Evidence obligations: EV-SATMON-PROFILE-001-AUTO, EV-SATMON-PROFILE-001-MANUAL
+
+### CORR-UPLOAD-010: UM980 Base Upload Requires Position And Observation Output
+
+Status: Normative
+
+UM980 base-upload preflight MUST require a command profile with RTCM1005 or
+RTCM1006 base-position output and at least one supported MSM observation output.
+A monitoring-only script MUST NOT be presented as an upload-capable base script.
+Missing prerequisites MUST be actionable configuration errors rather than an
+authenticated upload that silently sends no useful base observations. This
+preflight MUST NOT mutate receiver recording bytes or bypass RTCM frame filtering.
+
+Verification:
+- Automated: RtcmBaseOutputSanityTest and base upload configuration validation tests.
+
+Provenance: approved temporary-to-fixed-base upload-capable profile workflow; docs/user-workflows.md; existing Um980RtcmBaseOutputSanity implementation and tests.
+
+Evidence obligations: EV-CORR-UPLOAD-010-AUTO
+
+### CORR-REFERENCE-001: RTCM Reference Positions Are Decoded From Valid Frames
+
+Status: Normative
+
+Reference-station monitoring MUST decode station IDs and signed ECEF coordinates
+from validated RTCM3 1005/1006 frames using their specified field widths and
+scales. Truncated, CRC-invalid or unrelated frames MUST NOT produce a station
+position. Derived geodetic coordinates MUST use the same reference coordinates;
+antenna height from 1006 MUST remain separately identifiable. This parser is
+advisory and MUST NOT alter or delay recorded or routed correction bytes.
+
+Verification:
+- Automated: Rtcm3ReferenceStationParserTest with independent coordinate expectations.
+
+Provenance: approved base-station position monitoring and RTCM parsing work; docs/ntrip-and-corrections.md; existing parser and tests.
+
+Evidence obligations: EV-CORR-REFERENCE-001-AUTO

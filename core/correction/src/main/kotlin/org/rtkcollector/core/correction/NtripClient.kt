@@ -509,6 +509,9 @@ class NtripClient(
                 break
             }
 
+            if (bytes.size() >= MAX_HEADER_BYTES) {
+                error("NTRIP response headers exceed the configured limit")
+            }
             bytes.write(next)
             matched = if (next.toByte() == HEADER_TERMINATOR[matched]) matched + 1 else if (next == '\r'.code) 1 else 0
             if (matched == HEADER_TERMINATOR.size) break
@@ -587,32 +590,38 @@ class NtripClient(
         require(initialPayload.isEmpty()) { "Chunked NTRIP response unexpectedly included payload bytes with headers." }
         var bytesRead = 0L
         while (!cancelled.get()) {
-            val sizeLine = input.readAsciiLine() ?: break
-            val chunkSize = sizeLine
+            val sizeLine = input.readAsciiLine(MAX_CHUNK_METADATA_LINE_BYTES) ?: break
+            val sizeText = sizeLine
                 .substringBefore(';')
                 .trim()
-                .toIntOrNull(radix = 16)
-                ?: error("Invalid chunk size in NTRIP stream: $sizeLine")
-            if (chunkSize == 0) {
+            require(sizeText.isNotEmpty() && sizeText.all { it.digitToIntOrNull(radix = 16) != null }) {
+                "Invalid chunk size in NTRIP stream"
+            }
+            val chunkSize = sizeText.toLongOrNull(radix = 16)
+                ?: error("Invalid chunk size in NTRIP stream")
+            if (chunkSize == 0L) {
                 input.discardChunkTrailers()
                 break
             }
-            val chunk = input.readExact(chunkSize)
+            bytesRead += input.readChunkPayload(chunkSize, onRtcmBytes)
+            if (cancelled.get()) break
             input.expectCrLf()
-            onRtcmBytes(chunk)
-            bytesRead += chunk.size
         }
         return bytesRead
     }
 
-    private fun InputStream.readAsciiLine(): String? {
+    private fun InputStream.readAsciiLine(maxBytes: Int): String? {
         val line = ByteArrayOutputStream()
         var previous = -1
+        var bytesRead = 0
         while (true) {
             val next = read()
             if (next == -1) {
-                return if (line.size() == 0 && previous == -1) null else line.toString(Charsets.US_ASCII.name())
+                if (line.size() == 0 && previous == -1) return null
+                error("NTRIP chunk metadata line ended unexpectedly")
             }
+            bytesRead++
+            if (bytesRead > maxBytes) error("NTRIP chunk metadata line exceeds the configured limit")
             if (previous == '\r'.code && next == '\n'.code) {
                 val bytes = line.toByteArray()
                 return bytes.copyOf(bytes.size - 1).toString(Charsets.US_ASCII)
@@ -623,23 +632,41 @@ class NtripClient(
     }
 
     private fun InputStream.discardChunkTrailers() {
+        var totalBytes = 0
         while (true) {
-            val line = readAsciiLine() ?: return
+            val line = readAsciiLine(MAX_CHUNK_METADATA_LINE_BYTES)
+                ?: error("NTRIP chunk trailers ended unexpectedly")
+            totalBytes += line.toByteArray(Charsets.US_ASCII).size + CRLF.size
+            if (totalBytes > MAX_CHUNK_TRAILERS_BYTES) {
+                error("NTRIP chunk trailers exceed the configured limit")
+            }
             if (line.isEmpty()) return
         }
     }
 
-    private fun InputStream.readExact(byteCount: Int): ByteArray {
-        val output = ByteArray(byteCount)
-        var offset = 0
-        while (offset < byteCount) {
-            val count = read(output, offset, byteCount - offset)
+    private fun InputStream.readChunkPayload(
+        byteCount: Long,
+        onRtcmBytes: (ByteArray) -> Unit,
+    ): Long {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var remaining = byteCount
+        var bytesRead = 0L
+        while (remaining > 0 && !cancelled.get()) {
+            var count = read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
             if (count == -1) {
-                error("NTRIP chunk ended before $byteCount bytes were read.")
+                error("NTRIP chunk payload ended unexpectedly")
             }
-            offset += count
+            if (count == 0) {
+                val next = read()
+                if (next == -1) error("NTRIP chunk payload ended unexpectedly")
+                buffer[0] = next.toByte()
+                count = 1
+            }
+            onRtcmBytes(buffer.copyOf(count))
+            remaining -= count
+            bytesRead += count
         }
-        return output
+        return bytesRead
     }
 
     private fun InputStream.expectCrLf() {
@@ -708,5 +735,8 @@ class NtripClient(
         val CRLF = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte())
         val HEADER_TERMINATOR = byteArrayOf('\r'.code.toByte(), '\n'.code.toByte(), '\r'.code.toByte(), '\n'.code.toByte())
         const val DEFAULT_BUFFER_SIZE = 4096
+        const val MAX_HEADER_BYTES = 64 * 1024
+        const val MAX_CHUNK_METADATA_LINE_BYTES = 8 * 1024
+        const val MAX_CHUNK_TRAILERS_BYTES = 64 * 1024
     }
 }

@@ -65,6 +65,7 @@ data class ActiveRecordingConfig(
         )
         if (rtklib.enabled) {
             require(rtklib.validationErrors.isEmpty()) { rtklib.validationErrors.joinToString(" ") }
+            RtklibStartValidator.validateReceiverFrequency(commandReceiverFamily, rtklib.frequencyCount)
         }
         if (ntrip.enabled) {
             validateCorrectionProtocolPolicy(ntrip.protocolPolicy)

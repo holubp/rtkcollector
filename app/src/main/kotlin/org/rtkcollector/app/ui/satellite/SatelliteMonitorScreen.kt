@@ -104,17 +104,28 @@ fun SatelliteMonitorScreen(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (!state.hasFrequencyGroups) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-            ) {
+        if (state.hasFrequencyGroups) {
+            state.statusMessage?.let { message ->
                 Text(
-                    text = state.message,
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = message,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+        if (!state.hasFrequencyGroups) {
+            state.statusMessage?.let { message ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                ) {
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             return@Column
         }

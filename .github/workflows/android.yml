@@ -49,6 +49,20 @@ jobs:
             --ref "$RTKLIB_REF" \
             --metadata "$RUNNER_TEMP/rtklib-ex-snapshot.json"
 
+      - name: Test native boundaries and startup recovery
+        shell: bash
+        run: |
+          command -v cmake
+          command -v clang
+          command -v clang++
+          python3 -m venv "$RUNNER_TEMP/rtkcollector-native-tests"
+          NATIVE_TEST_PYTHON="$RUNNER_TEMP/rtkcollector-native-tests/bin/python"
+          "$NATIVE_TEST_PYTHON" -m pip install --disable-pip-version-check "pytest==9.1.1"
+          export RTKCOLLECTOR_NATIVE_TEST_SOURCE_DIR="$GITHUB_WORKSPACE/third_party/rtklib-ex/upstream/src"
+          "$NATIVE_TEST_PYTHON" -m pytest -q \
+            tools/test_rtklib_native_build_files.py \
+            tools/test_rtklib_native_server_backend.py
+
       - name: Verify release lint for both distributions
         run: sh gradlew :app:lintSideloadRelease :app:lintGooglePlayRelease --no-parallel
 

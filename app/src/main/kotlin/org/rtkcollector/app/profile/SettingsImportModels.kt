@@ -32,6 +32,80 @@ data class SettingsBackupImportPlan(
     val safTreeUriReselectionCount: Int,
 )
 
+enum class SecretStoreImportOutcome(val userMessage: String?) {
+    STORED(null),
+    PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED(
+        "Profiles restored, but NTRIP passwords were not restored. Password rollback was confirmed; imported credential bindings remain disabled. Enter the passwords again.",
+    ),
+    PRIMARY_AND_ROLLBACK_FAILED(
+        "Profiles restored, but NTRIP password state is uncertain because password rollback failed. Imported credential bindings remain disabled. Check and enter the passwords again.",
+    ),
+    FAILED("Profiles restored, but NTRIP passwords could not be stored securely. Imported credential bindings remain disabled. Enter the passwords again."),
+    ACTIVATION_FAILED("Profiles restored, but imported NTRIP credentials could not be enabled. Credential bindings remain disabled. Enter the passwords again."),
+}
+
+internal fun classifySecretStoreImportFailure(error: Throwable): SecretStoreImportOutcome =
+    when (generateSequence(error) { it.cause }.filterIsInstance<PreferenceCommitException>()
+        .firstOrNull()?.rollbackStatus) {
+        PreferenceRollbackStatus.FAILED -> SecretStoreImportOutcome.PRIMARY_AND_ROLLBACK_FAILED
+        PreferenceRollbackStatus.RESTORED -> SecretStoreImportOutcome.PRIMARY_COMMIT_FAILED_ROLLBACK_SUCCEEDED
+        null -> SecretStoreImportOutcome.FAILED
+    }
+
+/** Freeze the retained family once, so later credential activation cannot append duplicates. */
+internal fun SettingsBackupFile.withRetainedImportUploads(
+    retained: List<NtripCasterUploadProfile>,
+): SettingsBackupFile {
+    if (SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD in includedProfileFamilies || ntripCasterUploadProfiles.isEmpty()) return this
+    require(ntripCasterUploadProfiles.none { imported -> retained.any { it.id == imported.id } }) {
+        "Imported derived uploads must not replace an omitted profile family."
+    }
+    return copy(ntripCasterUploadProfiles = retained + ntripCasterUploadProfiles,
+        includedProfileFamilies = includedProfileFamilies + SettingsBackupProfileFamily.NTRIP_CASTER_UPLOAD)
+}
+
+/** Password destinations stay unreachable until their separate batch commits successfully. */
+internal fun restoreProfilesThenCredentials(
+    backup: SettingsBackupFile,
+    requireUnallocated: (Set<String>) -> Unit,
+    publishProfiles: (SettingsBackupFile) -> Unit,
+    persistPasswords: (Map<String, String>) -> Unit,
+    idFactory: SettingsImportIdFactory = collisionResistantSettingsImportIdFactory,
+): SecretStoreImportOutcome {
+    val passwords = backup.plaintextPasswordsBySecretId
+    val ids = FreshSettingsImportIds(idFactory, backup.referencedNtripSecretIds())
+    val disarmedBindings = passwords.keys.associateWith { ids.next("ntrip-import-disarmed") }
+    requireUnallocated(backup.committedNtripSecretIds() + disarmedBindings.values)
+    fun binding(id: String): String = disarmedBindings[id] ?: id
+    val disarmed = backup.copy(
+        ntripCasterProfiles = backup.ntripCasterProfiles.map { it.copy(secretId = binding(it.secretId)) },
+        ntripCasterUploadProfiles = backup.ntripCasterUploadProfiles.map { it.copy(secretId = binding(it.secretId)) },
+        settingsSets = backup.settingsSets.map { set -> set.copy(overrides = set.overrides.copy(
+            ntripCaster = set.overrides.ntripCaster?.let { it.copy(secretId = it.secretId?.let(::binding)) },
+            ntripCasterUpload = set.overrides.ntripCasterUpload?.let { it.copy(secretId = it.secretId?.let(::binding)) },
+        )) },
+        plaintextPasswordsBySecretId = emptyMap(),
+    )
+    publishProfiles(disarmed)
+    if (passwords.isEmpty()) return SecretStoreImportOutcome.STORED
+    try {
+        persistPasswords(passwords)
+    } catch (failure: Exception) {
+        return classifySecretStoreImportFailure(failure)
+    }
+    // A failed/uncertain secret rollback can never activate its destination IDs.
+    try {
+        publishProfiles(backup.copy(plaintextPasswordsBySecretId = emptyMap()))
+    } catch (_: GraphPublicationException) {
+        return SecretStoreImportOutcome.ACTIVATION_FAILED
+    } catch (_: GraphRecoveryException) {
+        throw GraphRecoveryException(
+            "Profiles were restored, but credential activation recovery is uncertain. Settings are blocked until recovery completes; credential restore was not confirmed.",
+        )
+    }
+    return SecretStoreImportOutcome.STORED
+}
+
 data class RetainedSettingsProfileIds(
     val ntripCasterUploadProfileIds: Set<String> = emptySet(),
     val rtklibProfileIds: Set<String> = emptySet(),

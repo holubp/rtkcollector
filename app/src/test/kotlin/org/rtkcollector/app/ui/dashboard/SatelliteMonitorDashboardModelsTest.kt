@@ -67,6 +67,23 @@ class SatelliteMonitorDashboardModelsTest {
     }
 
     @Test
+    fun `nonblank operational message remains available when frequency groups are populated`() {
+        val state = SatelliteMonitorDashboardState.preview().copy(
+            message = "Per-frequency used counts inferred",
+        )
+
+        assertTrue(state.hasFrequencyGroups)
+        assertEquals("Per-frequency used counts inferred", state.statusMessage)
+    }
+
+    @Test
+    fun `blank operational message is not exposed for display`() {
+        val state = SatelliteMonitorDashboardState.preview().copy(message = "  ")
+
+        assertEquals(null, state.statusMessage)
+    }
+
+    @Test
     fun `frequency chunks keep compact card rows bounded`() {
         val group = SatelliteMonitorConstellationGroup(
             label = "GPS",

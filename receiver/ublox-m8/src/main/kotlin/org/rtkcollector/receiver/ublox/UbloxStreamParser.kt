@@ -15,6 +15,7 @@ data class UbloxStreamRecord(
  */
 class UbloxStreamParser {
     private var pending = ByteArray(0)
+    private var discardingOversizedNmea = false
 
     fun accept(input: ByteArray): List<UbloxStreamRecord> {
         val data = pending + input
@@ -22,6 +23,16 @@ class UbloxStreamParser {
         val records = mutableListOf<UbloxStreamRecord>()
         var index = 0
         while (index < data.size) {
+            if (discardingOversizedNmea) {
+                val end = findLineEnd(data, index)
+                if (end < 0) {
+                    index = data.size
+                } else {
+                    discardingOversizedNmea = false
+                    index = end
+                }
+                continue
+            }
             when {
                 hasUbxSync(data, index) -> {
                     val end = frameEnd(data, index)
@@ -39,8 +50,14 @@ class UbloxStreamParser {
                 data[index] == '$'.code.toByte() -> {
                     val end = findLineEnd(data, index)
                     if (end < 0) {
-                        pending = data.copyOfRange(index, data.size)
+                        if (data.size - index > MAX_NMEA_LINE_LENGTH) {
+                            discardingOversizedNmea = true
+                        } else {
+                            pending = data.copyOfRange(index, data.size)
+                        }
                         index = data.size
+                    } else if (end - index > MAX_NMEA_LINE_LENGTH) {
+                        index = end
                     } else {
                         val bytes = data.copyOfRange(index, end)
                         records += UbloxStreamRecord("nmea", bytes, bytes.decodeToString())
@@ -48,8 +65,13 @@ class UbloxStreamParser {
                     }
                 }
                 else -> {
-                    records += UbloxStreamRecord("noise", data.copyOfRange(index, index + 1))
-                    index += 1
+                    if (data[index] == 0xB5.toByte() && index + 1 == data.size) {
+                        pending = data.copyOfRange(index, data.size)
+                        index = data.size
+                    } else {
+                        records += UbloxStreamRecord("noise", data.copyOfRange(index, index + 1))
+                        index += 1
+                    }
                 }
             }
         }
@@ -77,6 +99,8 @@ class UbloxStreamParser {
     private companion object {
         const val INCOMPLETE = -1
         const val INVALID = -2
-        const val MAX_PAYLOAD_LENGTH = 8192
+        const val MAX_PAYLOAD_LENGTH = 65_535
+        // Bounds retained NMEA candidates; oversized lines are discarded through LF.
+        const val MAX_NMEA_LINE_LENGTH = 8 * 1024
     }
 }

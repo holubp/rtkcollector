@@ -9,6 +9,33 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 class DeviceConsoleControllerTest {
     @Test
+    fun `console cannot open while stopped UI still has a service-owned session`() {
+        val location = "console-stopping-session"
+        val transport = FakeTransport()
+        val controller = DeviceConsoleController({ false }, { transport }, {})
+        org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry.activate(location)
+        try {
+            assertFalse(controller.connect().isSuccess)
+            assertFalse(transport.opened)
+        } finally {
+            controller.disconnect()
+            org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry.deactivate(location)
+        }
+    }
+
+    @Test
+    fun `send rechecks recording ownership rather than using connect-time state`() {
+        var recording = false
+        val transport = FakeTransport()
+        val controller = DeviceConsoleController({ recording }, { transport }, {})
+        try {
+            assertTrue(controller.connect().isSuccess)
+            recording = true
+            assertFalse(controller.send("MODE BASE", DeviceConsoleLineEnding.CRLF).isSuccess)
+            assertTrue(transport.written.isEmpty())
+        } finally { controller.disconnect() }
+    }
+    @Test
     fun `connect is rejected while recording is active`() {
         val transport = FakeTransport()
         val states = CopyOnWriteArrayList<DeviceConsoleState>()

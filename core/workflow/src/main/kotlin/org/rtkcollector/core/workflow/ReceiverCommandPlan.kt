@@ -187,6 +187,14 @@ class ReceiverCommandPlanValidator {
         val errors = mutableListOf<WorkflowValidationMessage>()
         val warnings = mutableListOf<WorkflowValidationMessage>()
 
+        if (workflow.receiverRole == ReceiverRole.REPLAY_TEST &&
+            (commandPlan.startupCommands().isNotEmpty() || commandPlan.shutdownCommands().isNotEmpty())) {
+            errors += WorkflowValidationMessage(
+                code = "REPLAY_REQUIRES_EMPTY_COMMAND_PLAN",
+                message = "Replay/test must not contain receiver startup or shutdown commands.",
+            )
+        }
+
         if (commandPlan.receiverProfileId != workflow.receiverProfileId) {
             warnings += WorkflowValidationMessage(
                 code = "COMMAND_PROFILE_DIFFERS_FROM_WORKFLOW_PROFILE",

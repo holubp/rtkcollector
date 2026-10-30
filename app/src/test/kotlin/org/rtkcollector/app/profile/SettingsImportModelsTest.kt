@@ -205,6 +205,48 @@ class SettingsImportModelsTest {
     }
 
     @Test
+    fun `format two excluded metadata cannot suppress a present optional family or its preview`() {
+        val source = sampleBackup(includePassword = false).copy(
+            formatVersion = 2,
+            rtklibProfiles = listOf(RtklibProfile(id = "rtklib", name = "Imported RTKLIB")),
+        )
+        val json = source.toJson().put("includedProfileFamilies", org.json.JSONArray())
+        val result = validateSettingsImportJson(json.toString())
+
+        assertTrue(result is SettingsImportValidationResult.Valid)
+        assertEquals(SettingsBackupProfileFamily.entries.toSet(), result.backup.includedProfileFamilies)
+        assertEquals(emptyList(), result.summary.omittedProfileFamilies)
+        assertEquals(1, result.summary.rtklibProfileCount)
+        val plan = settingsBackupImportPlan(result.backup, emptySet())
+        assertEquals(source.rtklibProfiles, plan.backup.rtklibProfiles)
+        assertTrue(SettingsBackupProfileFamily.RTKLIB in plan.backup.includedProfileFamilies)
+    }
+
+    @Test
+    fun `present empty families override excluded metadata but absent families alone are retained`() {
+        listOf("ntripCasterUploadProfiles", "rtklibProfiles", "solutionPolicyProfiles").forEach { key ->
+            val json = sampleBackup(includePassword = false).copy(formatVersion = 2).toJson()
+                .put(key, org.json.JSONArray())
+                .put("includedProfileFamilies", org.json.JSONArray())
+            val present = validateSettingsImportJson(json.toString())
+            assertTrue(present is SettingsImportValidationResult.Valid)
+            assertEquals(emptyList(), present.summary.omittedProfileFamilies)
+            assertTrue(present.backup.includedProfileFamilies.any { it.jsonKey == key })
+
+            json.remove(key)
+            val absent = validateSettingsImportJson(json.toString())
+            assertTrue(absent is SettingsImportValidationResult.Valid)
+            assertEquals(listOf(key), absent.summary.omittedProfileFamilies)
+            assertFalse(absent.backup.includedProfileFamilies.any { it.jsonKey == key })
+
+            json.put("includedProfileFamilies", org.json.JSONArray(SettingsBackupProfileFamily.entries.map { it.name }))
+            val declaredButAbsent = validateSettingsImportJson(json.toString())
+            assertTrue(declaredButAbsent is SettingsImportValidationResult.Valid)
+            assertEquals(listOf(key), declaredButAbsent.summary.omittedProfileFamilies)
+        }
+    }
+
+    @Test
     fun `present legacy profile-family key must be an array`() {
         listOf("ntripCasterUploadProfiles", "rtklibProfiles", "solutionPolicyProfiles").forEach { key ->
             val json = sampleBackup(includePassword = false).toJson()

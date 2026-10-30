@@ -354,8 +354,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     @Volatile private var activeNtripRuntimeConfig: NtripRuntimeConfig? = null
     @Volatile private var activeCasterUploadSecurityPolicy: org.rtkcollector.core.correction.NtripEndpointSecurityPolicy? = null
     private var casterUploadController: NtripCasterUploadController? = null
-    private var rtklibWorker: RtklibWorker? = null
-    private var lastRtklibStatusWriteMillis: Long = 0L
+    @Volatile private var rtklibWorker: RtklibWorker? = null
     private var activeWorkflowUsesNtrip: Boolean = false
     private var activeNtripSendToReceiver: Boolean = true
     private var activeSatelliteTelemetry: SatelliteTelemetryCapability = SatelliteTelemetryCapability.NONE
@@ -959,6 +958,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         if (!running.compareAndSet(false, true)) {
             RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
             return
+        }
+        synchronized(coordinateAveragingController) {
+            coordinateAveragingController.beginSession(System.currentTimeMillis())
+            updateCoordinateAverageState(null)
         }
         stopContext = RecordingStopContext()
         essentialStopSealed.set(false)
@@ -2241,25 +2244,18 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 appendNmeaLine = if (outputNmea) sessionWriters::appendRtklibSolutionNmea else null,
                 appendPosLine = if (outputPos) sessionWriters::appendRtklibSolutionPos else null,
             ),
+            statusSink = { snapshot -> appendRtklibStatus(sessionWriters, snapshot) },
         )
-        val result = worker.start(config)
-        if (result.started) {
-            rtklibWorker = worker
-            state = state.copy(
-                rtklibState = "RUNNING",
-                rtklibRoutePlan = routePlanText,
-                rtklibSnapshotId = intent.getStringExtra(EXTRA_RTKLIB_SNAPSHOT_ID) ?: "n/a",
-                rtklibLastError = null,
-            )
-        } else {
-            worker.stop()
-            state = state.copy(
-                rtklibState = "FAILED",
-                rtklibRoutePlan = routePlanText,
-                rtklibSnapshotId = intent.getStringExtra(EXTRA_RTKLIB_SNAPSHOT_ID) ?: "n/a",
-                rtklibLastError = result.message,
-            )
-        }
+        // Publish ownership before admission: Stop must also fence a still-initializing backend.
+        rtklibWorker = worker
+        val admission = worker.startAsync(config)
+        val snapshot = worker.snapshot()
+        state = state.copy(
+            rtklibState = snapshot.state.name,
+            rtklibRoutePlan = routePlanText,
+            rtklibSnapshotId = intent.getStringExtra(EXTRA_RTKLIB_SNAPSHOT_ID) ?: "n/a",
+            rtklibLastError = snapshot.lastError ?: admission.message,
+        )
     }
 
     private fun rtklibPresetFrom(value: String?): RtklibPreset =
@@ -2813,6 +2809,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             return
         }
         val wasRunning = running.getAndSet(false)
+        synchronized(coordinateAveragingController) {
+            coordinateAveragingController.endSession()
+            updateCoordinateAverageState(null)
+        }
         usbIdentity.stop()
         usbConsent.stop()
         usbRecoveryNeeded.set(false)
@@ -3670,7 +3670,6 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     raiseAlarm(RecordingAlarmEvidence.RTKLIB, "RTKLIB processing interrupted; receiver recording continues.")
                 else if (snapshot.state == org.rtkcollector.core.rtklib.RtklibEngineState.RUNNING) recoverAlarm(RecordingAlarmEvidence.RTKLIB)
             }
-            maybeAppendRtklibStatus(snapshot, System.currentTimeMillis())
             val solution = snapshot.latestSolution
             solution?.let { rtklibSolution ->
                 val newAlarmEpoch = if (running.get()) alarmRtklibEpoch.accept(rtklibSolution.timestampMillis) != null else false
@@ -3871,16 +3870,11 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         }
     }
 
-    private fun maybeAppendRtklibStatus(snapshot: RtklibEngineSnapshot, nowMillis: Long) {
-        if (!running.get()) return
-        if (nowMillis - lastRtklibStatusWriteMillis < 1_000L) return
-        synchronized(runtimeLock) {
-            if (!running.get()) return
-            lastRtklibStatusWriteMillis = nowMillis
-            writers?.appendRtklibStatusJson(
+    private fun appendRtklibStatus(sessionWriters: RecordingSessionWriters, snapshot: RtklibEngineSnapshot) {
+        // Invoked only by RtklibWorker, whose shutdown barrier protects this session's writers.
+        sessionWriters.appendRtklibStatusJson(
                 """{"type":"rtklib-status","state":"${snapshot.state.name.jsonEscape()}","fix":${snapshot.latestSolution?.fixClass?.name.jsonStringOrNull()},"latDeg":${snapshot.latestSolution?.latDeg ?: "null"},"lonDeg":${snapshot.latestSolution?.lonDeg ?: "null"},"ellipsoidalHeightM":${snapshot.latestSolution?.ellipsoidalHeightM ?: "null"},"horizontalAccuracyM":${snapshot.latestSolution?.horizontalAccuracyM ?: "null"},"verticalAccuracyM":${snapshot.latestSolution?.verticalAccuracyM ?: "null"},"decodedRoverEpochs":${snapshot.decodedRoverEpochs},"decodedCorrectionMessages":${snapshot.decodedCorrectionMessages},"serverCpuTimeMillis":${snapshot.serverCpuTimeMillis ?: "null"},"serverRoverObservationMessages":${snapshot.serverRoverObservationMessages},"serverBaseObservationMessages":${snapshot.serverBaseObservationMessages},"serverMissingObservationCount":${snapshot.serverMissingObservationCount},"droppedRoverBytes":${snapshot.droppedRoverBytes},"droppedCorrectionBytes":${snapshot.droppedCorrectionBytes},"warning":${snapshot.lastWarning.jsonStringOrNull()},"error":${snapshot.lastError.jsonStringOrNull()}}""",
-            )
-        }
+        )
     }
 
     private fun satelliteMonitorBroadcastPayload(): SatelliteMonitorBroadcastPayload {
@@ -3952,9 +3946,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         exportJsonSolution: Boolean,
     ) {
         ubloxStreamParser.accept(bytes).forEach { record ->
-            if (record.kind == "ubx" || record.kind == "nmea") {
-                markValidReceiverProtocolFrame(nowMillis)
-            }
+            val validProtocolFrame = record.kind == "ubx" ||
+                (record.kind == "nmea" && org.rtkcollector.receiver.unicore.ReceiverProtocolHealth.isValidNmea(record.bytes))
+            if (!validProtocolFrame) return@forEach
+            markValidReceiverProtocolFrame(SystemClock.elapsedRealtime())
             if (record.kind == "ubx") {
                 when {
                     record.bytes.getOrNull(2) == 0x01.toByte() && record.bytes.getOrNull(3) == 0x07.toByte() -> {
@@ -3969,9 +3964,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                                     activeRecorder?.recordNmeaBytes(sentence.toByteArray(Charsets.US_ASCII).size)
                                 }
                             }
-                            telemetry.toSolutionCandidate(satellitesInView = freshUbloxSatellitesInView(nowMillis))?.let {
-                                applyPrimaryScreenCandidate(it, nowMillis)
-                            }
+                            applyPrimaryScreenCandidate(
+                                telemetry.toSolutionCandidate(satellitesInView = freshUbloxSatellitesInView(nowMillis)),
+                                nowMillis, "UBX-NAV-PVT",
+                            )
                         }
                     }
                     record.bytes.getOrNull(2) == 0x02.toByte() && record.bytes.getOrNull(3) == 0x15.toByte() -> {
@@ -4022,9 +4018,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     .getOrDefault(emptyList())
                 fixes.forEach { fix ->
                     ubloxFrequencyTracker.record(UbloxMessageKind.GGA, nowMillis)
-                    fix.toCandidate("ublox", nowMillis)?.let {
-                        applyPrimaryScreenCandidate(it, nowMillis)
-                    }
+                    applyPrimaryScreenCandidate(fix.toCandidate("ublox", nowMillis), nowMillis, "NMEA-GGA")
                 }
             }
         }
@@ -4124,9 +4118,20 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun applyPrimaryScreenCandidate(
-        candidate: org.rtkcollector.core.solution.SolutionCandidate,
+        candidate: org.rtkcollector.core.solution.SolutionCandidate?,
         nowMillis: Long,
+        sourceId: String,
     ) {
+        if (isPrimaryScreenSource(sourceId, activeReceiverFamily)) {
+            synchronized(coordinateAveragingController) {
+                if (running.get()) {
+                    coordinateAveragingController.onPrimarySolution(candidate, nowMillis)?.let { result ->
+                        updateCoordinateAverageState(result)
+                    }
+                }
+            }
+        }
+        if (candidate == null) return
         offerAlarmPosition(candidate)
         if (candidate.isPrimaryScreenCandidateFor(activeReceiverFamily)) {
             state = state.withSelectedSolution(candidate, nowMillis)
@@ -4141,48 +4146,30 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     nowMillis,
                 )
             }
-            if (coordinateAveragingController.active) {
-                val result = coordinateAveragingController.onSelectedSolution(candidate)
-                updateCoordinateAverageState(result)
-            }
         }
         solutionCandidates[candidate.sourceId] = candidate
     }
 
     private fun startCoordinateAveraging() {
-        if (!running.get()) {
-            state = state.copy(
-                baseAverageActive = false,
-                baseAverageWarning = "Cannot start averaging: recording is not active.",
-            )
-            broadcastState()
-            return
+        synchronized(coordinateAveragingController) {
+            if (!running.get()) {
+                coordinateAveragingController.endSession()
+                updateCoordinateAverageState(null)
+                state = state.copy(baseAverageWarning = "Cannot start averaging: recording is not active.")
+            } else {
+                updateCoordinateAverageState(coordinateAveragingController.start(System.currentTimeMillis()))
+            }
         }
-        val candidate = latestPrimaryScreenCandidate()
-        if (candidate == null) {
-            state = state.copy(
-                baseAverageActive = false,
-                baseAverageWarning = "Cannot start averaging: no selected receiver solution.",
-            )
-            broadcastState()
-            return
-        }
-        coordinateAveragingController.start(candidate.fixClass)
-        val result = coordinateAveragingController.onSelectedSolution(candidate)
-        updateCoordinateAverageState(result)
         broadcastState()
     }
 
     private fun stopCoordinateAveraging() {
-        coordinateAveragingController.stop("Stopped")
-        updateCoordinateAverageState(null)
+        synchronized(coordinateAveragingController) {
+            coordinateAveragingController.stop("Stopped")
+            updateCoordinateAverageState(null)
+        }
         broadcastState()
     }
-
-    private fun latestPrimaryScreenCandidate(): SolutionCandidate? =
-        solutionCandidates.values
-            .filter { it.isPrimaryScreenCandidateFor(activeReceiverFamily) }
-            .maxByOrNull { it.updatedAtMillis }
 
     private fun updateCoordinateAverageState(result: CoordinateAverageAddResult?) {
         val summary = coordinateAveragingController.summary()
@@ -4353,9 +4340,14 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         return@AdvisoryConsumer
                     }
                     streamParser.accept(bytes).forEach { record ->
-                        if (record.kind == "nmea" || record.kind == "unicore_ascii" || record.kind == "unicore_binary") {
-                            markValidReceiverProtocolFrame(SystemClock.elapsedRealtime())
+                        val validProtocolFrame = when (record.kind) {
+                            "nmea" -> org.rtkcollector.receiver.unicore.ReceiverProtocolHealth.isValidNmea(record.bytes)
+                            "unicore_ascii" -> org.rtkcollector.receiver.unicore.ReceiverProtocolHealth.isValidUnicoreAscii(record.bytes)
+                            "unicore_binary" -> true // Stream parser already checked length and CRC.
+                            else -> false
                         }
+                        if (!validProtocolFrame) return@forEach
+                        markValidReceiverProtocolFrame(SystemClock.elapsedRealtime())
                         when (record.kind) {
                             "nmea" -> {
                                 if (exportNmea) {
@@ -4385,9 +4377,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                                             ?: state.differentialAge,
                                     )
                                     val now = System.currentTimeMillis()
-                                    fix.toCandidate("um980", now)?.let {
-                                        applyPrimaryScreenCandidate(it, now)
-                                    }
+                                    applyPrimaryScreenCandidate(fix.toCandidate("um980", now), now, "NMEA-GGA")
                                 }
                                 gsaParser.accept(record.bytes).forEach { dop ->
                                     markSatelliteTelemetryObserved()
@@ -4489,9 +4479,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                                                     ?: state.ellipsoidalHeight,
                                             ).withReceiverRtkAsciiSolution(solution)
                                             val now = System.currentTimeMillis()
-                                            solution.toBestnavCandidate(now)?.let {
-                                                applyPrimaryScreenCandidate(it, now)
-                                            }
+                                            applyPrimaryScreenCandidate(solution.toBestnavCandidate(now), now, "UM980-BESTNAV")
                                         }
                                     }
                                 }
@@ -4526,9 +4514,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                                     state = state.withUm980Telemetry(telemetry)
                                         .withReceiverRtkTelemetry(telemetry)
                                     val now = System.currentTimeMillis()
-                                    telemetry.toBestnavCandidate(now)?.let {
-                                        applyPrimaryScreenCandidate(it, now)
-                                    }
+                                    applyPrimaryScreenCandidate(telemetry.toBestnavCandidate(now), now, "UM980-BESTNAV")
                                 }
                                 Um980BinaryParser.parseAdrnavb(record.bytes)?.let { telemetry ->
                                     markSatelliteTelemetryObserved()

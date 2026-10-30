@@ -2,12 +2,24 @@ package org.rtkcollector.app.ui
 
 import org.rtkcollector.app.profile.PreferenceCommitException
 import org.rtkcollector.app.profile.PreferenceRollbackStatus
+import org.rtkcollector.app.profile.SecretStoreImportOutcome
+import org.rtkcollector.app.profile.classifySecretStoreImportFailure
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SettingsImportOutcomeTest {
+    @Test
+    fun `every credential failure reports restored profiles and disabled bindings without secret values`() {
+        SecretStoreImportOutcome.entries.filter { it != SecretStoreImportOutcome.STORED }.forEach { outcome ->
+            assertTrue(outcome.userMessage.orEmpty().contains("Profiles restored"))
+            assertTrue(outcome.userMessage.orEmpty().contains("bindings remain disabled"))
+            assertFalse(outcome.userMessage.orEmpty().contains("secret-password"))
+        }
+    }
+
     @Test
     fun `successful secret import has no warning`() {
         assertNull(SecretStoreImportOutcome.STORED.userMessage)
@@ -38,7 +50,7 @@ class SettingsImportOutcomeTest {
 
         assertEquals(SecretStoreImportOutcome.PRIMARY_AND_ROLLBACK_FAILED, outcome)
         assertEquals(
-            "NTRIP passwords could not be stored securely; persisted password state may be inconsistent. Check and enter them again.",
+            "Profiles restored, but NTRIP password state is uncertain because password rollback failed. Imported credential bindings remain disabled. Check and enter the passwords again.",
             outcome.userMessage,
         )
     }
@@ -51,7 +63,7 @@ class SettingsImportOutcomeTest {
 
         assertEquals(SecretStoreImportOutcome.FAILED, outcome)
         assertEquals(
-            "NTRIP passwords could not be stored securely; enter them again.",
+            "Profiles restored, but NTRIP passwords could not be stored securely. Imported credential bindings remain disabled. Enter the passwords again.",
             outcome.userMessage,
         )
     }

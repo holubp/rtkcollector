@@ -1,12 +1,32 @@
 package org.rtkcollector.receiver.ublox
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.rtkcollector.core.quality.SatelliteConstellation
 import org.rtkcollector.core.quality.SatelliteMonitorSource
 import org.rtkcollector.core.quality.SatelliteSignalKey
 
 class UbloxRawxParserTest {
+    @Test
+    fun `maps Galileo signal IDs from the u-blox signal identifier table`() {
+        val tableCases = listOf(
+            0 to UbloxBandAndSignal("L1", "E1"),
+            1 to UbloxBandAndSignal("L1", "E1"),
+            3 to UbloxBandAndSignal("L5", "E5a"),
+            4 to UbloxBandAndSignal("L5", "E5a"),
+            5 to UbloxBandAndSignal("L7", "E5b"),
+            6 to UbloxBandAndSignal("L7", "E5b"),
+        )
+
+        tableCases.forEach { (signalId, expected) ->
+            assertEquals(expected, UbloxSatelliteMapping.bandAndSignalFor(SatelliteConstellation.GALILEO, signalId))
+        }
+        listOf(2, 7, 255).forEach { signalId ->
+            assertNull(UbloxSatelliteMapping.bandAndSignalFor(SatelliteConstellation.GALILEO, signalId))
+        }
+    }
+
     @Test
     fun `parses gps rawx observations for l1 and l2`() {
         val payload = UbloxRawxTestPayloadBuilder()
@@ -32,18 +52,26 @@ class UbloxRawxParserTest {
     }
 
     @Test
-    fun `maps galileo rawx observations to e1 and e5a`() {
+    fun `maps galileo rawx observations to e1 e5a and e5b`() {
         val payload = UbloxRawxTestPayloadBuilder()
             .measurement(gnssId = 2, svId = 11, signalId = 0, cno = 38, pseudorangeStd = 100)
-            .measurement(gnssId = 2, svId = 12, signalId = 5, cno = 39, pseudorangeStd = 100)
+            .measurement(gnssId = 2, svId = 12, signalId = 3, cno = 39, pseudorangeStd = 100)
+            .measurement(gnssId = 2, svId = 13, signalId = 5, cno = 40, pseudorangeStd = 100)
+            .measurement(gnssId = 2, svId = 14, signalId = 7, cno = 41, pseudorangeStd = 100)
             .build()
 
         val frame = UbloxFrame.build(0x02, 0x15, payload)
         val observations = UbloxRawxParser.parse(frame, observedAtMillis = 12_000L)
 
-        assertEquals(2, observations.size)
-        assertEquals("E1", observations[0].key.signalCode)
-        assertEquals("E5a", observations[1].key.signalCode)
+        assertEquals(3, observations.size)
+        assertEquals(
+            listOf(
+                SatelliteSignalKey(SatelliteConstellation.GALILEO, 11, "L1", "E1"),
+                SatelliteSignalKey(SatelliteConstellation.GALILEO, 12, "L5", "E5a"),
+                SatelliteSignalKey(SatelliteConstellation.GALILEO, 13, "L7", "E5b"),
+            ),
+            observations.map { it.key },
+        )
     }
 
     @Test

@@ -21,9 +21,28 @@ data class Rtcm3ReferenceStation(
 object Rtcm3ReferenceStationParser {
     fun parse(frame: Rtcm3Frame): Rtcm3ReferenceStation? {
         if (frame.crcValid == false) return null
+        if (frame.payloadLength !in MINIMUM_MESSAGE_TYPE_BYTES..MAX_PAYLOAD_BYTES) return null
+        if (frame.bytes.size != RTCM3_OVERHEAD_BYTES + frame.payloadLength) return null
+        if ((frame.bytes[0].toInt() and BYTE_MASK) != RTCM3_PREAMBLE) return null
+        if ((frame.bytes[1].toInt() and HEADER_RESERVED_BITS_MASK) != 0) return null
+        val headerPayloadLength =
+            ((frame.bytes[1].toInt() and PAYLOAD_LENGTH_HIGH_BITS_MASK) shl 8) or
+                (frame.bytes[2].toInt() and BYTE_MASK)
+        if (headerPayloadLength != frame.payloadLength) return null
+        if (frame.crcValid == null) {
+            val crcOffset = frame.bytes.size - 3
+            val expectedCrc = ((frame.bytes[crcOffset].toInt() and BYTE_MASK) shl 16) or
+                ((frame.bytes[crcOffset + 1].toInt() and BYTE_MASK) shl 8) or
+                (frame.bytes[crcOffset + 2].toInt() and BYTE_MASK)
+            if (Rtcm3Extractor.crc24q(frame.bytes, crcOffset) != expectedCrc) return null
+        }
+
         val bits = RtcmBitReader(frame.bytes, bitOffset = 24, bitLength = frame.payloadLength * 8)
         val messageType = bits.unsigned(12).toInt()
         if (messageType != 1005 && messageType != 1006) return null
+        if (frame.messageType != null && frame.messageType != messageType) return null
+        if (messageType == 1005 && frame.payloadLength != EXACT_1005_PAYLOAD_BYTES) return null
+        if (messageType == 1006 && frame.payloadLength < MINIMUM_1006_PAYLOAD_BYTES) return null
         val stationId = bits.unsigned(12).toInt()
         bits.skip(6) // ITRF realization year
         bits.skip(1) // GPS indicator
@@ -36,7 +55,7 @@ object Rtcm3ReferenceStationParser {
         val ecefYM = bits.signed(38) * 0.0001
         bits.skip(2) // quarter-cycle indicator
         val ecefZM = bits.signed(38) * 0.0001
-        val antennaHeightM = if (messageType == 1006 && bits.remaining >= 16) {
+        val antennaHeightM = if (messageType == 1006) {
             bits.unsigned(16) * 0.0001
         } else {
             null
@@ -76,6 +95,16 @@ object Rtcm3ReferenceStationParser {
             heightM = height,
         )
     }
+
+    private const val RTCM3_PREAMBLE = 0xd3
+    private const val RTCM3_OVERHEAD_BYTES = 6
+    private const val MINIMUM_MESSAGE_TYPE_BYTES = 2
+    private const val EXACT_1005_PAYLOAD_BYTES = 19
+    private const val MINIMUM_1006_PAYLOAD_BYTES = 21
+    private const val MAX_PAYLOAD_BYTES = 1023
+    private const val BYTE_MASK = 0xff
+    private const val HEADER_RESERVED_BITS_MASK = 0xfc
+    private const val PAYLOAD_LENGTH_HIGH_BITS_MASK = 0x03
 }
 
 private data class GeodeticPosition(

@@ -340,3 +340,24 @@ paused for the final full-context reconciliation. Outstanding release work is
 the exact full attestation, full pre-push gate, commit/push, exact-source host CI,
 stable APK signing/publication and artifact verification. Android/device/SAF and
 vendor-specific manual checks remain explicit, not fabricated as completed.
+
+## Publication Verification Checkpoint
+
+Runtime tree `279294be6647c283a04841427538105b1b3f569a` is committed and pushed.
+Its full independent attestation covers 713 paths and 736 requirement/path pairs
+with no unresolved source findings. The full repository pre-push gate passed:
+1,444 tests across 193 suites, zero failures/errors/skips in executed tests,
+strict specification assurance and all JVM-test source compilation. The three
+Robolectric classes remain compile-only locally and execute on the host.
+
+Host validation is tracked by GitHub Actions run `41137476006`. The final
+published tag, host results, stable-key build and independent APK certificate,
+checksum, package/version and ABI checks must be recorded in the RC10 GitHub
+release. Those external records, not this source-preparation checkpoint, establish
+publication. Existing manual/device/provider obligations and the separate Play
+policy blocker retain their honest maturity; this is not a field-test claim.
+
+The follow-up tracker changes implementation status to implemented/not
+field-tested. It changes no runtime, tests, build configuration, requirements,
+approvals or capability mappings. Its refreshed exact-scope review and pre-push
+gate remain required before the documentation commit is pushed.

@@ -13,8 +13,179 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicBoolean
 
 class NtripCasterUploadControllerTest {
+    @Test fun `unexpected retry-wait interruption does not bypass minimum reconnect delay`() {
+        val retry = CountDownLatch(1)
+        val secondAttempt = CountDownLatch(1)
+        val attempts = AtomicInteger()
+        val controller = NtripCasterUploadController(uploadOnce = { _, _, _ ->
+            if (attempts.incrementAndGet() > 1) secondAttempt.countDown()
+            retryableFailure()
+        }, eventSink = { if (it.kind == "retry_scheduled") retry.countDown() })
+        try {
+            controller.start(runtimeConfig())
+            assertTrue(retry.await(2, TimeUnit.SECONDS))
+            val field = controller.javaClass.getDeclaredField("worker").apply { isAccessible = true }
+            val worker = field.get(controller) as Thread
+            waitUntil { worker.state == Thread.State.TIMED_WAITING }
+            worker.interrupt()
+            assertFalse(secondAttempt.await(100, TimeUnit.MILLISECONDS))
+        } finally { controller.stop(2_000) }
+    }
+
+    @Test fun `Stop cannot deliver a stale injected-delay interrupt to a later event writer`() {
+        val delayEntered = CountDownLatch(1); val releaseDelay = CountDownLatch(1)
+        val summaryEntered = CountDownLatch(1); val releaseSummary = CountDownLatch(1)
+        val interrupted = AtomicBoolean()
+        val controller = NtripCasterUploadController(uploadOnce = { _, _, _ -> retryableFailure() },
+            delay = { delayEntered.countDown(); releaseDelay.await() }, eventSink = {
+                if (it.kind == "final_summary") {
+                    summaryEntered.countDown()
+                    try { releaseSummary.await() } catch (_: InterruptedException) { interrupted.set(true) }
+                }
+            })
+        val stopper = Thread { controller.stop(0) }
+        try {
+            controller.start(runtimeConfig())
+            assertTrue(delayEntered.await(2, TimeUnit.SECONDS))
+            val wake = controller.javaClass.getDeclaredField("retryWaitLock").apply { isAccessible = true }.get(controller)
+            val running = controller.javaClass.getDeclaredField("running").apply { isAccessible = true }
+            synchronized(wake) {
+                stopper.start()
+                waitUntil { !running.getBoolean(controller) }
+                releaseDelay.countDown()
+                assertTrue(summaryEntered.await(2, TimeUnit.SECONDS))
+            }
+            stopper.join(2_000)
+            releaseSummary.countDown()
+            assertTrue(controller.stop(2_000))
+            assertFalse(interrupted.get())
+        } finally {
+            releaseDelay.countDown(); releaseSummary.countDown()
+            stopper.join(2_000); controller.stop(2_000)
+        }
+    }
+
+    @Test
+    fun `stop does not interrupt event writer callback and emits final summary once`() {
+        val callbackStarted = CountDownLatch(1)
+        val releaseCallback = CountDownLatch(1)
+        val callbackInterrupted = AtomicBoolean(false)
+        val finalSummaries = AtomicInteger()
+        val controller = NtripCasterUploadController(
+            uploadOnce = { _, _, _ -> retryableFailure() },
+            eventSink = { event ->
+                if (event.kind == "connect_attempt") {
+                    callbackStarted.countDown()
+                    try {
+                        releaseCallback.await()
+                    } catch (_: InterruptedException) {
+                        callbackInterrupted.set(true)
+                    }
+                }
+                if (event.kind == "final_summary") finalSummaries.incrementAndGet()
+            },
+        )
+
+        try {
+            controller.start(runtimeConfig())
+            assertTrue(callbackStarted.await(2, TimeUnit.SECONDS))
+            assertFalse(controller.stop(timeoutMillis = 0))
+            assertFalse(controller.stop(timeoutMillis = 20))
+            assertFalse(callbackInterrupted.get())
+            assertEquals(0, finalSummaries.get())
+
+            releaseCallback.countDown()
+            waitUntil { finalSummaries.get() == 1 }
+            assertTrue(controller.stop(timeoutMillis = 2_000))
+            assertTrue(controller.stop(timeoutMillis = 2_000))
+            assertEquals(1, finalSummaries.get())
+            assertFalse(callbackInterrupted.get())
+        } finally {
+            releaseCallback.countDown()
+            controller.stop(timeoutMillis = 2_000)
+        }
+    }
+
+    @Test
+    fun `stop wakes production retry wait without worker interruption`() {
+        val retryScheduled = CountDownLatch(1)
+        val attempts = AtomicInteger()
+        val controller = NtripCasterUploadController(
+            uploadOnce = { _, _, _ ->
+                attempts.incrementAndGet()
+                retryableFailure()
+            },
+            eventSink = { if (it.kind == "retry_scheduled") retryScheduled.countDown() },
+        )
+
+        controller.start(
+            runtimeConfig(
+                policy = NtripCasterUploadPolicy(
+                    retry = NtripCasterUploadRetryPolicy(
+                        mode = NtripCasterUploadRetryMode.FIXED,
+                        fixedReconnectDelayMillis = 60_000,
+                        stopAfterFailuresEnabled = false,
+                    ),
+                ),
+            ),
+        )
+        assertTrue(retryScheduled.await(2, TimeUnit.SECONDS))
+
+        val stoppedAt = System.nanoTime()
+        assertTrue(controller.stop(timeoutMillis = 500))
+        val stopMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - stoppedAt)
+
+        assertTrue(stopMillis < 500)
+        assertEquals(1, attempts.get())
+    }
+
+    @Test
+    fun `stop preserves final accepted upload bytes while output callback is blocked`() {
+        val callbackStarted = CountDownLatch(1)
+        val releaseCallback = CountDownLatch(1)
+        val callbackInterrupted = AtomicBoolean(false)
+        val written = Collections.synchronizedList(mutableListOf<Byte>())
+        val controller = NtripCasterUploadController(
+            uploadOnce = { _, onState, writeRtcmBytes ->
+                onState(NtripConnectionState.STREAMING)
+                writeRtcmBytes(object : OutputStream() {
+                    override fun write(value: Int) {
+                        callbackStarted.countDown()
+                        try {
+                            releaseCallback.await()
+                        } catch (_: InterruptedException) {
+                            callbackInterrupted.set(true)
+                        }
+                        written += value.toByte()
+                    }
+                })
+                NtripCasterUploadResult.Completed(written.size.toLong())
+            },
+        )
+
+        try {
+            controller.start(runtimeConfig())
+            waitUntil { controller.snapshot().state == "STREAMING" }
+            assertTrue(controller.offer(byteArrayOf(0x41, 0x42)))
+            assertTrue(callbackStarted.await(2, TimeUnit.SECONDS))
+            assertFalse(controller.stop(timeoutMillis = 20))
+            assertFalse(callbackInterrupted.get())
+            assertTrue(written.isEmpty())
+
+            releaseCallback.countDown()
+            waitUntil { controller.snapshot().bytesUploaded == 2L }
+            assertTrue(controller.stop(timeoutMillis = 2_000))
+            assertEquals(listOf(0x41.toByte(), 0x42.toByte()), written)
+            assertFalse(callbackInterrupted.get())
+        } finally {
+            releaseCallback.countDown()
+            controller.stop(timeoutMillis = 2_000)
+        }
+    }
+
     @Test
     fun `offer returns false and records dropped bytes when queue is full`() {
         val enteredUpload = CountDownLatch(1)

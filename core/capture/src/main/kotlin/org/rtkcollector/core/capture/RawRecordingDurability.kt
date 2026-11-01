@@ -3,6 +3,8 @@ package org.rtkcollector.core.capture
 class RawRecordingStorageException(
     message: String,
     cause: Throwable,
+    val artifact: String? = null,
+    val operation: String? = null,
 ) : RuntimeException(message, cause)
 
 enum class CaptureFailureDisposition {

@@ -10,6 +10,7 @@ sealed class PersistentReceiverWriteRoute {
 }
 
 enum class PersistentReceiverWriteRejectionReason {
+    RECEIVER_BUSY,
     USB_PROFILE_MISSING,
     RECEIVER_DISCONNECTED,
     USB_PERMISSION_MISSING,
@@ -20,8 +21,13 @@ fun persistentReceiverWriteRoute(
     usbProfileAvailable: Boolean,
     receiverConnected: Boolean,
     usbPermissionGranted: Boolean,
+    receiverBusy: Boolean = false,
 ): PersistentReceiverWriteRoute {
     if (recordingActive) return PersistentReceiverWriteRoute.ActiveRecordingService
+    if (receiverBusy) return PersistentReceiverWriteRoute.Rejected(
+        PersistentReceiverWriteRejectionReason.RECEIVER_BUSY,
+        "Receiver is starting or stopping. Wait before writing persistent configuration.",
+    )
     if (!usbProfileAvailable) {
         return PersistentReceiverWriteRoute.Rejected(
             reason = PersistentReceiverWriteRejectionReason.USB_PROFILE_MISSING,

@@ -82,7 +82,15 @@ internal class SessionDiagnostics(
         // Only sealing confirms that producers have relinquished the event stream.
         if (cleanupNeeded) runCatching {
             scheduleFailedWorkerCleanup(Runnable { finishClose() })
-        }.onFailure { failures.incrementAndGet() }
+        }.onFailure {
+            failures.incrementAndGet()
+            runCatching {
+                Thread({ finishClose() }, "rtkcollector-event-cleanup").apply { isDaemon = true; start() }
+            }.onFailure {
+                failures.incrementAndGet()
+                synchronized(lock) { failedCleanupScheduled = false }
+            }
+        }
     }
     fun awaitClosed(timeoutMillis: Long): Boolean {
         if (closed.count == 0L) return true
@@ -135,6 +143,6 @@ internal class SessionDiagnostics(
 
     companion object {
         private val SAFE_EVENT_FIELDS = setOf("state", "uploadedBytes", "droppedBytes", "bitrateKbps",
-            "rtcmHz", "stopReason", "url", "lastError")
+            "rtcmHz", "stopReason", "url", "lastError") + FAILURE_DIAGNOSTIC_KEYS
     }
 }

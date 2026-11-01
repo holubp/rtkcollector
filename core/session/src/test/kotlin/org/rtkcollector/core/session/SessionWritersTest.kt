@@ -17,6 +17,63 @@ class SessionWritersTest {
     @TempDir
     lateinit var tempDir: Path
 
+    @Test fun `open failure identifies the exact artifact and retains original cause`() {
+        val failure = java.nio.channels.ClosedChannelException()
+        val error = assertThrows(SessionWriterOpenException::class.java) {
+            SessionWriters.openAppendForRecovery(tempDir) { path ->
+                if (path.fileName.toString() == "tx-to-receiver.raw") throw failure
+                java.io.ByteArrayOutputStream()
+            }
+        }
+        assertEquals("tx-to-receiver.raw", error.artifact)
+        assertEquals("open", error.operation)
+        org.junit.jupiter.api.Assertions.assertSame(failure, error.cause)
+    }
+
+    @Test fun `production append preserves buffered tail on interrupted Android 29 writer`() {
+        val directory = tempDir.resolve("production")
+        val writers = SessionWriters.open(android29Path(directory))
+        writers.appendReceiverRx(byteArrayOf(1, 2, 3))
+        writers.flushReceiverRx()
+        writers.appendReceiverRx(byteArrayOf(4, 5, 6))
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable>()
+        val worker = Thread {
+            Thread.currentThread().interrupt()
+            try { writers.flushReceiverRx(); writers.appendReceiverRx(ByteArray(16_384) { 7 }) }
+            catch (error: Throwable) { failure.set(error) }
+            finally { Thread.interrupted() }
+        }
+        try {
+            worker.start(); worker.join(5_000)
+            assertFalse(worker.isAlive)
+            assertTrue(writers.closeAll().issues.isEmpty())
+            assertEquals(null, failure.get(), "Stop interruption must not destroy the raw file channel")
+            assertArrayEquals(byteArrayOf(1, 2, 3, 4, 5, 6) + ByteArray(16_384) { 7 },
+                Files.readAllBytes(directory.resolve("receiver-rx.raw")))
+        } finally { writers.closeAll() }
+    }
+
+    @Test fun `Android 29 negative control demonstrates interrupted channel tail loss`() {
+        val path = android29Path(tempDir.resolve("legacy.raw"))
+        val output = java.io.BufferedOutputStream(Files.newOutputStream(path,
+            StandardOpenOption.CREATE, StandardOpenOption.APPEND))
+        output.write(byteArrayOf(1, 2, 3)); output.flush()
+        output.write(byteArrayOf(4, 5, 6))
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable>()
+        val worker = Thread {
+            Thread.currentThread().interrupt()
+            try { output.flush() } catch (error: Throwable) { failure.set(error) }
+            finally { Thread.interrupted() }
+        }
+        try {
+            worker.start(); worker.join(5_000)
+            assertFalse(worker.isAlive)
+            assertTrue(failure.get() is java.nio.channels.ClosedByInterruptException)
+            assertThrows(java.nio.channels.ClosedChannelException::class.java) { output.flush() }
+            assertArrayEquals(byteArrayOf(1, 2, 3), Files.readAllBytes(path.toFile().toPath()))
+        } finally { runCatching { output.close() } }
+    }
+
     @Test fun `non event close finalizes raw without taking event ownership`() {
         val writers = SessionWriters.open(tempDir)
         writers.appendReceiverRx(byteArrayOf(7, 8))
@@ -160,6 +217,30 @@ class SessionWritersTest {
         assertEquals(1, streams.getValue("receiver-rx.raw").flushCount)
         assertEquals(0, streams.getValue("tx-to-receiver.raw").flushCount)
         writers.closeAll()
+    }
+
+    @Test
+    fun `message-less flush and close failures keep identity while every stream is finalized`() {
+        val closed = mutableListOf<String>()
+        val writers = SessionWriters.openAppendForRecovery(tempDir) { path ->
+            val name = path.fileName.toString()
+            object : java.io.OutputStream() {
+                override fun write(value: Int) = Unit
+                override fun flush() {
+                    if (name == "receiver-rx.raw") throw java.nio.channels.ClosedChannelException()
+                }
+                override fun close() {
+                    closed += name
+                    if (name == "tx-to-receiver.raw") throw java.nio.channels.ClosedChannelException()
+                }
+            }
+        }
+        val report = writers.closeAll()
+        assertEquals(14, closed.size)
+        assertFalse(report.rawRecordingSafe)
+        assertEquals(listOf("flush", "close"), report.issues.map { it.operation })
+        assertTrue(report.issues.all { it.exceptionClass == "java.nio.channels.ClosedChannelException" })
+        assertEquals(listOf("receiver-rx.raw", "tx-to-receiver.raw"), report.issues.map { it.artifact })
     }
 
     @Test

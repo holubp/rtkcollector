@@ -45,7 +45,7 @@ data class RuntimeDiagnosticRecord(
 private val SAFE_DIAGNOSTIC_KEYS = setOf("task", "exception", "receiverFamily", "staleForMillis",
     "bytesSinceLastValidFrame", "label", "url", "reason", "level", "receiverRxBytes", "txBytes",
     "correctionBytes", "workflowId", "receiverDriverId", "commandProfileId", "usbBaudProfileId",
-    "settingsSetId", "storageKind", "ntripEnabled", "rtklibEnabled", "sessionId")
+    "settingsSetId", "storageKind", "ntripEnabled", "rtklibEnabled", "sessionId") + FAILURE_DIAGNOSTIC_KEYS
 
 data class PerformanceDiagnosticSample(
     val timestampMillis: Long,

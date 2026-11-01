@@ -6,6 +6,17 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class Um980BaudTransitionTest {
+    @Test fun `diagnostic stages distinguish command phases without inventing baud switches`() {
+        val switched = Um980BaudTransitionPlan.build(230400, 921600,
+            listOf("UNLOG COM1"), listOf("CONFIG COM1 921600"), listOf("BESTNAVB COM1 1"))
+        assertEquals(listOf("init-commands", "device-baud-switch", "mode-commands"),
+            switched.steps.filterIsInstance<Um980BaudStep.SendCommands>().map { it.startupStage })
+        val unchanged = Um980BaudTransitionPlan.build(921600, 921600,
+            emptyList(), listOf("CONFIG COM1 921600"), listOf("BESTNAVB COM1 1"))
+        assertEquals(listOf("mode-commands"),
+            unchanged.steps.filterIsInstance<Um980BaudStep.SendCommands>().map { it.startupStage })
+    }
+
     @Test
     fun `different profile and serial baud uses device first host second ordering`() {
         val plan = Um980BaudTransitionPlan.build(
@@ -20,11 +31,11 @@ class Um980BaudTransitionTest {
             listOf(
                 Um980BaudStep.OpenHostAtProfileBaud(230400),
                 Um980BaudStep.SendCommands(listOf("LOG VERSIONA ONCE")),
-                Um980BaudStep.SendCommands(listOf("CONFIG COM1 921600")),
+                Um980BaudStep.SendCommands(listOf("CONFIG COM1 921600"), "device-baud-switch"),
                 Um980BaudStep.PauseAfterDeviceBaudCommand,
                 Um980BaudStep.ReconfigureHostBaud(921600),
                 Um980BaudStep.DrainTransitionalRx,
-                Um980BaudStep.SendCommands(listOf("BESTNAVB COM1 0.05")),
+                Um980BaudStep.SendCommands(listOf("BESTNAVB COM1 0.05"), "mode-commands"),
             ),
             plan.steps,
         )

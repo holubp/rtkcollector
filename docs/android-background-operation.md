@@ -101,6 +101,27 @@ recording/session stops.
 
 ## Limits
 
+Receiver initialization runs on an owned startup worker, not Android's main
+thread. The service establishes its foreground notification and `STARTING`
+state before USB opening, storage opening and command delays. Stop cancels the
+startup generation immediately; cleanup waits off-main for an outstanding open
+or write to return. A wait timeout is not successful finalization: the app stays
+in `STOPPING`, retains writer ownership and does not admit a second recording.
+
+Intentional Stop does not interrupt capture or receiver-maintenance threads in
+file IO. App-private append streams also tolerate an existing thread interrupt.
+After every producer has exited, normal finalization preserves all raw bytes
+successfully accepted with functional storage. This is not a promise that
+unflushed buffers survive process kill, power loss or provider/storage failure.
+
+Recording and idle persistent receiver maintenance use exclusive process-wide
+connection admission. Maintenance cannot open a competing port during `STARTING`
+or `STOPPING`, even if an Activity has stale state. A canceled late writer is
+still retained for finalization; its close failures remain explicit. Advisory
+and uploader shutdown do not interrupt writer-owning callbacks. A failed event
+worker has an independent off-main cleanup fallback if service destruction has
+already shut down its normal executor.
+
 Minimal diagnostics retain explicit stop requests and service lifecycle evidence
 without enabling Verbose/Debug logging. A deliberate user Stop is not an error.
 Events are flushed by a dedicated worker; shutdown must release producers and

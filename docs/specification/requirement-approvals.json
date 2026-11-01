@@ -2,6 +2,30 @@
   "schema_version": 1,
   "approvals": [
     {
+      "requirement_id": "ANDROID-SERVICE-003",
+      "requirement_digest": "sha256:133c596c60871d3402f39611899820109e7e3e9c8d95b8b892067f05e4ce54d2",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-11-01T08:12:42Z",
+      "decision_ref": "2026-11-01-rc11-approved-plan-no-further-approval"
+    },
+    {
+      "requirement_id": "ARCH-WRITER-003",
+      "requirement_digest": "sha256:dbd3ce3f6f2664db07acd4cfd437fef36ea6a382cbc53b71bcd86cecf11509b2",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-11-01T08:12:42Z",
+      "decision_ref": "2026-11-01-rc11-approved-plan-no-further-approval"
+    },
+    {
+      "requirement_id": "ANDROID-DIAGNOSTICS-005",
+      "requirement_digest": "sha256:45a824452b3ac9b9d81ba4aca925aa75c8b8e0000797ae709736b3afabe97c3c",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-11-01T08:12:42Z",
+      "decision_ref": "2026-11-01-rc11-approved-plan-no-further-approval"
+    },
+    {
       "requirement_id": "ANDROID-ALARM-009",
       "requirement_digest": "sha256:b8a9bfa41e4788672739dc0284ff997883856c8680cdee9fa0e0fa10eccb3e78",
       "state": "approved",

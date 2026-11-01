@@ -223,6 +223,20 @@ process-monotonic `elapsedRealtimeMillis`, sanitized `message` and evidence-loss
 counters. Stop events include a `correlationId`. Other existing event schemas
 remain valid in the same JSONL file; consumers must tolerate both.
 
+Startup-stage records add `stage`, `stageElapsedMillis`, `startupGeneration`,
+`processId` and `processInstanceId` where available. Elapsed time is monotonic
+within that startup; the random instance ID lasts only for the current process.
+The same identity on UI-attachment records distinguishes Activity recreation
+from a new process. Early stages before session writers exist are retained in
+the bounded essential app journal rather than inserted into raw capture.
+Failure records can add `artifact`, `operation`, `exceptionClass` and
+`causeClasses` (at most four cause classes, with cycle protection). These are
+bounded, redacted metadata, not stack traces or receiver payloads. Message-less
+exceptions still retain their class. Diagnostic loss does not abort raw cleanup.
+`cleanupFailures` can summarize at most four partial-open cleanup failures with
+their artifact, operation and exception class, bounded to the same attribute
+limit. Deliberate cancellation does not hide a genuine late storage/open error.
+
 The additive stop summary in `session.json` distinguishes `FINALIZED`,
 `EVIDENCE_INCOMPLETE` and `CLOSE_FAILED`. `stopReason` retains the initiator
 (`USER`, `START_FAILURE`, `RAW_STORAGE_FAILURE`, `SERVICE_DESTROYED`);

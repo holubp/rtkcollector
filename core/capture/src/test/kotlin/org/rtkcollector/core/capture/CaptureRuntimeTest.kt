@@ -8,6 +8,26 @@ import java.util.ArrayDeque
 
 class CaptureRuntimeTest {
     @Test
+    fun `close failures retain throwable identity and still close transport`() {
+        val failure = java.nio.channels.ClosedChannelException()
+        val received = mutableListOf<CaptureEvent>()
+        val transport = FakeSerialTransport()
+        val runtime = CaptureRuntime(transport, object : RawRecorder {
+            override fun appendReceiverBytes(bytes: ByteArray) = Unit
+            override fun appendTransmittedBytes(bytes: ByteArray) = Unit
+            override fun appendCorrectionInputBytes(bytes: ByteArray) = Unit
+            override fun close() { throw failure }
+        }, object : CaptureEventSink {
+            override fun recordEvent(event: CaptureEvent) { received += event }
+        })
+        runtime.open()
+        runtime.close()
+        assertEquals(false, transport.isOpen)
+        assertEquals("recorder-close-error", received.single().type)
+        org.junit.jupiter.api.Assertions.assertSame(failure, received.single().failure)
+    }
+
+    @Test
     fun `receiver bytes are recorded byte exact before advisory callbacks`() {
         val recorder = MemoryRecorder()
         val events = MemoryEvents()

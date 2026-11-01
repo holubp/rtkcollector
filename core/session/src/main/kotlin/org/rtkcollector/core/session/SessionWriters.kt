@@ -4,6 +4,7 @@ import java.io.BufferedOutputStream
 import java.io.Closeable
 import java.io.IOException
 import java.io.OutputStream
+import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -168,7 +169,9 @@ class SessionWriters private constructor(
             Files.createDirectories(sessionDirectory)
             val openedStreams = mutableListOf<OpenedSessionWriterTarget>()
             fun openRequired(artifact: SessionArtifactFile): OutputStream =
-                streamFactory(sessionDirectory.resolve(artifact.fileName)).also { stream ->
+                try { streamFactory(sessionDirectory.resolve(artifact.fileName)) }
+                catch (failure: Throwable) { throw SessionWriterOpenException(artifact.fileName, "open", failure) }
+                .also { stream ->
                     openedStreams += OpenedSessionWriterTarget(artifact, stream)
                 }
             fun openOptional(artifact: SessionArtifactFile): OutputStream? =
@@ -277,11 +280,12 @@ private fun finaliseStream(
 }
 
 private fun SessionWriterTarget.issue(operation: String, error: Throwable): SessionWriterIssue =
-    SessionWriterIssue(
+    SessionWriterIssue.fromFailure(
         artifact = artifact.fileName,
         category = category,
         severity = severity,
-        message = error.message ?: "Failed to $operation ${artifact.fileName}",
+        operation = operation,
+        failure = error,
     )
 
 private fun finaliseOpenedStream(target: OpenedSessionWriterTarget, openingFailure: Throwable) {
@@ -292,7 +296,7 @@ private fun finaliseOpenedStream(target: OpenedSessionWriterTarget, openingFailu
 }
 
 private fun OpenedSessionWriterTarget.cleanupFailure(operation: String, error: Throwable): IOException =
-    IOException("Failed to $operation ${artifact.fileName} during partial session-writer cleanup.", error)
+    SessionWriterCleanupException(artifact.fileName, operation, error)
 
 private fun writeUtf8Text(path: Path, text: String, vararg options: StandardOpenOption) {
     Files.newOutputStream(path, StandardOpenOption.WRITE, *options).use { output ->
@@ -367,12 +371,9 @@ fun exportSessionMetadata(metadata: SessionMetadata): String {
 }
 
 private fun Path.appendStream(): OutputStream {
+    // Android 10 Files streams close their underlying channel on thread interruption.
     return BufferedOutputStream(
-        Files.newOutputStream(
-            this,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.APPEND,
-        ),
+        FileOutputStream(toFile(), true),
     )
 }
 

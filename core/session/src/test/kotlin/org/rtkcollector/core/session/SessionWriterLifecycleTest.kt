@@ -7,6 +7,22 @@ import org.junit.jupiter.api.Test
 
 class SessionWriterLifecycleTest {
     @Test
+    fun `writer failure retains operation and bounded cyclic cause identity without messages`() {
+        val failure = java.nio.channels.ClosedChannelException()
+        val cause = java.io.IOException("password=private")
+        failure.initCause(cause)
+        cause.initCause(failure)
+        val issue = SessionWriterIssue.fromFailure(
+            "receiver-rx.raw", SessionWriterIssueCategory.RAW_RX,
+            SessionWriterIssueSeverity.FATAL, "flush", failure,
+        )
+        assertEquals("flush", issue.operation)
+        assertEquals("java.nio.channels.ClosedChannelException", issue.exceptionClass)
+        assertEquals(listOf("java.io.IOException"), issue.causeClasses)
+        assertEquals("Failed to flush receiver-rx.raw", issue.message)
+    }
+
+    @Test
     fun `report with only sidecar issue is degraded but raw safe`() {
         val report = SessionWriterCloseReport(
             issues = listOf(

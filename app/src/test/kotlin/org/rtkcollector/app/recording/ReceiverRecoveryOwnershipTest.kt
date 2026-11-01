@@ -9,6 +9,50 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 @org.junit.jupiter.api.Timeout(20)
 class ReceiverRecoveryOwnershipTest {
+    @Test fun `capture self-cleared before barrier lookup still requires fresh USB retirement`() {
+        var retireCalls = 0
+        var lateHandle = false
+        assertFalse(retireAfterCaptureBarrier(
+            retire = { retireCalls++; !lateHandle },
+            awaitProducer = { lateHandle = true; true }, // Producer acquired a handle, then self-cleared.
+        ))
+        assertEquals(2, retireCalls)
+    }
+
+    @Test fun `initial handle retirement does not waive a still-running capture producer`() {
+        var retireCalls = 0
+        assertFalse(retireAfterCaptureBarrier(retire = { retireCalls++; true }, awaitProducer = { false }))
+        assertEquals(1, retireCalls)
+    }
+
+    @Test fun `failed connection close retains ownership until retry succeeds`() {
+        val owner = ReceiverConnectionOwnership()
+        val lease = requireNotNull(owner.tryAcquire())
+        var attempts = 0
+        var reports = 0
+        retireReceiverConnection(
+            close = { if (++attempts == 1) throw java.io.IOException() },
+            failed = { reports++; assertTrue(owner.isOwned) },
+            pause = { assertTrue(owner.isOwned) },
+        )
+        lease.close()
+        assertEquals(2, attempts)
+        assertEquals(1, reports)
+        assertFalse(owner.isOwned)
+    }
+
+    @Test fun `recording and idle maintenance admission are exclusive through cleanup`() {
+        val ownership = ReceiverConnectionOwnership()
+        val recording = requireNotNull(ownership.tryAcquire())
+        assertNull(ownership.tryAcquire())
+        recording.close()
+        val maintenance = requireNotNull(ownership.tryAcquire())
+        recording.close()
+        assertNull(ownership.tryAcquire(), "a stale release must not release the new owner")
+        maintenance.close()
+        requireNotNull(ownership.tryAcquire()).close()
+    }
+
     @Test fun `read begun before detach cannot clear the new outage`() {
         val fence = ReceiverReadRecoveryFence()
         val oldRead = fence.beforeRead()

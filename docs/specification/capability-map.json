@@ -1115,9 +1115,169 @@
       "pattern": "docs/superpowers/specs/2026-10-30-supporting-requirement-coverage-design.md",
       "category": "documentation",
       "reason": "Proposed supporting-coverage assurance design; not self-realization or approval."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-11-01-p30pro-recording-safety-design.md",
+      "category": "documentation",
+      "reason": "Approved recording-safety design and private-evidence conclusions."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md",
+      "category": "documentation",
+      "reason": "Approved checkpointed recording-safety implementation and release plan."
     }
   ],
   "capabilities": [
+    {
+      "id": "CAP-RECORDING-START-STOP-SAFETY-001",
+      "name": "Responsive startup, cancellation-safe writers and failure identity",
+      "status": "active",
+      "requirement_ids": [
+        "ANDROID-SERVICE-003",
+        "ARCH-WRITER-003",
+        "ANDROID-DIAGNOSTICS-005",
+        "ARCH-WRITER-002"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003",
+            "ARCH-WRITER-003",
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingStartupOwner.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003",
+            "ARCH-WRITER-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/NtripUpdatePolicy.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingServiceState.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/usb/AndroidUsbSerialTransport.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003",
+            "ARCH-WRITER-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingCancellation.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003",
+            "ARCH-WRITER-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/ReceiverRecoveryOwnership.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003",
+            "ARCH-WRITER-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/receiver/PersistentReceiverWritePolicy.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingSessionWriters.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003",
+            "ARCH-WRITER-003",
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/Um980BaudTransition.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/FailureDiagnostics.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsModels.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnostics.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
+          "requirement_ids": [
+            "ANDROID-SERVICE-003",
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionWriters.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-003",
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "core/session/src/main/kotlin/org/rtkcollector/core/session/SessionWriterLifecycle.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/CaptureContracts.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/CaptureRuntime.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/RawRecordingDurability.kt",
+          "requirement_ids": [
+            "ANDROID-DIAGNOSTICS-005"
+          ]
+        },
+        {
+          "pattern": "core/capture/src/main/kotlin/org/rtkcollector/core/capture/AdvisoryFanout.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-002"
+          ]
+        },
+        {
+          "pattern": "core/correction/src/main/kotlin/org/rtkcollector/core/correction/NtripCasterUploadController.kt",
+          "requirement_ids": [
+            "ARCH-WRITER-002"
+          ]
+        }
+      ],
+      "supporting_mappings": []
+    },
     {
       "id": "CAP-CAPTURE-RUNTIME-001",
       "name": "Byte-exact capture and Android recording runtime",
@@ -3489,11 +3649,18 @@
     }
   ],
   "approval": {
-    "inventory_digest": "sha256:9675e61473ccc89b160f7cbe775d550d13b36cc962987594a03b318fc8ad2aa2",
+    "inventory_digest": "sha256:5d0e15ea0d667a6aea516193ad820206cc45a785891cbf62b957b2544a0d1985",
     "state": "approved",
     "approved_by": "human:holubp",
-    "approved_at": "2026-10-30T18:06:55Z",
-    "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    "approved_at": "2026-11-01T08:12:42Z",
+    "decision_ref": "2026-11-01-rc11-approved-plan-no-further-approval",
+    "previous_approval": {
+      "inventory_digest": "sha256:9675e61473ccc89b160f7cbe775d550d13b36cc962987594a03b318fc8ad2aa2",
+      "state": "approved",
+      "approved_by": "human:holubp",
+      "approved_at": "2026-10-30T18:06:55Z",
+      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+    }
   },
   "previous_approval": {
     "inventory_digest": "sha256:17ae9240cdee51b9647ef4f0eec48a433e2dbbc1d1d609cd0b7703bdb9628b33",

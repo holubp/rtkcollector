@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 private const val UPLOAD_MESSAGE_RATE_WINDOW_MILLIS = 60_000L
+private val DEFAULT_UPLOAD_DELAY: (Long) -> Unit = {}
 
 data class NtripCasterUploadRuntimeConfig(
     val request: NtripCasterUploadRequest,
@@ -56,7 +57,7 @@ class NtripCasterUploadController(
     private val sessionFactory: (NtripCasterUploadRuntimeConfig) -> CasterUploadSession = { config ->
         ClientCasterUploadSession(NtripCasterUploadClient(config.request))
     },
-    private val delay: (Long) -> Unit = { Thread.sleep(it) },
+    private val delay: (Long) -> Unit = DEFAULT_UPLOAD_DELAY,
     private val clockMillis: () -> Long = { System.currentTimeMillis() },
     private val eventSink: ((NtripCasterUploadEvent) -> Unit)? = null,
 ) {
@@ -67,7 +68,7 @@ class NtripCasterUploadController(
             onState: (NtripConnectionState) -> Unit,
             writeRtcmBytes: (OutputStream) -> Unit,
         ) -> NtripCasterUploadResult,
-        delay: (Long) -> Unit = { Thread.sleep(it) },
+        delay: (Long) -> Unit = DEFAULT_UPLOAD_DELAY,
         clockMillis: () -> Long = { System.currentTimeMillis() },
         eventSink: ((NtripCasterUploadEvent) -> Unit)? = null,
     ) : this(
@@ -102,6 +103,7 @@ class NtripCasterUploadController(
     private val finalSummaryEmitted = AtomicBoolean(false)
     private val stats = UploadStats()
     private val lifecycleLock = Any()
+    private val retryWaitLock = Object()
 
     @Volatile
     private var running = false
@@ -111,6 +113,9 @@ class NtripCasterUploadController(
 
     @Volatile
     private var activePolicy: NtripCasterUploadPolicy = NtripCasterUploadPolicy()
+
+    @Volatile
+    private var inInjectedDelay = false
 
     fun start(config: NtripCasterUploadRuntimeConfig) {
         check(stop()) { "Previous NTRIP caster upload worker did not stop." }
@@ -139,8 +144,10 @@ class NtripCasterUploadController(
     }
 
     fun offer(bytes: ByteArray, messageType: Int? = null): Boolean {
-        if (!running) return false
-        val accepted = queue.offer(UploadChunk(bytes.copyOf(), messageType))
+        val accepted = synchronized(lifecycleLock) {
+            if (!running) return false
+            queue.offer(UploadChunk(bytes.copyOf(), messageType))
+        }
         if (!accepted) {
             bytesDropped.addAndGet(bytes.size.toLong())
             state.compareAndSet("STREAMING", "DEGRADED")
@@ -157,11 +164,14 @@ class NtripCasterUploadController(
         val (thread, session) = synchronized(lifecycleLock) {
             running = false
             queue.clear()
+            if (inInjectedDelay && worker !== Thread.currentThread()) worker?.interrupt()
             worker to activeSession.get()
         }
+        synchronized(retryWaitLock) {
+            retryWaitLock.notifyAll()
+        }
         runCatching { session?.cancel() }
-        thread?.interrupt()
-        if (thread != null && thread !== Thread.currentThread()) {
+        if (timeoutMillis > 0L && thread != null && thread !== Thread.currentThread()) {
             thread.join(timeoutMillis)
         }
         val terminated = thread == null || (thread !== Thread.currentThread() && !thread.isAlive)
@@ -207,6 +217,7 @@ class NtripCasterUploadController(
         try {
             while (running) {
                 emitEvent("connect_attempt", "Connecting to ${config.mountpointUrl}.")
+                if (!running) break
                 val session = sessionFactory(config)
                 val mayConnect = synchronized(lifecycleLock) {
                     if (running) {
@@ -411,7 +422,40 @@ class NtripCasterUploadController(
     }
 
     private fun sleep(delayMillis: Long) {
-        runCatching { delay(delayMillis) }
+        if (!running || delayMillis <= 0L) return
+        if (delay === DEFAULT_UPLOAD_DELAY) {
+            synchronized(retryWaitLock) {
+                val duration = TimeUnit.MILLISECONDS.toNanos(delayMillis)
+                val started = System.nanoTime()
+                while (running) {
+                    val remaining = duration - (System.nanoTime() - started)
+                    if (remaining <= 0L) break
+                    try { TimeUnit.NANOSECONDS.timedWait(retryWaitLock, remaining) }
+                    catch (_: InterruptedException) {
+                        // Only Stop cancels this wait; unrelated interruption cannot bypass retry policy.
+                    }
+                }
+            }
+            return
+        }
+
+        val shouldDelay = synchronized(lifecycleLock) {
+            if (running) {
+                inInjectedDelay = true
+                true
+            } else {
+                false
+            }
+        }
+        if (!shouldDelay) return
+        try {
+            runCatching { delay(delayMillis) }
+        } finally {
+            synchronized(lifecycleLock) {
+                Thread.interrupted()
+                inInjectedDelay = false
+            }
+        }
     }
 
     private fun nextRetryDelay(

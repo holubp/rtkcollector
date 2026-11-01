@@ -23,6 +23,9 @@ import org.rtkcollector.app.alarms.*
 import org.rtkcollector.app.BuildConfig
 import org.rtkcollector.app.base.BasePositionJsonCodec
 import org.rtkcollector.app.diagnostics.DiagnosticCategory
+import org.rtkcollector.app.diagnostics.failureDiagnosticAttributes
+import org.rtkcollector.app.diagnostics.failureCleanupIssues
+import org.rtkcollector.app.diagnostics.ProcessDiagnosticIdentity
 import org.rtkcollector.app.diagnostics.DiagnosticsSettings
 import org.rtkcollector.app.diagnostics.DiagnosticsStore
 import org.rtkcollector.app.diagnostics.PerformanceDiagnosticSample
@@ -106,6 +109,7 @@ import org.rtkcollector.core.session.AntennaMetadata
 import org.rtkcollector.core.session.NtripSessionMetadata
 import org.rtkcollector.core.session.SerialParameters
 import org.rtkcollector.core.session.SessionWriterCloseReport
+import org.rtkcollector.core.session.SessionWriterOpenException
 import org.rtkcollector.core.session.SessionWriterIssue
 import org.rtkcollector.core.session.SessionWriterIssueCategory
 import org.rtkcollector.core.session.SessionWriterIssueSeverity
@@ -326,6 +330,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private val stopping = AtomicBoolean(false)
     private val shutdownSent = AtomicBoolean(false)
     private val ntripReconnectRequested = AtomicBoolean(false)
+    private val startupOwner = RecordingStartupOwner()
+    private var receiverConnectionLease: java.io.Closeable? = null
+    @Volatile private var retainedStorageFailureReport = SessionWriterCloseReport()
+    @Volatile private var sessionCancellation = RecordingCancellation()
     private val captureThreadLock = Any()
     private val ntripOperationLock = Any()
     private val ntripReconnectThreadLock = Any()
@@ -362,7 +370,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private val satelliteMonitorController = SatelliteMonitorController()
     private var wakeLock: PowerManager.WakeLock? = null
     private var shutdownCommands: List<String> = emptyList()
-    private var state = RecordingServiceState()
+    @Volatile private var state = RecordingServiceState()
     private val diagnosticsSettings by lazy { DiagnosticsSettings(this) }
     private val diagnosticsStore by lazy {
         val settings = diagnosticsSettings
@@ -950,7 +958,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun startRecording(incoming: Intent) {
-        if (stopping.get() || stopDispatcher.isBusy) {
+        if (stopping.get() || stopDispatcher.isBusy || startupOwner.isBusy) {
             RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
             runCatching { broadcastState() }
             return
@@ -959,6 +967,19 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
             return
         }
+        receiverConnectionLease = ProcessReceiverConnectionOwnership.tryAcquire()
+        if (receiverConnectionLease == null) {
+            running.set(false)
+            RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
+            state = state.copy(running = false, lifecycle = RecordingLifecycleState.FAILED,
+                lastError = "Receiver is busy with maintenance. Wait for it to finish before Start.",
+                errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+                errorSeverity = RecordingErrorSeverity.DEGRADED)
+            broadcastState()
+            if (!alarmKeepsAlive()) stopSelf()
+            return
+        }
+        retainedStorageFailureReport = SessionWriterCloseReport()
         synchronized(coordinateAveragingController) {
             coordinateAveragingController.beginSession(System.currentTimeMillis())
             updateCoordinateAverageState(null)
@@ -973,6 +994,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 ?: throw IllegalArgumentException("Validated recording setup expired; retry Start.")
         }.getOrElse {
             RecordingSetupBridge.cancelStart(incoming.getStringExtra(EXTRA_SETUP_TOKEN))
+            releaseReceiverConnectionLease()
             running.set(false)
             state = state.copy(running = false, lifecycle = RecordingLifecycleState.FAILED,
                 lastError = "Validated recording setup is required; retry Start.",
@@ -991,6 +1013,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             authorizedStartIntent(incoming, snapshot)
         } catch (_: Throwable) {
             RecordingSetupBridge.stop(snapshot.sessionId)
+            releaseReceiverConnectionLease()
             activeSetupSessionId = null
             running.set(false)
             state = state.copy(running = false, lifecycle = RecordingLifecycleState.FAILED,
@@ -1003,6 +1026,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             return
         }
         if (stopping.get()) {
+            releaseReceiverConnectionLease()
             running.set(false)
             RecordingSetupBridge.stop(snapshot.sessionId)
             activeSetupSessionId = null
@@ -1064,11 +1088,78 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 AlarmForegroundPolicy.types(recordingOwnsService = true, audioEnabled = false))
             else startForeground(NOTIFICATION_ID, notification(lastNotificationText))
             acquireWakeLock()
+            val admitted = startupOwner.start(snapshot.sessionId,
+                initialize = { lease -> initializeRecording(intent, snapshot, lease) },
+                failed = ::reportStartupFailure)
+            if (!admitted && running.get()) error("Receiver startup could not be scheduled.")
+        } catch (error: Throwable) {
+            failRecordingStart(error)
+        }
+    }
+
+    private fun reportStartupFailure(lease: RecordingStartupLease, error: Throwable) {
+        if (error is ReceiverOperationCancelledException) return
+        val cleanupIssues = failureCleanupIssues(error)
+        val storageFailure = error as? RawRecordingStorageException
+        // Retain facts before the worker releases its barrier, not in a queued UI callback.
+        if (!startupOwner.retainForCleanup(lease) {
+            val primary = storageFailure?.let {
+                SessionWriterIssue.fromFailure(it.artifact ?: "receiver-rx.raw",
+                    if (it.artifact == null || it.artifact == "receiver-rx.raw") SessionWriterIssueCategory.RAW_RX
+                    else SessionWriterIssueCategory.METADATA,
+                    SessionWriterIssueSeverity.FATAL, it.operation ?: "append", it)
+                    .copy(message = "Recording startup storage failed.")
+            }
+            retainedStorageFailureReport = SessionWriterCloseReport(listOfNotNull(primary) + cleanupIssues)
+            stopContext.request(if (storageFailure != null) RecordingStopReason.RAW_STORAGE_FAILURE
+                else RecordingStopReason.START_FAILURE)
+            if (cleanupIssues.isNotEmpty()) stopContext.request(RecordingStopReason.WRITER_CLOSE_FAILURE)
+            state = state.copy(lastError = error.message ?: error.javaClass.simpleName,
+                errorCategory = if (storageFailure != null || cleanupIssues.isNotEmpty()) RecordingErrorCategory.STORAGE
+                    else classifyStartError(error),
+                errorSeverity = RecordingErrorSeverity.FATAL)
+        }) return
+        startupStage(lease, "failed", error)
+        if (!startupOwner.isCurrent(lease) || !running.get()) {
+            runCatching { broadcastState() }
+            return
+        }
+        val report = Runnable {
+            if (startupOwner.isCurrent(lease) && running.get()) failRecordingStart(error)
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) report.run() else alarmMain.post(report)
+    }
+
+    private fun requireStartup(lease: RecordingStartupLease) {
+        if (!startupOwner.isCurrent(lease) || !running.get() || alarmDestroyed) throw ReceiverOperationCancelledException()
+    }
+
+    private fun startupStage(lease: RecordingStartupLease, stage: String, failure: Throwable? = null,
+        operation: String? = null) {
+        val attributes = ProcessDiagnosticIdentity.attributes(android.os.Process.myPid()) + mapOf(
+            "sessionId" to lease.sessionId, "startupGeneration" to lease.generation.toString(),
+            "stage" to stage, "stageElapsedMillis" to
+                ((System.nanoTime() - lease.startedAtNanos).coerceAtLeast(0) / 1_000_000L).toString(),
+        ) + failure?.let { failureDiagnosticAttributes(it, operation = operation) }.orEmpty()
+        val message = "Receiver startup stage: $stage."
+        runCatching { runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(),
+            DiagnosticCategory.SERVICE, if (failure == null) "NOTICE" else "ERROR", message,
+            attributes, code = "startup-stage"), DiagnosticLevel.MINIMAL) }
+        runCatching { sessionDiagnostics?.record("startup-stage", message, if (failure == null) "INFO" else "ERROR",
+            critical = true, fields = attributes) }
+    }
+
+    private fun initializeRecording(intent: Intent, snapshot: RunningSetupSnapshot, lease: RecordingStartupLease) {
+        requireStartup(lease)
+        if (!startupOwner.publish(lease) { sessionCancellation = lease.cancellation }) return
+        startupStage(lease, "accepted")
             val usbDevice = intent.usbDevice() ?: error("No USB device supplied.")
-            usbIdentity.begin(usbDevice.deviceId).also { usbConsent.begin(it.generation) }
-            usbConsent.observe(usbDevice.deviceId)
-            usbRecoveryNeeded.set(false)
-            usbRecoveryStage = null
+            if (!startupOwner.publish(lease) {
+                usbIdentity.begin(usbDevice.deviceId).also { usbConsent.begin(it.generation) }
+                usbConsent.observe(usbDevice.deviceId)
+                usbRecoveryNeeded.set(false)
+                usbRecoveryStage = null
+            }) return
             val usbManager = getSystemService(USB_SERVICE) as UsbManager
             if (!usbManager.hasPermission(usbDevice)) {
                 error("USB permission has not been granted.")
@@ -1113,15 +1204,40 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 device = usbDevice,
                 options = UsbSerialOpenOptions(profileBaud),
             )
+            requireStartup(lease)
+            if (!startupOwner.retainForCleanup(lease) { transport = usbTransport }) return
+            startupStage(lease, "receiver-open")
             runCatching { usbTransport.open() }
                 .onFailure {
                     runCatching { usbTransport.close() }
-                    error(UsbStartAccessDecision.openFailureMessage())
+                    startupStage(lease, "receiver-open", it, operation = "open-usb")
+                    throw IllegalStateException(UsbStartAccessDecision.openFailureMessage(), it)
                 }
-            transport = usbTransport
+            if (!startupOwner.publish(lease) { transport = usbTransport }) {
+                usbTransport.close()
+                return
+            }
 
-            val openedSession = openSessionWriters(intent)
+            requireStartup(lease)
+            startupStage(lease, "storage-open")
+            val openedSession = openSessionWriters(intent) { location ->
+                if (!startupOwner.publish(lease) {
+                    ActiveRecordingSessionRegistry.activate(location)
+                    activeSessionLocation = location
+                }) throw ReceiverOperationCancelledException()
+            }
             val sessionWriters = openedSession.writers
+            if (!startupOwner.retainForCleanup(lease) {
+                writers = sessionWriters
+            }) {
+                sessionWriters.closeAll().issues.forEach { issue ->
+                    recordRuntimeDiagnostic(DiagnosticCategory.STORAGE, issue.severity.name,
+                        { issue.message }, { mapOf("artifact" to issue.artifact,
+                            "operation" to (issue.operation ?: "close"),
+                            "exceptionClass" to (issue.exceptionClass ?: "unknown")) })
+                }
+                return
+            }
             val startedAt = Instant.now().toString()
             val sessionUuid = snapshot.sessionId
             val metadata = SessionMetadata(
@@ -1198,10 +1314,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 validationSummary = "Validated settings set ${snapshot.settingsSetId}; start revision ${snapshot.revision}",
                 expectedArtifacts = intent.getStringArrayListExtra(EXTRA_EXPECTED_ARTIFACTS).orEmpty(),
             )
-            writers = sessionWriters
-            ActiveRecordingSessionRegistry.activate(openedSession.displayPath)
-            activeSessionLocation = openedSession.displayPath
-            activeSessionMetadata = metadata
+            check(startupOwner.retainForCleanup(lease) { activeSessionMetadata = metadata })
+            if (!startupOwner.isCurrent(lease) || !running.get() || alarmDestroyed) return
             val diagnosticLease = ActiveRecordingSessionRegistry.retainWriter(openedSession.displayPath)
             val maintenance = diagnosticMaintenance
             val essentialLog = createSessionDiagnostics(metadata.sessionUuid, sessionWriters,
@@ -1211,10 +1325,16 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             essentialLog.record("session-created", "Session writers opened.", critical = true)
             essentialLog.record("start-accepted", "Validated recording setup accepted.", critical = true)
             essentialLog.record("logging-level", diagnosticsSettings.level.name, critical = true)
-            sessionWriters.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
+            try { sessionWriters.writeSessionJson(sessionJsonWithSetupProvenance(metadata)) }
+            catch (failure: Throwable) { throw RawRecordingStorageException("Unable to write session.json.", failure,
+                artifact = "session.json", operation = "write") }
             intent.getStringExtra(EXTRA_BASE_POSITION_JSON)
                 ?.takeIf { it.isNotBlank() }
-                ?.let(sessionWriters::writeBasePositionJson)
+                ?.let { json ->
+                    try { sessionWriters.writeBasePositionJson(json) }
+                    catch (failure: Throwable) { throw RawRecordingStorageException("Unable to write base-position.json.", failure,
+                        artifact = "base-position.json", operation = "write") }
+                }
             val recorder = SessionRawRecorder(
                 writers = sessionWriters,
                 recordCorrectionInput = intent.getBooleanExtra(EXTRA_RECORD_NTRIP_CORRECTION_INPUT, true),
@@ -1223,7 +1343,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             activeRecorder = recorder
             val eventSink = SessionEventSink(essentialLog)
             activeEventSink = eventSink
-            startRtklibWorkerIfEnabled(intent, sessionWriters)
+            if (!startupOwner.publish(lease) { startRtklibWorkerIfEnabled(intent, sessionWriters) }) return
             val casterUploadConfig = casterUploadRuntimeConfig(intent)
             activeCasterUploadSecurityPolicy = casterUploadConfig?.request?.policy
             val uploadController = casterUploadConfig?.let {
@@ -1238,8 +1358,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             activeTargetBaud = serialBaud
             activeUsbVid = usbDevice.vendorId
             activeUsbPid = usbDevice.productId
-            val asyncAdvisoryFanout = AsyncAdvisoryFanout(
-                delegate = buildAdvisoryFanout(
+            val advisoryDelegate = buildAdvisoryFanout(
                     sessionWriters = sessionWriters,
                     eventSink = eventSink,
                     exportNmea = intent.getBooleanExtra(EXTRA_EXPORT_NMEA, true),
@@ -1251,18 +1370,20 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     ),
                     exportJsonSolution = intent.getBooleanExtra(EXTRA_EXPORT_JSON_SOLUTION, true),
                     casterUploadController = uploadController,
-                ),
-                eventSink = eventSink,
-            )
-            advisoryFanout = asyncAdvisoryFanout
+                )
+            lateinit var asyncAdvisoryFanout: AsyncAdvisoryFanout
+            if (!startupOwner.publish(lease) {
+                asyncAdvisoryFanout = AsyncAdvisoryFanout(delegate = advisoryDelegate, eventSink = eventSink)
+                advisoryFanout = asyncAdvisoryFanout
+            }) return
             val captureRuntime = CaptureRuntime(
                 transport = usbTransport,
                 recorder = recorder,
                 eventSink = eventSink,
                 advisoryFanout = asyncAdvisoryFanout,
             )
-            captureRuntime.open()
             runtime = captureRuntime
+            requireStartup(lease)
 
             solutionCandidates.clear()
             ubloxStreamParser = UbloxStreamParser()
@@ -1273,7 +1394,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             mockLocationRateHz = intent.mockLocationRateHz()
             screenSolutionPolicy = intent.solutionSourcePolicyExtra(EXTRA_SOLUTION_SCREEN_POLICY)
             mockSolutionPolicy = intent.solutionSourcePolicyExtra(EXTRA_SOLUTION_MOCK_POLICY)
-            configureMockLocation(enableMockLocation)
+            configureMockLocation(enableMockLocation, lease)
             val configuredMode = Um980ModeParser.configuredMode(
                 (initCommands + baudSwitchCommands + modeCommands).joinToString("\n"),
             )
@@ -1285,10 +1406,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 modeCommands = modeCommands,
             )
             activeBaudPlan = baudPlan
-            executeBaudTransition(baudPlan, captureRuntime, usbTransport)
+            requireStartup(lease)
+            executeBaudTransition(baudPlan, captureRuntime, usbTransport,
+                onStage = { startupStage(lease, it) })
+            requireStartup(lease)
             activeSerialBaud = serialBaud
             casterUploadConfig?.let { config ->
-                uploadController?.start(config)
+                if (!startupOwner.publish(lease) { uploadController?.start(config) }) return
                 eventSink.recordEvent(
                     CaptureEvent(
                         timestamp = Instant.now().toString(),
@@ -1296,7 +1420,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         message = config.mountpointUrl,
                     ),
                 )
-                state = state.copy(
+                if (!startupOwner.publish(lease) { state = state.copy(
                     baseCasterUploadState = "CONNECTING",
                     baseCasterUploadUrl = config.mountpointUrl,
                     baseCasterUploadRetryMode = config.policy.retry.mode.name,
@@ -1311,14 +1435,14 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         (config.policy.safety.noDataTimeoutMillis / 1_000L).toInt(),
                     baseCasterUploadStopAfterConsecutiveFailures =
                         config.policy.retry.stopAfterConsecutiveFailures,
-                )
+                ) }) return
             }
 
             val commandProfileLabel = intent.getStringExtra(EXTRA_SETTINGS_COMMAND_PROFILE_NAME)
                 ?: intent.getStringExtra(EXTRA_COMMAND_PROFILE_ID)
                 ?: intent.getStringExtra(EXTRA_RECEIVER_PROFILE_ID)
                 ?: "n/a"
-            state = state.copy(
+            if (!startupOwner.publish(lease) { state = state.copy(
                 running = true,
                 lifecycle = RecordingLifecycleState.RECORDING,
                 workflowLabel = intent.getStringExtra(EXTRA_WORKFLOW_NAME) ?: intent.getStringExtra(EXTRA_WORKFLOW_ID) ?: "n/a",
@@ -1342,7 +1466,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 correctionsActive = false,
                 um980Mode = configuredMode?.let { "Commanded $it" } ?: "n/a",
                 mockLocationRateHz = mockLocationRateHz,
-            )
+            ) }) return
             ntripRateWindowStartedAtMillis = System.currentTimeMillis()
             ntripRateWindowCorrectionBytes = 0L
             ntripRateWindowTxBytes = 0L
@@ -1354,7 +1478,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             lastMockPublishedIdentity = null
             lastMockPublishWallClockAtMillis = null
             previousMockResult = null
-            startBestSolutionTicker()
+            if (!startupOwner.publish(lease) { startBestSolutionTicker() }) return
 
             val startedCaptureThread = Thread(
                 {
@@ -1370,13 +1494,16 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 },
                 "rtkcollector-capture",
             )
-            synchronized(captureThreadLock) {
-                captureThread = startedCaptureThread
-            }
-            startedCaptureThread.start()
+            if (!startupOwner.publish(lease) {
+                synchronized(captureThreadLock) { captureThread = startedCaptureThread }
+                startedCaptureThread.start()
+            }) return
             essentialLog.record("capture-started", "Receiver capture worker started.", critical = true)
-            maybeStartNtrip(intent, recorder)
-        } catch (error: Throwable) {
+            startupStage(lease, "capture-started")
+            maybeStartNtrip(intent, recorder, lease)
+    }
+
+    private fun failRecordingStart(error: Throwable) {
             activeSatelliteTelemetry = SatelliteTelemetryCapability.NONE
             activeSatelliteTelemetryObserved = false
             val startErrorCategory = if (
@@ -1399,11 +1526,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 category = state.errorCategory.toDiagnosticCategory(),
                 severity = state.errorSeverity.name,
                 message = { "Recording start failed: ${error.message ?: error.javaClass.simpleName}" },
+                attributes = { failureDiagnosticAttributes(error) +
+                    ProcessDiagnosticIdentity.attributes(android.os.Process.myPid()) },
             )
             broadcastState()
-            sessionDiagnostics?.record("start-failed", "Recording startup failed.", "FATAL", critical = true)
+            runCatching { sessionDiagnostics?.record("start-failed", "Recording startup failed.", "FATAL", critical = true,
+                fields = failureDiagnosticAttributes(error)) }
             stopRecording(sendShutdown = false, reason = RecordingStopReason.START_FAILURE)
-        }
     }
 
     private fun captureLoop(recorder: SessionRawRecorder) {
@@ -1415,7 +1544,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     if (!stopForFatalRawStorageFailure(failure)) handleCaptureReadOrRawFlushFailure(failure, recorder)
                     continue
                 }
-                if (!tryReconnectUsb(recorder) && running.get()) Thread.sleep(1_000)
+                if (!tryReconnectUsb(recorder) && running.get()) sessionCancellation.awaitDelay(1_000)
                 continue
             }
             val readRevision = usbReadFence.beforeRead()
@@ -1481,8 +1610,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun handleCaptureReadOrRawFlushFailure(failure: Throwable, recorder: SessionRawRecorder) {
-        if (!running.get()) return
         if (stopForFatalRawStorageFailure(failure)) return
+        if (!running.get()) return
         usbReadFence.detached {
             alarmReceiverLost.set(true)
             usbRecoveryNeeded.set(true)
@@ -1517,12 +1646,16 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         )
         runCatching { broadcastState() }
         if (running.get() && !tryReconnectUsb(recorder) && running.get()) {
-            Thread.sleep(1_000)
+            sessionCancellation.awaitDelay(1_000)
         }
     }
 
     private fun stopForFatalRawStorageFailure(failure: Throwable): Boolean {
         if (captureFailureDisposition(failure) != CaptureFailureDisposition.FATAL_STORAGE_STOP) return false
+        val storage = failure as RawRecordingStorageException
+        retainedStorageFailureReport = SessionWriterCloseReport(listOf(SessionWriterIssue.fromFailure(
+            storage.artifact ?: "receiver-rx.raw", SessionWriterIssueCategory.RAW_RX, SessionWriterIssueSeverity.FATAL,
+            storage.operation ?: "append", storage).copy(message = "Raw recording storage failed.")))
         state = state.copy(
             lastError = failure.message,
             errorCategory = RecordingErrorCategory.STORAGE,
@@ -1533,7 +1666,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             category = DiagnosticCategory.STORAGE,
             severity = RecordingErrorSeverity.FATAL.name,
             message = { failure.message ?: "Raw recording storage failed." },
+            attributes = { failureDiagnosticAttributes(failure) + ProcessDiagnosticIdentity.attributes(android.os.Process.myPid()) },
         )
+        runCatching { sessionDiagnostics?.record("raw-storage-failed", failure.message ?: "Raw recording storage failed.",
+            "FATAL", critical = true, fields = failureDiagnosticAttributes(failure)) }
         runCatching { broadcastState() }
         stopRecording(sendShutdown = false, reason = RecordingStopReason.RAW_STORAGE_FAILURE)
         return true
@@ -1589,7 +1725,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             usbRecoveryStatus("opening", "USB access available; reopening and initializing receiver.")
             synchronized(runtimeLock) {
                 receiverTx.run({ running.get() && usbIdentity.isCurrent(lease) }) {
-                    runCatching { transport?.close() }
+                    transport?.close()
+                    reconnectTransport?.close()
+                    reconnectTransport = null
                     val usbTransport = AndroidUsbSerialTransport(
                         usbManager = usbManager, device = device, options = UsbSerialOpenOptions(activeProfileBaud),
                     )
@@ -1610,8 +1748,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         }
                         check(promoted) { "Recording stopped during USB promotion." }
                     } finally {
+                        if (!promoted) usbTransport.close()
                         if (reconnectTransport === usbTransport) reconnectTransport = null
-                        if (!promoted) runCatching { usbTransport.close() }
                     }
                 }
             }
@@ -1628,11 +1766,14 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private fun maybeStartNtrip(
         intent: Intent,
         recorder: SessionRawRecorder,
+        startupLease: RecordingStartupLease,
     ) {
+        if (!startupOwner.isCurrent(startupLease) || !running.get()) return
         if (!intent.getBooleanExtra(EXTRA_NTRIP_ENABLED, false)) {
-            activeNtripRuntimeConfig = null
-            state = state.copy(ntripState = "Disabled", correctionsActive = false)
-            broadcastState()
+            if (startupOwner.publish(startupLease) {
+                activeNtripRuntimeConfig = null
+                state = state.copy(ntripState = "Disabled", correctionsActive = false)
+            }) broadcastState()
             return
         }
         val config = ntripRuntimeConfig(intent)
@@ -1643,6 +1784,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             config = config,
             recorder = recorder,
             sendCorrectionsToReceiver = intent.getBooleanExtra(EXTRA_NTRIP_SEND_TO_RECEIVER, true),
+            startupLease = startupLease,
         )
     }
 
@@ -1650,9 +1792,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         config: NtripRuntimeConfig,
         recorder: SessionRawRecorder,
         sendCorrectionsToReceiver: Boolean,
+        startupLease: RecordingStartupLease? = null,
     ) {
         val configAccepted = synchronized(ntripOperationLock) {
-            if (!running.get()) {
+            if (!running.get() || (startupLease != null && !startupOwner.isCurrent(startupLease))) {
                 false
             } else {
                 activeNtripRuntimeConfig = config
@@ -1661,7 +1804,20 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         }
         if (!configAccepted) return
         val ntripRtcmExtractor = Rtcm3Extractor(validateCrc = true)
-        val controller = NtripRuntimeController(
+        lateinit var controller: NtripRuntimeController
+        val statusDelivery = LatestNtripStatusDelivery<NtripRuntimeSnapshot>(
+            schedule = { alarmMain.post(it); Unit },
+            deliver = { snapshot ->
+                if (running.get() && ntripController === controller &&
+                    (startupLease == null || startupOwner.isCurrent(startupLease))) {
+                    runCatching { handleNtripSnapshot(snapshot) }.onFailure { error ->
+                        recordRuntimeDiagnostic(DiagnosticCategory.NTRIP, "ERROR",
+                            { "NTRIP status display failed: ${error.javaClass.simpleName}" })
+                    }
+                }
+            },
+        )
+        controller = NtripRuntimeController(
             clientFactory = { runtimeConfig ->
                 DefaultNtripRuntimeClient(
                     NtripClient(
@@ -1670,7 +1826,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     ),
                 )
             },
-            emit = ::handleNtripSnapshot,
+            emit = statusDelivery::offer,
             onRtcmBytes = corrections@{ bytes ->
                 if (running.get()) {
                     val healthEvents = recordingHealthMonitor.recordCorrectionBytes(
@@ -1716,8 +1872,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         )
         synchronized(ntripOperationLock) {
             if (!running.get() || activeNtripRuntimeConfig != config) return
-            ntripController = controller
-            controller.start(config)
+            val start = { ntripController = controller; controller.start(config); Unit }
+            if (startupLease == null) start() else startupOwner.publish(startupLease, start)
         }
     }
 
@@ -2545,7 +2701,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun writePersistentReceiverConfig(intent: Intent) {
-        if (!running.get()) {
+        if (!running.get() || state.lifecycle != RecordingLifecycleState.RECORDING) {
             state = state.copy(
                 lastError = "Cannot write receiver configuration: recording service is not connected.",
                 errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
@@ -2702,7 +2858,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             check(running.get() && runtime === captureRuntime) { "Recording stopped or receiver connection replaced." }
             when (step) {
                 is Um980PersistentBaudStep.SendCommands -> sendCommandLines(captureRuntime, step.commands)
-                Um980PersistentBaudStep.PauseAfterDeviceBaudCommands -> Thread.sleep(500)
+                Um980PersistentBaudStep.PauseAfterDeviceBaudCommands -> check(sessionCancellation.awaitDelay(500)) {
+                    "Receiver operation canceled."
+                }
                 is Um980PersistentBaudStep.ReconfigureHostBaud -> {
                     usbTransport.reconfigureBaud(step.baud)
                     activeSerialBaud = step.baud
@@ -2756,7 +2914,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     return collected
                 }
             } else {
-                Thread.sleep(50)
+                if (!sessionCancellation.awaitDelay(50)) break
             }
         }
         flushActiveRawNow()
@@ -2778,7 +2936,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     return collected
                 }
             } else {
-                Thread.sleep(50)
+                if (!sessionCancellation.awaitDelay(50)) break
             }
         }
         flushActiveRawNow()
@@ -2786,6 +2944,10 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun stopRecording(sendShutdown: Boolean, reason: RecordingStopReason) {
+        val canceledStartup = startupOwner.currentLease?.takeIf { !it.cancellation.isCancelled }
+        startupOwner.cancel()
+        sessionCancellation.cancel()
+        if (startupOwner.isBusy) canceledStartup?.let { startupStage(it, "canceled") }
         if (reason == RecordingStopReason.USER) {
             alarmController?.userStop(alarmGeneration)
             runCatching { alarmAudio.cancel(alarmGeneration) }
@@ -2832,17 +2994,16 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             ntripController == null &&
             casterUploadController == null &&
             rtklibWorker == null &&
-            advisoryFanout == null
+            advisoryFanout == null &&
+            !startupOwner.isBusy
         ) {
+            releaseReceiverConnectionLease()
             stopping.set(false)
             return
         }
         routineStateBroadcastRateLimiter.reset()
         state = state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false)
-        stopDispatcher.request(fence = {
-            synchronized(captureThreadLock) { captureThread }?.interrupt()
-            persistentWriteThread?.interrupt()
-        }, cleanup = { finishRecordingStop(sendShutdown) }, failed = { error ->
+        stopDispatcher.request(fence = {}, cleanup = { finishRecordingStop(sendShutdown) }, failed = { error ->
             stopping.set(true)
             val cleanupState = if (stopDispatcher.isBusy) "cleanup failed and will retry" else
                 "cleanup worker could not start; restart the app after preserving existing files"
@@ -2856,6 +3017,22 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun finishRecordingStop(sendShutdown: Boolean) {
+        if (startupOwner.isBusy) {
+            // Cancel USB, not files; startup must release ownership before producer teardown.
+            runCatching { transport?.close() }
+            runCatching { reconnectTransport?.close() }
+            while (!startupOwner.awaitStopped(1_000)) {
+                startupOwner.currentLease?.let { lease -> startupOwner.retainForCleanup(lease) {
+                    state = if (state.errorSeverity == RecordingErrorSeverity.FATAL)
+                        state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false)
+                    else state.copy(lifecycle = RecordingLifecycleState.STOPPING, running = false,
+                        lastError = "Stopping: waiting for receiver initialization to release session writers.",
+                        errorCategory = RecordingErrorCategory.SERVICE_LIFECYCLE,
+                        errorSeverity = RecordingErrorSeverity.DEGRADED)
+                } }
+                runCatching { broadcastState() }
+            }
+        }
         // Drain prior NTRIP admission off the service callback, after running was fenced false.
         synchronized(ntripReconnectThreadLock) { synchronized(ntripOperationLock) { Unit } }
         recordSessionEvent("shutdown-started", "Stopping recording producers.")
@@ -2875,7 +3052,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     lastError = error.message,
                     errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                     errorSeverity = RecordingErrorSeverity.DEGRADED,
-                )
+                ).preservingFatalError(state)
                 runCatching { broadcastState() }
             }
         }
@@ -3003,26 +3180,34 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         completeRecordingStop(activeCasterUpload?.snapshot())
     }
 
-    private fun tryStopCapture(timeoutMillis: Long): Boolean {
-        // Either transport may currently own the USB connection during a reconnect transition.
-        runCatching { transport?.close() }
-        runCatching { reconnectTransport?.close() }
-        val thread = synchronized(captureThreadLock) { captureThread } ?: return true
-        thread.interrupt()
-        if (thread === Thread.currentThread()) return false
-        try {
-            thread.join(timeoutMillis)
-        } catch (_: InterruptedException) {
-            Thread.interrupted()
-            return false
-        }
-        if (thread.isAlive) return false
-        synchronized(captureThreadLock) {
-            if (captureThread === thread) {
-                captureThread = null
+    private fun tryStopCapture(timeoutMillis: Long): Boolean = retireAfterCaptureBarrier(
+        retire = { retireUsbConnectionsForStop(timeoutMillis) },
+        awaitProducer = await@{
+            val thread = synchronized(captureThreadLock) { captureThread } ?: return@await true
+            if (thread === Thread.currentThread()) return@await false
+            try { thread.join(timeoutMillis) } catch (_: InterruptedException) {
+                Thread.interrupted(); return@await false
             }
+            if (thread.isAlive) return@await false
+            synchronized(captureThreadLock) { if (captureThread === thread) captureThread = null }
+            true
+        },
+    )
+
+    private fun retireUsbConnectionsForStop(timeoutMillis: Long): Boolean {
+        // Either transport may currently own the USB connection during a reconnect transition.
+        val closeResults = listOf(runCatching { transport?.close() }, runCatching { reconnectTransport?.close() })
+        val retired = closeResults.all { it.isSuccess }
+        closeResults.mapNotNull { it.exceptionOrNull() }.forEach { failure ->
+            recordRuntimeDiagnostic(DiagnosticCategory.USB, "ERROR", { "USB handle close failed; cleanup will retry." },
+                { failureDiagnosticAttributes(failure, artifact = "usb-connection", operation = "close") +
+                    ProcessDiagnosticIdentity.attributes(android.os.Process.myPid()) })
         }
-        return true
+        if (!retired && timeoutMillis > 0) {
+            try { Thread.sleep(timeoutMillis.coerceAtMost(1_000)) }
+            catch (_: InterruptedException) { Thread.interrupted() }
+        }
+        return retired
     }
 
     private fun tryStopNtripReconnect(timeoutMillis: Long): Boolean {
@@ -3046,7 +3231,6 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
 
     private fun tryStopPersistentWrite(timeoutMillis: Long): Boolean {
         val thread = synchronized(persistentWriteThreadLock) { persistentWriteThread } ?: return true
-        thread.interrupt()
         if (thread !== Thread.currentThread()) {
             try {
                 thread.join(timeoutMillis)
@@ -3127,10 +3311,21 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 essential.seal()
             }
         }
-        val finalization = closeRecordingSessionWriters(writers, essential)
+        val closed = closeRecordingSessionWriters(writers, essential)
+        val finalization = if (retainedStorageFailureReport.issues.isEmpty()) closed else RecordingSessionFinalization(
+            "CLOSE_FAILED", SessionWriterCloseReport(closed.closeReport.issues + retainedStorageFailureReport.issues))
         synchronized(runtimeLock) {
             val closeReport = finalization.closeReport
             if (closeReport.issues.isNotEmpty()) {
+                closeReport.issues.forEach { issue ->
+                    recordRuntimeDiagnostic(DiagnosticCategory.STORAGE, issue.severity.name,
+                        { issue.message }, { buildMap {
+                            put("artifact", issue.artifact)
+                            issue.operation?.let { put("operation", it) }
+                            issue.exceptionClass?.let { put("exceptionClass", it) }
+                            if (issue.causeClasses.isNotEmpty()) put("causeClasses", issue.causeClasses.joinToString(" -> ").take(256))
+                        } + ProcessDiagnosticIdentity.attributes(android.os.Process.myPid()) })
+                }
                 stopContext.request(RecordingStopReason.WRITER_CLOSE_FAILURE)
                 if (!alarmDestroyed && stopContext.initiator != RecordingStopReason.USER) alarmController?.post(AlarmCommand.TerminalStop(
                     alarmGeneration, RecordingAlarmEvidence.STORAGE, "Additional recording close failure.", SystemClock.elapsedRealtime()))
@@ -3143,7 +3338,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         RecordingErrorSeverity.DEGRADED
                     },
                     rawRecordingActive = false,
-                )
+                ).preservingFatalError(state)
                 recordRuntimeDiagnostic(
                     category = DiagnosticCategory.STORAGE,
                     severity = state.errorSeverity.name,
@@ -3166,8 +3361,11 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                     writers?.writeSessionJson(sessionJsonWithSetupProvenance(metadata))
                     activeSessionMetadata = metadata
                 }
-            }.onFailure {
-                recordRuntimeDiagnostic(DiagnosticCategory.STORAGE, "ERROR", { "Session stop metadata could not be persisted." })
+            }.onFailure { failure ->
+                recordRuntimeDiagnostic(DiagnosticCategory.STORAGE, "ERROR", { "Session stop metadata could not be persisted." },
+                    { failureDiagnosticAttributes(failure, artifact = "session.json", operation = "write") +
+                        ProcessDiagnosticIdentity.attributes(android.os.Process.myPid()) +
+                        mapOf("sessionId" to (activeSessionMetadata?.sessionUuid ?: "unknown")) })
             }
         }
         activeSessionLocation?.let(ActiveRecordingSessionRegistry::deactivate)
@@ -3262,6 +3460,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             mockLocationState = "Disabled",
             ubloxFrequency = "Frequency RAWX/SFRBX/TM2/NAV-PVT/NAV-SAT/NAV-DOP/GGA -/-/-/-/-/-/- Hz",
         )
+        releaseReceiverConnectionLease()
         stopping.set(false)
         runCatching { broadcastState() }
         alarmMain.post {
@@ -3284,7 +3483,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         compiled.forEach { command ->
             receiverTx.run(current) {
                 captureRuntime.sendToReceiver(command.payload)
-                Thread.sleep(100)
+                if (phase == CompilePhase.STOP) Thread.sleep(100)
+                else if (!sessionCancellation.awaitDelay(100) || !current()) throw ReceiverOperationCancelledException()
             }
         }
     }
@@ -3294,16 +3494,27 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         captureRuntime: CaptureRuntime,
         usbTransport: AndroidUsbSerialTransport,
         current: () -> Boolean = { running.get() && runtime === captureRuntime },
+        onStage: (String) -> Unit = {},
     ) {
         receiverTx.run(current) {
             plan.steps.forEach { step ->
-                check(current()) { "Receiver initialization canceled." }
+                if (!current()) throw ReceiverOperationCancelledException()
                 when (step) {
                     is Um980BaudStep.OpenHostAtProfileBaud -> Unit
-                    is Um980BaudStep.SendCommands -> sendCommandLines(captureRuntime, step.commands, current = current)
-                    Um980BaudStep.PauseAfterDeviceBaudCommand -> Thread.sleep(500)
-                    is Um980BaudStep.ReconfigureHostBaud -> usbTransport.reconfigureBaud(step.baud)
-                    Um980BaudStep.DrainTransitionalRx -> drainAfterProfile(captureRuntime, current)
+                    is Um980BaudStep.SendCommands -> {
+                        onStage(step.startupStage)
+                        sendCommandLines(captureRuntime, step.commands, current = current)
+                    }
+                    Um980BaudStep.PauseAfterDeviceBaudCommand ->
+                        if (!sessionCancellation.awaitDelay(500) || !current()) throw ReceiverOperationCancelledException()
+                    is Um980BaudStep.ReconfigureHostBaud -> {
+                        onStage("host-baud")
+                        usbTransport.reconfigureBaud(step.baud)
+                    }
+                    Um980BaudStep.DrainTransitionalRx -> {
+                        onStage("rx-drain")
+                        drainAfterProfile(captureRuntime, current)
+                    }
                 }
             }
         }
@@ -3441,9 +3652,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun drainAfterProfile(captureRuntime: CaptureRuntime, current: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + PROFILE_DRAIN_MILLIS
-        while (System.currentTimeMillis() < deadline) {
-            check(current()) { "Receiver initialization canceled." }
+        val deadline = SystemClock.elapsedRealtime() + PROFILE_DRAIN_MILLIS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (!current()) throw ReceiverOperationCancelledException()
             captureRuntime.readOnce(READ_BUFFER_BYTES)
             flushActiveRawIfDue()
         }
@@ -3458,16 +3669,20 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         activeRecorder?.flushRawNow(SystemClock.elapsedRealtime())
     }
 
-    private fun openSessionWriters(intent: Intent): OpenedRecordingSession =
+    private fun openSessionWriters(intent: Intent, onSessionCreated: (String) -> Unit = {}): OpenedRecordingSession =
         try {
-            openSessionWritersUnchecked(intent)
+            openSessionWritersUnchecked(intent, onSessionCreated)
+        } catch (error: ReceiverOperationCancelledException) {
+            throw error
         } catch (error: RawRecordingStorageException) {
             throw error
         } catch (error: Throwable) {
-            throw RawRecordingStorageException("Unable to open recording session storage.", error)
+            throw RawRecordingStorageException("Unable to open recording session storage.", error,
+                artifact = (error as? SessionWriterOpenException)?.artifact ?: "session-directory",
+                operation = (error as? SessionWriterOpenException)?.operation ?: "open")
         }
 
-    private fun openSessionWritersUnchecked(intent: Intent): OpenedRecordingSession {
+    private fun openSessionWritersUnchecked(intent: Intent, onSessionCreated: (String) -> Unit): OpenedRecordingSession {
         val sessionName = createSessionName()
         return if (intent.getStringExtra(EXTRA_STORAGE_KIND) == "SAF_TREE") {
             val treeUriText = intent.getStringExtra(EXTRA_STORAGE_TREE_URI)
@@ -3480,6 +3695,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 resolver = contentResolver,
                 treeUri = Uri.parse(treeUriText),
                 sessionName = sessionName,
+                onSessionCreated = { onSessionCreated(it.toString()) },
             )
             OpenedRecordingSession(
                 displayPath = safWriters.sessionUri.toString(),
@@ -3487,6 +3703,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             )
         } else {
             val directory = createSessionDirectory(sessionName)
+            onSessionCreated(directory.toString())
             OpenedRecordingSession(
                 displayPath = directory.toString(),
                 writers = PathRecordingSessionWriters.open(directory),
@@ -3551,6 +3768,11 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private fun releaseWakeLock() {
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
+    }
+
+    private fun releaseReceiverConnectionLease() {
+        receiverConnectionLease?.close()
+        receiverConnectionLease = null
     }
 
     private fun createNotificationChannel() {
@@ -4198,19 +4420,30 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     private fun Double.formatFixed(decimals: Int): String =
         "%.${decimals}f".format(java.util.Locale.US, this)
 
-    private fun configureMockLocation(enabled: Boolean) {
+    private fun configureMockLocation(enabled: Boolean, startupLease: RecordingStartupLease? = null) {
+        fun current(): Boolean = running.get() && !stopping.get() && !alarmDestroyed &&
+            (startupLease == null || startupOwner.isCurrent(startupLease))
+        fun publish(action: () -> Unit): Boolean = if (startupLease != null) startupOwner.publish(startupLease, action)
+            else if (current()) { action(); true } else false
+        if (!current()) return
         if (!enabled) {
             teardownMockLocation()
             return
         }
         val manager = getSystemService(android.location.LocationManager::class.java)
         if (manager == null) {
-            mockLocationPublisher = null
+            publish { mockLocationPublisher = null
             state = state.copy(
                 mockLocationState =
                     org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED.name,
-            )
+            ) }
             return
+        }
+        var added = false
+        fun retireProvider() {
+            if (!added) return
+            runCatching { manager.setTestProviderEnabled(android.location.LocationManager.GPS_PROVIDER, false) }
+            runCatching { manager.removeTestProvider(android.location.LocationManager.GPS_PROVIDER) }
         }
         val outcome = runCatching {
             manager.addTestProvider(
@@ -4225,12 +4458,17 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 android.location.provider.ProviderProperties.POWER_USAGE_LOW,
                 android.location.provider.ProviderProperties.ACCURACY_FINE,
             )
+            added = true
+            if (!current()) throw ReceiverOperationCancelledException()
             manager.setTestProviderEnabled(
                 android.location.LocationManager.GPS_PROVIDER,
                 true,
             )
         }
+        if (!current()) { retireProvider(); return }
         if (outcome.isFailure) {
+            retireProvider()
+            if (!publish {
             mockLocationPublisher = null
             previousMockResult =
                 org.rtkcollector.app.mocklocation.MockLocationPublishResult.NOT_PERMITTED
@@ -4240,6 +4478,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 errorCategory = RecordingErrorCategory.PARSER_EXPORT,
                 errorSeverity = RecordingErrorSeverity.DEGRADED,
             )
+            }) return
             recordRuntimeDiagnostic(
                 category = DiagnosticCategory.MOCK_LOCATION,
                 severity = RecordingErrorSeverity.DEGRADED.name,
@@ -4247,12 +4486,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             )
             return
         }
-        mockLocationPublisher = org.rtkcollector.app.mocklocation.MockLocationPublisher(
+        val publisher = org.rtkcollector.app.mocklocation.MockLocationPublisher(
             org.rtkcollector.app.mocklocation.AndroidMockLocationSink(
                 manager,
                 android.location.LocationManager.GPS_PROVIDER,
             ),
         )
+        if (!publish { mockLocationPublisher = publisher }) retireProvider()
     }
 
     private fun teardownMockLocation() {
@@ -4297,7 +4537,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                 lastError = error.message ?: error.javaClass.simpleName,
                 errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
                 errorSeverity = severity,
-            )
+            ).preservingFatalError(state)
             broadcastState()
             if (phase == CompilePhase.START) {
                 throw error
@@ -4746,7 +4986,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             lastError = if (uploadHasProblem) snapshot.lastError else lastError,
             errorCategory = if (uploadHasProblem) RecordingErrorCategory.NTRIP else errorCategory,
             errorSeverity = if (uploadHasProblem) RecordingErrorSeverity.DEGRADED else errorSeverity,
-        )
+        ).preservingFatalError(this)
     }
 
     private fun RecordingSessionWriters.appendCasterUploadEvent(event: NtripCasterUploadEvent) {
@@ -4831,7 +5071,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             try {
                 writers.appendReceiverRx(bytes)
             } catch (error: Throwable) {
-                throw RawRecordingStorageException("Unable to write receiver-rx.raw.", error)
+                throw RawRecordingStorageException("Unable to write receiver-rx.raw.", error,
+                    artifact = "receiver-rx.raw", operation = "append")
             }
             receiverRxBytes += bytes.size
             unflushedReceiverRxBytes += bytes.size
@@ -4864,7 +5105,8 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             try {
                 writers.flushRaw()
             } catch (error: Throwable) {
-                throw RawRecordingStorageException("Unable to flush receiver-rx.raw.", error)
+                throw RawRecordingStorageException("Unable to flush receiver-rx.raw.", error,
+                    artifact = "receiver-rx.raw", operation = "flush")
             }
             unflushedReceiverRxBytes = 0
             lastRawFlushElapsedRealtimeMillis = nowElapsedRealtimeMillis
@@ -4877,7 +5119,11 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
 
     private class SessionEventSink(private val diagnostics: SessionDiagnostics) : CaptureEventSink {
         override fun recordEvent(event: CaptureEvent) {
-            diagnostics.record(event.type, event.message)
+            val fields = event.failure?.let { failureDiagnosticAttributes(it,
+                artifact = if (event.type == "recorder-close-error") "receiver-rx.raw" else null,
+                operation = if (event.type == "recorder-close-error") "flush" else "close") }.orEmpty()
+            diagnostics.record(event.type, event.message, if (event.failure == null) "INFO" else "ERROR",
+                critical = event.failure != null, fields = fields)
         }
     }
 

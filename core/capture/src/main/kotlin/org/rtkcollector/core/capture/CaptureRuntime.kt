@@ -55,9 +55,9 @@ class CaptureRuntime(
 
     fun close() {
         runCatching { recorder.close() }
-            .onFailure { recordEvent("recorder-close-error", it.message ?: "Recorder close failed.") }
+            .onFailure { recordEvent("recorder-close-error", it.message ?: "Recorder close failed.", it) }
         runCatching { transport.close() }
-            .onFailure { recordEvent("transport-close-error", it.message ?: "Transport close failed.") }
+            .onFailure { recordEvent("transport-close-error", it.message ?: "Transport close failed.", it) }
     }
 
     private fun runAdvisory(type: String, block: () -> Unit) {
@@ -66,13 +66,14 @@ class CaptureRuntime(
         }
     }
 
-    private fun recordEvent(type: String, message: String) {
+    private fun recordEvent(type: String, message: String, failure: Throwable? = null) {
         runCatching {
             eventSink.recordEvent(
                 CaptureEvent(
                     timestamp = Instant.now().toString(),
                     type = type,
                     message = message,
+                    failure = failure,
                 ),
             )
         }

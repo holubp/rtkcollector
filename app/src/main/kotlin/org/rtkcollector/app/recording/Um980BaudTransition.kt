@@ -22,13 +22,13 @@ data class Um980BaudTransitionPlan(
                 steps += Um980BaudStep.SendCommands(initCommands)
             }
             if (profileBaud != serialBaud) {
-                steps += Um980BaudStep.SendCommands(baudSwitchCommands)
+                steps += Um980BaudStep.SendCommands(baudSwitchCommands, "device-baud-switch")
                 steps += Um980BaudStep.PauseAfterDeviceBaudCommand
                 steps += Um980BaudStep.ReconfigureHostBaud(serialBaud)
                 steps += Um980BaudStep.DrainTransitionalRx
             }
             if (modeCommands.isNotEmpty()) {
-                steps += Um980BaudStep.SendCommands(modeCommands)
+                steps += Um980BaudStep.SendCommands(modeCommands, "mode-commands")
             }
             return Um980BaudTransitionPlan(steps)
         }
@@ -37,7 +37,7 @@ data class Um980BaudTransitionPlan(
 
 sealed class Um980BaudStep {
     data class OpenHostAtProfileBaud(val baud: Int) : Um980BaudStep()
-    data class SendCommands(val commands: List<String>) : Um980BaudStep()
+    data class SendCommands(val commands: List<String>, val startupStage: String = "init-commands") : Um980BaudStep()
     data object PauseAfterDeviceBaudCommand : Um980BaudStep()
     data class ReconfigureHostBaud(val baud: Int) : Um980BaudStep()
     data object DrainTransitionalRx : Um980BaudStep()

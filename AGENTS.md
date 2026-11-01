@@ -180,6 +180,14 @@ unchanged.
 ## Android Implementation Rules
 
 - Foreground service owns recording, wake lock and session writers.
+- Main-thread Start must establish foreground admission promptly, then delegate
+  blocking USB/storage initialization and receiver delays to the owned startup
+  worker. Stop must fence that worker and await its actual exit off-main before
+  finalizing writers; a timeout is not termination.
+- Never interrupt capture or receiver-maintenance workers as a shortcut for
+  stopping file IO. Use cooperative cancellation and off-main USB cancellation.
+  App-private append streams must tolerate Android 10 interruption semantics;
+  keep an explicit old-Android channel negative control in regression tests.
 - UI code should be thin: collect user intent, display state and send explicit
   start/stop commands.
 - Compose UI work must keep Menu and Start/Stop outside scrollable content so

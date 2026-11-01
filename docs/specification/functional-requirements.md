@@ -133,6 +133,27 @@ Provenance: AGENTS.md; docs/architecture.md; docs/session-format.md; docs/androi
 
 Evidence obligations: EV-ARCH-WRITER-001-AUTO, EV-ARCH-WRITER-001-REVIEW
 
+### ARCH-WRITER-003: Cancellation Preserves Accepted Bytes
+
+Status: Normative
+
+Intentional Stop and worker cancellation MUST NOT close a session's raw file
+through thread interruption. With functional storage, finalization MUST preserve
+all receiver bytes successfully accepted before producer quiescence and MUST
+retain ownership until writer users have exited. Genuine storage failures MUST
+remain explicit. This does not guarantee survival of unflushed bytes after
+process kill, power loss or genuine storage failure.
+
+Verification:
+- Automated: interruption-safe production append streams, older Android channel
+  negative control, exact buffered-tail bytes and concurrent shutdown tests.
+- Review: capture, startup, correction and maintenance cancellation ownership.
+- Manual: app-private and SAF deliberate Stop preserve the receiver-data tail.
+
+Provenance: docs/superpowers/specs/2026-11-01-p30pro-recording-safety-design.md; docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md
+
+Evidence obligations: EV-ARCH-WRITER-003-AUTO, EV-ARCH-WRITER-003-REVIEW, EV-ARCH-WRITER-003-MANUAL
+
 ### ARCH-WRITER-002: Finalisation Waits For Writer-Using Workers
 
 Status: Normative

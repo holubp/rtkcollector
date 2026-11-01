@@ -1,5 +1,18 @@
 # Architecture
 
+## Startup And Cancellation Ownership
+
+Foreground-service Start admission establishes notification and lifecycle state
+without blocking receiver/storage initialization on Android's main thread.
+An owned startup lease fences publication of resources, active state and workers.
+Stop invalidates that lease cooperatively, cancellation-closes USB off-main and
+waits for startup before finalizing its session writers. A delayed open retains
+ownership until it returns; a late resource is retired without reviving capture.
+Capture and persistent-command cancellation must not interrupt file operations.
+App-private append streams use buffered FileOutputStream in append mode rather
+than Android 10's interruption-sensitive channel-backed Files stream factory.
+Metadata replacement and SAF provider/URI semantics remain unchanged.
+
 ## Recording Alarms
 
 Alarm policy is advisory and session-scoped, not a capture dependency. It consumes

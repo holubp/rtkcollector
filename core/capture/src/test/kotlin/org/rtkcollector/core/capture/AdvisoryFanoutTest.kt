@@ -96,18 +96,23 @@ class AdvisoryFanoutTest {
     }
 
     @Test
-    fun `async fanout shutdown interrupts in-flight work and discards queued chunks`() {
+    fun `async fanout shutdown leaves in-flight writer callback uninterrupted`() {
         val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val finished = CountDownLatch(1)
+        val interrupted = AtomicReference(false)
         val processed = mutableListOf<Byte>()
         val fanout = AsyncAdvisoryFanout(
             delegate = ReceiverBytesConsumer { bytes ->
                 processed += bytes.single()
                 started.countDown()
                 try {
-                    CountDownLatch(1).await()
+                    release.await()
                 } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
+                    interrupted.set(true)
                 }
+                processed += 9
+                finished.countDown()
             },
             eventSink = MemoryEvents(),
             queueCapacity = 2,
@@ -117,10 +122,24 @@ class AdvisoryFanoutTest {
         assertTrue(started.await(2, TimeUnit.SECONDS))
         fanout.accept(byteArrayOf(2))
 
-        assertTrue(fanout.shutdown(1_000))
-        fanout.accept(byteArrayOf(3))
+        try {
+            assertFalse(fanout.shutdown(0))
+            assertFalse(fanout.shutdown(20))
+            assertFalse(interrupted.get())
+            assertTrue(processed.none { it == 9.toByte() })
 
-        assertEquals(listOf(1.toByte()), processed)
+            release.countDown()
+            assertTrue(finished.await(2, TimeUnit.SECONDS))
+            assertTrue(fanout.shutdown(1_000))
+            assertTrue(fanout.shutdown(1_000))
+            fanout.accept(byteArrayOf(3))
+
+            assertEquals(listOf(1.toByte(), 9.toByte()), processed)
+            assertFalse(interrupted.get())
+        } finally {
+            release.countDown()
+            fanout.shutdown(1_000)
+        }
     }
 
     @Test

@@ -8,6 +8,14 @@ import org.rtkcollector.core.solution.SolutionCandidate
 import org.rtkcollector.core.solution.SolutionEngine
 
 class RecordingServiceStateTest {
+    @Test fun `additional cleanup error cannot downgrade fatal recording failure`() {
+        val fatal = RecordingServiceState(lastError = "raw failed", errorCategory = RecordingErrorCategory.STORAGE,
+            errorSeverity = RecordingErrorSeverity.FATAL)
+        val additional = fatal.copy(lastError = "TX close failed", errorCategory = RecordingErrorCategory.RECEIVER_COMMAND,
+            errorSeverity = RecordingErrorSeverity.DEGRADED).preservingFatalError(fatal)
+        assertEquals(fatal.recordingErrorSnapshot(), additional.recordingErrorSnapshot())
+    }
+
     @Test
     fun `completed deferred finalization clears its temporary wait status`() {
         val beforeWait = RecordingServiceState().recordingErrorSnapshot()

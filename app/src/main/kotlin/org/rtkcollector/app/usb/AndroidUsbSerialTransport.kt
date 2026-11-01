@@ -14,7 +14,8 @@ class AndroidUsbSerialTransport(
     private val device: UsbDevice,
     private val options: UsbSerialOpenOptions,
 ) : SerialTransport {
-    private var connection: UsbDeviceConnection? = null
+    @Volatile private var connection: UsbDeviceConnection? = null
+    @Volatile private var ready = false
     private var claimedInterface: UsbInterface? = null
     private var inEndpoint: UsbEndpoint? = null
     private var outEndpoint: UsbEndpoint? = null
@@ -22,39 +23,49 @@ class AndroidUsbSerialTransport(
     private var inMaxPacketSize: Int = 64
 
     override val isOpen: Boolean
-        get() = connection != null
+        get() = ready
+
+    internal val hasPendingConnection: Boolean get() = connection != null
 
     override fun open() {
         if (isOpen) return
+        if (hasPendingConnection) close()
         val selected = selectEndpoint(device) ?: error("No usable USB serial IN endpoint found.")
         val opened = usbManager.openDevice(device) ?: error("Unable to open USB device.")
-        if (!opened.claimInterface(selected.usbInterface, true)) {
-            opened.close()
-            error("Unable to claim USB interface ${selected.usbInterface.id}.")
-        }
-
         connection = opened
-        claimedInterface = selected.usbInterface
-        inEndpoint = selected.inEndpoint
-        outEndpoint = selected.outEndpoint
-        inMaxPacketSize = selected.inEndpoint.maxPacketSize.coerceAtLeast(64)
-        ftdiMode = device.vendorId == FTDI_VENDOR_ID
-        if (ftdiMode) {
-            configureFtdi(opened, selected.usbInterface.id, options.baudRate)
+        try {
+            check(opened.claimInterface(selected.usbInterface, true)) {
+                "Unable to claim USB interface ${selected.usbInterface.id}."
+            }
+            claimedInterface = selected.usbInterface
+            inEndpoint = selected.inEndpoint
+            outEndpoint = selected.outEndpoint
+            inMaxPacketSize = selected.inEndpoint.maxPacketSize.coerceAtLeast(64)
+            ftdiMode = device.vendorId == FTDI_VENDOR_ID
+            if (ftdiMode) configureFtdi(opened, selected.usbInterface.id, options.baudRate)
+            check(connection === opened) { "USB connection closed during initialization." }
+            ready = true
+        } catch (failure: Throwable) {
+            try { close() } catch (cleanup: Throwable) { if (cleanup !== failure) failure.addSuppressed(cleanup) }
+            throw failure
         }
     }
 
     override fun close() {
-        val opened = connection
+        ready = false
+        val opened = connection ?: return
         val iface = claimedInterface
-        if (opened != null && iface != null) {
-            runCatching { opened.releaseInterface(iface) }
+        val releaseFailure = if (iface != null) runCatching { opened.releaseInterface(iface) }.exceptionOrNull() else null
+        try { opened.close() } catch (failure: Throwable) {
+            if (releaseFailure != null && releaseFailure !== failure) failure.addSuppressed(releaseFailure)
+            throw failure
         }
-        runCatching { opened?.close() }
-        connection = null
-        claimedInterface = null
-        inEndpoint = null
-        outEndpoint = null
+        if (connection === opened) {
+            connection = null
+            claimedInterface = null
+            inEndpoint = null
+            outEndpoint = null
+        }
     }
 
     override fun readAvailable(maxBytes: Int): ByteArray {

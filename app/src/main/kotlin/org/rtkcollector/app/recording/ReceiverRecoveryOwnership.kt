@@ -4,6 +4,42 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
+internal class ReceiverOperationCancelledException : IllegalStateException("Receiver operation canceled or connection replaced.")
+
+/** Admission is shared by recording and idle maintenance; IO never runs under this lock. */
+internal class ReceiverConnectionOwnership {
+    private val lock = Any()
+    private var owner: Any? = null
+    val isOwned: Boolean get() = synchronized(lock) { owner != null }
+    fun tryAcquire(): java.io.Closeable? = synchronized(lock) {
+        if (owner != null) return null
+        val lease = Any()
+        owner = lease
+        java.io.Closeable { synchronized(lock) { if (owner === lease) owner = null } }
+    }
+}
+
+internal object ProcessReceiverConnectionOwnership {
+    private val ownership = ReceiverConnectionOwnership()
+    val isOwned: Boolean get() = ownership.isOwned
+    fun tryAcquire(): java.io.Closeable? = ownership.tryAcquire()
+}
+
+/** Keep the caller's connection lease until the native handle is actually retired. Off-main only. */
+internal fun retireReceiverConnection(close: () -> Unit, failed: (Throwable) -> Unit,
+    pause: () -> Unit = { Thread.sleep(1_000) }) {
+    while (true) {
+        try { close(); return } catch (failure: Throwable) { runCatching { failed(failure) } }
+        try { pause() } catch (_: InterruptedException) { Thread.interrupted() }
+    }
+}
+
+/** Cancel IO to unblock the producer, then recheck handles after every successful barrier, including null-thread. */
+internal fun retireAfterCaptureBarrier(retire: () -> Boolean, awaitProducer: () -> Boolean): Boolean {
+    retire()
+    return awaitProducer() && retire()
+}
+
 /** Stop cancellation must never reach Android's process-killing uncaught handler. */
 internal fun runCaptureLoopWhileActive(active: () -> Boolean, capture: () -> Unit) {
     while (active()) {
@@ -74,7 +110,7 @@ class ReceiverTxGate {
     fun <T> run(current: () -> Boolean, operation: () -> T): T {
         lock.lockInterruptibly()
         try {
-            check(current()) { "Receiver operation canceled or connection replaced." }
+            if (!current()) throw ReceiverOperationCancelledException()
             return operation()
         } finally { lock.unlock() }
     }

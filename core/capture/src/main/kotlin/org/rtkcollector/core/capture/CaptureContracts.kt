@@ -15,4 +15,5 @@ data class CaptureEvent(
     val timestamp: String,
     val type: String,
     val message: String,
+    val failure: Throwable? = null,
 )

@@ -50,18 +50,27 @@ class AsyncAdvisoryFanout(
     private val dropEventRecorded = AtomicBoolean(false)
     private val shutdownSummaryRecorded = AtomicBoolean(false)
     private val shutdownLock = Any()
+    private val workerWakeLock = Object()
     @Volatile
     private var accepting = true
 
     private val worker = Thread(
         {
-            while (accepting || queue.isNotEmpty()) {
-                val bytes = try {
-                    queue.poll(100, TimeUnit.MILLISECONDS)
-                } catch (_: InterruptedException) {
+            while (true) {
+                val bytes = queue.poll()
+                if (bytes == null) {
                     if (!accepting) break
+                    synchronized(workerWakeLock) {
+                        if (queue.isEmpty() && accepting) {
+                            try {
+                                workerWakeLock.wait(WORKER_IDLE_WAIT_MILLIS)
+                            } catch (_: InterruptedException) {
+                                // Preserve callback ownership; shutdown wakes this wait directly.
+                            }
+                        }
+                    }
                     continue
-                } ?: continue
+                }
                 runCatching { delegate.accept(bytes) }
                     .onFailure { error ->
                         eventSink.recordBestEffort(
@@ -98,6 +107,10 @@ class AsyncAdvisoryFanout(
                     ),
                 )
             }
+        } else {
+            synchronized(workerWakeLock) {
+                workerWakeLock.notifyAll()
+            }
         }
     }
 
@@ -114,7 +127,9 @@ class AsyncAdvisoryFanout(
         synchronized(shutdownLock) {
             accepting = false
             queue.clear()
-            worker.interrupt()
+            synchronized(workerWakeLock) {
+                workerWakeLock.notifyAll()
+            }
             if (timeoutMillis > 0 && worker !== Thread.currentThread()) {
                 worker.join(timeoutMillis)
             }
@@ -152,6 +167,7 @@ class AsyncAdvisoryFanout(
     }
 
     private companion object {
+        const val WORKER_IDLE_WAIT_MILLIS = 100L
         const val DEFAULT_SHUTDOWN_TIMEOUT_MILLIS = 1_000L
     }
 }

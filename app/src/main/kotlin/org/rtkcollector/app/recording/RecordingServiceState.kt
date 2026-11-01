@@ -306,6 +306,11 @@ internal fun RecordingServiceState.recordingErrorSnapshot(): RecordingErrorSnaps
         severity = errorSeverity,
     )
 
+internal fun RecordingServiceState.preservingFatalError(previous: RecordingServiceState): RecordingServiceState =
+    if (previous.errorSeverity == RecordingErrorSeverity.FATAL && errorSeverity != RecordingErrorSeverity.FATAL)
+        copy(lastError = previous.lastError, errorCategory = previous.errorCategory, errorSeverity = previous.errorSeverity)
+    else this
+
 internal fun RecordingServiceState.restoreErrorAfterCompletedFinalization(
     beforeWait: RecordingErrorSnapshot,
 ): RecordingServiceState =

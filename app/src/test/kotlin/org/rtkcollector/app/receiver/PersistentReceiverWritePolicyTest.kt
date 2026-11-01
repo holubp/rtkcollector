@@ -4,6 +4,12 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class PersistentReceiverWritePolicyTest {
+    @Test fun `starting or stopping receiver cannot use idle maintenance`() {
+        val route = persistentReceiverWriteRoute(recordingActive = false, usbProfileAvailable = true,
+            receiverConnected = true, usbPermissionGranted = true, receiverBusy = true)
+        org.junit.jupiter.api.Assertions.assertTrue(route is PersistentReceiverWriteRoute.Rejected)
+    }
+
     @Test
     fun `active recording uses service path`() {
         assertEquals(

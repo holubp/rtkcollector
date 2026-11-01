@@ -12,6 +12,21 @@ import java.util.concurrent.TimeUnit
 class SessionDiagnosticsIsolationTest {
     @TempDir lateinit var directory: Path
 
+    @Test fun `rejected failed-worker cleanup executor falls back off caller and releases session`() {
+        val registry = org.rtkcollector.app.sessions.ActiveSessionRegistry()
+        val lease = registry.retainWriter(directory.toString())
+        val caller = Thread.currentThread()
+        val closeThread = java.util.concurrent.atomic.AtomicReference<Thread>()
+        val log = SessionDiagnostics("s", write = {},
+            startWorker = { throw java.util.concurrent.RejectedExecutionException("initial failure") },
+            scheduleFailedWorkerCleanup = { throw java.util.concurrent.RejectedExecutionException("service destroyed") },
+            closeEventStream = { closeThread.set(Thread.currentThread()); lease.close(); true })
+        log.seal(); log.seal()
+        assertTrue(log.awaitClosed(5_000))
+        assertNotSame(caller, closeThread.get())
+        registry.requireInactive(directory.toString(), "share")
+    }
+
     @Test fun `start rejection retains writer lease until deferred close finishes`() {
         val registry = org.rtkcollector.app.sessions.ActiveSessionRegistry()
         val lease = registry.retainWriter(directory.toString())

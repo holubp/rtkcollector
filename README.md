@@ -60,6 +60,11 @@ retries connection. Approve USB access if Android asks; you may need to unlock
 the phone. After denial, reconnect the receiver to request access again. A port
 reopening alone does not silence the connection alarm: receiver bytes must resume.
 
+Receiver preparation runs off the UI thread: **Starting** remains responsive to
+**Stop**. The app waits for outstanding receiver/storage operations before
+finalizing the files and admitting another recording. See
+[Starting And Stopping Safely](docs/user-workflows.md#starting-and-stopping-safely).
+
 ## Development Status
 
 This repository is in experimental bootstrap status. The current code includes

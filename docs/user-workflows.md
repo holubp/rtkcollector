@@ -1,5 +1,20 @@
 # User Workflows
 
+## Starting And Stopping Safely
+
+After **Start**, the app shows **Starting** while it opens the receiver and
+storage and sends the selected profile. The controls remain responsive during
+this preparation. **Stop** also cancels preparation; it does not leave a delayed
+startup running in the background.
+
+If a receiver or storage operation is slow to finish, the app remains
+**Stopping** until it can safely release the session files. Wait for completion
+before starting another recording. Existing files are preserved, and genuine
+storage failures are reported. Deliberate Stop flushes accepted receiver bytes;
+force-stopping the app, power loss or Android killing the process can still lose
+unflushed bytes. Minimal logs retain startup stages and failure details without
+requiring Verbose or Debug logging.
+
 RtkCollector V1 is an Android companion for external USB GNSS receivers. It
 records the receiver byte stream, routes NTRIP corrections, helps configure
 receiver-side rover/base workflows and keeps separate session files for later

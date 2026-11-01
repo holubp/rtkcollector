@@ -222,6 +222,26 @@ Provenance: AGENTS.md; docs/android-background-operation.md; docs/architecture.m
 
 Evidence obligations: EV-ANDROID-SERVICE-002-AUTO, EV-ANDROID-SERVICE-002-REVIEW, EV-ANDROID-SERVICE-002-MANUAL
 
+### ANDROID-SERVICE-003: Responsive Owned Startup
+
+Status: Normative
+
+Recording startup MUST perform blocking receiver and storage work off the Android
+main thread while the foreground service retains generation-scoped ownership.
+Stop MUST fence and wait for startup before finalizing its writers; canceled
+startup MUST NOT publish active state or workers. Main-thread callbacks MUST NOT
+wait for startup or cleanup. Foreground admission MUST precede blocking startup.
+
+Verification:
+- Automated: blocked initialization, late resource publication, worker launch
+  failure, cancellation and service callback responsiveness tests.
+- Review: startup ownership, main-thread admission and shutdown barrier.
+- Manual: P30 Pro Start/Stop during initialization and background USB recovery.
+
+Provenance: docs/superpowers/specs/2026-11-01-p30pro-recording-safety-design.md; docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md
+
+Evidence obligations: EV-ANDROID-SERVICE-003-AUTO, EV-ANDROID-SERVICE-003-REVIEW, EV-ANDROID-SERVICE-003-MANUAL
+
 ### ANDROID-CAPTURE-001: Capture Path Is Independent Of UI
 
 Status: Normative
@@ -317,6 +337,25 @@ Verification:
 Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
 
 Evidence obligations: EV-ANDROID-DIAGNOSTICS-004-AUTO, EV-ANDROID-DIAGNOSTICS-004-MANUAL
+
+### ANDROID-DIAGNOSTICS-005: Bounded Failure Identity
+
+Status: Normative
+
+Essential diagnostics MUST identify startup stages and failure operations and
+artifacts with session and process correlation. Failure records MUST preserve
+exception class and bounded cause-class information even for null messages,
+respecting existing privacy, bounded delivery and recording-isolation requirements.
+
+Verification:
+- Automated: null-message, nested/cyclic-cause, redaction, bounded delivery and
+  diagnostic-failure isolation tests.
+- Review: startup, recorder-close and writer-finalization evidence call sites.
+- Manual: Android 10 exported logs distinguish startup stages and process identity.
+
+Provenance: docs/superpowers/specs/2026-11-01-p30pro-recording-safety-design.md; docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md
+
+Evidence obligations: EV-ANDROID-DIAGNOSTICS-005-AUTO, EV-ANDROID-DIAGNOSTICS-005-REVIEW, EV-ANDROID-DIAGNOSTICS-005-MANUAL
 
 ### ANDROID-JNI-001: JNI And Native Boundaries Are Explicitly Sanitized
 

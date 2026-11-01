@@ -75,6 +75,7 @@ import org.rtkcollector.app.console.DeviceConsoleController
 import org.rtkcollector.app.console.DeviceConsoleLineEnding
 import org.rtkcollector.app.console.DeviceConsoleState
 import org.rtkcollector.app.diagnostics.DiagnosticCategory
+import org.rtkcollector.app.diagnostics.ProcessDiagnosticIdentity
 import org.rtkcollector.app.BuildConfig
 import org.rtkcollector.app.diagnostics.DiagnosticsSettings
 import org.rtkcollector.app.diagnostics.DiagnosticLevel
@@ -150,6 +151,7 @@ import org.rtkcollector.app.profile.correctionCasterRestrictionRef
 import org.rtkcollector.app.ui.profiles.settingsSetSelectionPolicyFields
 import org.rtkcollector.app.ui.profiles.withSettingsSetSelectionPolicies
 import org.rtkcollector.app.recording.RecordingSetupBridge
+import org.rtkcollector.app.recording.ProcessReceiverConnectionOwnership
 import org.rtkcollector.app.recording.RunningSetupSnapshot
 import org.rtkcollector.app.recording.SetupPatchRequest
 import org.rtkcollector.app.profile.isOptionLocked
@@ -398,7 +400,8 @@ fun RtkCollectorApp(
         level = diagnosticLevel, retention = diagnosticsSettings.retention)) }
     LaunchedEffect(context) {
         runtimeDiagnostics.record(RuntimeDiagnosticRecord(System.currentTimeMillis(), DiagnosticCategory.APP,
-            "NOTICE", "Application UI attached (${BuildConfig.VERSION_NAME}).", code = "app-ui-attached"))
+            "NOTICE", "Application UI attached (${BuildConfig.VERSION_NAME}).",
+            attributes = ProcessDiagnosticIdentity.attributes(android.os.Process.myPid()), code = "app-ui-attached"))
     }
     DisposableEffect(diagnosticsSettings) {
         val subscription = diagnosticsSettings.observeChanges {
@@ -6315,6 +6318,10 @@ private fun writeCommandProfilePersistentlyToDevice(
     runtimeScript: String,
     isRecording: Boolean,
 ) {
+    if (!isRecording && ProcessReceiverConnectionOwnership.isOwned) {
+        Toast.makeText(context, "Receiver is starting or stopping. Wait before writing persistent configuration.", Toast.LENGTH_LONG).show()
+        return
+    }
     val profileStore = ProfileStores(context)
     val commandProfile = profileStore.commandProfiles().firstOrNull { it.id == commandProfileId }
     if (commandProfile == null) {
@@ -6373,6 +6380,10 @@ private fun writeUsbBaudPersistentlyToDevice(
     values: Map<String, String>,
     isRecording: Boolean,
 ) {
+    if (!isRecording && ProcessReceiverConnectionOwnership.isOwned) {
+        Toast.makeText(context, "Receiver is starting or stopping. Wait before writing persistent configuration.", Toast.LENGTH_LONG).show()
+        return
+    }
     val profileStore = ProfileStores(context)
     val savedProfile = profileStore.usbBaudProfiles().firstOrNull { it.id == usbProfileId }
     if (savedProfile == null) {
@@ -6438,15 +6449,20 @@ private fun writePersistentCommandsViaMaintenanceConnection(
         Toast.makeText(context, "Persistent receiver configuration write is already in progress.", Toast.LENGTH_LONG).show()
         return
     }
+    val maintenanceLease = ProcessReceiverConnectionOwnership.tryAcquire()
+    if (maintenanceLease == null) {
+        persistentReceiverWriteInProgress.set(false)
+        Toast.makeText(context, "Receiver is starting or stopping. Wait before writing persistent configuration.", Toast.LENGTH_LONG).show()
+        return
+    }
     Toast.makeText(context, "Writing persistent receiver configuration...", Toast.LENGTH_SHORT).show()
-    Thread {
-        val transport = AndroidUsbSerialTransport(
-            usbManager = usbManager,
-            device = requireNotNull(device),
-            options = UsbSerialOpenOptions(baudRate = usbProfile.profileBaud),
-        )
+    try { Thread {
+        var ownedTransport: AndroidUsbSerialTransport? = null
         try {
-            runCatching {
+            val result = runCatching {
+                val transport = AndroidUsbSerialTransport(usbManager, requireNotNull(device),
+                    UsbSerialOpenOptions(baudRate = usbProfile.profileBaud))
+                ownedTransport = transport
                 transport.open()
                 verifyMaintenanceReceiverConnection(transport)
                 if (targetBaud == null) {
@@ -6458,28 +6474,30 @@ private fun writePersistentCommandsViaMaintenanceConnection(
                         targetBaud = targetBaud,
                     )
                 }
-            }.onSuccess {
-                runOnMain(context) {
-                    Toast.makeText(
-                        context,
-                        "Persistent receiver configuration written for $commandProfileName.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            }.onFailure { error ->
-                runOnMain(context) {
-                    Toast.makeText(
-                        context,
-                        "Persistent receiver configuration failed: ${error.message}",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
             }
+            runCatching { runOnMain(context) {
+                val message = if (result.isSuccess) "Persistent receiver configuration written for $commandProfileName."
+                    else "Persistent receiver configuration failed: ${result.exceptionOrNull()?.message}"
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            } }
         } finally {
-            runCatching { transport.close() }
+            var reported = false
+            org.rtkcollector.app.recording.retireReceiverConnection(close = { ownedTransport?.close() }, failed = {
+                if (!reported) {
+                    reported = true
+                    runCatching { runOnMain(context) {
+                        Toast.makeText(context, "USB cleanup pending; receiver remains busy until cleanup succeeds.", Toast.LENGTH_LONG).show()
+                    } }
+                }
+            })
+            maintenanceLease.close()
             persistentReceiverWriteInProgress.set(false)
         }
-    }.start()
+    }.start() } catch (failure: Throwable) {
+        maintenanceLease.close()
+        persistentReceiverWriteInProgress.set(false)
+        Toast.makeText(context, "Cannot start receiver maintenance: ${failure.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+    }
 }
 
 private fun executePersistentBaudPlanOnMaintenanceTransport(

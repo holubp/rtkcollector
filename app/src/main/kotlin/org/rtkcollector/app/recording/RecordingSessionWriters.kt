@@ -8,6 +8,8 @@ import org.rtkcollector.core.session.SessionWriterCloseReport
 import org.rtkcollector.core.session.SessionWriterIssue
 import org.rtkcollector.core.session.SessionWriterIssueCategory
 import org.rtkcollector.core.session.SessionWriterIssueSeverity
+import org.rtkcollector.core.session.SessionWriterOpenException
+import org.rtkcollector.core.session.SessionWriterCleanupException
 import org.rtkcollector.core.session.SessionWriters
 import java.io.BufferedOutputStream
 import java.io.Closeable
@@ -450,6 +452,7 @@ internal class SafRecordingSessionWriters private constructor(
             resolver: ContentResolver,
             treeUri: Uri,
             sessionName: String,
+            onSessionCreated: (Uri) -> Unit = {},
         ): SafRecordingSessionWriters {
             val rootDocumentUri = DocumentsContract.buildDocumentUriUsingTree(
                 treeUri,
@@ -461,6 +464,7 @@ internal class SafRecordingSessionWriters private constructor(
                 DocumentsContract.Document.MIME_TYPE_DIR,
                 sessionName,
             ) ?: error("Unable to create SAF session folder.")
+            onSessionCreated(sessionUri)
 
             val files = mutableMapOf<String, Uri>()
             fun create(fileName: String): Uri =
@@ -470,10 +474,12 @@ internal class SafRecordingSessionWriters private constructor(
 
             val openedStreams = mutableListOf<OpenedSafStream>()
             fun appendStream(artifact: SessionArtifactFile): OutputStream {
-                val uri = create(artifact.fileName)
+                val uri = try { create(artifact.fileName) }
+                    catch (failure: Throwable) { throw SessionWriterOpenException(artifact.fileName, "create", failure) }
                 return BufferedOutputStream(
-                    resolver.openOutputStream(uri, "wa")
-                        ?: error("Unable to open SAF file for append: ${artifact.fileName}"),
+                    try { resolver.openOutputStream(uri, "wa")
+                        ?: error("Unable to open SAF file for append: ${artifact.fileName}") }
+                    catch (failure: Throwable) { throw SessionWriterOpenException(artifact.fileName, "open", failure) },
                 ).also { stream -> openedStreams += OpenedSafStream(artifact, stream) }
             }
 
@@ -521,7 +527,7 @@ private fun finaliseOpenedSafStream(target: OpenedSafStream, openingFailure: Thr
 }
 
 private fun safCleanupFailure(artifact: SessionArtifactFile, operation: String, error: Throwable): IOException =
-    IOException("Failed to $operation ${artifact.fileName} during partial SAF session-writer cleanup.", error)
+    SessionWriterCleanupException(artifact.fileName, operation, error)
 
 private fun closeOptionalStream(
     stream: OutputStream?,
@@ -542,19 +548,21 @@ private fun closeStream(
     issues: MutableList<SessionWriterIssue>,
 ) {
     runCatching { stream.flush() }.onFailure { error ->
-        issues += SessionWriterIssue(
+        issues += SessionWriterIssue.fromFailure(
             artifact = artifact.fileName,
             category = category,
             severity = severity,
-            message = error.message ?: "Failed to flush ${artifact.fileName}",
+            operation = "flush",
+            failure = error,
         )
     }
     runCatching { stream.close() }.onFailure { error ->
-        issues += SessionWriterIssue(
+        issues += SessionWriterIssue.fromFailure(
             artifact = artifact.fileName,
             category = category,
             severity = severity,
-            message = error.message ?: "Failed to close ${artifact.fileName}",
+            operation = "close",
+            failure = error,
         )
     }
 }

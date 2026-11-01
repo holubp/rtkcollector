@@ -896,18 +896,25 @@ class RecordingAlarmServiceTest {
         } finally { owner.destroy() }
     }
     @Test fun `rejected Start preserves the existing terminal alarm service`() {
-        val owner = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val owner = Robolectric.buildService(RecordingForegroundService::class.java)
         val service = owner.get()
+        // Model the recording owner while arming, then isolate admission from audio-provider effects.
+        (field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).set(true)
+        owner.create()
         try {
             RecordingForegroundService::class.java.getDeclaredField("alarmGeneration")
                 .apply { isAccessible = true }.setLong(service, 88)
-            val controller = RecordingForegroundService::class.java.getDeclaredField("alarmController")
-                .apply { isAccessible = true }.get(service) as RecordingAlarmController
-            controller.post(AlarmCommand.Begin(88, AlarmSettingsSnapshot.defaults(), 0))
-            controller.post(AlarmCommand.TerminalStop(88, RecordingAlarmEvidence.STORAGE, "storage", 1))
+            (field("alarmController").get(service) as RecordingAlarmController).close()
+            val controller = RecordingAlarmController(android.os.SystemClock::elapsedRealtime, {})
+            field("alarmController").set(service, controller)
+            val now = android.os.SystemClock.elapsedRealtime()
+            controller.post(AlarmCommand.Begin(88, AlarmSettingsSnapshot.defaults(), now))
+            controller.post(AlarmCommand.TerminalStop(88, RecordingAlarmEvidence.STORAGE, "storage", now))
             val deadline = System.nanoTime() + 10_000_000_000L
             while (!controller.snapshot().terminalAlertPending && System.nanoTime() < deadline) Thread.sleep(5)
             assertTrue(controller.snapshot().terminalAlertPending)
+            assertFalse("terminal fixture must be alive before the rejected Start", shadowOf(service).isStoppedBySelf)
+            (field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).set(false)
             service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
                 .setAction(RecordingForegroundService.ACTION_START), 0, 1)
             assertFalse(shadowOf(service).isStoppedBySelf)

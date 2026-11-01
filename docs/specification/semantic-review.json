@@ -1145,7 +1145,7 @@
     },
     {
       "path": "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt",
-      "digest": "sha256:b0ae20f56929884a2ce7caf1fb5f0fbfe5046963b38652878958d3ed0668fd20"
+      "digest": "sha256:a8fca13dd4076e86b4c841d088d973aed03e3720dfd68c13cfa75d69ed625095"
     },
     {
       "path": "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingCancellationTest.kt",
@@ -1961,7 +1961,7 @@
     },
     {
       "path": "docs/superpowers/plan-status.md",
-      "digest": "sha256:d35636188f6f1d42d39258bf4b2113b9c6aeb492d9b40d405d1d757b9be98760"
+      "digest": "sha256:35f57c92159d92b29d82653d3c1f609b53b972e058db04dd255af03f1dac30e4"
     },
     {
       "path": "docs/superpowers/plans/2026-06-06-rtkcollector-bootstrap.md",
@@ -2201,7 +2201,7 @@
     },
     {
       "path": "docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md",
-      "digest": "sha256:9b7ef15eddd7ba9ec9e45a35ee6599e0bf3c0ff3ced731596701ab5dc93541bc"
+      "digest": "sha256:db748f1420e13a3a41ce1a5e4546fae9e9876772c58b7a3fe398135b758c2261"
     },
     {
       "path": "docs/superpowers/specs/2026-06-06-rtkcollector-bootstrap-design.md",
@@ -5114,8 +5114,8 @@
       ]
     }
   ],
-  "observed_head_commit": "5423ed9be26bebaa9c86641e86f77768bdb3311d",
-  "scope_digest": "sha256:f12246e3a3221e1b5a91c1dd06538071bafcb8d9b8c8ce940e7905dba19b3b8d",
+  "observed_head_commit": "d4412bc76d222db22cfe614dacc71e05f90af058",
+  "scope_digest": "sha256:17c5ede1ea1abbaa5c4881e647516451a062a876399847ddad1850bb49adc8de",
   "reviewed_paths": [
     ".github/CODEOWNERS",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -6487,14 +6487,14 @@
   },
   "result": "pass",
   "reviewer": "model:codex-rc11-independent-sol-high",
-  "reviewed_at": "2026-11-01T10:49:30.883117Z",
+  "reviewed_at": "2026-11-01T11:33:02.915899Z",
   "findings": [],
   "limitations": [],
   "audit_provenance": {
     "scope": "Independent whole-delta source semantics and acceptance-test-source audit; not host/device execution or release certification.",
     "comparison_base": "e6221f2e9aa568464f16158a3d17a321af537674",
-    "review_context": ".spec-assurance/p30-ci-fixture-review-context.json",
-    "expected_scope_digest": "sha256:f12246e3a3221e1b5a91c1dd06538071bafcb8d9b8c8ce940e7905dba19b3b8d",
+    "review_context": ".spec-assurance/p30-terminal-fixture-review-context.json",
+    "expected_scope_digest": "sha256:17c5ede1ea1abbaa5c4881e647516451a062a876399847ddad1850bb49adc8de",
     "model": "gpt-6.1-sol",
     "reasoning_effort": "high",
     "model_identity_basis": "Controller-supplied runtime routing identity, not model self-identification or an independently inspected runtime-metadata claim.",
@@ -6528,9 +6528,9 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "robolectric": "Historical local compile-only evidence is not host pass. CI 41298101535 host RED exposed fixture admission failures before intended IO. Corrected fixture host GREEN remains pending.",
+      "robolectric": "Controller reports independently downloaded CI 41301095017 XML: RecordingAlarmServiceTest 48 cases, 2 failures, 0 errors/skips; only rejected Start failed on SDK33/35, all other 46 cases passed. This reviewer did not independently download or certify that XML. Corrected terminal fixture host GREEN remains required; native audio is explicitly outside this isolated admission oracle.",
       "receipts": "320 not-run, one available and one blocked; no passing receipts were invented or promoted by this review.",
-      "remaining_gates": "Mandatory full pre-push rerun before next push and corrected exact-source host CI GREEN are required. Host paths beyond fixture admission may expose additional failures. Signing, artifact verification, actual RC11 publication and device obligations remain required.",
+      "remaining_gates": "Mandatory full pre-push for this exact source before next push, then exact-source corrected host CI GREEN. Signing, artifact verification, actual RC11 publication and P30/SAF/vendor/device obligations remain separately required.",
       "approval_boundary": "Three design-derived canonical requirements and precise capability inventory use the owner's narrow release-without-further-approval authorization. This is not a claim that the human inspected final digest strings or waived any evidence gate. Existing owner/external-author governance remains distinct from universal branch protection."
     },
     "reconciliation": {
@@ -6594,7 +6594,7 @@
         "core/session/src/test/kotlin/org/rtkcollector/core/session/SessionWriterLifecycleTest.kt",
         "core/session/src/test/kotlin/org/rtkcollector/core/session/SessionWritersTest.kt"
       ],
-      "nonpair_governance_documentation_review": "Instructions, architecture/background/session/operator documentation, release notes, approved design/plan, source ledger, narrow approvals, exact inventory, receipts and verification matrix were inspected. Plan checkboxes distinguish source/add-test/pure-test work from still-unchecked host RED/execution, full gates, CI, signing, publication and field work. No independent review or source presence was substituted for passing execution receipts. CI fixture refresh: four changed paths independently rereviewed; observed host RED explicitly remains pre-IO fixture evidence, not behavioral race certification."
+      "nonpair_governance_documentation_review": "Instructions, architecture/background/session/operator documentation, release notes, approved design/plan, source ledger, narrow approvals, exact inventory, receipts and verification matrix were inspected. Plan checkboxes distinguish source/add-test/pure-test work from still-unchecked host RED/execution, full gates, CI, signing, publication and field work. No independent review or source presence was substituted for passing execution receipts. CI fixture refresh: four changed paths independently rereviewed; observed host RED explicitly remains pre-IO fixture evidence, not behavioral race certification. Terminal fixture refresh: three affected paths independently reviewed, valid admission/effects separation confirmed, host failure and pending corrected host GREEN preserved."
     },
     "ci_fixture_refresh": {
       "prior_candidate": "/data/data/com.termux/files/usr/tmp/rtkcollector-p30pro/sol-repaired-semantic.json",
@@ -6618,6 +6618,28 @@
       "host_failure": "Controller reports CI 41298101535 failed five methods on SDK33/35 before intended IO because fixture owner outputs were inconsistent. Inspected fixture and admission contract support that explanation; no production defect identified by this affected source review.",
       "focused_local_evidence": "Controller reports RecordingSetupBridgeTest GREEN (ci-fixture-repair-green.log) and all app/Robolectric sources compile. Reviewer did not execute Gradle or certify those results.",
       "remaining_execution": "Mandatory full pre-push rerun before next push and corrected exact-source host CI GREEN are required. Host paths beyond fixture admission may expose additional failures. Signing, artifact verification, actual RC11 publication and device obligations remain required."
+    },
+    "terminal_fixture_refresh": {
+      "prior_candidate": "/data/data/com.termux/files/usr/tmp/rtkcollector-p30pro/sol-ci-fixture-semantic.json",
+      "prior_candidate_digest": "sha256:06c1a4b79c87db23463b4add509d5984e83e9619eb7d86f3068dde14f7232456",
+      "prior_scope_digest": "sha256:f12246e3a3221e1b5a91c1dd06538071bafcb8d9b8c8ce940e7905dba19b3b8d",
+      "reviewed_changed_paths": {
+        "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt": "Independently traced rejected-Start fixture against production running.compareAndSet-before-beginAlarms, alarmKeepsAlive, idle-exit and controller mailbox semantics. Fixture sets ownership before service creation and arming, closes the original policy controller, installs a real RecordingAlarmController with controlled callbacks, and uses actual monotonic elapsed timestamps. It waits for terminal policy state, asserts alive before action, relinquishes running ownership, invokes the real rejected Start and preserves alive/generation-88/terminal-pending assertions. This valid admission isolation does not certify native audio, periodic idle-exit or full effects integration. Other real USB/SAF/startup/Stop race tests are unchanged. No production defect or weakened admission assertion identified in this affected review.",
+        "docs/superpowers/plan-status.md": "Status remains In progress. It attributes implementation and first fixture repair to their commits, distinguishes prior full pre-push from subsequent host CI, and records that the second host run passed real startup/Stop paths but failed the terminal admission fixture. Corrected full host GREEN, stable signing/APK checks and RC11 publication remain required. No claim of audio or device certification is introduced.",
+        "docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md": "Added host-run account distinguishes successful startup/Stop cases from terminal admission fixture failure. The fixture correction models production owner-before-Begin ordering and isolates native audio effects while retaining original assertions and adding a pre-action alive check. The explicit statement that this does not certify audio delivery preserves acceptance/evidence boundaries; no original recording-safety criterion is removed."
+      },
+      "exact_unchanged_paths": 720,
+      "exact_traced_pair_conclusions_retained": 769,
+      "qualification": "Each retained path/requirement pair matches prior path hash, requirement digest and traceability. Production, implementation/supporting digests, approvals and capability inventory are unchanged. Prior RC10 qualification and historical supplementary Astra source review remain historical; no new Astra fixture review is asserted.",
+      "receipt_states": {
+        "not-run": 320,
+        "available": 1,
+        "blocked": 1
+      },
+      "receipts_and_matrix": "Byte-identical to previously inspected 5423ed9 records; all pending evidence states retained. No passing receipt issued.",
+      "host_execution_boundary": "Controller reports independently downloaded CI 41301095017 XML: RecordingAlarmServiceTest 48 cases, 2 failures, 0 errors/skips; only rejected Start failed on SDK33/35, all other 46 cases passed. This reviewer did not independently download or certify that XML. Corrected terminal fixture host GREEN remains required; native audio is explicitly outside this isolated admission oracle.",
+      "local_execution_boundary": "Controller reports 977 feasible app tests GREEN and all app/Robolectric sources compile in 1m21s. Reviewer ran no Gradle and does not certify these reports as passing receipts.",
+      "remaining_execution": "Mandatory full pre-push for this exact source before next push, then exact-source corrected host CI GREEN. Signing, artifact verification, actual RC11 publication and P30/SAF/vendor/device obligations remain separately required."
     }
   },
   "conclusions": [

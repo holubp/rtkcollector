@@ -205,6 +205,12 @@ and `RecordingCancellationTest.kt`; extend existing `ReceiverRecoveryOwnershipTe
   it with a pure staged-start regression; do not relax validation. These failures
   occurred before the intended USB/storage interleavings; host GREEN is still
   required for those behavioral assertions.
+
+  Host run `41301095017` subsequently passed those startup/Stop paths. An existing
+  rejected-Start alarm test exposed an unowned arming/effect race in its fixture;
+  model the production owner-before-Begin order and isolate admission from native
+  audio delivery. Retain the alive/generation/terminal assertions and assert that
+  the fixture is alive before the action. This does not certify audio delivery.
 - [x] Split `startRecording` into prompt main-thread admission and worker-owned
   initialization. Keep validated setup acceptance, foreground admission, alarm
   generation and service start-ID handling correct. Move profile preparation,

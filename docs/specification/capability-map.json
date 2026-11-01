@@ -1135,6 +1135,11 @@
       "pattern": "docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md",
       "category": "documentation",
       "reason": "Approved Stop confirmation design and checkpointed implementation history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-11-01-stop-confirmation-timer-repair-design.md",
+      "category": "documentation",
+      "reason": "Approved Stop confirmation design and checkpointed implementation history."
     }
   ],
   "capabilities": [
@@ -3672,6 +3677,12 @@
           ]
         },
         {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
           "pattern": "app/src/main/kotlin/org/rtkcollector/app/settings/StopConfirmationSettings.kt",
           "requirement_ids": [
             "UI-STOP-001"
@@ -3718,24 +3729,17 @@
     }
   ],
   "approval": {
+    "inventory_digest": "sha256:ea1924afaaf559224dbe3c8fcaea645934b953f8262cd6e25dbaaea03ee4fece",
+    "state": "approved",
+    "approved_by": "human:holubp",
+    "approved_at": "2026-11-01T22:04:05.342668Z",
+    "decision_ref": "2026-11-01-astra-stop-timer-repair-normal-gates"
+  },
+  "previous_approval": {
     "inventory_digest": "sha256:af0f7d777e4b7bb15294da5230154ee8116b6271d1da8088ef0aa7c561d99fb2",
     "state": "approved",
     "approved_by": "human:holubp",
     "approved_at": "2026-11-01T20:07:48.023613Z",
     "decision_ref": "2026-11-01-stop-confirmation-approved-plan-release"
-  },
-  "previous_approval": {
-    "inventory_digest": "sha256:5d0e15ea0d667a6aea516193ad820206cc45a785891cbf62b957b2544a0d1985",
-    "state": "approved",
-    "approved_by": "human:holubp",
-    "approved_at": "2026-11-01T08:12:42Z",
-    "decision_ref": "2026-11-01-rc11-approved-plan-no-further-approval",
-    "previous_approval": {
-      "inventory_digest": "sha256:9675e61473ccc89b160f7cbe775d550d13b36cc962987594a03b318fc8ad2aa2",
-      "state": "approved",
-      "approved_by": "human:holubp",
-      "approved_at": "2026-10-30T18:06:55Z",
-      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
-    }
   }
 }

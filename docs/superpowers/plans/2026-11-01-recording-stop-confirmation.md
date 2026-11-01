@@ -96,6 +96,41 @@ Every approved design section is assigned above: timing/settings (1), authority/
 
 ## Execution Checkpoint
 
+### Approved Astra Repair Slice
+
+Owner approved the Astra repair and resumed work, explicitly using normal gates,
+not a diagnostic exception. The prior gate-exception prerequisite was overstated.
+Source review of a newly repaired implementation must remain distinct from future
+host execution; do not certify host GREEN or erase historical failures.
+
+- [x] Add `recording/StopConfirmationRefreshLoop.kt` and matching pure tests.
+  Interface: window, elapsed/uptime readers, current-request predicate,
+  `(phase, seconds)` renderer, dismissal, `(Runnable, uptimeTarget)` scheduling
+  and cancellation callbacks. At most one callback; cancel fences rescheduling.
+- [x] Observe missing-class RED, then reproduce actual old-order drift with the
+  extracted render-then-delay loop and 15 ms rendering-cost fake. Keep literal
+  boundary expectations, not values generated through production policy.
+- [x] Choose an absolute second/phase/100 ms owner-check target before rendering;
+  afterward post at `uptimeNow + max(0, targetElapsed - elapsedNow)`. Test cancellation,
+  stale identity, late wakeups, expiry during rendering and differing clocks.
+- [x] Adapt the native dialog to the pure loop. Require enabled button, current
+  request and fresh ACTIVE phase for dispatch. Strengthen successful UI tests with
+  enabled/label assertions; preserve original 2/9/1 host timing assertions.
+- [ ] Update the narrow capability mappings/approved design provenance, invalidate
+  affected evidence honestly, and obtain independent source review of repaired
+  code. Run normal full pre-push gate, commit/push and full host CI; keep RC12
+  unpublished until current-source tests, build and signed-APK verification pass.
+
+Repair evidence: the extracted old render-then-delay order failed 3/7 actual
+pure tests: WAITING rather than ACTIVE at 2000 ms, scheduled uptime1115 rather
+than1100, and label2 rather than1 at1000. The boundary-aligned implementation
+passed10 refresh tests plus5 policy tests, zero failures; all Android test sources
+compiled. These results prove the source scheduling mechanism, not historical CI
+callback causality. Current affected-source review, full gate and host CI remain
+required before release. No diagnostic workflow/exception was used.
+
+### Earlier Checkpoints
+
 - User approved execution and next RC publication as an active goal; target is
   RC12, version code 13. RC11 remains immutable.
 - Timing/authorization tests first failed compilation for missing policy symbols
@@ -144,3 +179,13 @@ Every approved design section is assigned above: timing/settings (1), authority/
   after show returns. Original assertions remain unchanged as the host RED oracle.
   Other host cases, including real A/B ownership and cancellation/navigation,
   passed; sideload/native/release tasks were not reached in this failed run.
+- Repair3528ee4 / host CI41349342786 passed the initial-disabled and successful
+  confirmation tests, leaving two failures in the timer UI assertion at the
+  two-second activation boundary (SDK33/35). The remaining cause is not proven.
+  The same assertion now includes elapsed/uptime deltas, captured window/phase,
+  label, visibility, token identities and next scheduled task; no deadline or
+  assertion was relaxed. This diagnostic branch must not be released as verified.
+- A focused local Robolectric probe cannot replace host evidence: SDK33 needs
+  unavailable conscrypt Linux/aarch64 JNI and SDK35 reports unsupported native
+  runtime on Linux/aarch64. The external diagnostic init script is not part of
+  repository gates; no native/tooling bypass or test exclusion change is made.

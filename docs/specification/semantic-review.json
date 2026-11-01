@@ -504,6 +504,10 @@
       "digest": "sha256:b326e9495378c000ba0ed553b09f7fe869af46d833a71dadf46837d35d6c8248"
     },
     {
+      "path": "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt",
+      "digest": "sha256:6d3889dea1be771ef2e9e3d62ddd866ecee36be2703d490a33374c08d56f3045"
+    },
+    {
       "path": "app/src/main/kotlin/org/rtkcollector/app/recording/Um980BaudTransition.kt",
       "digest": "sha256:3235d76274b0847be9c35439b3c6fde8c1b228863db7dcdb6892fcdeea0ac5da"
     },
@@ -597,7 +601,7 @@
     },
     {
       "path": "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt",
-      "digest": "sha256:ec469d18e91e1191714230ab3ee921f3aefab7d77bd70650609add6450183df4"
+      "digest": "sha256:79fd1e658a5b7ae326d47313a9cdc9c8489ac3158ca8320f90c7d766cbe3e0a4"
     },
     {
       "path": "app/src/main/kotlin/org/rtkcollector/app/ui/common/TidyUi.kt",
@@ -1157,7 +1161,7 @@
     },
     {
       "path": "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt",
-      "digest": "sha256:0169aa1d2c690f47d3e610b9393e391df99960e6e04995136d7124ef46cbd75d"
+      "digest": "sha256:6bb5ad002924605e63e1a85dea70513726b50f2516587d6892cdca708bbe1c67"
     },
     {
       "path": "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingCancellationTest.kt",
@@ -1258,6 +1262,10 @@
     {
       "path": "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicyTest.kt",
       "digest": "sha256:388ba4cfafc2f80bf0c52e37dc351e10fe28adb0df13ca19b4eee751063bf408"
+    },
+    {
+      "path": "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoopTest.kt",
+      "digest": "sha256:ed01256cf6c87fdec96854bf9e090eaee7f85b6812e792305fdb0832ef9c0f3f"
     },
     {
       "path": "app/src/test/kotlin/org/rtkcollector/app/recording/Um980BaudTransitionTest.kt",
@@ -1849,7 +1857,7 @@
     },
     {
       "path": "docs/releases/1.0-RC12.md",
-      "digest": "sha256:07af36ac00e842e57ad9aeea674a61f62983374615043aa76e7408071d77826c"
+      "digest": "sha256:22d1000e6ece9132164b9a325647eac9c9db839ee98dac529fb74c76c91591dc"
     },
     {
       "path": "docs/releases/1.0-RC2.md",
@@ -1905,7 +1913,7 @@
     },
     {
       "path": "docs/specification/capability-map.json",
-      "digest": "sha256:2c8cfd6b74ede0785650b8641a6fa5b62f11873fb0b3eebbf2a81c2163439a73"
+      "digest": "sha256:82f3c8b4c328d540f9fa480c3266629f0dfc0b3c4fb8685d682d634b7e05cab4"
     },
     {
       "path": "docs/specification/conflict-review.md",
@@ -1913,7 +1921,7 @@
     },
     {
       "path": "docs/specification/evidence-receipts.json",
-      "digest": "sha256:6d59bc48183fb927bcb387dc34b0b30a2e6b6d82ac2669b4da331a0973524e08"
+      "digest": "sha256:4a09253f389df5d8e07e83bf3239ab69d1c4137e32c5b3577d7381ebf37f8fde"
     },
     {
       "path": "docs/specification/functional-requirements.md",
@@ -1945,7 +1953,7 @@
     },
     {
       "path": "docs/specification/source-ledger.md",
-      "digest": "sha256:fee25de693eb9ae9ea3caaaea995ac4034b0f8c1734bbec8d210265472c58d0d"
+      "digest": "sha256:60c48c6476bc530e5033b764039f03da4fd41fc5bc7a4a6b56dd2b9e0b21bcdb"
     },
     {
       "path": "docs/specification/spec-config.yaml",
@@ -1973,7 +1981,7 @@
     },
     {
       "path": "docs/specification/verification-matrix.md",
-      "digest": "sha256:b1c77e7f275e7e2d51083a36ddf09bc811e0d8e1988ac72417402a2ed234087e"
+      "digest": "sha256:8bd1b12d9e035d564dbd8b6f77d52c02d0c3cf192b06305951f3d5066824fa97"
     },
     {
       "path": "docs/specification/workflows.md",
@@ -1981,7 +1989,7 @@
     },
     {
       "path": "docs/superpowers/plan-status.md",
-      "digest": "sha256:3230f3e078bb87f6a6c84cb16bddf298ee9b9e8ed1d1ff13757745a42a98c1e2"
+      "digest": "sha256:4f9feb169d37a64c8d994b77dc9fcc02fad5942a048c9ce28c4076caa512ee23"
     },
     {
       "path": "docs/superpowers/plans/2026-06-06-rtkcollector-bootstrap.md",
@@ -2225,7 +2233,7 @@
     },
     {
       "path": "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md",
-      "digest": "sha256:b8a908ea2df36157a5e5a01d758b65f9d5dc3e9e9325cd556874ca35d5fb8d55"
+      "digest": "sha256:30192e5af19eebfab38a187d19b0ff7360a308b98971fbe3a305526c7f9036a3"
     },
     {
       "path": "docs/superpowers/specs/2026-06-06-rtkcollector-bootstrap-design.md",
@@ -2398,6 +2406,10 @@
     {
       "path": "docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md",
       "digest": "sha256:a97171644f2d15f6acfb126ad80c8bfdc75ed92112d170e0dbf8dc4d688bf383"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-11-01-stop-confirmation-timer-repair-design.md",
+      "digest": "sha256:96d2d8c8c1778f0cdada48ea8f49bb0940d20c839715fb55176aff109cd7ced5"
     },
     {
       "path": "docs/supported-receivers.md",
@@ -3086,7 +3098,7 @@
     "WF-TEMPBASE-HEIGHT-001",
     "WF-UPLOAD-UI-001"
   ],
-  "capability_inventory_digest": "sha256:af0f7d777e4b7bb15294da5230154ee8116b6271d1da8088ef0aa7c561d99fb2",
+  "capability_inventory_digest": "sha256:ea1924afaaf559224dbe3c8fcaea645934b953f8262cd6e25dbaaea03ee4fece",
   "approval_policy_digest": "sha256:7f86c567dc580c62a27ba00d8c956af4a3ca946e0fb95f91aa2452af41988c48",
   "implementation_traceability": [
     {
@@ -3885,6 +3897,12 @@
     },
     {
       "path": "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt",
+      "requirement_ids": [
+        "UI-STOP-001"
+      ]
+    },
+    {
+      "path": "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt",
       "requirement_ids": [
         "UI-STOP-001"
       ]
@@ -5167,8 +5185,8 @@
       ]
     }
   ],
-  "observed_head_commit": "fd318cd4f91f48a21d5883471719864f2fa292cc",
-  "scope_digest": "sha256:17f82b77cb0a176afc0d30c45f173bc78237850fcd1d898c031f74d144a88753",
+  "observed_head_commit": "3528ee47ac5d2e66a6a0dad96ed8b19830e52384",
+  "scope_digest": "sha256:1a060b478ddf69d3c7d0e4d8f4a12c949a0c5d52a1f37d8bd2570b2ad6aced7e",
   "reviewed_paths": [
     ".github/CODEOWNERS",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -5295,6 +5313,7 @@
     "app/src/main/kotlin/org/rtkcollector/app/recording/SessionZipExporter.kt",
     "app/src/main/kotlin/org/rtkcollector/app/recording/StateBroadcastRateLimiter.kt",
     "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt",
+    "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt",
     "app/src/main/kotlin/org/rtkcollector/app/recording/Um980BaudTransition.kt",
     "app/src/main/kotlin/org/rtkcollector/app/recording/UsbRecoveryConsent.kt",
     "app/src/main/kotlin/org/rtkcollector/app/recording/UsbRecoveryPlatform.kt",
@@ -5484,6 +5503,7 @@
     "app/src/test/kotlin/org/rtkcollector/app/recording/SessionZipExporterTest.kt",
     "app/src/test/kotlin/org/rtkcollector/app/recording/StateBroadcastRateLimiterTest.kt",
     "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicyTest.kt",
+    "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoopTest.kt",
     "app/src/test/kotlin/org/rtkcollector/app/recording/Um980BaudTransitionTest.kt",
     "app/src/test/kotlin/org/rtkcollector/app/recording/UsbRecoveryConsentTest.kt",
     "app/src/test/kotlin/org/rtkcollector/app/sessions/ActiveRecordingSessionRegistryTest.kt",
@@ -5769,6 +5789,7 @@
     "docs/superpowers/specs/2026-10-30-supporting-requirement-coverage-design.md",
     "docs/superpowers/specs/2026-11-01-p30pro-recording-safety-design.md",
     "docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md",
+    "docs/superpowers/specs/2026-11-01-stop-confirmation-timer-repair-design.md",
     "docs/supported-receivers.md",
     "docs/testing-plan.md",
     "docs/third-party-licenses.md",
@@ -6204,7 +6225,7 @@
     "UI-SETUP-007": "sha256:a7df6b7c1735b85638a96527c45956b3fe11e23652fd02d402ad5b5d593b0445",
     "UI-SETUP-008": "sha256:5abf879067ef0fdc7ad09baf7df4fbd6c91d77085d9e0f57445f2ce9db6a2e0e",
     "UI-SETUP-009": "sha256:f71d5b4b282e793c5870e08affc9b60fb0ddd6254cbd99d9d0b6b30f92f5aa63",
-    "UI-STOP-001": "sha256:db5da26c11da0af55680393de651c2b5d886b4ac128b44ce847c33a1a36f3ae6",
+    "UI-STOP-001": "sha256:2d197c86d1392ba48a8bb11c51178e48bde5e6c6f853efd69ae701c9e9943143",
     "UI-STORAGE-001": "sha256:9b826f92b5db82fc46e5d257ac5d4b33168be30f44fcc8fb5daf5f198b074dba",
     "UI-UPLOAD-001": "sha256:bdc47488a1769d237b1aff459897076beb0269b21499b587a588bdfbab836f0f",
     "UI-UPLOAD-002": "sha256:bdc47488a1769d237b1aff459897076beb0269b21499b587a588bdfbab836f0f",
@@ -6551,7 +6572,7 @@
   },
   "result": "pass",
   "reviewer": "model:codex-rc12-independent-sol-high",
-  "reviewed_at": "2026-11-01T20:48:20.222531Z",
+  "reviewed_at": "2026-11-01T22:23:36.881253Z",
   "findings": [],
   "limitations": [],
   "conclusions": [
@@ -8236,6 +8257,12 @@
       "notes": "Validated whole-second delay 1-60 and active timeout 1-120 default to 2/10. Monotonic absolute deadlines create WAITING then a full separate ACTIVE interval and EXPIRED, with ceiling-second labels. Synchronized process-local authority derives ownership from service activation, holds at most one pending request and consumes only a matching current owner/token within ACTIVE exactly once; cancel/retire/owner replacement revoke it and diagnostic callback failures are contained. No capture or IO dependency is introduced. Policy test source covers boundary/deferred-tick behavior, ranges, early/expiry/replay/stale identity, cancel/retire and throwing diagnostics. Current scoped requirement: UI-STOP-001."
     },
     {
+      "path": "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt",
+      "requirement_id": "UI-STOP-001",
+      "result": "pass",
+      "notes": "Fresh independent current-source review: one pre-render elapsed sample determines expiry, frame and the next absolute target, min(now+100ms, next openedAt-relative second boundary). The frame is rendered once; cancellation is rechecked, one after-render elapsed sample is taken, and stale identity/expiry dismiss before scheduling. The remaining interval max(0,targetElapsed-afterRenderElapsed) is translated to current uptime and posted absolutely. Rendering time is not added as another 100ms delay; overdue work posts immediately. Cancel removes pending work and fences delivered callbacks, run removes its prior pending callback, and late callbacks skip missed labels without extending immutable 2/10 deadlines or configuration bounds. The pure seam has no recording/authority/alarm dependency. Ten deterministic tests use literal boundary expectations, simulated 15ms frame cost, distinct elapsed/uptime offsets, late delivery, overdue targets, cancel/stale identity during rendering and render crossing expiry. Actual old-order negative control failed 3/7 cases; repaired ten refresh plus five policy cases pass. This establishes the source scheduling invariant, not historical host callback causality or current host GREEN."
+    },
+    {
       "path": "app/src/main/kotlin/org/rtkcollector/app/recording/Um980BaudTransition.kt",
       "requirement_id": "ANDROID-DIAGNOSTICS-005",
       "result": "pass",
@@ -8689,7 +8716,7 @@
       "path": "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt",
       "requirement_id": "UI-STOP-001",
       "result": "pass",
-      "notes": "Fresh focused review after actual host RED: the queued setOnShowListener initialization is replaced by a local initializeButtons function, invoked synchronously immediately after dialog.show returns. On the UI-thread call sites, the native buttons now exist and the custom guarded positive listener and initial disabled/countdown state are installed before control yields to queued input; an early click cannot take the native default-dismiss path. The existing monotonic ACTIVE/deadline check, submitted/isShowing one-shot guard, immediate disabling on confirmation, service-owned one-use token, failure cancellation and toast, Activity-owner navigation dismissal, background/recreation cleanup and timer/callback removal remain intact. No service, raw, transport, settings, command or alarm runtime delta exists. Original SDK33/35 host assertions and test source are unchanged; the observed four failures are the actual RED oracle and corrected host GREEN is still pending. This is a source conclusion for UI-STOP-001, not an execution certificate."
+      "notes": "Fresh independent current adapter review: synchronous post-show initialization remains; the pure loop receives SystemClock elapsed/uptime, Handler postAtTime/remove callbacks, actual visibility/current-token predicate and a frame renderer that avoids unchanged label writes. Dispatch now requires enabled button, showing dialog, current pending token, fresh ACTIVE phase and one-shot submission; service validation remains final authority. Cancellation/submission/error paths cancel refresh work without capture or alarm effects. The dismiss callback changes outcome to expired only while the dialog is still showing, preserving a prior cancelled/backgrounded outcome if a delivered stale refresh precedes queued onDismiss. The corrected host regression captures the actual queued refresh, calls dialog.dismiss directly on the main Looper, asserts hidden state and only opened provenance before manually delivering the callback, then checks cancelled outcome/no service. Default negative performClick was rejected for this fixture because its framework dismissal is queued; no broad looper drain occurs before the simulated race. Original host 2/9/1 assertions remain, success now asserts visible enabled state and label before click, and prior owner-scoped navigation/background/recreation/startup/replay/base and failure-safe behavior is preserved. No unsupported native execution or host GREEN is claimed."
     },
     {
       "path": "app/src/main/kotlin/org/rtkcollector/app/ui/common/TidyUi.kt",
@@ -11225,37 +11252,46 @@
     }
   ],
   "audit_provenance": {
-    "scope": "Full exact-scope independent source semantics, original acceptance and test-source review; not an execution, field-validation or release-publication certificate.",
+    "scope": "Current full exact-scope independent source semantics and original acceptance/test-source audit after the approved timer repair; not a future host-test, device, signing or release-publication certificate.",
     "comparison_base": "d38686a6d75592be7b41663919029aaf1cd2e1de",
-    "review_context": ".spec-assurance/rc12-dialog-review-context.json",
-    "expected_scope_digest": "sha256:17f82b77cb0a176afc0d30c45f173bc78237850fcd1d898c031f74d144a88753",
+    "review_context": ".spec-assurance/rc12-refresh-review-context.json",
+    "expected_scope_digest": "sha256:1a060b478ddf69d3c7d0e4d8f4a12c949a0c5d52a1f37d8bd2570b2ad6aced7e",
     "schema_authority": "Unmodified project-vendored tools/specification/spec_check.py, SEMANTIC_SCHEMA_VERSION=5; installed schema-4 references were not used as schema authority.",
     "model": "gpt-6.1-sol",
     "reasoning_effort": "high",
     "model_identity_basis": "Controller verified runtime metadata and supplied exact model/effort; not model self-identification or an independent runtime-inspection claim.",
-    "method": "Same independent reviewer continued the exact-scope review after host CI identified a real native-dialog initialization defect missed by the earlier source review. Regenerated full project schema-5 context was compared exactly to the frozen dialog context. Prior source conclusions were reused only for exact matching path/requirement digests and existing traced pairs. Independently reviewed all four changed paths, the one fresh traced pair and adjacent timing, lifecycle, authorization and diagnostic effects. Original unchanged tests were preserved as RED oracles. All earlier approval, provenance, legacy-helper and execution qualifications remain retained in the nested review history.",
+    "method": "Whole task delta from d386 was reconciled through fd318cd, 3528ee4 and the current approved repair. Exact unchanged path/requirement/traced-pair conclusions were retained from the qualified passing 17f82b source artifact, not from the pending 6fe2 diagnostic checkpoint. Independently reviewed all twelve changed/new paths, both fresh implementation pairs, current original acceptance, adjacent ownership/diagnostic/privacy/raw/alarm boundaries, pure regression oracles, host fixture corrections, approved mapping and all evidence/status updates. Independently regenerated the project schema-5 full context and validated current scoped file hashes. No new code, receipt approval, Gradle execution or remote publication was performed by this reviewer.",
     "reconciliation": {
-      "context_path_hashes_verified": 730,
-      "changed_or_new_paths_independently_reviewed": 4,
-      "unchanged_paths": 726,
+      "context_path_hashes_verified": 733,
+      "changed_or_new_paths_independently_reviewed": 12,
+      "unchanged_paths": 721,
       "deleted_paths": 0,
-      "current_unique_traced_pairs": 778,
+      "current_unique_traced_pairs": 779,
       "exact_prior_conclusions_retained": 777,
-      "changed_pair_conclusions_independently_authored": 1,
-      "baseline_semantic_artifact_digest": "sha256:a0568954d7e95ce28f2beee1b2df13632d66092705515f1d7763fe9a08eac7ba",
-      "baseline_scope_digest": "sha256:180bc5ad3d1cdb1d6a4a0f562b7441637dd398092783c1beb9067658ac32a889",
+      "changed_or_new_pair_conclusions_independently_authored": 2,
+      "baseline_semantic_artifact_digest": "sha256:9fc2bf1842edb847a1ba0d26dcd5be58ef25f79b950465ad2855c3a001c9c6da",
+      "baseline_scope_digest": "sha256:17f82b77cb0a176afc0d30c45f173bc78237850fcd1d898c031f74d144a88753",
       "baseline_reviewer": "model:codex-rc12-independent-sol-high",
-      "baseline_reviewed_at": "2026-11-01T20:34:05.384270Z",
+      "baseline_reviewed_at": "2026-11-01T20:48:20.222531Z",
       "current_path_hash_mismatches": [],
       "normative_revision_changes": [],
       "reviewed_changed_paths": [
+        "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt",
         "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt",
+        "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt",
+        "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoopTest.kt",
+        "docs/releases/1.0-RC12.md",
+        "docs/specification/capability-map.json",
         "docs/specification/evidence-receipts.json",
+        "docs/specification/source-ledger.md",
         "docs/specification/verification-matrix.md",
-        "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md"
+        "docs/superpowers/plan-status.md",
+        "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md",
+        "docs/superpowers/specs/2026-11-01-stop-confirmation-timer-repair-design.md"
       ],
       "fresh_path_notes": {
-        "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt": "Fresh focused review after actual host RED: the queued setOnShowListener initialization is replaced by a local initializeButtons function, invoked synchronously immediately after dialog.show returns. On the UI-thread call sites, the native buttons now exist and the custom guarded positive listener and initial disabled/countdown state are installed before control yields to queued input; an early click cannot take the native default-dismiss path. The existing monotonic ACTIVE/deadline check, submitted/isShowing one-shot guard, immediate disabling on confirmation, service-owned one-use token, failure cancellation and toast, Activity-owner navigation dismissal, background/recreation cleanup and timer/callback removal remain intact. No service, raw, transport, settings, command or alarm runtime delta exists. Original SDK33/35 host assertions and test source are unchanged; the observed four failures are the actual RED oracle and corrected host GREEN is still pending. This is a source conclusion for UI-STOP-001, not an execution certificate."
+        "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt": "Fresh independent current-source review: one pre-render elapsed sample determines expiry, frame and the next absolute target, min(now+100ms, next openedAt-relative second boundary). The frame is rendered once; cancellation is rechecked, one after-render elapsed sample is taken, and stale identity/expiry dismiss before scheduling. The remaining interval max(0,targetElapsed-afterRenderElapsed) is translated to current uptime and posted absolutely. Rendering time is not added as another 100ms delay; overdue work posts immediately. Cancel removes pending work and fences delivered callbacks, run removes its prior pending callback, and late callbacks skip missed labels without extending immutable 2/10 deadlines or configuration bounds. The pure seam has no recording/authority/alarm dependency. Ten deterministic tests use literal boundary expectations, simulated 15ms frame cost, distinct elapsed/uptime offsets, late delivery, overdue targets, cancel/stale identity during rendering and render crossing expiry. Actual old-order negative control failed 3/7 cases; repaired ten refresh plus five policy cases pass. This establishes the source scheduling invariant, not historical host callback causality or current host GREEN.",
+        "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt": "Fresh independent current adapter review: synchronous post-show initialization remains; the pure loop receives SystemClock elapsed/uptime, Handler postAtTime/remove callbacks, actual visibility/current-token predicate and a frame renderer that avoids unchanged label writes. Dispatch now requires enabled button, showing dialog, current pending token, fresh ACTIVE phase and one-shot submission; service validation remains final authority. Cancellation/submission/error paths cancel refresh work without capture or alarm effects. The dismiss callback changes outcome to expired only while the dialog is still showing, preserving a prior cancelled/backgrounded outcome if a delivered stale refresh precedes queued onDismiss. The corrected host regression captures the actual queued refresh, calls dialog.dismiss directly on the main Looper, asserts hidden state and only opened provenance before manually delivering the callback, then checks cancelled outcome/no service. Default negative performClick was rejected for this fixture because its framework dismissal is queued; no broad looper drain occurs before the simulated race. Original host 2/9/1 assertions remain, success now asserts visible enabled state and label before click, and prior owner-scoped navigation/background/recreation/startup/replay/base and failure-safe behavior is preserved. No unsupported native execution or host GREEN is claimed."
       }
     },
     "resolved_findings": [
@@ -11264,48 +11300,47 @@
       "Authority activation follows both early preparation/stopping returns; no-USB rejected startup test source asserts absent authority.",
       "Dialog submission checks submitted/isShowing and disables Confirm before dispatch; service still consumes once and failed dispatch remains cancel-safe.",
       "Controller identified the explicit navigation/disposal requirement not covered by Activity pause alone. Compose screen-key disposal now invokes Activity-owner-scoped native dismissal, revoking unsubmitted authorization without Stop.",
-      "Host CI41348026809 for fd318cd executed 1153 Google Play JVM cases with four failures: initial disabled-state and successful-dialog tests on SDK33/35. Queued OnShow left the native default positive handler/state active until dispatch. Source repair installs the custom handler and initial timer state synchronously after show; tests remain unchanged and corrected host execution is pending."
+      "Host CI41348026809 for fd318cd executed 1153 Google Play JVM cases with four failures: initial disabled-state and successful-dialog tests on SDK33/35. Queued OnShow left the native default positive handler/state active until dispatch. Source repair installs the custom handler and initial timer state synchronously after show; tests remain unchanged and corrected host execution is pending.",
+      "Current absolute-target refresh scheduling removes the source-supported accumulation of render cost; deterministic old-order RED and repaired GREEN establish the invariant without claiming an observed historical CI trace.",
+      "Queued hidden-dialog refresh could overwrite cancelled/backgrounded provenance with expired. The native dismissal callback now changes outcome only for a still-visible dialog; the regression preserves cancellation before queued onDismiss and asserts no service request.",
+      "The new race fixture initially used negative-button performClick followed by immediate hidden-state assertion. Installed Android AlertController and Robolectric ShadowView bytecode show queued dismissal without automatic direct-click drain. Fixture now uses direct dialog.dismiss on main Looper and preserves the pre-listener/manual-callback ordering assertions."
     ],
     "legacy_helper_qualification": "The requireNotNull in activateFixedBaseWithCommandProfile is reachable only from two unreferenced local helpers, not the current UI. Current visible fixed-base confirmation calls commitFixedBaseHandoff under runCatching. This is not an unresolved acceptance failure; reusing the dead helpers in future would require renewed review.",
-    "approval_boundary": "Owner approval of design, plan, implementation, RC12 release and narrow UI-STOP-001 translation/mapping is recorded by the source ledger. Digest-bound records implement that approved decision; neither this audit nor the ledger claims the human manually reviewed digest strings. No approvals were authored by this reviewer.",
-    "nonpair_governance_documentation_review": "All 29 changed/new paths were reviewed, including tests, release notes, source-ledger, approval/inventory delta, traceability, matrix and checkpoint/status. No removed requirement or path exists. New UI-STOP receipts remain not-run with a real tracked AUTO test target. Existing receipt states are unchanged: 322 not-run, one available and one blocked; none is promoted to passing. Broader implementation/supporting digests and pending timestamps were refreshed without claiming execution. Plans/status/release notes retain incomplete integration/publication and physical-device boundaries.",
-    "execution_evidence_boundary": "Source-only attestation after a real host failure. Controller reports CI41348026809 on fd318cd: 1153 Google Play cases, four failures and 1149 passing; two failing tests each execute on SDK33/35. Old source attestations did not certify those tests passed. The repaired unchanged host oracles have not yet been reported GREEN. Reviewer ran project checker/source/hash/diff validation only, not Gradle, CI or devices. Existing pending receipts remain pending and earlier review qualifications are inherited, not discarded.",
+    "approval_boundary": "Human Go ahead / Also resume goal approves the written timer repair under normal gates and the narrow new loop/design capability mappings, recorded in source-ledger decision 2026-11-01-astra-stop-timer-repair-normal-gates. Inventory digest ea1924afaaf559224dbe3c8fcaea645934b953f8262cd6e25dbaaea03ee4fece is bound to that approval; UI-STOP-001 remains the previously approved ef8847943ec458439d495734ccafebfc4490f62c7a6207fc2aa0d6b80990a1db revision. No exception, changed timer contract or human digest-string inspection is invented.",
+    "nonpair_governance_documentation_review": "All twelve changed/new paths were reviewed. Repair design accurately separates demonstrated source drift from unproven old CI causality; the plan records actual old-order 3/7 failures and repaired 15 pure passes, retaining native/host and release limits. RC12 notes add absolute refresh targets/visible enablement without claiming publication. Plan status remains In progress. Capability changes classify only the approved repair design and map the new internal loop to existing UI-STOP-001. Two pending UI-STOP receipt bindings and the matrix timestamp were refreshed without state promotion. Receipt totals remain 322 not-run, one available and one blocked. Formal requirements and requirement approvals are unchanged.",
+    "execution_evidence_boundary": "Old CI41348026809/fd318cd and CI41349342786/3528ee4 failures remain historical, not claimed GREEN or presented as an executed test of new code. Latest local XML inspected by this reviewer reports ten refresh and five policy cases with zero failures/errors/skips; final-green and old-order RED logs were inspected. Controller additionally reports rc12-refresh-race-seeded.log: all test sources compile and fifteen pure cases pass after fixture correction. Early compile retries hit aapt2/R.jar environment setup and were not interpreted as source failures. Reviewer ran no Gradle, native tests, CI, devices or signing. New host 2/9/1 and queued-dismissal cases remain unexecuted until supported ordinary CI. A source-compliant new implementation may pass current source assurance and normal pre-push before that CI; future CI is required for release qualification, not circularly required to push the repair. No receipt or full execution gate is waived.",
     "prior_audit_provenance": {
       "scope": "Full exact-scope independent source semantics, original acceptance and test-source review; not an execution, field-validation or release-publication certificate.",
       "comparison_base": "d38686a6d75592be7b41663919029aaf1cd2e1de",
-      "review_context": ".spec-assurance/rc12-navigation-review-context.json",
-      "expected_scope_digest": "sha256:180bc5ad3d1cdb1d6a4a0f562b7441637dd398092783c1beb9067658ac32a889",
+      "review_context": ".spec-assurance/rc12-dialog-review-context.json",
+      "expected_scope_digest": "sha256:17f82b77cb0a176afc0d30c45f173bc78237850fcd1d898c031f74d144a88753",
       "schema_authority": "Unmodified project-vendored tools/specification/spec_check.py, SEMANTIC_SCHEMA_VERSION=5; installed schema-4 references were not used as schema authority.",
       "model": "gpt-6.1-sol",
       "reasoning_effort": "high",
       "model_identity_basis": "Controller verified runtime metadata and supplied exact model/effort; not model self-identification or an independent runtime-inspection claim.",
-      "method": "Continuation by the same independent reviewer. Regenerated project schema-5 full context and compared it exactly to the frozen navigation context. Qualified prior conclusions are retained only for exact unchanged path/requirement hashes and existing traced pairs. Independently reviewed all seven changed paths and every affected pair; original timing, ownership, diagnostic, base and privacy acceptance plus prior qualifications remain applicable. No whole-baseline reread or execution-evidence promotion was substituted for this affected review.",
+      "method": "Same independent reviewer continued the exact-scope review after host CI identified a real native-dialog initialization defect missed by the earlier source review. Regenerated full project schema-5 context was compared exactly to the frozen dialog context. Prior source conclusions were reused only for exact matching path/requirement digests and existing traced pairs. Independently reviewed all four changed paths, the one fresh traced pair and adjacent timing, lifecycle, authorization and diagnostic effects. Original unchanged tests were preserved as RED oracles. All earlier approval, provenance, legacy-helper and execution qualifications remain retained in the nested review history.",
       "reconciliation": {
         "context_path_hashes_verified": 730,
-        "changed_or_new_paths_independently_reviewed": 7,
-        "unchanged_paths": 723,
+        "changed_or_new_paths_independently_reviewed": 4,
+        "unchanged_paths": 726,
         "deleted_paths": 0,
         "current_unique_traced_pairs": 778,
-        "exact_prior_conclusions_retained": 747,
-        "changed_pair_conclusions_independently_authored": 31,
-        "baseline_semantic_artifact_digest": "sha256:8b837ec26089980e965101a63c11e4b64087f561aa6f5f7fb1c4a96542260298",
-        "baseline_scope_digest": "sha256:1146cb92b9f0a48af4ce2d721cbaabe6ea57872de7c90e68a0ee2f478168c844",
+        "exact_prior_conclusions_retained": 777,
+        "changed_pair_conclusions_independently_authored": 1,
+        "baseline_semantic_artifact_digest": "sha256:a0568954d7e95ce28f2beee1b2df13632d66092705515f1d7763fe9a08eac7ba",
+        "baseline_scope_digest": "sha256:180bc5ad3d1cdb1d6a4a0f562b7441637dd398092783c1beb9067658ac32a889",
         "baseline_reviewer": "model:codex-rc12-independent-sol-high",
-        "baseline_reviewed_at": "2026-11-01T20:22:46.435899Z",
+        "baseline_reviewed_at": "2026-11-01T20:34:05.384270Z",
         "current_path_hash_mismatches": [],
         "normative_revision_changes": [],
         "reviewed_changed_paths": [
-          "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
           "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt",
-          "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt",
-          "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicyTest.kt",
           "docs/specification/evidence-receipts.json",
           "docs/specification/verification-matrix.md",
           "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md"
         ],
         "fresh_path_notes": {
-          "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt": "Fresh focused review of the complete navigation delta against the original approved UI-STOP-001 contract: DisposableEffect(context, screen) is installed before the configuration-recovery early return and its disposal calls owner-scoped dismissal. Screen-key changes and composition removal cancel an unsubmitted confirmation even when Activity pause does not occur. This adds no recording, command, profile, source, storage, mock or alarm mutation. Existing source conclusions for the rest of this file and the unreachable fixed-base helper qualification were rechecked against the unchanged surrounding code; the visible base confirmation still calls caught commitFixedBaseHandoff.",
-          "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt": "Fresh focused review: each dialog sets its Activity owner; dismissForNavigation unwraps ContextWrapper to the Activity and dismisses only the identical active owner. Existing onDismiss cancellation revokes pending authority and removes timer/lifecycle callbacks without submitting Stop; another Activity cannot dismiss this dialog through the hook. Successful already-confirmed dispatch retains its existing one-use service authorization, which navigation does not retroactively undo. Existing monotonic timing, saved-value snapshots, one-shot submitted/isShowing gate, dispatch-failure cleanup, background/recreation cancellation and raw/alarm isolation remain unchanged."
+          "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt": "Fresh focused review after actual host RED: the queued setOnShowListener initialization is replaced by a local initializeButtons function, invoked synchronously immediately after dialog.show returns. On the UI-thread call sites, the native buttons now exist and the custom guarded positive listener and initial disabled/countdown state are installed before control yields to queued input; an early click cannot take the native default-dismiss path. The existing monotonic ACTIVE/deadline check, submitted/isShowing one-shot guard, immediate disabling on confirmation, service-owned one-use token, failure cancellation and toast, Activity-owner navigation dismissal, background/recreation cleanup and timer/callback removal remain intact. No service, raw, transport, settings, command or alarm runtime delta exists. Original SDK33/35 host assertions and test source are unchanged; the observed four failures are the actual RED oracle and corrected host GREEN is still pending. This is a source conclusion for UI-STOP-001, not an execution certificate."
         }
       },
       "resolved_findings": [
@@ -11313,102 +11348,165 @@
         "Real startup test helper no longer overwrites production authority callbacks; A/B test carries an unconsumed A token into actual B startup and asserts fresh B ownership.",
         "Authority activation follows both early preparation/stopping returns; no-USB rejected startup test source asserts absent authority.",
         "Dialog submission checks submitted/isShowing and disables Confirm before dispatch; service still consumes once and failed dispatch remains cancel-safe.",
-        "Controller identified the explicit navigation/disposal requirement not covered by Activity pause alone. Compose screen-key disposal now invokes Activity-owner-scoped native dismissal, revoking unsubmitted authorization without Stop."
+        "Controller identified the explicit navigation/disposal requirement not covered by Activity pause alone. Compose screen-key disposal now invokes Activity-owner-scoped native dismissal, revoking unsubmitted authorization without Stop.",
+        "Host CI41348026809 for fd318cd executed 1153 Google Play JVM cases with four failures: initial disabled-state and successful-dialog tests on SDK33/35. Queued OnShow left the native default positive handler/state active until dispatch. Source repair installs the custom handler and initial timer state synchronously after show; tests remain unchanged and corrected host execution is pending."
       ],
       "legacy_helper_qualification": "The requireNotNull in activateFixedBaseWithCommandProfile is reachable only from two unreferenced local helpers, not the current UI. Current visible fixed-base confirmation calls commitFixedBaseHandoff under runCatching. This is not an unresolved acceptance failure; reusing the dead helpers in future would require renewed review.",
       "approval_boundary": "Owner approval of design, plan, implementation, RC12 release and narrow UI-STOP-001 translation/mapping is recorded by the source ledger. Digest-bound records implement that approved decision; neither this audit nor the ledger claims the human manually reviewed digest strings. No approvals were authored by this reviewer.",
       "nonpair_governance_documentation_review": "All 29 changed/new paths were reviewed, including tests, release notes, source-ledger, approval/inventory delta, traceability, matrix and checkpoint/status. No removed requirement or path exists. New UI-STOP receipts remain not-run with a real tracked AUTO test target. Existing receipt states are unchanged: 322 not-run, one available and one blocked; none is promoted to passing. Broader implementation/supporting digests and pending timestamps were refreshed without claiming execution. Plans/status/release notes retain incomplete integration/publication and physical-device boundaries.",
-      "execution_evidence_boundary": "Controller reports earlier local full Android gate: 1491 current-task results/197 suites, zero failures/errors/skips, all app tests compiled and both IDE aliases dry-run; those results predate the navigation delta and are not claimed as verification of this hook. Reviewer ran only project checker/source/hash/diff checks, not Gradle, CI or device tests. Navigation host tests remain source-reviewed until clean-host execution. All pending evidence and all prior review qualifications are preserved.",
+      "execution_evidence_boundary": "Source-only attestation after a real host failure. Controller reports CI41348026809 on fd318cd: 1153 Google Play cases, four failures and 1149 passing; two failing tests each execute on SDK33/35. Old source attestations did not certify those tests passed. The repaired unchanged host oracles have not yet been reported GREEN. Reviewer ran project checker/source/hash/diff validation only, not Gradle, CI or devices. Existing pending receipts remain pending and earlier review qualifications are inherited, not discarded.",
       "prior_audit_provenance": {
         "scope": "Full exact-scope independent source semantics, original acceptance and test-source review; not an execution, field-validation or release-publication certificate.",
         "comparison_base": "d38686a6d75592be7b41663919029aaf1cd2e1de",
-        "review_context": ".spec-assurance/rc12-review-context-fixed.json",
-        "expected_scope_digest": "sha256:1146cb92b9f0a48af4ce2d721cbaabe6ea57872de7c90e68a0ee2f478168c844",
+        "review_context": ".spec-assurance/rc12-navigation-review-context.json",
+        "expected_scope_digest": "sha256:180bc5ad3d1cdb1d6a4a0f562b7441637dd398092783c1beb9067658ac32a889",
         "schema_authority": "Unmodified project-vendored tools/specification/spec_check.py, SEMANTIC_SCHEMA_VERSION=5; installed schema-4 references were not used as schema authority.",
         "model": "gpt-6.1-sol",
         "reasoning_effort": "high",
         "model_identity_basis": "Controller verified runtime metadata and supplied exact model/effort; not model self-identification or an independent runtime-inspection claim.",
-        "method": "Prior independent review retained only for exact unchanged path and requirement hashes and existing passing traced pairs. Independently reviewed every changed/new path, all fresh pairs, approval translation and capability boundaries, receipts/matrix, approved design/plan, tests, operator/release documentation and adjacent Stop/start/alarm/raw/diagnostic contracts. Earlier concrete findings were repaired and affected source/tests independently rereviewed. Project checker context was regenerated and matched the corrected frozen context exactly with no structural findings.",
+        "method": "Continuation by the same independent reviewer. Regenerated project schema-5 full context and compared it exactly to the frozen navigation context. Qualified prior conclusions are retained only for exact unchanged path/requirement hashes and existing traced pairs. Independently reviewed all seven changed paths and every affected pair; original timing, ownership, diagnostic, base and privacy acceptance plus prior qualifications remain applicable. No whole-baseline reread or execution-evidence promotion was substituted for this affected review.",
         "reconciliation": {
           "context_path_hashes_verified": 730,
-          "changed_or_new_paths_independently_reviewed": 29,
-          "unchanged_paths": 701,
+          "changed_or_new_paths_independently_reviewed": 7,
+          "unchanged_paths": 723,
           "deleted_paths": 0,
           "current_unique_traced_pairs": 778,
-          "exact_prior_conclusions_retained": 634,
-          "changed_or_new_pair_conclusions_independently_authored": 144,
-          "baseline_semantic_artifact_digest": "sha256:46aca58d60202734cb864a89751910a5a7595715779ca14aed2399cfb99287ea",
-          "baseline_scope_digest": "sha256:6ac7862784e2a49575313bb23a8a93a0f3b8033e7e4aead8f4f65c153616ce35",
-          "baseline_reviewer": "model:codex-rc11-independent-sol-high",
-          "baseline_reviewed_at": "2026-11-01T12:13:41.284566Z",
+          "exact_prior_conclusions_retained": 747,
+          "changed_pair_conclusions_independently_authored": 31,
+          "baseline_semantic_artifact_digest": "sha256:8b837ec26089980e965101a63c11e4b64087f561aa6f5f7fb1c4a96542260298",
+          "baseline_scope_digest": "sha256:1146cb92b9f0a48af4ce2d721cbaabe6ea57872de7c90e68a0ee2f478168c844",
+          "baseline_reviewer": "model:codex-rc12-independent-sol-high",
+          "baseline_reviewed_at": "2026-11-01T20:22:46.435899Z",
           "current_path_hash_mismatches": [],
-          "normative_revision_changes": [
-            "UI-STOP-001"
-          ],
-          "fresh_path_notes": {
-            "README.md": "Operator copy accurately adds the default disabled 2-second phase and separate 10-second active phase, cancellation/timeout preservation and Advanced settings. It does not claim field validation or identify the historical initiating touch.",
-            "app/build.gradle.kts": "The only build delta increments versionName to 1.0-RC12 and versionCode to 13. Distribution variants, permissions, packaging, native pin/provisioning, dependencies, signing boundaries and IDE task aliases remain unchanged. Source review does not certify RC12 assembly or publication.",
-            "app/src/main/kotlin/org/rtkcollector/app/MainActivity.kt": "The legacy Activity Stop control uses the same Activity-compatible confirmation host as Compose and configuration recovery. No immediate unscoped Stop remains at this control. Replay/start/session lifecycle and raw capture remain service-owned and otherwise unchanged.",
-            "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsModels.kt": "The runtime allowlist admits only controlId, ownerId, requestId and correlationId in addition to existing keys. Existing redaction, 24-attribute limit, 256-character attribute bounds, message bounds and independent minimal journal are preserved; arbitrary keys, credentials and position dumps are not enabled. Serializer test source checks actual essential-journal JSON and rejects an unknown password field.",
-            "app/src/main/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnostics.kt": "Only bounded allowlist entries controlId, ownerId and requestId are added. Correlation uses the existing dedicated record parameter. Existing scalar/string filtering, redaction, bounded queue and output, drop/failure accounting, sealing, writer lease and off-path delivery remain unchanged. Regression test source inspects serialized events and excludes an unknown password field.",
-            "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt": "Current complete service delta and affected ownership/diagnostic/correction contracts reviewed. Explicit Stop requires a current one-use in-window token, an owner-matched separately confirmed fixed-base transition, or an alarm-generation action with no recording ownership; bare, stale, early, expired and replayed recording Stops fail closed. Activation follows authorized-intent preparation and the stopping early-return check, preserves startup identity through capture and retires before teardown. Source provenance uses bounded identity keys and dedicated stop correlation; diagnostic exceptions do not grant authority. Existing USER initiator/contributors, alarm fencing, immediate automatic cleanup, off-main startup/finalization barriers, raw append and artifact separation, USB retry/baud/command ownership, NTRIP/TLS/upload routing and lazy RTKLIB are unchanged. New host test source exercises real rejected startup, outstanding A-token retirement and B startup/owner, stale terminal alarm rejection, valid base transition and dialog-to-service Stop. Host execution remains pending, not certified here.",
-            "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt": "Validated whole-second delay 1-60 and active timeout 1-120 default to 2/10. Monotonic absolute deadlines create WAITING then a full separate ACTIVE interval and EXPIRED, with ceiling-second labels. Synchronized process-local authority derives ownership from service activation, holds at most one pending request and consumes only a matching current owner/token within ACTIVE exactly once; cancel/retire/owner replacement revoke it and diagnostic callback failures are contained. No capture or IO dependency is introduced. Policy test source covers boundary/deferred-tick behavior, ranges, early/expiry/replay/stale identity, cancel/retire and throwing diagnostics.",
-            "app/src/main/kotlin/org/rtkcollector/app/settings/StopConfirmationSettings.kt": "A separate app-wide SharedPreferences store writes the validated timing pair in one editor operation. Missing, corrupt-type and out-of-range values safely use 2/10 defaults without modifying diagnostic or profile settings. Dialogs receive an immutable value snapshot. Host test source covers persistence, extrema, corrupt values and unchanged logging selection.",
-            "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt": "Main and configuration-recovery explicit Stop controls enter the shared confirmation; opening no longer clears startup/UI locks or stops/acknowledges recording. Existing final fixed-base confirmation uses the owner-matched transition intent inside runCatching; its publication waits for existing STOPPED/FAILED observation. Other profile, workflow, mock, receiver, source, storage and replay behavior is unchanged. Reachability audit: activateFixedBaseWithCommandProfile has only overwriteCommandProfileForFixedBase/createFixedBaseCommandProfile callers; both are unreferenced local definitions. Its uncaught requireNotNull therefore has no current UI entry point. Visible confirmation calls commitFixedBaseHandoff, whose session lookup is caught; no unrelated dead-helper refactor is required.",
-            "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt": "One native dialog covers legacy and Compose Activities. It snapshots saved timing, renders both phase countdowns inside Confirm, keeps Cancel available and checks actual monotonic time on click. Service authority remains decisive. Pause/destruction, Cancel, Back/outside dismissal and expiry remove pending authority without Stop; identity retirement dismisses the old dialog. Confirmation checks submitted and isShowing and immediately disables the button to prevent repeat dispatch. Successful dispatch preserves the token for service consumption; failed dispatch reports recording continues and retains cancellation cleanup. Timer/callback cleanup does not own capture, corrections, USB recovery or alarms. Host test source covers default timing, timeout/background, Cancel/recreation and successful startup Stop/replay; actual host/device execution remains separately pending.",
-            "app/src/main/kotlin/org/rtkcollector/app/ui/diagnostics/AppDiagnosticsScreen.kt": "Advanced settings retains all existing level, retention, performance, export and delete controls. Two draft fields use the existing custom single-line editor; integer parsing plus StopConfirmationTiming rejects empty, nonnumeric, overflowing and out-of-range edits. Save requires a valid changed pair and writes only stop timing. Saved state and dialog snapshots do not mutate recording or logging selection. Existing privacy and optional-diagnostic behavior is unchanged.",
-            "app/src/main/kotlin/org/rtkcollector/app/ui/settings/SettingsHub.kt": "Only the logging/performance entry name/icon text becomes Advanced settings, using the same callback. Existing settings navigation, profile ownership and readiness behavior is unchanged; the renamed destination exposes validated stop timing while retaining diagnostic controls.",
-            "docs/specification/ui-requirements.md": "The only normalized requirement addition/change is approved UI-STOP-001. It accurately translates the approved two countdown phases, validated persisted bounds, lifecycle cancellation, service-owned one-use identity/expiry checks, separate base/automatic/alarm paths, bounded private provenance and renamed settings without weakening existing UI requirement blocks. Automated and manual evidence obligations remain distinct and pending.",
-            "docs/user-workflows.md": "The operator section names the actual Advanced settings menu, default 2-second disabled phase followed by a separate 10-second enabled window, cancellation/background preservation, configurable persisted bounds, and separate base/failure cleanup. Existing startup/finalization and minimal-log guidance remains compatible when Stop means the confirmed accepted action. No field validation, guaranteed durability or root-cause identification is claimed."
-          },
+          "normative_revision_changes": [],
           "reviewed_changed_paths": [
-            "README.md",
-            "app/build.gradle.kts",
-            "app/src/main/kotlin/org/rtkcollector/app/MainActivity.kt",
-            "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsModels.kt",
-            "app/src/main/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnostics.kt",
-            "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
-            "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt",
-            "app/src/main/kotlin/org/rtkcollector/app/settings/StopConfirmationSettings.kt",
             "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
             "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt",
-            "app/src/main/kotlin/org/rtkcollector/app/ui/diagnostics/AppDiagnosticsScreen.kt",
-            "app/src/main/kotlin/org/rtkcollector/app/ui/settings/SettingsHub.kt",
-            "app/src/test/kotlin/org/rtkcollector/app/alarms/AlarmSettingsStoreTest.kt",
-            "app/src/test/kotlin/org/rtkcollector/app/diagnostics/RuntimeDiagnosticsTest.kt",
-            "app/src/test/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnosticsTest.kt",
             "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt",
             "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicyTest.kt",
-            "docs/releases/1.0-RC12.md",
-            "docs/specification/capability-map.json",
             "docs/specification/evidence-receipts.json",
-            "docs/specification/requirement-approvals.json",
-            "docs/specification/source-ledger.md",
-            "docs/specification/traceability.md",
-            "docs/specification/ui-requirements.md",
             "docs/specification/verification-matrix.md",
-            "docs/superpowers/plan-status.md",
-            "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md",
-            "docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md",
-            "docs/user-workflows.md"
-          ]
+            "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md"
+          ],
+          "fresh_path_notes": {
+            "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt": "Fresh focused review of the complete navigation delta against the original approved UI-STOP-001 contract: DisposableEffect(context, screen) is installed before the configuration-recovery early return and its disposal calls owner-scoped dismissal. Screen-key changes and composition removal cancel an unsubmitted confirmation even when Activity pause does not occur. This adds no recording, command, profile, source, storage, mock or alarm mutation. Existing source conclusions for the rest of this file and the unreachable fixed-base helper qualification were rechecked against the unchanged surrounding code; the visible base confirmation still calls caught commitFixedBaseHandoff.",
+            "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt": "Fresh focused review: each dialog sets its Activity owner; dismissForNavigation unwraps ContextWrapper to the Activity and dismisses only the identical active owner. Existing onDismiss cancellation revokes pending authority and removes timer/lifecycle callbacks without submitting Stop; another Activity cannot dismiss this dialog through the hook. Successful already-confirmed dispatch retains its existing one-use service authorization, which navigation does not retroactively undo. Existing monotonic timing, saved-value snapshots, one-shot submitted/isShowing gate, dispatch-failure cleanup, background/recreation cancellation and raw/alarm isolation remain unchanged."
+          }
         },
         "resolved_findings": [
           "Stop identity fields now pass both bounded serializers; session correlation uses the dedicated parameter and accepted source retains request identity.",
           "Real startup test helper no longer overwrites production authority callbacks; A/B test carries an unconsumed A token into actual B startup and asserts fresh B ownership.",
           "Authority activation follows both early preparation/stopping returns; no-USB rejected startup test source asserts absent authority.",
-          "Dialog submission checks submitted/isShowing and disables Confirm before dispatch; service still consumes once and failed dispatch remains cancel-safe."
+          "Dialog submission checks submitted/isShowing and disables Confirm before dispatch; service still consumes once and failed dispatch remains cancel-safe.",
+          "Controller identified the explicit navigation/disposal requirement not covered by Activity pause alone. Compose screen-key disposal now invokes Activity-owner-scoped native dismissal, revoking unsubmitted authorization without Stop."
         ],
         "legacy_helper_qualification": "The requireNotNull in activateFixedBaseWithCommandProfile is reachable only from two unreferenced local helpers, not the current UI. Current visible fixed-base confirmation calls commitFixedBaseHandoff under runCatching. This is not an unresolved acceptance failure; reusing the dead helpers in future would require renewed review.",
         "approval_boundary": "Owner approval of design, plan, implementation, RC12 release and narrow UI-STOP-001 translation/mapping is recorded by the source ledger. Digest-bound records implement that approved decision; neither this audit nor the ledger claims the human manually reviewed digest strings. No approvals were authored by this reviewer.",
         "nonpair_governance_documentation_review": "All 29 changed/new paths were reviewed, including tests, release notes, source-ledger, approval/inventory delta, traceability, matrix and checkpoint/status. No removed requirement or path exists. New UI-STOP receipts remain not-run with a real tracked AUTO test target. Existing receipt states are unchanged: 322 not-run, one available and one blocked; none is promoted to passing. Broader implementation/supporting digests and pending timestamps were refreshed without claiming execution. Plans/status/release notes retain incomplete integration/publication and physical-device boundaries.",
-        "execution_evidence_boundary": "Controller reports 14 focused pure tests green including serializer RED-to-GREEN and local compile work; reviewer did not run Gradle, host tests, CI, device validation or release verification. Android lifecycle oracles are source-reviewed only until clean-host CI executes. All unenrolled and manual receipt states remain pending. Empty findings/limitations assert complete source review for this exact scope, not completed test execution or field assurance."
+        "execution_evidence_boundary": "Controller reports earlier local full Android gate: 1491 current-task results/197 suites, zero failures/errors/skips, all app tests compiled and both IDE aliases dry-run; those results predate the navigation delta and are not claimed as verification of this hook. Reviewer ran only project checker/source/hash/diff checks, not Gradle, CI or device tests. Navigation host tests remain source-reviewed until clean-host execution. All pending evidence and all prior review qualifications are preserved.",
+        "prior_audit_provenance": {
+          "scope": "Full exact-scope independent source semantics, original acceptance and test-source review; not an execution, field-validation or release-publication certificate.",
+          "comparison_base": "d38686a6d75592be7b41663919029aaf1cd2e1de",
+          "review_context": ".spec-assurance/rc12-review-context-fixed.json",
+          "expected_scope_digest": "sha256:1146cb92b9f0a48af4ce2d721cbaabe6ea57872de7c90e68a0ee2f478168c844",
+          "schema_authority": "Unmodified project-vendored tools/specification/spec_check.py, SEMANTIC_SCHEMA_VERSION=5; installed schema-4 references were not used as schema authority.",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "high",
+          "model_identity_basis": "Controller verified runtime metadata and supplied exact model/effort; not model self-identification or an independent runtime-inspection claim.",
+          "method": "Prior independent review retained only for exact unchanged path and requirement hashes and existing passing traced pairs. Independently reviewed every changed/new path, all fresh pairs, approval translation and capability boundaries, receipts/matrix, approved design/plan, tests, operator/release documentation and adjacent Stop/start/alarm/raw/diagnostic contracts. Earlier concrete findings were repaired and affected source/tests independently rereviewed. Project checker context was regenerated and matched the corrected frozen context exactly with no structural findings.",
+          "reconciliation": {
+            "context_path_hashes_verified": 730,
+            "changed_or_new_paths_independently_reviewed": 29,
+            "unchanged_paths": 701,
+            "deleted_paths": 0,
+            "current_unique_traced_pairs": 778,
+            "exact_prior_conclusions_retained": 634,
+            "changed_or_new_pair_conclusions_independently_authored": 144,
+            "baseline_semantic_artifact_digest": "sha256:46aca58d60202734cb864a89751910a5a7595715779ca14aed2399cfb99287ea",
+            "baseline_scope_digest": "sha256:6ac7862784e2a49575313bb23a8a93a0f3b8033e7e4aead8f4f65c153616ce35",
+            "baseline_reviewer": "model:codex-rc11-independent-sol-high",
+            "baseline_reviewed_at": "2026-11-01T12:13:41.284566Z",
+            "current_path_hash_mismatches": [],
+            "normative_revision_changes": [
+              "UI-STOP-001"
+            ],
+            "fresh_path_notes": {
+              "README.md": "Operator copy accurately adds the default disabled 2-second phase and separate 10-second active phase, cancellation/timeout preservation and Advanced settings. It does not claim field validation or identify the historical initiating touch.",
+              "app/build.gradle.kts": "The only build delta increments versionName to 1.0-RC12 and versionCode to 13. Distribution variants, permissions, packaging, native pin/provisioning, dependencies, signing boundaries and IDE task aliases remain unchanged. Source review does not certify RC12 assembly or publication.",
+              "app/src/main/kotlin/org/rtkcollector/app/MainActivity.kt": "The legacy Activity Stop control uses the same Activity-compatible confirmation host as Compose and configuration recovery. No immediate unscoped Stop remains at this control. Replay/start/session lifecycle and raw capture remain service-owned and otherwise unchanged.",
+              "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsModels.kt": "The runtime allowlist admits only controlId, ownerId, requestId and correlationId in addition to existing keys. Existing redaction, 24-attribute limit, 256-character attribute bounds, message bounds and independent minimal journal are preserved; arbitrary keys, credentials and position dumps are not enabled. Serializer test source checks actual essential-journal JSON and rejects an unknown password field.",
+              "app/src/main/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnostics.kt": "Only bounded allowlist entries controlId, ownerId and requestId are added. Correlation uses the existing dedicated record parameter. Existing scalar/string filtering, redaction, bounded queue and output, drop/failure accounting, sealing, writer lease and off-path delivery remain unchanged. Regression test source inspects serialized events and excludes an unknown password field.",
+              "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt": "Current complete service delta and affected ownership/diagnostic/correction contracts reviewed. Explicit Stop requires a current one-use in-window token, an owner-matched separately confirmed fixed-base transition, or an alarm-generation action with no recording ownership; bare, stale, early, expired and replayed recording Stops fail closed. Activation follows authorized-intent preparation and the stopping early-return check, preserves startup identity through capture and retires before teardown. Source provenance uses bounded identity keys and dedicated stop correlation; diagnostic exceptions do not grant authority. Existing USER initiator/contributors, alarm fencing, immediate automatic cleanup, off-main startup/finalization barriers, raw append and artifact separation, USB retry/baud/command ownership, NTRIP/TLS/upload routing and lazy RTKLIB are unchanged. New host test source exercises real rejected startup, outstanding A-token retirement and B startup/owner, stale terminal alarm rejection, valid base transition and dialog-to-service Stop. Host execution remains pending, not certified here.",
+              "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt": "Validated whole-second delay 1-60 and active timeout 1-120 default to 2/10. Monotonic absolute deadlines create WAITING then a full separate ACTIVE interval and EXPIRED, with ceiling-second labels. Synchronized process-local authority derives ownership from service activation, holds at most one pending request and consumes only a matching current owner/token within ACTIVE exactly once; cancel/retire/owner replacement revoke it and diagnostic callback failures are contained. No capture or IO dependency is introduced. Policy test source covers boundary/deferred-tick behavior, ranges, early/expiry/replay/stale identity, cancel/retire and throwing diagnostics.",
+              "app/src/main/kotlin/org/rtkcollector/app/settings/StopConfirmationSettings.kt": "A separate app-wide SharedPreferences store writes the validated timing pair in one editor operation. Missing, corrupt-type and out-of-range values safely use 2/10 defaults without modifying diagnostic or profile settings. Dialogs receive an immutable value snapshot. Host test source covers persistence, extrema, corrupt values and unchanged logging selection.",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt": "Main and configuration-recovery explicit Stop controls enter the shared confirmation; opening no longer clears startup/UI locks or stops/acknowledges recording. Existing final fixed-base confirmation uses the owner-matched transition intent inside runCatching; its publication waits for existing STOPPED/FAILED observation. Other profile, workflow, mock, receiver, source, storage and replay behavior is unchanged. Reachability audit: activateFixedBaseWithCommandProfile has only overwriteCommandProfileForFixedBase/createFixedBaseCommandProfile callers; both are unreferenced local definitions. Its uncaught requireNotNull therefore has no current UI entry point. Visible confirmation calls commitFixedBaseHandoff, whose session lookup is caught; no unrelated dead-helper refactor is required.",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt": "One native dialog covers legacy and Compose Activities. It snapshots saved timing, renders both phase countdowns inside Confirm, keeps Cancel available and checks actual monotonic time on click. Service authority remains decisive. Pause/destruction, Cancel, Back/outside dismissal and expiry remove pending authority without Stop; identity retirement dismisses the old dialog. Confirmation checks submitted and isShowing and immediately disables the button to prevent repeat dispatch. Successful dispatch preserves the token for service consumption; failed dispatch reports recording continues and retains cancellation cleanup. Timer/callback cleanup does not own capture, corrections, USB recovery or alarms. Host test source covers default timing, timeout/background, Cancel/recreation and successful startup Stop/replay; actual host/device execution remains separately pending.",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/diagnostics/AppDiagnosticsScreen.kt": "Advanced settings retains all existing level, retention, performance, export and delete controls. Two draft fields use the existing custom single-line editor; integer parsing plus StopConfirmationTiming rejects empty, nonnumeric, overflowing and out-of-range edits. Save requires a valid changed pair and writes only stop timing. Saved state and dialog snapshots do not mutate recording or logging selection. Existing privacy and optional-diagnostic behavior is unchanged.",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/settings/SettingsHub.kt": "Only the logging/performance entry name/icon text becomes Advanced settings, using the same callback. Existing settings navigation, profile ownership and readiness behavior is unchanged; the renamed destination exposes validated stop timing while retaining diagnostic controls.",
+              "docs/specification/ui-requirements.md": "The only normalized requirement addition/change is approved UI-STOP-001. It accurately translates the approved two countdown phases, validated persisted bounds, lifecycle cancellation, service-owned one-use identity/expiry checks, separate base/automatic/alarm paths, bounded private provenance and renamed settings without weakening existing UI requirement blocks. Automated and manual evidence obligations remain distinct and pending.",
+              "docs/user-workflows.md": "The operator section names the actual Advanced settings menu, default 2-second disabled phase followed by a separate 10-second enabled window, cancellation/background preservation, configurable persisted bounds, and separate base/failure cleanup. Existing startup/finalization and minimal-log guidance remains compatible when Stop means the confirmed accepted action. No field validation, guaranteed durability or root-cause identification is claimed."
+            },
+            "reviewed_changed_paths": [
+              "README.md",
+              "app/build.gradle.kts",
+              "app/src/main/kotlin/org/rtkcollector/app/MainActivity.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/diagnostics/DiagnosticsModels.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnostics.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/settings/StopConfirmationSettings.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/diagnostics/AppDiagnosticsScreen.kt",
+              "app/src/main/kotlin/org/rtkcollector/app/ui/settings/SettingsHub.kt",
+              "app/src/test/kotlin/org/rtkcollector/app/alarms/AlarmSettingsStoreTest.kt",
+              "app/src/test/kotlin/org/rtkcollector/app/diagnostics/RuntimeDiagnosticsTest.kt",
+              "app/src/test/kotlin/org/rtkcollector/app/diagnostics/SessionDiagnosticsTest.kt",
+              "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt",
+              "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicyTest.kt",
+              "docs/releases/1.0-RC12.md",
+              "docs/specification/capability-map.json",
+              "docs/specification/evidence-receipts.json",
+              "docs/specification/requirement-approvals.json",
+              "docs/specification/source-ledger.md",
+              "docs/specification/traceability.md",
+              "docs/specification/ui-requirements.md",
+              "docs/specification/verification-matrix.md",
+              "docs/superpowers/plan-status.md",
+              "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md",
+              "docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md",
+              "docs/user-workflows.md"
+            ]
+          },
+          "resolved_findings": [
+            "Stop identity fields now pass both bounded serializers; session correlation uses the dedicated parameter and accepted source retains request identity.",
+            "Real startup test helper no longer overwrites production authority callbacks; A/B test carries an unconsumed A token into actual B startup and asserts fresh B ownership.",
+            "Authority activation follows both early preparation/stopping returns; no-USB rejected startup test source asserts absent authority.",
+            "Dialog submission checks submitted/isShowing and disables Confirm before dispatch; service still consumes once and failed dispatch remains cancel-safe."
+          ],
+          "legacy_helper_qualification": "The requireNotNull in activateFixedBaseWithCommandProfile is reachable only from two unreferenced local helpers, not the current UI. Current visible fixed-base confirmation calls commitFixedBaseHandoff under runCatching. This is not an unresolved acceptance failure; reusing the dead helpers in future would require renewed review.",
+          "approval_boundary": "Owner approval of design, plan, implementation, RC12 release and narrow UI-STOP-001 translation/mapping is recorded by the source ledger. Digest-bound records implement that approved decision; neither this audit nor the ledger claims the human manually reviewed digest strings. No approvals were authored by this reviewer.",
+          "nonpair_governance_documentation_review": "All 29 changed/new paths were reviewed, including tests, release notes, source-ledger, approval/inventory delta, traceability, matrix and checkpoint/status. No removed requirement or path exists. New UI-STOP receipts remain not-run with a real tracked AUTO test target. Existing receipt states are unchanged: 322 not-run, one available and one blocked; none is promoted to passing. Broader implementation/supporting digests and pending timestamps were refreshed without claiming execution. Plans/status/release notes retain incomplete integration/publication and physical-device boundaries.",
+          "execution_evidence_boundary": "Controller reports 14 focused pure tests green including serializer RED-to-GREEN and local compile work; reviewer did not run Gradle, host tests, CI, device validation or release verification. Android lifecycle oracles are source-reviewed only until clean-host CI executes. All unenrolled and manual receipt states remain pending. Empty findings/limitations assert complete source review for this exact scope, not completed test execution or field assurance."
+        },
+        "navigation_refresh": {
+          "runtime_delta": "Only Compose navigation/disposal binding and owner-scoped native dialog dismissal. No service, policy, settings, raw, NTRIP, command or alarm runtime changes.",
+          "test_source_delta": "Host lifecycle test invokes navigation dismissal after recreation and checks absent pending authorization and no started service. This directly tests the hook, not actual Compose navigation or cross-Activity noninterference. The straightforward Compose wiring and Activity identity condition were source-reviewed. Pure policy range test adds Int.MAX_VALUE delay and Int.MIN_VALUE timeout rejection before deadline arithmetic; no production policy change.",
+          "plan_delta": "Checkboxes distinguish implementation/source/test-authoring from still-pending host execution. Checkpoint records prior 1491-test/197-suite local gate and 139 assurance tests only for the earlier scope; missing-method compilation is the observed navigation RED boundary, not a host behavior RED. Native-dialog and three validated service-derived wire-name rulings retain the original accepted paths and do not claim arbitrary-origin acceptance.",
+          "evidence_delta": "Affected receipt digests and derived matrix are refreshed while states remain not-run. No passed receipt, host run or device validation is fabricated. Prior source review conclusions are not an execution certificate."
+        }
       },
       "navigation_refresh": {
         "runtime_delta": "Only Compose navigation/disposal binding and owner-scoped native dialog dismissal. No service, policy, settings, raw, NTRIP, command or alarm runtime changes.",
         "test_source_delta": "Host lifecycle test invokes navigation dismissal after recreation and checks absent pending authorization and no started service. This directly tests the hook, not actual Compose navigation or cross-Activity noninterference. The straightforward Compose wiring and Activity identity condition were source-reviewed. Pure policy range test adds Int.MAX_VALUE delay and Int.MIN_VALUE timeout rejection before deadline arithmetic; no production policy change.",
         "plan_delta": "Checkboxes distinguish implementation/source/test-authoring from still-pending host execution. Checkpoint records prior 1491-test/197-suite local gate and 139 assurance tests only for the earlier scope; missing-method compilation is the observed navigation RED boundary, not a host behavior RED. Native-dialog and three validated service-derived wire-name rulings retain the original accepted paths and do not claim arbitrary-origin acceptance.",
         "evidence_delta": "Affected receipt digests and derived matrix are refreshed while states remain not-run. No passed receipt, host run or device validation is fabricated. Prior source review conclusions are not an execution certificate."
+      },
+      "dialog_initialization_refresh": {
+        "runtime_delta": "Only native dialog initialization ordering changes: local initializeButtons replaces setOnShowListener and is called immediately after successful show. No other product source changes.",
+        "test_oracle": "RecordingAlarmServiceTest.kt remains byte-identical to the prior navigation candidate (sha256:0169aa1d2c690f47d3e610b9393e391df99960e6e04995136d7124ef46cbd75d). Its initial disabled/countdown and early-click/success assertions were not weakened or deferred.",
+        "plan_delta": "Tracked checkpoint accurately records the actual 1153-case/four-failure Google Play host run, the asynchronous initialization cause, the product repair and unchanged assertions. Other 1149 cases passed according to controller; sideload/native/release tasks were not reached in that failed run. No new release or tag exists or is certified.",
+        "evidence_delta": "Only affected pending receipt bindings and derived matrix are refreshed. No receipt is promoted to passing. Earlier local full-gate and pure results are not proof that corrected host dialog cases passed; actual host GREEN and device validation remain pending."
       }
     },
     "navigation_refresh": {
@@ -11422,6 +11520,37 @@
       "test_oracle": "RecordingAlarmServiceTest.kt remains byte-identical to the prior navigation candidate (sha256:0169aa1d2c690f47d3e610b9393e391df99960e6e04995136d7124ef46cbd75d). Its initial disabled/countdown and early-click/success assertions were not weakened or deferred.",
       "plan_delta": "Tracked checkpoint accurately records the actual 1153-case/four-failure Google Play host run, the asynchronous initialization cause, the product repair and unchanged assertions. Other 1149 cases passed according to controller; sideload/native/release tasks were not reached in that failed run. No new release or tag exists or is certified.",
       "evidence_delta": "Only affected pending receipt bindings and derived matrix are refreshed. No receipt is promoted to passing. Earlier local full-gate and pure results are not proof that corrected host dialog cases passed; actual host GREEN and device validation remain pending."
+    },
+    "intervening_diagnostic_checkpoint": {
+      "artifact_digest": "sha256:fc3faf1c9b99bc36a7bba276a094d1eb6052e566b1eb25c7d3e60c5d98bb75f9",
+      "scope_digest": "sha256:6fe2fc04d0b1e00e88bd3cd42d3e4ac326474a54c0ab3549adc7bfaff3d8c7c9",
+      "result": "pending",
+      "findings": [
+        {
+          "id": "RC12-TIMER-HOST-001",
+          "severity": "blocking",
+          "status": "open",
+          "requirement_id": "UI-STOP-001",
+          "path": "app/src/test/kotlin/org/rtkcollector/app/recording/RecordingAlarmServiceTest.kt",
+          "message": "Two known host failures remain at the two-second button-enable assertion (SDK33/35). Root cause is unresolved; initial-disabled and happy service cases now pass but do not establish periodic UI refresh. Full-scope compliance and RC publication remain blocked pending discriminating supported-host evidence and any required repair.",
+          "evidence": "Downloaded CI41349342786 XML reports 60 RecordingAlarmServiceTest cases, two assertion failures at line 179 of commit 3528ee4. Controller reports 1153 Google Play cases overall and 1151 passing. Diagnostic snapshots are newly added, not yet observed."
+        }
+      ],
+      "limitations": [
+        "Known timed-button host failures cannot yet be attributed to product or test/scheduler behavior. This full exact scope therefore cannot receive a findings-free passing attestation. The separate diagnostic-diff source assessment does not resolve that limitation."
+      ],
+      "disposition": "The diagnostic checkpoint was not installed. Its pending UI-STOP conclusions applied to unchanged old runtime with unresolved old host failures. Current runtime now removes the demonstrated render-then-delay mechanism, has actual pure old-order RED/repaired GREEN and has been independently reviewed. Replacing that old pending state is a current-source judgment, not a waiver or a claim the historical host run passed."
+    },
+    "supplementary_astra_review": {
+      "model": "gpt-6-astra",
+      "reasoning_effort": "high",
+      "controller_supplied_session_id": "01a19915-f816-7c52-8e0a-1f417b4d74cd",
+      "identity_basis": "Controller reports verified actual runtime metadata and a latest affected review with no blockers; this reviewer does not claim to have independently queried that runtime metadata or inspected its transcript.",
+      "qualified_hashes": {
+        "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoop.kt": "sha256:6d3889dea1be771ef2e9e3d62ddd866ecee36be2703d490a33374c08d56f3045",
+        "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationRefreshLoopTest.kt": "sha256:ed01256cf6c87fdec96854bf9e090eaee7f85b6812e792305fdb0832ef9c0f3f"
+      },
+      "qualification": "Controller states Astra read the latest single-afterRender-sample loop. Its current loop/test hashes match this reviewer earlier inspected snapshots. Astra corroboration is retained only for that matching affected content. The later native visibility guard and direct-dismiss fixture correction were independently reviewed here and are not retroactively attributed to an earlier Astra verdict. Both fresh formal conclusions are independently supported by this review."
     }
   }
 }

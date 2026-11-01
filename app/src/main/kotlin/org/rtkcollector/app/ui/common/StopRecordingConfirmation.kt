@@ -13,6 +13,7 @@ import android.widget.Toast
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.recording.RecordingStopConfirmation
 import org.rtkcollector.app.recording.StopConfirmationPhase
+import org.rtkcollector.app.recording.StopConfirmationRefreshLoop
 import org.rtkcollector.app.settings.StopConfirmationSettings
 
 /** One native dialog also covers the legacy Activity and configuration-recovery UI. */
@@ -49,31 +50,34 @@ object StopRecordingConfirmation {
             override fun onActivityStopped(a: Activity) {}
             override fun onActivitySaveInstanceState(a: Activity, state: Bundle) {}
         }
-        val tick = object : Runnable {
-            override fun run() {
-                if (!dialog.isShowing) return
-                val now = SystemClock.elapsedRealtime()
-                if (RecordingStopConfirmation.pending()?.requestId != request.requestId ||
-                    request.window.phase(now) == StopConfirmationPhase.EXPIRED) {
-                    outcome = "expired"; dialog.dismiss(); return
-                }
+        val refresh = StopConfirmationRefreshLoop(
+            window = request.window,
+            elapsedMillis = SystemClock::elapsedRealtime,
+            uptimeMillis = SystemClock::uptimeMillis,
+            isCurrent = { dialog.isShowing && RecordingStopConfirmation.pending()?.requestId == request.requestId },
+            render = { frame ->
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).apply {
-                    isEnabled = request.window.phase(now) == StopConfirmationPhase.ACTIVE
-                    val label = "Confirm (${request.window.remainingSeconds(now)}s)"
+                    isEnabled = frame.phase == StopConfirmationPhase.ACTIVE
+                    val label = "Confirm (${frame.remainingSeconds}s)"
                     if (text.toString() != label) text = label
                 }
-                handler.postDelayed(this, 100)
-            }
-        }
+            },
+            dismiss = {
+                if (dialog.isShowing) { outcome = "expired"; dialog.dismiss() }
+            },
+            postAtUptime = { callback, at -> handler.postAtTime(callback, at); Unit },
+            remove = { callback -> handler.removeCallbacks(callback) },
+        )
         dialog.setOnDismissListener {
-            handler.removeCallbacks(tick)
+            refresh.cancel()
             activity.application.unregisterActivityLifecycleCallbacks(callbacks)
             RecordingStopConfirmation.cancel(request.requestId, outcome)
             if (active === dialog) active = null
         }
         fun initializeButtons() {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                if (!submitted && dialog.isShowing &&
+                if (!submitted && dialog.isShowing && dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled &&
+                    RecordingStopConfirmation.pending()?.requestId == request.requestId &&
                     request.window.phase(SystemClock.elapsedRealtime()) == StopConfirmationPhase.ACTIVE) {
                     submitted = true
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
@@ -85,7 +89,7 @@ object StopRecordingConfirmation {
                         }
                     // Keep the one-use authorization until service acceptance or expiry.
                     if (outcome == "submitted") {
-                        handler.removeCallbacks(tick)
+                        refresh.cancel()
                         dialog.setOnDismissListener {
                             activity.application.unregisterActivityLifecycleCallbacks(callbacks)
                             if (active === dialog) active = null
@@ -94,14 +98,14 @@ object StopRecordingConfirmation {
                     dialog.dismiss()
                 }
             }
-            tick.run()
+            refresh.run()
         }
         activity.application.registerActivityLifecycleCallbacks(callbacks)
         try {
             dialog.show()
             initializeButtons()
         } catch (error: RuntimeException) {
-            handler.removeCallbacks(tick)
+            refresh.cancel()
             activity.application.unregisterActivityLifecycleCallbacks(callbacks)
             RecordingStopConfirmation.cancel(request.requestId, "unavailable")
             if (active === dialog) active = null

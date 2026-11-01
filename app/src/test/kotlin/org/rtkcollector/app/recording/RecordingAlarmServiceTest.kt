@@ -108,6 +108,37 @@ class RecordingAlarmServiceTest {
         } finally { controller.pause().stop().destroy(); RecordingStopConfirmation.retire("dialog-owner") }
     }
 
+    @Test fun `overdue refresh preserves cancellation before queued dismissal listener`() {
+        val controller = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+        val activity = controller.get()
+        val outcomes = mutableListOf<String>()
+        RecordingStopConfirmation.activate("dialog-owner") { outcome, _ -> outcomes += outcome }
+        try {
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+            var message: android.os.Message? = ReflectionHelpers.getField(Looper.getMainLooper().queue, "mMessages")
+            var refresh: StopConfirmationRefreshLoop? = null
+            while (message != null) {
+                val current = message
+                if (current.callback is StopConfirmationRefreshLoop) {
+                    refresh = current.callback as StopConfirmationRefreshLoop
+                    break
+                }
+                message = ReflectionHelpers.getField(current, "next")
+            }
+            val queuedRefresh = requireNotNull(refresh)
+            dialog.dismiss()
+            assertFalse(dialog.isShowing)
+            assertEquals(listOf("opened"), outcomes)
+            // Simulate an overdue callback already delivered before onDismiss cleans up.
+            queuedRefresh.run()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(listOf("opened", "cancelled"), outcomes)
+            assertNull(RecordingStopConfirmation.pending())
+            assertNull(shadowOf(activity).nextStartedService)
+        } finally { controller.pause().stop().destroy(); RecordingStopConfirmation.retire("dialog-owner") }
+    }
+
     @Test
     @Config(shadows = [StartupUsbManagerShadow::class, StartupUsbConnectionShadow::class])
     fun `successful dialog confirmation submits one service-owned Stop during startup`() {
@@ -125,6 +156,8 @@ class RecordingAlarmServiceTest {
             val button = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
             button.performClick(); assertNull(shadowOf(activity).nextStartedService)
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+            assertTrue("confirmation must be visibly usable", button.isEnabled)
+            assertEquals("Confirm (10s)", button.text.toString())
             button.performClick(); button.performClick()
             val intent = requireNotNull(shadowOf(activity).nextStartedService)
             assertNull(shadowOf(activity).nextStartedService)
@@ -175,8 +208,17 @@ class RecordingAlarmServiceTest {
             val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
             val confirm = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
             assertFalse(confirm.isEnabled); assertEquals("Confirm (2s)", confirm.text.toString())
+            val request = requireNotNull(RecordingStopConfirmation.pending())
+            val beforeElapsed = android.os.SystemClock.elapsedRealtime()
+            val beforeUptime = android.os.SystemClock.uptimeMillis()
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
-            assertTrue(confirm.isEnabled); assertEquals("Confirm (10s)", confirm.text.toString())
+            val now = android.os.SystemClock.elapsedRealtime()
+            assertTrue("elapsed=$now uptime=${android.os.SystemClock.uptimeMillis()} " +
+                "elapsedDelta=${now - beforeElapsed} uptimeDelta=${android.os.SystemClock.uptimeMillis() - beforeUptime} " +
+                "window=${request.window} phase=${request.window.phase(now)} remaining=${request.window.remainingSeconds(now)} " +
+                "label=${confirm.text} visible=${dialog.isShowing} pending=${RecordingStopConfirmation.pending()?.requestId} " +
+                "captured=${request.requestId} next=${shadowOf(Looper.getMainLooper()).nextScheduledTaskTime}", confirm.isEnabled)
+            assertEquals("Confirm (10s)", confirm.text.toString())
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(9))
             assertTrue(dialog.isShowing); assertEquals("Confirm (1s)", confirm.text.toString())
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))

@@ -40,6 +40,10 @@ import org.rtkcollector.app.diagnostics.DiagnosticsStatus
 import org.rtkcollector.app.diagnostics.DiagnosticLevel
 import org.rtkcollector.app.diagnostics.DiagnosticsRetention
 import org.rtkcollector.app.ui.common.TidyColors
+import androidx.compose.ui.platform.LocalContext
+import org.rtkcollector.app.ui.common.ProfileSingleLineTextField
+import org.rtkcollector.app.settings.StopConfirmationSettings
+import org.rtkcollector.app.recording.StopConfirmationTiming
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,10 +59,18 @@ fun AppDiagnosticsScreen(
     onBack: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val stopSettings = remember(context) { StopConfirmationSettings(context) }
+    var savedTiming by remember { mutableStateOf(stopSettings.timing) }
+    var delayText by remember { mutableStateOf(savedTiming.delaySeconds.toString()) }
+    var timeoutText by remember { mutableStateOf(savedTiming.timeoutSeconds.toString()) }
+    val draftTiming = runCatching {
+        StopConfirmationTiming(requireNotNull(delayText.toIntOrNull()), requireNotNull(timeoutText.toIntOrNull()))
+    }.getOrNull()
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("App logs and performance monitoring") },
+                title = { Text("Advanced settings") },
                 navigationIcon = {
                     TextButton(onClick = onBack) {
                         Text("Back")
@@ -75,6 +87,16 @@ fun AppDiagnosticsScreen(
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            DiagnosticsCard("Recording Stop confirmation") {
+                ProfileSingleLineTextField(delayText, { delayText = it },
+                    label = "Stop confirmation delay (seconds, 1-60)",
+                    isError = delayText.toIntOrNull() !in 1..60)
+                ProfileSingleLineTextField(timeoutText, { timeoutText = it },
+                    label = "Stop confirmation timeout (seconds, 1-120)",
+                    isError = timeoutText.toIntOrNull() !in 1..120)
+                Button(onClick = { draftTiming?.let { stopSettings.timing = it; savedTiming = it } },
+                    enabled = draftTiming != null && draftTiming != savedTiming) { Text("Save") }
+            }
             DiagnosticsCard("Logging") {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     DiagnosticLevel.entries.forEachIndexed { index, level ->

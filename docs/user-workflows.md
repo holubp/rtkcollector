@@ -906,9 +906,25 @@ Do not disconnect storage while the app is still finalising the session.
 
 ## App Logs
 
-Open **Menu -> Developer tools -> App logs and performance monitoring**.
+Open **Menu -> Developer tools -> Advanced settings**.
 Minimal logging is always on: each new session keeps essential lifecycle and
 stop evidence in its session ZIP, without enabling troubleshooting first.
+
+### Preventing Accidental Stop
+
+Pressing **Stop** asks for confirmation while recording continues. The Confirm
+button first counts down a short disabled delay (initially **2 seconds**), then
+becomes available for a separate **10-second** countdown. Press Confirm during
+that second countdown to stop. Cancel, Back, timeout or moving the app into the
+background leaves recording running. Returning requires a fresh confirmation.
+
+In **Advanced settings**, adjust **Stop confirmation delay** (1-60 seconds) and
+**Stop confirmation timeout** (1-120 seconds), then press Save. Both values
+persist across app restarts. Existing fixed-base handoff confirmations retain
+their own stop-and-switch flow. Automatic failure cleanup is not delayed by a
+confirmation dialog.
+
+### Logging Controls
 
 Choose **Verbose** for operational summaries or **Debug** for internal diagnostic
 detail. The choice survives app restarts. The main-screen elevated-logging

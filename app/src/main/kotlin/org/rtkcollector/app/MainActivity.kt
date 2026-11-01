@@ -322,7 +322,7 @@ class MainActivity : Activity() {
             startRealRecording()
         }
         stopButton.setOnClickListener {
-            startService(RecordingForegroundService.stopIntent(this))
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(this, "legacy")
         }
 
         root.addView(label("Workflow"))

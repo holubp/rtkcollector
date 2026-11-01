@@ -18,6 +18,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.widget.Toast
+import org.rtkcollector.app.ui.common.StopRecordingConfirmation
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
@@ -383,6 +384,9 @@ fun RtkCollectorApp(
         mutableStateOf(SessionBrowserEntryPoint.SETTINGS)
     }
     val context = LocalContext.current
+    DisposableEffect(context, screen) {
+        onDispose { StopRecordingConfirmation.dismissForNavigation(context) }
+    }
     val diagnosticsSettings = remember(context) { DiagnosticsSettings(context) }
     val diagnosticsStore = remember(context) { DiagnosticsStore(context.filesDir, retentionProvider = { diagnosticsSettings.retention }) }
     val diagnosticsZipExporter = remember(context) { DiagnosticsZipExporter(context.cacheDir) }
@@ -464,7 +468,7 @@ fun RtkCollectorApp(
                 Text("RtkCollector", style = MaterialTheme.typography.titleLarge)
                 Text(configurationReadiness.message, color = MaterialTheme.colorScheme.error)
                 if (ActiveRecordingSessionRegistry.isAnyActive() || RecordingSetupBridge.current() != null) {
-                    Button(onClick = { context.startService(RecordingForegroundService.stopIntent(context)) }) {
+                    Button(onClick = { StopRecordingConfirmation.show(context, "settings-recovery") }) {
                         Text("Stop recording")
                     }
                 }
@@ -973,7 +977,8 @@ fun RtkCollectorApp(
             if (state.isRecording || ActiveRecordingSessionRegistry.isAnyActive()) {
                 pendingFixedBasePublication = plan
                 fixedBaseProfileSelectionMode = null
-                runCatching { context.startService(RecordingForegroundService.stopIntent(context)) }
+                runCatching { context.startService(RecordingForegroundService.fixedBaseStopIntent(context,
+                    requireNotNull(RecordingSetupBridge.current()?.sessionId))) }
                     .onFailure { error ->
                         pendingFixedBasePublication = null
                         fixedBaseProfileSelectionMode = FixedBaseProfileSelectionMode.CONFIRM
@@ -1000,7 +1005,8 @@ fun RtkCollectorApp(
         profileStore.saveSettingsSets(updatedSettingsSets)
         refreshProfileUi(updatedSettingsSets)
         if (shouldStopRecording) {
-            context.startService(RecordingForegroundService.stopIntent(context))
+            context.startService(RecordingForegroundService.fixedBaseStopIntent(context,
+                requireNotNull(RecordingSetupBridge.current()?.sessionId)))
         }
     }
     fun overwriteCommandProfileForFixedBase(
@@ -1813,9 +1819,7 @@ fun RtkCollectorApp(
                             },
                             onPrimaryAction = {
                                 if (state.isRecording) {
-                                    startInProgress = false
-                                    startingLocks = null
-                                    context.startService(RecordingForegroundService.stopIntent(context))
+                                    StopRecordingConfirmation.show(context, "home")
                                 } else if (persistentReceiverWriteInProgress.get()) {
                                     Toast.makeText(
                                         context,

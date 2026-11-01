@@ -10,6 +10,22 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [26, 27, 33])
 class AlarmSettingsStoreTest {
+    @Test fun `stop timing persists without changing logging and corrupt values default safely`() {
+        val context = RuntimeEnvironment.getApplication()
+        val prefs = context.getSharedPreferences("rtkcollector-stop-confirmation", 0)
+        prefs.edit().clear().commit()
+        val logging = org.rtkcollector.app.diagnostics.DiagnosticsSettings(context)
+        logging.level = org.rtkcollector.app.diagnostics.DiagnosticLevel.VERBOSE
+        val settings = org.rtkcollector.app.settings.StopConfirmationSettings(context)
+        assertEquals(org.rtkcollector.app.recording.StopConfirmationTiming(2, 10), settings.timing)
+        settings.timing = org.rtkcollector.app.recording.StopConfirmationTiming(60, 120)
+        assertEquals(settings.timing, org.rtkcollector.app.settings.StopConfirmationSettings(context).timing)
+        prefs.edit().putInt("delaySeconds", 0).commit()
+        assertEquals(org.rtkcollector.app.recording.StopConfirmationTiming(), settings.timing)
+        prefs.edit().putString("delaySeconds", "bad-type").commit()
+        assertEquals(org.rtkcollector.app.recording.StopConfirmationTiming(), settings.timing)
+        assertEquals(org.rtkcollector.app.diagnostics.DiagnosticLevel.VERBOSE, logging.level)
+    }
     @Test fun `old settings retain normal routing and Bluetooth choice survives recreation`() {
         val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences("rtkcollector-alarms", 0).edit().clear()

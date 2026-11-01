@@ -194,7 +194,7 @@ fun SettingsHub(
                 SettingsSection("Developer tools") {
                     SettingsRow("IO", "Device console", onDeviceConsole)
                     SettingsDivider()
-                    SettingsRow("LOG", "App logs and performance monitoring", onAppDiagnostics)
+                    SettingsRow("ADV", "Advanced settings", onAppDiagnostics)
                 }
             }
             HelpOverlay(topic = helpTopic, onDismiss = { helpTopic = null })

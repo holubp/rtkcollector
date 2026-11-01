@@ -601,6 +601,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         when (intent?.action) {
             ACTION_START -> startRecording(intent)
             ACTION_STOP -> {
+                val confirmation = RecordingStopConfirmation.pending()
+                val confirmed = RecordingStopConfirmation.consume(intent.getStringExtra(EXTRA_STOP_CONFIRMATION),
+                    SystemClock.elapsedRealtime(), activeSetupSessionId)
+                val transition = intent.getStringExtra(EXTRA_STOP_ORIGIN) == "FIXED_BASE_TRANSITION" &&
+                    activeSetupSessionId != null && intent.getStringExtra(EXTRA_STOP_OWNER) == activeSetupSessionId
+                val terminalAlarm = intent.hasExtra(AlarmActions.GENERATION) && !alarmOwnsRecording()
+                if (!confirmed && !transition && !terminalAlarm) return START_NOT_STICKY
                 if (!intent.hasExtra(AlarmActions.GENERATION) || intent.getLongExtra(AlarmActions.GENERATION, -1) == alarmGeneration ||
                     alarmGeneration < 0 && !alarmOwnsRecording()) {
                     if (alarmGeneration < 0) {
@@ -609,6 +616,14 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
                         alarmEffects?.offer(AlarmDesiredState(alarmGeneration, 1, emptyList(), null, false))
                         broadcastAlarmState()
                     }
+                    val origin = if (confirmed) "CONFIRMED_CONTROL" else if (transition) "FIXED_BASE_TRANSITION" else "TERMINAL_ALARM"
+                    runCatching { sessionDiagnostics?.record("stop-source", origin, critical = true,
+                        correlationId = stopContext.correlationId,
+                        fields = mapOf("controlId" to (if (confirmed) confirmation?.controlId else origin).orEmpty(),
+                            "ownerId" to activeSetupSessionId.orEmpty(),
+                            "requestId" to (if (confirmed) confirmation?.requestId else null))) }
+                    recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "NOTICE", { "Recording Stop accepted: $origin" },
+                        { mapOf("ownerId" to activeSetupSessionId.orEmpty(), "correlationId" to stopContext.correlationId) })
                     stopRecording(sendShutdown = true, reason = RecordingStopReason.USER)
                     if (!alarmOwnsRecording()) requestAlarmExit()
                 }
@@ -1034,6 +1049,14 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
             return
         }
         startedSetupState = requireNotNull(RecordingSetupBridge.current())
+        RecordingStopConfirmation.activate(snapshot.sessionId) { outcome, request ->
+            recordRuntimeDiagnostic(DiagnosticCategory.SERVICE, "NOTICE", { "Stop confirmation: $outcome" },
+                { mapOf("controlId" to request.controlId, "ownerId" to request.ownerId, "requestId" to request.requestId) })
+            sessionDiagnostics?.record("stop-confirmation", outcome, critical = true,
+                correlationId = stopContext.correlationId,
+                fields = mapOf("controlId" to request.controlId, "ownerId" to request.ownerId,
+                    "requestId" to request.requestId))
+        }
         beginAlarms()
         latestAcceptedSetupState = startedSetupState
         shutdownSent.set(false)
@@ -2944,6 +2967,7 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
     }
 
     private fun stopRecording(sendShutdown: Boolean, reason: RecordingStopReason) {
+        activeSetupSessionId?.let(RecordingStopConfirmation::retire)
         val canceledStartup = startupOwner.currentLease?.takeIf { !it.cancellation.isCancelled }
         startupOwner.cancel()
         sessionCancellation.cancel()
@@ -5146,6 +5170,9 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
         private const val RTKLIB_SHUTDOWN_RETRY_MILLIS = 1_000L
         const val ACTION_START = "org.rtkcollector.app.recording.START"
         const val ACTION_STOP = "org.rtkcollector.app.recording.STOP"
+        private const val EXTRA_STOP_CONFIRMATION = "stopConfirmation"
+        private const val EXTRA_STOP_OWNER = "stopOwner"
+        private const val EXTRA_STOP_ORIGIN = "stopOrigin"
         const val ACTION_ALARM_STATE = "org.rtkcollector.app.recording.ALARM_STATE"
         const val EXTRA_STATE_ALARM_TERMINAL_PENDING = "alarmTerminalPending"
         const val EXTRA_STATE_ALARM_MESSAGE = "alarmMessage"
@@ -5410,6 +5437,13 @@ class RecordingForegroundService : Service(), AlarmForegroundHost {
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(ACTION_STOP)
+
+        fun confirmedStopIntent(context: Context, requestId: String): Intent =
+            stopIntent(context).putExtra(EXTRA_STOP_CONFIRMATION, requestId)
+
+        fun fixedBaseStopIntent(context: Context, ownerId: String): Intent =
+            stopIntent(context).putExtra(EXTRA_STOP_ORIGIN, "FIXED_BASE_TRANSITION")
+                .putExtra(EXTRA_STOP_OWNER, ownerId)
 
         fun mockLocationUpdateIntent(
             context: Context,

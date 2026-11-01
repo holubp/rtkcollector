@@ -6,6 +6,7 @@ requirements live under `docs/specification/`.
 
 | Source | Formal spec destination | Notes |
 | --- | --- | --- |
+| `docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md`, `docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md` | `ui-requirements.md` (`UI-STOP-001`), verification matrix | Approved two-phase configurable Stop confirmation, service-bound one-use authorization and essential origin evidence. |
 | `docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md` | all formal specification files and assurance records | Reconcile the September framework with current RC10 without waivers or stale approvals; retain exact digest-matching approvals only. |
 | `docs/superpowers/plans/2026-10-30-background-usb-recovery.md` | `android-runtime.md`, `verification-matrix.md` | Confirmed Stop/retry crash, service-owned USB consent, stale callback rejection and epoch-fenced recovery publication. |
 | `docs/superpowers/specs/2026-10-29-recording-alarms-design.md`, `docs/superpowers/specs/2026-10-29-alarm-bluetooth-routing-design.md`, `docs/superpowers/plans/2026-10-30-muted-alarm-warning.md` | `android-runtime.md`, `verification-matrix.md` | Recording-isolated alarms, Bluetooth fallback, DND and confirmed-silence advisories. |

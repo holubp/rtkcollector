@@ -7,6 +7,19 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class SessionDiagnosticsTest {
+    @Test fun `stop control owner and request survive serialized session evidence`() {
+        val lines = mutableListOf<String>()
+        val log = SessionDiagnostics("session", write = { lines.add(it) })
+        log.record("stop-source", "CONFIRMED_CONTROL", correlationId = "stop-id", critical = true,
+            fields = mapOf("controlId" to "home", "ownerId" to "session", "requestId" to "request-id", "password" to "never-export"))
+        log.seal(); assertTrue(log.awaitClosed(1000))
+        val value = JSONObject(lines.single())
+        assertEquals("home", value.getString("controlId"))
+        assertEquals("session", value.getString("ownerId"))
+        assertEquals("request-id", value.getString("requestId"))
+        assertEquals("stop-id", value.getString("correlationId"))
+        assertFalse(lines.single().contains("never-export"))
+    }
     @Test fun `oversized structured messages do not leak secrets through truncated framing`() {
         val lines = mutableListOf<String>()
         val body = "{\"password\":\"oversize-secret-marker\",\"padding\":\"" + "x".repeat(4000) + "\"}"

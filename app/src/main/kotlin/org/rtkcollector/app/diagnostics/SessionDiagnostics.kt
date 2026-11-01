@@ -143,6 +143,6 @@ internal class SessionDiagnostics(
 
     companion object {
         private val SAFE_EVENT_FIELDS = setOf("state", "uploadedBytes", "droppedBytes", "bitrateKbps",
-            "rtcmHz", "stopReason", "url", "lastError") + FAILURE_DIAGNOSTIC_KEYS
+            "rtcmHz", "stopReason", "url", "lastError", "controlId", "ownerId", "requestId") + FAILURE_DIAGNOSTIC_KEYS
     }
 }

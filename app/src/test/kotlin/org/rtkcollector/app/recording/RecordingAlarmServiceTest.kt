@@ -26,6 +26,180 @@ import org.rtkcollector.app.alarms.*
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33, 35])
 class RecordingAlarmServiceTest {
+    @Test fun `startup rejected before USB preparation does not retain confirmation authority`() {
+        val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = controller.get()
+        val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
+        val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString())
+        try {
+            val token = RecordingSetupBridge.stageStart(snapshot)
+            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
+                .setAction(RecordingForegroundService.ACTION_START)
+                .putExtra(RecordingForegroundService.EXTRA_SETUP_TOKEN, token), 0, 1)
+            assertFalse((field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).get())
+            assertNull(RecordingStopConfirmation.open("home", android.os.SystemClock.elapsedRealtime(), StopConfirmationTiming()))
+        } finally { controller.destroy(); awaitStop(service); RecordingSetupBridge.stop(snapshot.sessionId) }
+    }
+
+    @Test
+    @Config(shadows = [StartupUsbManagerShadow::class, StartupUsbConnectionShadow::class])
+    fun `actual startup ownership fences old confirmed Stop after new Start and accepts base handoff`() {
+        val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = controller.get()
+        var oldStop: Intent? = null
+        try {
+            repeat(2) { index ->
+                val io = StartupIo("usb-open"); startupIo = io
+                val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
+                val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(),
+                    config = base.config.copy(shutdownCommands = emptyList()))
+                try {
+                    startWithUsb(service, snapshot)
+                    assertTrue(io.entered.await(10, TimeUnit.SECONDS))
+                    val running = field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean
+                    if (index == 0) {
+                        val request = requireNotNull(RecordingStopConfirmation.open("home", android.os.SystemClock.elapsedRealtime(), StopConfirmationTiming()))
+                        assertEquals(snapshot.sessionId, request.ownerId)
+                        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(2))
+                        oldStop = RecordingForegroundService.confirmedStopIntent(service, request.requestId)
+                        // Leave A's confirmation outstanding; retire A through an independent accepted path.
+                        service.onStartCommand(RecordingForegroundService.fixedBaseStopIntent(service, snapshot.sessionId), 0, 2)
+                    } else {
+                        service.onStartCommand(oldStop, 0, 3)
+                        assertTrue("old confirmation stopped new session", running.get())
+                        val fresh = requireNotNull(RecordingStopConfirmation.open("home", android.os.SystemClock.elapsedRealtime(), StopConfirmationTiming()))
+                        assertEquals("new Start must replace production authority", snapshot.sessionId, fresh.ownerId)
+                        service.onStartCommand(RecordingForegroundService.stopIntent(service)
+                            .putExtra(AlarmActions.GENERATION, 0L), 0, 4)
+                        assertTrue("terminal alarm action stopped active session", running.get())
+                        service.onStartCommand(RecordingForegroundService.fixedBaseStopIntent(service, snapshot.sessionId), 0, 5)
+                    }
+                    assertFalse(running.get())
+                } finally { io.release.countDown(); awaitStop(service); RecordingSetupBridge.stop(snapshot.sessionId) }
+            }
+        } finally { startupIo?.release?.countDown(); controller.destroy(); awaitStop(service); startupIo = null }
+    }
+
+    @Test fun `dialog Cancel Back and recreation revoke authorization without service requests`() {
+        val controller = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+        val activity = controller.get()
+        RecordingStopConfirmation.activate("dialog-owner")
+        try {
+            for (back in listOf(false, true)) {
+                org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "recovery")
+                val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+                if (back) dialog.cancel() else dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick()
+                shadowOf(Looper.getMainLooper()).idle()
+                assertNull(RecordingStopConfirmation.pending())
+                assertNull(shadowOf(activity).nextStartedService)
+            }
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            val previous = requireNotNull(RecordingStopConfirmation.pending())
+            controller.recreate()
+            assertNull(RecordingStopConfirmation.pending())
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(controller.get(), "home")
+            val next = requireNotNull(RecordingStopConfirmation.pending())
+            assertNotEquals(previous.requestId, next.requestId)
+            assertEquals(StopConfirmationPhase.WAITING, next.window.phase(android.os.SystemClock.elapsedRealtime()))
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.dismissForNavigation(controller.get())
+            shadowOf(Looper.getMainLooper()).idle()
+            assertNull(RecordingStopConfirmation.pending())
+            assertNull(shadowOf(controller.get()).nextStartedService)
+        } finally { controller.pause().stop().destroy(); RecordingStopConfirmation.retire("dialog-owner") }
+    }
+
+    @Test
+    @Config(shadows = [StartupUsbManagerShadow::class, StartupUsbConnectionShadow::class])
+    fun `successful dialog confirmation submits one service-owned Stop during startup`() {
+        val io = StartupIo("usb-open"); startupIo = io
+        val serviceController = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = serviceController.get()
+        val activityController = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+        val activity = activityController.get()
+        val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
+        val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(), config = base.config.copy(shutdownCommands = emptyList()))
+        try {
+            startWithUsb(service, snapshot); assertTrue(io.entered.await(10, TimeUnit.SECONDS))
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+            val button = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+            button.performClick(); assertNull(shadowOf(activity).nextStartedService)
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+            button.performClick(); button.performClick()
+            val intent = requireNotNull(shadowOf(activity).nextStartedService)
+            assertNull(shadowOf(activity).nextStartedService)
+            service.onStartCommand(intent, 0, 2)
+            assertFalse((field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).get())
+            service.onStartCommand(intent, 0, 3)
+            assertNull(RecordingStopConfirmation.pending())
+        } finally {
+            io.release.countDown(); awaitStop(service); serviceController.destroy()
+            activityController.pause().stop().destroy(); RecordingSetupBridge.stop(snapshot.sessionId); startupIo = null
+        }
+    }
+
+    @Test fun `unconfirmed expired and previous-session Stop cannot stop current recording`() {
+        val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = controller.get()
+        val running = field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean
+        try {
+            running.set(true)
+            field("activeSetupSessionId").set(service, "session-A")
+            RecordingStopConfirmation.activate("session-A")
+            service.onStartCommand(RecordingForegroundService.stopIntent(service), 0, 1)
+            assertTrue(running.get())
+            val expired = requireNotNull(RecordingStopConfirmation.open("home", android.os.SystemClock.elapsedRealtime(), StopConfirmationTiming(1, 1)))
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(2))
+            service.onStartCommand(RecordingForegroundService.confirmedStopIntent(service, expired.requestId), 0, 2)
+            assertTrue(running.get())
+            RecordingStopConfirmation.cancel(expired.requestId)
+            val old = requireNotNull(RecordingStopConfirmation.open("home", android.os.SystemClock.elapsedRealtime(), StopConfirmationTiming()))
+            field("activeSetupSessionId").set(service, "session-B")
+            RecordingStopConfirmation.activate("session-B")
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(2))
+            service.onStartCommand(RecordingForegroundService.confirmedStopIntent(service, old.requestId), 0, 3)
+            assertTrue(running.get())
+            service.onStartCommand(RecordingForegroundService.fixedBaseStopIntent(service, "session-A"), 0, 4)
+            assertTrue(running.get())
+        } finally { controller.destroy(); awaitStop(service) }
+    }
+
+    @Test fun `dialog delay and timeout leave recording running and cancel on background`() {
+        val activityController = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+        val activity = activityController.get()
+        val settings = org.rtkcollector.app.settings.StopConfirmationSettings(activity)
+        settings.timing = StopConfirmationTiming(2, 10)
+        RecordingStopConfirmation.activate("dialog-owner")
+        try {
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+            val confirm = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+            assertFalse(confirm.isEnabled); assertEquals("Confirm (2s)", confirm.text.toString())
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+            assertTrue(confirm.isEnabled); assertEquals("Confirm (10s)", confirm.text.toString())
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(9))
+            assertTrue(dialog.isShowing); assertEquals("Confirm (1s)", confirm.text.toString())
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
+            assertFalse(dialog.isShowing); assertNull(RecordingStopConfirmation.pending())
+            assertNull(shadowOf(activity).nextStartedService)
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            activityController.pause()
+            assertFalse(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().isShowing)
+            assertNull(RecordingStopConfirmation.pending()); assertNull(shadowOf(activity).nextStartedService)
+        } finally { RecordingStopConfirmation.retire("dialog-owner"); activityController.stop().destroy() }
+    }
+
+    private fun confirmedStopForTest(service: RecordingForegroundService): Intent {
+        val owner = field("activeSetupSessionId").get(service) as? String ?: "test-owner".also {
+            field("activeSetupSessionId").set(service, it)
+            // Older finalization fixtures seed fields instead of starting a receiver.
+            RecordingStopConfirmation.activate(it)
+        }
+        val request = requireNotNull(RecordingStopConfirmation.open("test", android.os.SystemClock.elapsedRealtime(), StopConfirmationTiming()))
+        assertEquals("production startup must install confirmation ownership", owner, request.ownerId)
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(2))
+        return RecordingForegroundService.confirmedStopIntent(service, request.requestId)
+    }
     @Test
     @Config(shadows = [StartupUsbManagerShadow::class, StartupUsbConnectionShadow::class])
     fun `Stop rechecks late reconnect handle retirement after capture exits`() {
@@ -48,8 +222,7 @@ class RecordingAlarmServiceTest {
             field("receiverConnectionLease").set(service, lease); field("captureThread").set(service, worker)
             (field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).set(true)
             worker.start(); assertTrue(io.entered.await(5, TimeUnit.SECONDS))
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 1)
+            service.onStartCommand(confirmedStopForTest(service), 0, 1)
             val waitingUntil = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
             fun coordinatorJoining(): Boolean = Thread.getAllStackTraces().any { (thread, frames) ->
                 thread.name == "rtkcollector-stop-coordinator" && thread.state == Thread.State.TIMED_WAITING &&
@@ -89,8 +262,7 @@ class RecordingAlarmServiceTest {
                 override fun writeSessionJson(json: String) { invoked.set(true); throw java.io.IOException() }
             })
             (field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).set(true)
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 1)
+            service.onStartCommand(confirmedStopForTest(service), 0, 1)
             awaitStop(service)
             assertTrue("final writer must be invoked, not fail during provenance serialization", invoked.get())
             val entry = directory.resolve("app/diagnostics/essential/essential.jsonl").toFile().readLines()
@@ -185,8 +357,7 @@ class RecordingAlarmServiceTest {
                     field("captureThread").set(service, worker); worker.start()
                 }
                 assertTrue("writer did not enter $phase", entered.await(5, TimeUnit.SECONDS))
-                service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                    .setAction(RecordingForegroundService.ACTION_STOP), 0, 1)
+                service.onStartCommand(confirmedStopForTest(service), 0, 1)
                 Thread.sleep(100)
                 assertEquals(0, closes.get()); assertTrue(inWriter.get()); assertFalse(interrupted.get())
                 release.countDown(); awaitStop(service); worker?.join(5_000)
@@ -274,8 +445,7 @@ class RecordingAlarmServiceTest {
             }, { lease, error -> report.invoke(service, lease, error) }))
             assertTrue(startup.awaitStopped(5_000))
             // Do not drain the main looper: Stop overtakes failure presentation.
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 1)
+            service.onStartCommand(confirmedStopForTest(service), 0, 1)
             awaitStop(service)
             val state = field("state").get(service) as RecordingServiceState
             assertEquals(RecordingErrorCategory.STORAGE, state.errorCategory)
@@ -320,8 +490,7 @@ class RecordingAlarmServiceTest {
                 val started = System.nanoTime()
                 service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
                     .setAction(RecordingForegroundService.ACTION_QUERY), 0, 2)
-                service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                    .setAction(RecordingForegroundService.ACTION_STOP), 0, 3)
+                service.onStartCommand(confirmedStopForTest(service), 0, 3)
                 assertTrue("Android callback blocked in $phase", System.nanoTime() - started < TimeUnit.SECONDS.toNanos(2))
                 assertTrue((field("startupOwner").get(service) as RecordingStartupOwner).isBusy)
                 io.release.countDown()
@@ -364,8 +533,7 @@ class RecordingAlarmServiceTest {
             startWithUsb(service, snapshot)
             assertTrue(io.entered.await(10, TimeUnit.SECONDS))
             assertTrue(org.rtkcollector.app.sessions.ActiveRecordingSessionRegistry.isActive(io.sessionUri!!))
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 2)
+            service.onStartCommand(confirmedStopForTest(service), 0, 2)
             assertTrue((field("startupOwner").get(service) as RecordingStartupOwner).isBusy)
             io.release.countDown()
             awaitStop(service)
@@ -404,8 +572,7 @@ class RecordingAlarmServiceTest {
                 .putStringArrayListExtra(RecordingForegroundService.EXTRA_PERSISTENT_COMMANDS,
                     arrayListOf("CONFIG COM1 230400")), 0, 2)
             assertTrue(io.entered.await(10, TimeUnit.SECONDS))
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 3)
+            service.onStartCommand(confirmedStopForTest(service), 0, 3)
             assertNotNull(field("writers").get(service))
             io.release.countDown()
             awaitStop(service)
@@ -436,8 +603,7 @@ class RecordingAlarmServiceTest {
         try {
             startWithUsb(service, snapshot)
             assertTrue(io.entered.await(10, TimeUnit.SECONDS))
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 2)
+            service.onStartCommand(confirmedStopForTest(service), 0, 2)
             io.release.countDown(); awaitStop(service)
             val state = field("state").get(service) as RecordingServiceState
             assertEquals(RecordingErrorCategory.STORAGE, state.errorCategory)
@@ -721,8 +887,7 @@ class RecordingAlarmServiceTest {
                 writers.appendReceiverRx(byteArrayOf(4, 5, 6))
             }, { _, error -> failed.set(error) }))
             assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 1)
+            service.onStartCommand(confirmedStopForTest(service), 0, 1)
             service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
                 .setAction(RecordingForegroundService.ACTION_QUERY), 0, 2)
             assertNotNull(field("writers").get(service))
@@ -763,8 +928,7 @@ class RecordingAlarmServiceTest {
             assertNull(field("captureThread").get(service))
             service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
                 .setAction(RecordingForegroundService.ACTION_QUERY), 0, 2)
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 3)
+            service.onStartCommand(confirmedStopForTest(service), 0, 3)
             assertTrue(startup.isBusy)
             assertFalse((field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).get())
             queued.run()
@@ -870,8 +1034,7 @@ class RecordingAlarmServiceTest {
             RecordingForegroundService::class.java.getDeclaredField("alarmLastDesired")
                 .apply { isAccessible = true }.set(service, old)
             service.alarmDeliveryFailed("audio", old)
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java)
-                .setAction(RecordingForegroundService.ACTION_STOP), 0, 1)
+            service.onStartCommand(confirmedStopForTest(service), 0, 1)
             shadowOf(Looper.getMainLooper()).idle()
             val broadcast = RecordingForegroundService::class.java.getDeclaredField("alarmBroadcast").apply { isAccessible = true }
             assertNull((broadcast.get(service) as AlarmBroadcastSnapshot).delivery)
@@ -953,7 +1116,7 @@ class RecordingAlarmServiceTest {
             var deadline = System.nanoTime() + 10_000_000_000L
             while (controller.snapshot().visibleEpisodes.isEmpty() && System.nanoTime() < deadline) Thread.sleep(5)
             assertFalse(controller.snapshot().visibleEpisodes.isEmpty())
-            service.onStartCommand(Intent(service, RecordingForegroundService::class.java).setAction(RecordingForegroundService.ACTION_STOP), 0, 1)
+            service.onStartCommand(confirmedStopForTest(service), 0, 1)
             deadline = System.nanoTime() + 10_000_000_000L
             while (controller.snapshot().visibleEpisodes.isNotEmpty() && System.nanoTime() < deadline) Thread.sleep(5)
             assertTrue(controller.snapshot().visibleEpisodes.isEmpty())

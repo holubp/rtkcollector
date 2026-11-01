@@ -2,6 +2,35 @@
 
 ## Dashboard
 
+### UI-STOP-001: Deliberate Session-Bound Stop Confirmation
+
+Status: Normative
+
+Explicit recording Stop controls MUST open a shared confirmation without
+interrupting recording. Confirmation MUST be disabled initially (default 2
+seconds), then enabled for a separate window (default 10 seconds). Both phases
+MUST display a per-second countdown inside the confirmation button. App-wide
+Advanced settings MUST persist integer delays of 1-60 seconds and windows of
+1-120 seconds, rejecting invalid edits and preserving logging controls.
+Timeout, Cancel, Back, outside dismissal, backgrounding, navigation and Activity
+recreation MUST leave recording running. Service acceptance MUST enforce
+monotonic deadlines, one-use authorization and matching recording/startup owner.
+Already-confirmed fixed-base transitions retain their own confirmation; automatic
+failure cleanup remains immediate. Opening confirmation MUST NOT acknowledge alarms.
+Essential diagnostics MUST distinguish confirmed controls, fixed-base transitions
+and terminal alarm actions without credentials or coordinates; diagnostic failure
+MUST NOT affect capture or authorize Stop. Advanced settings replaces the existing
+logging/performance screen title and menu entry without removing its controls.
+
+Verification:
+- Automated: policy boundaries, replay/stale owner, lifecycle dismissal, settings
+  persistence and service authorization tests.
+- Manual: countdown/button accessibility and background behaviour on Android.
+
+Provenance: docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md; human:holubp approval in conversation
+
+Evidence obligations: EV-UI-STOP-001-AUTO, EV-UI-STOP-001-MANUAL
+
 ### UI-DASH-001: Recording Controls Remain Reachable
 
 Status: Normative

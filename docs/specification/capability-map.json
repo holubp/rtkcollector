@@ -1125,6 +1125,16 @@
       "pattern": "docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md",
       "category": "documentation",
       "reason": "Approved checkpointed recording-safety implementation and release plan."
+    },
+    {
+      "pattern": "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md",
+      "category": "documentation",
+      "reason": "Approved Stop confirmation design and checkpointed implementation history."
+    },
+    {
+      "pattern": "docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md",
+      "category": "documentation",
+      "reason": "Approved Stop confirmation design and checkpointed implementation history."
     }
   ],
   "capabilities": [
@@ -3646,9 +3656,75 @@
       ],
       "implementation_mappings": [],
       "supporting_mappings": []
+    },
+    {
+      "id": "CAP-RECORDING-STOP-001",
+      "name": "Deliberate session-bound Stop confirmation",
+      "status": "active",
+      "requirement_ids": [
+        "UI-STOP-001"
+      ],
+      "implementation_mappings": [
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/settings/StopConfirmationSettings.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/common/StopRecordingConfirmation.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/RecordingForegroundService.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/MainActivity.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/MainActivity.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/diagnostics/AppDiagnosticsScreen.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        },
+        {
+          "pattern": "app/src/main/kotlin/org/rtkcollector/app/ui/settings/SettingsHub.kt",
+          "requirement_ids": [
+            "UI-STOP-001"
+          ]
+        }
+      ],
+      "supporting_mappings": []
     }
   ],
   "approval": {
+    "inventory_digest": "sha256:af0f7d777e4b7bb15294da5230154ee8116b6271d1da8088ef0aa7c561d99fb2",
+    "state": "approved",
+    "approved_by": "human:holubp",
+    "approved_at": "2026-11-01T20:07:48.023613Z",
+    "decision_ref": "2026-11-01-stop-confirmation-approved-plan-release"
+  },
+  "previous_approval": {
     "inventory_digest": "sha256:5d0e15ea0d667a6aea516193ad820206cc45a785891cbf62b957b2544a0d1985",
     "state": "approved",
     "approved_by": "human:holubp",
@@ -3661,12 +3737,5 @@
       "approved_at": "2026-10-30T18:06:55Z",
       "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
     }
-  },
-  "previous_approval": {
-    "inventory_digest": "sha256:17ae9240cdee51b9647ef4f0eec48a433e2dbbc1d1d609cd0b7703bdb9628b33",
-    "state": "approved",
-    "approved_by": "human:holubp",
-    "approved_at": "2026-09-23T14:02:05Z",
-    "decision_ref": "2026-09-23-specification-assurance-approval"
   }
 }

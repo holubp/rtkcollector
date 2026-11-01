@@ -65,6 +65,11 @@ Receiver preparation runs off the UI thread: **Starting** remains responsive to
 finalizing the files and admitting another recording. See
 [Starting And Stopping Safely](docs/user-workflows.md#starting-and-stopping-safely).
 
+Stop asks for confirmation: a disabled countdown (initially 2 seconds), then a
+separate confirmation window (initially 10 seconds). Cancel or timeout keeps
+recording running. Change both durations under **Advanced settings**, alongside
+the existing logging and performance controls.
+
 ## Development Status
 
 This repository is in experimental bootstrap status. The current code includes

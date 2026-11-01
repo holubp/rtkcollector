@@ -7,6 +7,20 @@ import java.nio.file.Path
 
 class RuntimeDiagnosticsTest {
     @TempDir lateinit var tempDir: Path
+    @Test fun `essential journal retains bounded stop request provenance`() {
+        val store = DiagnosticsStore(tempDir.toFile())
+        val log = RuntimeDiagnostics(store, directWrites = true, level = { DiagnosticLevel.MINIMAL }) { false }
+        log.record(RuntimeDiagnosticRecord(1, DiagnosticCategory.SERVICE, "NOTICE", "Stop confirmation: opened",
+            attributes = mapOf("controlId" to "home", "ownerId" to "owner", "requestId" to "request",
+                "correlationId" to "stop", "password" to "never-export")))
+        val value = org.json.JSONObject(tempDir.resolve("diagnostics/essential/essential.jsonl").toFile()
+            .readLines().single()).getJSONObject("attributes")
+        assertEquals("home", value.getString("controlId"))
+        assertEquals("owner", value.getString("ownerId"))
+        assertEquals("request", value.getString("requestId"))
+        assertEquals("stop", value.getString("correlationId"))
+        assertFalse(value.toString().contains("never-export"))
+    }
     @Test fun `rejected submissions are isolated and do not leak queue capacity`() {
         val store = DiagnosticsStore(tempDir.toFile())
         val log = RuntimeDiagnostics(store, submit = { _, _ -> throw java.util.concurrent.RejectedExecutionException() }) { true }

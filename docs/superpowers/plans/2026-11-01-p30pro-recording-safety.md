@@ -15,14 +15,16 @@ Robolectric service tests, Gradle and GitHub Actions. No new dependencies.
 
 **Spec:** `docs/superpowers/specs/2026-11-01-p30pro-recording-safety-design.md`.
 
-**State:** Design and plan approved by human:holubp on 2026-11-01; executing.
+**State:** Implemented, not field-tested. RC11 published 2026-11-01 from tagged
+source `54c34fcc3971094503b7b10835fc69ac8d4379ce`; host CI and stable APK verified.
+Design and plan approved by human:holubp on 2026-11-01.
 Decision reference: `2026-11-01-p30pro-recording-safety-plan-approval`.
 The subsequent user instruction authorizes the next RC release after verification.
 Comparison base: `e6221f2e9aa568464f16158a3d17a321af537674`.
 Branch: `codex/p30pro-recording-safety` in the existing isolated integration
 worktree; the dirty root worktree is out of scope.
 
-## Execution Checkpoint
+## Initial Execution Checkpoint (Historical)
 
 2026-11-01: production changes are implemented and the fresh Termux clean-checkout
 gate passes app JVM compilation, feasible app/module tests and IDE task aliases.
@@ -326,26 +328,26 @@ constructors/callers remain compatible. Task 3 serializes them safely.
   Stop cancellation/finalization, meaningful failure evidence and bounded
   process-kill loss versus deliberate Stop. Update `docs/superpowers/plan-status.md`
   to reflect actual implementation and unexecuted hardware checks.
-- [ ] Reconcile exact new/changed runtime paths, requirements and supporting
+- [x] Reconcile exact new/changed runtime paths, requirements and supporting
   documentation through the repository checker. Obtain still-required exact
   human requirement/inventory approvals. Refresh pending digest bindings; create
   passing receipts only from executed checks with valid tracked evidence.
-- [ ] Freeze writers and have one independent Sol-high reviewer audit the whole
+- [x] Freeze writers and have one independent Sol-high reviewer audit the whole
   task delta, original design and exact regenerated assurance context. This
   effort is justified by lifecycle concurrency and raw-data loss. Fix findings
   and re-review affected paths; reuse unchanged qualified baseline evidence.
-- [ ] Run full repository gates sequentially in Termux. Keep every app JVM test
+- [x] Run full repository gates sequentially in Termux. Keep every app JVM test
   compile-checked and all feasible tests executed. Do not count Robolectric
   exclusions as passed tests. Preserve Android Studio compatibility aliases.
-- [ ] Commit only scoped source/tests/docs/assurance changes after local gates.
+- [x] Commit only scoped source/tests/docs/assurance changes after local gates.
   Push the branch, then require GitHub host CI to pass full tests including
   Robolectric service regressions, both distributions, release lint and native
   assembly. Inspect actual outcomes and fix failures; never publish a false green.
-- [ ] After exact-source host CI, publish RC11 with version code 12 and a
+- [x] After exact-source host CI, publish RC11 with version code 12 and a
   stable-signed GitHub-built APK. Independently download and verify checksum,
   signer, package/version and both ARM ABIs before publishing the draft release.
   Integrate into main without disturbing the dirty root worktree or RC10.
-- [ ] Final report: commit/remote state, executed tests, CI/release links,
+- [x] Final report: commit/remote state, executed tests, CI/release links,
   APK source identity and remaining P30 Pro/SAF/vendor validation.
 
 ## Verification Commands
@@ -387,10 +389,11 @@ assembly or invented host execution. CI is authoritative for full Android tests.
 | Design | Approved | human:holubp, 2026-11-01; independent builder check found no unanswered consequential questions |
 | Plan | Approved | human:holubp approved the plan and subsequently requested next-RC delivery; controller implementation plus one independent final audit |
 | Contract / baseline | Recorded | Three canonical requirements and inventory bound to the owner's explicit no-further-approval decision; unexecuted receipts remain not-run |
-| Startup | Implemented, host verification pending | Owned worker/barrier, real USB/SAF/mock-provider service fixtures compile; final Astra startup-failure/Stop race repair included |
-| Raw Stop safety | Implemented, host verification pending | Android-29 production negative control and exact raw-tail regressions pass locally; cooperative sidecar cancellation reviewed and tested |
-| Diagnostics | Implemented | Bounded identities, stages, process correlation and rejected cleanup fallback; pure JVM regressions pass locally |
-| Assurance / CI / push | In progress | Sol and Astra affected rereview, exact-scope attestation, full pre-push and GitHub CI/release remain mandatory |
+| Startup | Host verified, not field-tested | Owned worker/barrier and real USB/SAF/mock-provider service fixtures passed in both host variants/SDKs |
+| Raw Stop safety | Host verified, not field-tested | Android-29 negative control, production raw-tail, in-flight Stop/failure and cooperative sidecar regressions passed |
+| Diagnostics | Host verified | Bounded identities, stages, process correlation and rejected cleanup fallback; no historical exception identity invented |
+| Assurance / CI / push | Verified | Sol/Astra source reviews, exact-scope attestation, full local gate, CI 41303130604 and main CI 41303993708 passed |
+| Release | Published | v1.0-RC11, code 12; stable build 41304029992; downloaded APK independently verified; see docs/releases/1.0-RC11.md |
 | Field validation | Not run | P30 Pro Start/Stop at initialization phases, background USB recovery, working-storage raw tail, SAF/provider behavior |
 
 At each checkpoint record commands/results, actual files and pending ownership

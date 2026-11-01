@@ -1829,7 +1829,7 @@
     },
     {
       "path": "docs/releases/1.0-RC11.md",
-      "digest": "sha256:578cfc4f067b44de70eb890e81815e8a69bdeca8d156cff4dbacbc7da3054285"
+      "digest": "sha256:bccede8120a0240d21caf3beadd9cc23091450cd23aa32ffedcd229cedab78d7"
     },
     {
       "path": "docs/releases/1.0-RC2.md",
@@ -1961,7 +1961,7 @@
     },
     {
       "path": "docs/superpowers/plan-status.md",
-      "digest": "sha256:35f57c92159d92b29d82653d3c1f609b53b972e058db04dd255af03f1dac30e4"
+      "digest": "sha256:bd40ef0d82072a08c2d661661638f69274fca0ff2636486d513893d5a30398ea"
     },
     {
       "path": "docs/superpowers/plans/2026-06-06-rtkcollector-bootstrap.md",
@@ -2201,7 +2201,7 @@
     },
     {
       "path": "docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md",
-      "digest": "sha256:db748f1420e13a3a41ce1a5e4546fae9e9876772c58b7a3fe398135b758c2261"
+      "digest": "sha256:613332f887ed0f22cf99a5d62b9e035b7e4e2fc4bbd2dc7315b805b395d7eb97"
     },
     {
       "path": "docs/superpowers/specs/2026-06-06-rtkcollector-bootstrap-design.md",
@@ -5114,8 +5114,8 @@
       ]
     }
   ],
-  "observed_head_commit": "d4412bc76d222db22cfe614dacc71e05f90af058",
-  "scope_digest": "sha256:17c5ede1ea1abbaa5c4881e647516451a062a876399847ddad1850bb49adc8de",
+  "observed_head_commit": "54c34fcc3971094503b7b10835fc69ac8d4379ce",
+  "scope_digest": "sha256:6ac7862784e2a49575313bb23a8a93a0f3b8033e7e4aead8f4f65c153616ce35",
   "reviewed_paths": [
     ".github/CODEOWNERS",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -6487,14 +6487,14 @@
   },
   "result": "pass",
   "reviewer": "model:codex-rc11-independent-sol-high",
-  "reviewed_at": "2026-11-01T11:33:02.915899Z",
+  "reviewed_at": "2026-11-01T12:13:41.284566Z",
   "findings": [],
   "limitations": [],
   "audit_provenance": {
     "scope": "Independent whole-delta source semantics and acceptance-test-source audit; not host/device execution or release certification.",
     "comparison_base": "e6221f2e9aa568464f16158a3d17a321af537674",
-    "review_context": ".spec-assurance/p30-terminal-fixture-review-context.json",
-    "expected_scope_digest": "sha256:17c5ede1ea1abbaa5c4881e647516451a062a876399847ddad1850bb49adc8de",
+    "review_context": ".spec-assurance/p30-published-review-context.json",
+    "expected_scope_digest": "sha256:6ac7862784e2a49575313bb23a8a93a0f3b8033e7e4aead8f4f65c153616ce35",
     "model": "gpt-6.1-sol",
     "reasoning_effort": "high",
     "model_identity_basis": "Controller-supplied runtime routing identity, not model self-identification or an independently inspected runtime-metadata claim.",
@@ -6528,10 +6528,11 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "robolectric": "Controller reports independently downloaded CI 41301095017 XML: RecordingAlarmServiceTest 48 cases, 2 failures, 0 errors/skips; only rejected Start failed on SDK33/35, all other 46 cases passed. This reviewer did not independently download or certify that XML. Corrected terminal fixture host GREEN remains required; native audio is explicitly outside this isolated admission oracle.",
+      "robolectric": "Corrected-source host CI and main CI now succeed at the immutable release source; live GitHub run states independently checked. Detailed passing XML totals are controller-reported, not rerun by this reviewer.",
       "receipts": "320 not-run, one available and one blocked; no passing receipts were invented or promoted by this review.",
-      "remaining_gates": "Mandatory full pre-push for this exact source before next push, then exact-source corrected host CI GREEN. Signing, artifact verification, actual RC11 publication and P30/SAF/vendor/device obligations remain separately required.",
-      "approval_boundary": "Three design-derived canonical requirements and precise capability inventory use the owner's narrow release-without-further-approval authorization. This is not a claim that the human inspected final digest strings or waived any evidence gate. Existing owner/external-author governance remains distinct from universal branch protection."
+      "remaining_gates": "Final mandatory docs-snapshot full gate, scoped docs/assurance commit and main push remain controller work before goal closure. Keep v1.0-RC11 immutable. Physical P30/vendor/SAF obligations remain unexecuted; publication is not field certification.",
+      "approval_boundary": "Three design-derived canonical requirements and precise capability inventory use the owner's narrow release-without-further-approval authorization. This is not a claim that the human inspected final digest strings or waived any evidence gate. Existing owner/external-author governance remains distinct from universal branch protection.",
+      "historical_local_xml_totals": "The pre-existing numeric XML fields describe the earlier inspected local source snapshot, not a new execution for this documentation-only refresh."
     },
     "reconciliation": {
       "context_path_hashes_verified": 723,
@@ -6594,7 +6595,7 @@
         "core/session/src/test/kotlin/org/rtkcollector/core/session/SessionWriterLifecycleTest.kt",
         "core/session/src/test/kotlin/org/rtkcollector/core/session/SessionWritersTest.kt"
       ],
-      "nonpair_governance_documentation_review": "Instructions, architecture/background/session/operator documentation, release notes, approved design/plan, source ledger, narrow approvals, exact inventory, receipts and verification matrix were inspected. Plan checkboxes distinguish source/add-test/pure-test work from still-unchecked host RED/execution, full gates, CI, signing, publication and field work. No independent review or source presence was substituted for passing execution receipts. CI fixture refresh: four changed paths independently rereviewed; observed host RED explicitly remains pre-IO fixture evidence, not behavioral race certification. Terminal fixture refresh: three affected paths independently reviewed, valid admission/effects separation confirmed, host failure and pending corrected host GREEN preserved."
+      "nonpair_governance_documentation_review": "Instructions, architecture/background/session/operator documentation, release notes, approved design/plan, source ledger, narrow approvals, exact inventory, receipts and verification matrix were inspected. Plan checkboxes distinguish source/add-test/pure-test work from still-unchecked host RED/execution, full gates, CI, signing, publication and field work. No independent review or source presence was substituted for passing execution receipts. CI fixture refresh: four changed paths independently rereviewed; observed host RED explicitly remains pre-IO fixture evidence, not behavioral race certification. Terminal fixture refresh: three affected paths independently reviewed, valid admission/effects separation confirmed, host failure and pending corrected host GREEN preserved. Published documentation refresh: release note, plan and status independently checked against live GitHub run/release metadata and local APK verification record; pending receipts and field limits preserved."
     },
     "ci_fixture_refresh": {
       "prior_candidate": "/data/data/com.termux/files/usr/tmp/rtkcollector-p30pro/sol-repaired-semantic.json",
@@ -6640,6 +6641,55 @@
       "host_execution_boundary": "Controller reports independently downloaded CI 41301095017 XML: RecordingAlarmServiceTest 48 cases, 2 failures, 0 errors/skips; only rejected Start failed on SDK33/35, all other 46 cases passed. This reviewer did not independently download or certify that XML. Corrected terminal fixture host GREEN remains required; native audio is explicitly outside this isolated admission oracle.",
       "local_execution_boundary": "Controller reports 977 feasible app tests GREEN and all app/Robolectric sources compile in 1m21s. Reviewer ran no Gradle and does not certify these reports as passing receipts.",
       "remaining_execution": "Mandatory full pre-push for this exact source before next push, then exact-source corrected host CI GREEN. Signing, artifact verification, actual RC11 publication and P30/SAF/vendor/device obligations remain separately required."
+    },
+    "published_documentation_refresh": {
+      "prior_candidate": "/data/data/com.termux/files/usr/tmp/rtkcollector-p30pro/sol-terminal-fixture-semantic.json",
+      "prior_candidate_digest": "sha256:a856de9ba77ee50061a8a355495b1dd97a47cb131d43882f389042f12b9c38be",
+      "prior_scope_digest": "sha256:17c5ede1ea1abbaa5c4881e647516451a062a876399847ddad1850bb49adc8de",
+      "reviewed_changed_paths": {
+        "docs/releases/1.0-RC11.md": "Release note facts match live read-only GitHub release/run queries and local rc11-apk-verification.json: published prerelease/time, tagged source, three successful exact-source runs, APK asset name/size/hash, package/version/code, stable certificate, both ARM ABIs and four native-library alignments. Controller-reported XML/native/signature verification remains attributed execution evidence, not independently rerun by this source reviewer. Source review is explicitly not device certification; pending receipts and physical P30/SAF/vendor/historical identity limits remain explicit.",
+        "docs/superpowers/plan-status.md": "Implemented, not field-tested matches shipped RC11 and successful exact-source CI while preserving physical P30/vendor/SAF and historical kill/exception uncertainty. Runtime/tag identity and run IDs agree with live queries and release notes. No unenrolled evidence is marked passing. Historical local test totals are not represented as a new docs-only gate run.",
+        "docs/superpowers/plans/2026-11-01-p30pro-recording-safety.md": "Initial checkpoint is clearly historical; current state records published RC11 and successful host verification. Completed implementation/review/source-integration/publication items agree with prior independent review plus current GitHub evidence. Host verification and field validation remain distinct. This documentation source attestation does not certify the still-required final docs gate, docs commit/main push or controller goal closure; original immutable release tag remains unchanged."
+      },
+      "exact_unchanged_paths": 720,
+      "exact_traced_pair_conclusions_retained": 769,
+      "qualification": "All retained pair/path-content/requirement digests and traceability match exactly. Production and tests are unchanged. Prior RC10 and Astra review provenance remains qualified historical source evidence. Earlier refresh pending-host statements describe their historical checkpoints, superseded by the live run outcomes below.",
+      "live_github_checked_by_reviewer": {
+        "published_at": "2026-11-01T12:06:23Z",
+        "draft": false,
+        "prerelease": true,
+        "asset_count": 3,
+        "apk_name": "rtkcollector-v1.0-RC11-sideload-debug.apk",
+        "apk_size": 22051814,
+        "apk_digest": "sha256:643ecaeee88e3a4a9111668b7d10ed6eb6391a8e2b1a46c493239e27c39fd64e",
+        "tag_source": "54c34fcc3971094503b7b10835fc69ac8d4379ce",
+        "runs": {
+          "41303130604": {
+            "conclusion": "success",
+            "headSha": "54c34fcc3971094503b7b10835fc69ac8d4379ce",
+            "status": "completed"
+          },
+          "41303993708": {
+            "conclusion": "success",
+            "headSha": "54c34fcc3971094503b7b10835fc69ac8d4379ce",
+            "status": "completed"
+          },
+          "41304029992": {
+            "conclusion": "success",
+            "headSha": "54c34fcc3971094503b7b10835fc69ac8d4379ce",
+            "status": "completed"
+          }
+        }
+      },
+      "local_verification_record_digest": "sha256:593eb06f59217e2fc320c8ee1519382258ffaffc929ef1c83a5ef1b98e7ab19a",
+      "artifact_review_boundary": "Read controller-produced local verification JSON and compared fields with docs, GitHub asset metadata and source/tag. Did not independently rerun apksigner, download XML/APK, native tests or alignment checks. Detailed XML counts 2769/354 and native 30 passed are supported by controller evidence and published summary, not a new reviewer execution certificate.",
+      "receipt_states": {
+        "not-run": 320,
+        "available": 1,
+        "blocked": 1
+      },
+      "receipts_and_matrix": "Unchanged bytes from previously inspected records; no pending receipt promoted.",
+      "remaining_closure": "Final mandatory docs-snapshot full gate, scoped docs/assurance commit and main push remain controller work before goal closure. Keep v1.0-RC11 immutable. Physical P30/vendor/SAF obligations remain unexecuted; publication is not field certification."
     }
   },
   "conclusions": [

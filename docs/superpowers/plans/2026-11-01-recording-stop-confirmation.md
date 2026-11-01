@@ -136,3 +136,11 @@ Every approved design section is assigned above: timing/settings (1), authority/
   than a separate enum; service-derived origin is never copied from arbitrary
   intent text. Cost if wrong: new caller strings require review/tests; current
   accepted branches and serialized provenance are tested and independently read.
+- Candidate fd318cd reached host CI41348026809: 1,153 Google Play JVM cases,
+  four failures (the two new initial-button/success tests on SDK33 and35).
+  Queued OnShow initialization left the default native positive button enabled
+  until dispatch; an early test click dismissed the dialog before installing the
+  guarded listener. Product repair initializes buttons synchronously immediately
+  after show returns. Original assertions remain unchanged as the host RED oracle.
+  Other host cases, including real A/B ownership and cancellation/navigation,
+  passed; sideload/native/release tasks were not reached in this failed run.

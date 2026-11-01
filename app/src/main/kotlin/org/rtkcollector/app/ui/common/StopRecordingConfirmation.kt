@@ -71,7 +71,7 @@ object StopRecordingConfirmation {
             RecordingStopConfirmation.cancel(request.requestId, outcome)
             if (active === dialog) active = null
         }
-        dialog.setOnShowListener {
+        fun initializeButtons() {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 if (!submitted && dialog.isShowing &&
                     request.window.phase(SystemClock.elapsedRealtime()) == StopConfirmationPhase.ACTIVE) {
@@ -97,7 +97,10 @@ object StopRecordingConfirmation {
             tick.run()
         }
         activity.application.registerActivityLifecycleCallbacks(callbacks)
-        try { dialog.show() } catch (error: RuntimeException) {
+        try {
+            dialog.show()
+            initializeButtons()
+        } catch (error: RuntimeException) {
             handler.removeCallbacks(tick)
             activity.application.unregisterActivityLifecycleCallbacks(callbacks)
             RecordingStopConfirmation.cancel(request.requestId, "unavailable")

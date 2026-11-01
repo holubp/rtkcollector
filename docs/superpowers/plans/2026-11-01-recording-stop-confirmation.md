@@ -4,7 +4,7 @@
 
 **Goal:** Prevent accidental explicit recording Stop requests using configurable, session-bound confirmation and identify the origin of future stop requests.
 
-**Architecture:** A pure deadline policy supplies a shared Compose dialog. The service owns a one-use confirmation authorization bound to its current recording/startup identity and elapsed-time window, and validates it before stopping. Existing confirmed base transitions and automatic cleanup remain separate typed paths; diagnostics never authorize or block capture.
+**Architecture:** A pure deadline policy supplies a shared native Android dialog used by Compose and legacy screens. The service owns a one-use confirmation authorization bound to its current recording/startup identity and elapsed-time window, and validates it before stopping. Existing confirmed base transitions and automatic cleanup remain separate typed paths; diagnostics never authorize or block capture.
 
 **Tech Stack:** Kotlin, Compose Material 3, Android SharedPreferences, existing JVM/Robolectric tests and GitHub CI.
 
@@ -54,47 +54,73 @@ Execution evidence belongs here per task: changed files, RED/GREEN commands, rem
 - [x] Add draft formal requirements for confirmation/timing and stop provenance, identify affected existing UI/runtime/diagnostics requirement IDs, and map approved design without inventing approvals.
 - [x] Write failing `StopConfirmationPolicyTest`: default window WAITING at 0/1999 ms, ACTIVE at 2000/11999, EXPIRED at 12000; displayed ceiling seconds 2/1 then 10/1. Test custom extrema, rejected out-of-range/overflow input, delayed ticks and wall-clock independence.
 - [x] Write settings tests for fresh defaults, persistence across instances, atomic pair save, corrupt stored values reverting safely and unchanged diagnostic preferences.
-- [ ] Run targeted policy tests, record actual RED; compile-check settings tests locally and run them in host Robolectric where required.
-- [ ] Implement only policy/settings contracts and rerun targeted tests GREEN.
+- [x] Run targeted policy tests, record actual RED; compile-check settings tests locally and run them in host Robolectric where required.
+- [x] Implement only policy/settings contracts and rerun targeted tests GREEN.
 
 ### Task 2: Service-Owned Stop Authorization And Provenance
 
 **Interfaces:** `StopRequestOrigin` distinguishes CONFIRMED_CONTROL, FIXED_BASE_TRANSITION and TERMINAL_ALARM. A process-local service-owned authority exposes immutable pending confirmation snapshots (request ID, current owner ID, timing/deadlines) to the shared UI; `requestConfirmation(controlId: String)`, `cancelConfirmation(requestId: String, outcome: String)` and `consumeConfirmation(requestId: String, nowMillis: Long, ownerId: String): Boolean` are serialized against stop/start ownership. Service uses its own monotonic time, not caller-supplied deadlines. Owner IDs must survive startup-to-capture promotion and never be reused.
 
-- [ ] Write failing authorization tests: early/expired/missing/replayed token, second tap, old-session token, startup token, owner retirement and cancellation all reject appropriately; active in-window token consumes exactly once.
-- [ ] Extend service tests: queue confirmed Stop for A, finish A/start B, deliver old request and prove B remains running; confirm during startup; prove opening/cancel/timeout has no producer/alarm effect.
-- [ ] Add service tests for failed diagnostics and legitimate fixed-base transition; test terminal Stop alarm cannot stop an unrelated active session through a stale generation.
-- [ ] Run targeted tests and record RED; introduce authority and a distinct confirmed-stop intent/action. Do not let unscoped legacy UI intents bypass authorization. Migrate every internal caller deliberately; preserve generation guards on terminal alarms and immediate automatic failure cleanup.
+- [x] Write failing authorization tests: early/expired/missing/replayed token, second tap, old-session token, startup token, owner retirement and cancellation all reject appropriately; active in-window token consumes exactly once.
+- [x] Extend service tests: queue confirmed Stop for A, finish A/start B, deliver old request and prove B remains running; confirm during startup; prove opening/cancel/timeout has no producer/alarm effect.
+- [x] Add service tests for failed diagnostics and legitimate fixed-base transition; test terminal Stop alarm cannot stop an unrelated active session through a stale generation.
+- [x] Run targeted tests and record RED; introduce authority and a distinct confirmed-stop intent/action. Do not let unscoped legacy UI intents bypass authorization. Migrate every internal caller deliberately; preserve generation guards on terminal alarms and immediate automatic failure cleanup.
 - [x] Add bounded request-origin/control ID to accepted stop evidence and confirmation outcome events. Retain existing USER initiator/contributors/correlation semantics and avoid secrets/coordinates.
-- [ ] Run policy/authority/stop-context tests GREEN plus existing startup, raw finalization and alarm regressions; host-only service cases remain explicit until CI executes them.
+- [x] Run policy/authority/stop-context tests GREEN plus existing startup, raw finalization and alarm regressions; host-only service cases remain explicit until CI executes them.
 
 ### Task 3: Shared Dialog And Advanced Settings UI
 
 **Interfaces:** shared host consumes the service snapshot and cancel/confirm callbacks. It uses Task 1 phases for presentation, never authorizes Stop itself. Numeric field edits use a draft; Save writes one validated timing pair. Each confirmation snapshots saved values when opened.
 
-- [ ] Write failing UI/source-contract and host lifecycle tests: disabled/enabled button labels, click disabled has no effect, Cancel/Back/outside/timeout continue recording, background/navigation/recreation dismiss, repeated opens do not create overlapping authorizations.
-- [ ] Test both settings bounds and invalid/empty/nonnumeric input; verify default 2/10 values and persistence. Test recovery-screen Stop and any reachable legacy control through the same authorization path.
-- [ ] Implement shared dialog with per-second display updates driven by monotonic deadlines; observe recording identity and lifecycle, cancel on change/background/disposal. If service/session authority is unavailable, do not fall back to unguarded Stop.
+- [x] Write failing UI/source-contract and host lifecycle tests: disabled/enabled button labels, click disabled has no effect, Cancel/Back/outside/timeout continue recording, background/navigation/recreation dismiss, repeated opens do not create overlapping authorizations.
+- [x] Automate settings bounds, default 2/10 values, persistence and corrupt-store fallback. Source-review empty/nonnumeric editor validation and recovery/legacy routing through the shared authorization path; source review is not executed UI evidence.
+- [ ] Execute empty/nonnumeric editor interactions and reachable recovery/legacy Stop UI flows explicitly on a device or UI test host; these interaction cases remain pending.
+- [x] Implement shared dialog with per-second display updates driven by monotonic deadlines; observe recording identity and lifecycle, cancel on change/background/disposal. If service/session authority is unavailable, do not fall back to unguarded Stop.
 - [x] Route main/recovery/legacy explicit Stop actions to the host; preserve base handoff's existing final confirmation and alarm-only semantics. Reconcile every `stopIntent`/ACTION_STOP caller in a checked inventory.
 - [x] Rename screen/menu title to `Advanced settings`; retain all logging/performance/export controls and add both numeric settings with seconds labels using the app's existing editor behaviour.
-- [ ] Run focused tests GREEN and compile all app test sources. Check compact portrait/landscape/accessibility countdown text; record actual screenshots/device checks or mark them not run.
+- [x] Run focused tests GREEN and compile all app test sources. Host tests execute in both distributions on SDK33/35.
+- [ ] Physical-device compact portrait/landscape/accessibility countdown checks remain not run; no screenshot or field-validation claim is made.
 
 ### Task 4: Assurance, Independent Review And Publication To Main
 
 **Interfaces:** stable full delta from baseline, approved design, Task 1-3 test evidence and remaining manual checks.
 
-- [ ] Update user docs (`docs/user-workflows.md`, logging/background docs where affected), formal capability/requirement mappings, verification evidence and `docs/superpowers/plan-status.md`. Keep unexecuted device/host checks explicitly pending; refresh only digest-valid approvals/attestations through the repository's prescribed assurance flow.
-- [ ] Review all callers and original acceptance points; audit Stop alarm versus recording Stop, configuration-recovery early return, initial startup and fixed-base transition. No unexplained generic USER source remains in app-generated stop requests.
-- [ ] Obtain one independent Sol/high review of the whole delta for ownership/lifecycle/data-integrity consequences; justify high effort on this boundary. Fix in-scope findings, then re-review affected parts. Never treat an agent timeout as a review.
-- [ ] Run `git diff --check`; `sh scripts/pre_push_check.sh`; IDE alias dry-runs `sh gradlew :app:unitTestClasses :app:androidTestClasses --dry-run`. No parallel Gradle builds. Record exact results, including Termux compile-only tests.
-- [ ] Stage only scoped files; commit, push and observe clean-host CI (both variants/tests/resource/native/release-lint checks). Repair real failures before declaring verified. Do not run local APK assembly in Termux.
-- [ ] Push final scoped integration to main using explicit source ref, preserving the dirty root checkout. Update checkpoint evidence and report implemented-versus-device-tested status; a new RC requires separate release authorization and must not replace RC11.
+- [x] Update user docs (`docs/user-workflows.md`, logging/background docs where affected), formal capability/requirement mappings, verification evidence and `docs/superpowers/plan-status.md`. Keep unexecuted device checks explicitly pending; refresh only digest-valid approvals/attestations through the repository's prescribed assurance flow.
+- [x] Review all callers and original acceptance points; audit Stop alarm versus recording Stop, configuration-recovery early return, initial startup and fixed-base transition. No unexplained generic USER source remains in app-generated stop requests.
+- [x] Obtain one independent Sol/high review of the whole delta for ownership/lifecycle/data-integrity consequences; justify high effort on this boundary. Fix in-scope findings, then re-review affected parts. Never treat an agent timeout as a review.
+- [x] Run `git diff --check`; `sh scripts/pre_push_check.sh`; IDE alias dry-runs `sh gradlew :app:unitTestClasses :app:androidTestClasses --dry-run`. No parallel Gradle builds. Record exact results, including Termux compile-only tests.
+- [x] Stage only scoped files; commit, push and observe clean-host CI (both variants/tests/resource/native/release-lint checks). Repair real failures before declaring verified. Do not run local APK assembly in Termux.
+- [x] Push final scoped integration to main using explicit source ref, preserving the dirty root checkout. Update checkpoint evidence and report implemented-versus-device-tested status. Owner separately authorized and resumed RC12 publication; RC11 is unchanged.
 
 ## Plan Self-Review
 
 Every approved design section is assigned above: timing/settings (1), authority/origins (2), shared UI/lifecycle/rename (3), assurance/docs/CI (4). All five review-focus conditions have explicit tests. Existing owner/session identity is reused, not a second recording lifecycle; exact snapshot plumbing is an implementation decision constrained by Task 2's serialized service contract. No implementation is authorized to infer a human stop from the current USER label.
 
 ## Execution Checkpoint
+
+### Published RC12
+
+Status: **Implemented, not field-tested**. Source `d56d5d26905c3543bf1e05c7b2e5b7182861c616`
+was fast-forwarded to remote main and tagged `v1.0-RC12`. Full-host
+[CI41359752906](https://github.com/holubp/rtkcollector/actions/runs/41359752906)
+passed 2,849 JVM tests / 358 suites (zero failures/errors/skips), including
+68 recording-service cases per variant on SDK33/35. Native boundary/startup
+checks passed 30 tests; both release lint checks, assembly and signing smoke
+passed. Normal local pre-push checks passed 1,501 JVM tests / 198 suites and
+compiled all app JVM tests; IDE task aliases dry-ran successfully.
+
+The same Sol/high independent review and focused Astra repair reviews found no
+remaining blockers. No diagnostic exception, timing relaxation or added test
+exclusion was used. Historical failed candidates remain recorded below.
+
+[Stable release build41360543487](https://github.com/holubp/rtkcollector/actions/runs/41360543487)
+passed against the exact tag. Downloaded APK source receipt, SHA-256, single
+stable signer, v2/v3 signatures, package/version/code13, ARM64/ARMv7 and 16 KiB
+ARM64 ELF/ZIP alignment were independently verified before publishing the
+[RC12 prerelease](https://github.com/holubp/rtkcollector/releases/tag/v1.0-RC12).
+See `docs/releases/1.0-RC12.md` for checksums and certificate identity.
+Physical-device touch/accessibility/background/rotation checks remain pending;
+the initiating control in the old RC11 USER-stop capture remains unproven.
 
 ### Approved Astra Repair Slice
 
@@ -116,7 +142,7 @@ host execution; do not certify host GREEN or erase historical failures.
 - [x] Adapt the native dialog to the pure loop. Require enabled button, current
   request and fresh ACTIVE phase for dispatch. Strengthen successful UI tests with
   enabled/label assertions; preserve original 2/9/1 host timing assertions.
-- [ ] Update the narrow capability mappings/approved design provenance, invalidate
+- [x] Update the narrow capability mappings/approved design provenance, invalidate
   affected evidence honestly, and obtain independent source review of repaired
   code. Run normal full pre-push gate, commit/push and full host CI; keep RC12
   unpublished until current-source tests, build and signed-APK verification pass.
@@ -126,8 +152,9 @@ pure tests: WAITING rather than ACTIVE at 2000 ms, scheduled uptime1115 rather
 than1100, and label2 rather than1 at1000. The boundary-aligned implementation
 passed10 refresh tests plus5 policy tests, zero failures; all Android test sources
 compiled. These results prove the source scheduling mechanism, not historical CI
-callback causality. Current affected-source review, full gate and host CI remain
-required before release. No diagnostic workflow/exception was used.
+callback causality. Final affected-source review, full gate, host CI and signed
+release verification passed as recorded above. No diagnostic workflow/exception
+was used.
 
 ### Earlier Checkpoints
 

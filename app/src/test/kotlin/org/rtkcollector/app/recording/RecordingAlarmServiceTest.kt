@@ -295,7 +295,7 @@ class RecordingAlarmServiceTest {
             startupIo = io
             val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
             val service = controller.get()
-            val base = RecordingSetupBridgeTest.snapshot()
+            val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
             val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(),
                 config = base.config.copy(ntrip = base.config.ntrip.copy(enabled = false),
                     profileBaud = 230400, serialBaud = 921600,
@@ -354,7 +354,7 @@ class RecordingAlarmServiceTest {
         val tree = Uri.parse("content://recording-test/tree/root")
         service.contentResolver.takePersistableUriPermission(tree,
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        val base = RecordingSetupBridgeTest.snapshot()
+        val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
         val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(),
             config = base.config.copy(ntrip = base.config.ntrip.copy(enabled = false),
                 storage = base.config.storage.copy(kind = "SAF_TREE", treeUri = tree.toString()),
@@ -387,7 +387,7 @@ class RecordingAlarmServiceTest {
         val io = StartupIo("CONFIG"); startupIo = io
         val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
         val service = controller.get()
-        val base = RecordingSetupBridgeTest.snapshot()
+        val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
         val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(),
             config = base.config.copy(ntrip = base.config.ntrip.copy(enabled = false),
                 profileBaud = 230400, serialBaud = 230400, initCommands = emptyList(),
@@ -427,7 +427,7 @@ class RecordingAlarmServiceTest {
         val tree = Uri.parse("content://recording-test/tree/root")
         service.contentResolver.takePersistableUriPermission(tree,
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        val base = RecordingSetupBridgeTest.snapshot()
+        val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
         val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(),
             config = base.config.copy(ntrip = base.config.ntrip.copy(enabled = false),
                 storage = base.config.storage.copy(kind = "SAF_TREE", treeUri = tree.toString()),
@@ -499,7 +499,7 @@ class RecordingAlarmServiceTest {
         val io = StartupIo("mock-provider"); startupIo = io
         val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
         val service = controller.get()
-        val base = RecordingSetupBridgeTest.snapshot()
+        val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
         val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(),
             recordingOutputProfile = base.recordingOutputProfile.copy(enableMockLocation = true),
             config = base.config.copy(ntrip = base.config.ntrip.copy(enabled = false),

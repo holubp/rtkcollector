@@ -26,6 +26,15 @@ import org.rtkcollector.app.profile.SelectionChoice
 import org.rtkcollector.app.profile.SettingsSetOptionPolicy
 
 class RecordingSetupBridgeTest {
+    @Test fun `plain receiver startup fixture keeps derived outputs consistent with owner`() {
+        val plain = snapshot(ntripEnabled = false)
+        assertEquals("plain-rover", plain.config.workflowId)
+        assertFalse(plain.config.ntrip.enabled)
+        assertFalse(plain.config.recording.recordNtripCorrectionInput)
+        assertFalse(plain.config.recording.recordRemoteBaseRaw)
+        assertNotNull(RecordingSetupAuthority().stageStart(plain))
+    }
+
     @Test
     fun `accepted published live source and mock ASK answers are session consumed but newer equal answers survive`() {
         listOf(ActiveSetupOptionKey.NTRIP_MOUNTPOINT, ActiveSetupOptionKey.RECORDING_OUTPUT).forEach { key ->
@@ -430,10 +439,11 @@ class RecordingSetupBridgeTest {
     }
 
     companion object {
-        internal fun snapshot(): RunningSetupSnapshot {
+        internal fun snapshot(ntripEnabled: Boolean = true): RunningSetupSnapshot {
             val output = output()
             val config = ActiveRecordingConfig.resolve(
                 settingsSet = RecordingSettingsSet.builtInRoverNtrip().copy(
+                    workflowId = if (ntripEnabled) "rover-ntrip" else "plain-rover",
                     commandProfileRef = ProfileReference("commands", "Commands"),
                     usbBaudProfileRef = ProfileReference("baud", "Baud"),
                     ntripCasterProfileRef = null,
@@ -447,8 +457,8 @@ class RecordingSetupBridgeTest {
                 ntripMountpointProfile = source().copy(id = "old-source", mountpoint = "OLD"),
                 recordingPolicyProfile = output,
                 storageProfile = StorageProfile("storage", "Storage"),
-                workflowName = "Rover NTRIP",
-                workflowUsesNtrip = true,
+                workflowName = if (ntripEnabled) "Rover NTRIP" else "Plain rover",
+                workflowUsesNtrip = ntripEnabled,
                 passwordLookup = { null },
             )
             return RunningSetupSnapshot("session", 0, "set", config, output,

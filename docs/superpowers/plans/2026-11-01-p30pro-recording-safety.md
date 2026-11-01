@@ -195,9 +195,16 @@ and `RecordingCancellationTest.kt`; extend existing `ReceiverRecoveryOwnershipTe
   ownership and between completion/publication. Use the existing Robolectric
   class so no extra Termux exclusion is required. These tests execute in CI;
   source scanning alone is not proof of Android callback responsiveness.
-- [ ] Observe integration RED on a clean host/CI. In Termux, compile these tests
+- [x] Observe integration RED on a clean host/CI. In Termux, compile these tests
   and execute the pure ownership tests; retain host execution as pending rather
   than claiming Robolectric passed locally.
+
+  Host RED: GitHub run `41298101535` rejected five platform fixtures on both
+  SDKs because disabling NTRIP after resolving outputs violated their selected
+  owner profile. Correct the fixture through the production resolver and check
+  it with a pure staged-start regression; do not relax validation. These failures
+  occurred before the intended USB/storage interleavings; host GREEN is still
+  required for those behavioral assertions.
 - [x] Split `startRecording` into prompt main-thread admission and worker-owned
   initialization. Keep validated setup acceptance, foreground admission, alarm
   generation and service start-ID handling correct. Move profile preparation,

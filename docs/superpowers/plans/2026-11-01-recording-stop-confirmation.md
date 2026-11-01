@@ -131,6 +131,32 @@ required before release. No diagnostic workflow/exception was used.
 
 ### Earlier Checkpoints
 
+- Repair2b96ec3 passed the normal local gate:1,501 JVM cases/198 suites,
+  zero failures/errors/skips, with all app test sources compiled. Independent
+  Sol source review passed. Ordinary host CI41357572741 attempt1 hit Maven
+  Central HTTP429 fetching the Robolectric runtime; the unchanged retry fetched
+  it successfully. Attempt2 passed the original timing/expiry assertions and
+  hidden-dialog provenance regression, then failed both immediate post-pause
+  authorization assertions. No timing threshold or assertion was relaxed.
+- Astra's affected lifecycle review identified queued OnDismiss revocation.
+  Pause must synchronously revoke an unsubmitted request; only successful
+  dispatch (`outcome == "submitted"`), not a merely attempted dispatch, retains
+  authorization for service delivery. Added Waiting/Active pause, delayed old
+  cleanup versus replacement, failed dispatch, and successful dispatch followed
+  by pause coverage. Current gate and ordinary host execution remain required.
+- Sol's affected review extended the same synchronous captured-request cleanup
+  to owner-scoped navigation and destruction, preventing an immediate reopened
+  dialog from inheriting the dismissed request before queued cleanup executes.
+  The navigation test now reopens before draining callbacks and checks a fresh
+  WAITING request that survives the old dialog's cleanup. Successful-dispatch
+  authorization remains exempt from all these cancellation paths.
+- Astra's combined submit/reopen review found that an outstanding dispatched
+  token must not be adopted by a new dialog after queued cleanup clears the old
+  dialog. UI tracking now prevents this until service consumption or original
+  expiry; an expired submitted request can be replaced by a fresh countdown.
+  Tests defer actual service delivery across cleanup, reopen, navigation and
+  pause, and separately cover expiry followed by retry.
+
 - User approved execution and next RC publication as an active goal; target is
   RC12, version code 13. RC11 remains immutable.
 - Timing/authorization tests first failed compilation for missing policy symbols

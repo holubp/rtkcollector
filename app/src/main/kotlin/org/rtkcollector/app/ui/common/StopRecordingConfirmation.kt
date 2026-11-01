@@ -18,20 +18,28 @@ import org.rtkcollector.app.settings.StopConfirmationSettings
 
 /** One native dialog also covers the legacy Activity and configuration-recovery UI. */
 object StopRecordingConfirmation {
-    private var active: AlertDialog? = null
+    private data class ActiveConfirmation(val dialog: AlertDialog, val cancel: () -> Unit)
+    private var active: ActiveConfirmation? = null
+    private var dispatchedRequestId: String? = null
 
     fun dismissForNavigation(context: Context) {
         var current = context
         while (current is ContextWrapper && current !is Activity) current = current.baseContext
-        active?.takeIf { it.ownerActivity === current }?.dismiss()
+        active?.takeIf { it.dialog.ownerActivity === current }?.cancel?.invoke()
     }
 
     fun show(context: Context, controlId: String) {
         var current = context
         while (current is ContextWrapper && current !is Activity) current = current.baseContext
         val activity = current as? Activity ?: return
-        if (activity.isFinishing || activity.isDestroyed || active?.isShowing == true) return
-        val request = RecordingStopConfirmation.open(controlId, SystemClock.elapsedRealtime(),
+        if (activity.isFinishing || activity.isDestroyed || active?.dialog?.isShowing == true) return
+        val now = SystemClock.elapsedRealtime()
+        RecordingStopConfirmation.pending()?.takeIf { it.requestId == dispatchedRequestId }?.let {
+            if (it.window.phase(now) != StopConfirmationPhase.EXPIRED) return
+            RecordingStopConfirmation.cancel(it.requestId, "expired")
+        }
+        dispatchedRequestId = null
+        val request = RecordingStopConfirmation.open(controlId, now,
             StopConfirmationSettings(activity).timing) ?: return
         val handler = Handler(Looper.getMainLooper())
         var outcome = "cancelled"
@@ -40,10 +48,21 @@ object StopRecordingConfirmation {
             .setMessage("Recording continues until you confirm.")
             .setPositiveButton("Confirm", null).setNegativeButton("Cancel", null).create()
         dialog.setOwnerActivity(activity)
-        active = dialog
+        fun cancelAndDismiss(reason: String) {
+            if (outcome != "submitted") {
+                outcome = reason
+                RecordingStopConfirmation.cancel(request.requestId, outcome)
+            }
+            dialog.dismiss()
+        }
+        active = ActiveConfirmation(dialog) { cancelAndDismiss("cancelled") }
         val callbacks = object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityPaused(a: Activity) { if (a === activity) { outcome = "backgrounded"; dialog.dismiss() } }
-            override fun onActivityDestroyed(a: Activity) { if (a === activity) dialog.dismiss() }
+            override fun onActivityPaused(a: Activity) {
+                if (a === activity) {
+                    cancelAndDismiss("backgrounded")
+                }
+            }
+            override fun onActivityDestroyed(a: Activity) { if (a === activity) cancelAndDismiss("cancelled") }
             override fun onActivityCreated(a: Activity, state: Bundle?) {}
             override fun onActivityStarted(a: Activity) {}
             override fun onActivityResumed(a: Activity) {}
@@ -72,7 +91,7 @@ object StopRecordingConfirmation {
             refresh.cancel()
             activity.application.unregisterActivityLifecycleCallbacks(callbacks)
             RecordingStopConfirmation.cancel(request.requestId, outcome)
-            if (active === dialog) active = null
+            if (active?.dialog === dialog) active = null
         }
         fun initializeButtons() {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -82,7 +101,7 @@ object StopRecordingConfirmation {
                     submitted = true
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                     runCatching { activity.startService(RecordingForegroundService.confirmedStopIntent(activity, request.requestId)) }
-                        .onSuccess { outcome = "submitted" }
+                        .onSuccess { outcome = "submitted"; dispatchedRequestId = request.requestId }
                         .onFailure {
                             outcome = "dispatch-failed"
                             Toast.makeText(activity, "Could not request Stop. Recording continues.", Toast.LENGTH_LONG).show()
@@ -92,7 +111,7 @@ object StopRecordingConfirmation {
                         refresh.cancel()
                         dialog.setOnDismissListener {
                             activity.application.unregisterActivityLifecycleCallbacks(callbacks)
-                            if (active === dialog) active = null
+                            if (active?.dialog === dialog) active = null
                         }
                     }
                     dialog.dismiss()
@@ -108,7 +127,7 @@ object StopRecordingConfirmation {
             refresh.cancel()
             activity.application.unregisterActivityLifecycleCallbacks(callbacks)
             RecordingStopConfirmation.cancel(request.requestId, "unavailable")
-            if (active === dialog) active = null
+            if (active?.dialog === dialog) active = null
         }
     }
 }

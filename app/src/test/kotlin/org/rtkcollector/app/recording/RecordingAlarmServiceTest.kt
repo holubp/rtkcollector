@@ -102,6 +102,14 @@ class RecordingAlarmServiceTest {
             assertNotEquals(previous.requestId, next.requestId)
             assertEquals(StopConfirmationPhase.WAITING, next.window.phase(android.os.SystemClock.elapsedRealtime()))
             org.rtkcollector.app.ui.common.StopRecordingConfirmation.dismissForNavigation(controller.get())
+            assertNull(RecordingStopConfirmation.pending())
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(controller.get(), "home")
+            val reopened = requireNotNull(RecordingStopConfirmation.pending())
+            assertNotEquals(next.requestId, reopened.requestId)
+            assertEquals(StopConfirmationPhase.WAITING, reopened.window.phase(android.os.SystemClock.elapsedRealtime()))
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(reopened.requestId, RecordingStopConfirmation.pending()?.requestId)
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.dismissForNavigation(controller.get())
             shadowOf(Looper.getMainLooper()).idle()
             assertNull(RecordingStopConfirmation.pending())
             assertNull(shadowOf(controller.get()).nextStartedService)
@@ -139,6 +147,49 @@ class RecordingAlarmServiceTest {
         } finally { controller.pause().stop().destroy(); RecordingStopConfirmation.retire("dialog-owner") }
     }
 
+    @Test fun `pause revokes waiting and active requests before delayed dismissal without revoking replacement`() {
+        for (elapsedSeconds in listOf(0L, 2L)) {
+            val controller = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+            val activity = controller.get()
+            val outcomes = mutableListOf<String>()
+            RecordingStopConfirmation.activate("dialog-owner") { outcome, _ -> outcomes += outcome }
+            try {
+                org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+                if (elapsedSeconds > 0) shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(elapsedSeconds))
+                controller.pause()
+                assertNull(RecordingStopConfirmation.pending())
+                assertEquals(listOf("opened", "backgrounded"), outcomes)
+                assertNull(shadowOf(activity).nextStartedService)
+                val replacement = requireNotNull(RecordingStopConfirmation.open("replacement",
+                    android.os.SystemClock.elapsedRealtime(), StopConfirmationTiming()))
+                shadowOf(Looper.getMainLooper()).idle()
+                assertEquals(replacement.requestId, RecordingStopConfirmation.pending()?.requestId)
+            } finally { controller.stop().destroy(); RecordingStopConfirmation.retire("dialog-owner") }
+        }
+    }
+
+    class FailedStopDispatchActivity : android.app.Activity() {
+        override fun startService(service: Intent): android.content.ComponentName? =
+            throw IllegalStateException("Stop dispatch unavailable for test")
+    }
+
+    @Test fun `pause after failed dispatch immediately revokes authorization`() {
+        val controller = Robolectric.buildActivity(FailedStopDispatchActivity::class.java).setup()
+        val activity = controller.get()
+        RecordingStopConfirmation.activate("dialog-owner")
+        try {
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+            val button = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+                .getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+            assertTrue(button.isEnabled)
+            button.performClick()
+            controller.pause()
+            assertNull(RecordingStopConfirmation.pending())
+            assertNull(shadowOf(activity).nextStartedService)
+        } finally { controller.stop().destroy(); RecordingStopConfirmation.retire("dialog-owner") }
+    }
+
     @Test
     @Config(shadows = [StartupUsbManagerShadow::class, StartupUsbConnectionShadow::class])
     fun `successful dialog confirmation submits one service-owned Stop during startup`() {
@@ -147,6 +198,7 @@ class RecordingAlarmServiceTest {
         val service = serviceController.get()
         val activityController = Robolectric.buildActivity(android.app.Activity::class.java).setup()
         val activity = activityController.get()
+        var activityPaused = false
         val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
         val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(), config = base.config.copy(shutdownCommands = emptyList()))
         try {
@@ -161,13 +213,54 @@ class RecordingAlarmServiceTest {
             button.performClick(); button.performClick()
             val intent = requireNotNull(shadowOf(activity).nextStartedService)
             assertNull(shadowOf(activity).nextStartedService)
+            val pending = requireNotNull(RecordingStopConfirmation.pending())
+            shadowOf(Looper.getMainLooper()).idle()
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            assertSame(dialog, org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog())
+            assertFalse(dialog.isShowing)
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.dismissForNavigation(activity)
+            activityController.pause(); activityPaused = true
+            assertEquals(pending.requestId, RecordingStopConfirmation.pending()?.requestId)
             service.onStartCommand(intent, 0, 2)
             assertFalse((field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).get())
             service.onStartCommand(intent, 0, 3)
             assertNull(RecordingStopConfirmation.pending())
         } finally {
             io.release.countDown(); awaitStop(service); serviceController.destroy()
-            activityController.pause().stop().destroy(); RecordingSetupBridge.stop(snapshot.sessionId); startupIo = null
+            if (!activityPaused) activityController.pause()
+            activityController.stop().destroy(); RecordingSetupBridge.stop(snapshot.sessionId); startupIo = null
+        }
+    }
+
+    @Test fun `expired submitted request allows a fresh confirmation instead of blocking retries`() {
+        val serviceController = Robolectric.buildService(RecordingForegroundService::class.java).create()
+        val service = serviceController.get()
+        val running = field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean
+        running.set(true)
+        field("activeSetupSessionId").set(service, "dialog-owner")
+        val controller = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+        val activity = controller.get()
+        RecordingStopConfirmation.activate("dialog-owner")
+        try {
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            val original = requireNotNull(RecordingStopConfirmation.pending())
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+            org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+                .getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            val oldStop = requireNotNull(shadowOf(activity).nextStartedService)
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(10))
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            val fresh = requireNotNull(RecordingStopConfirmation.pending())
+            assertNotEquals(original.requestId, fresh.requestId)
+            assertEquals(StopConfirmationPhase.WAITING, fresh.window.phase(android.os.SystemClock.elapsedRealtime()))
+            service.onStartCommand(oldStop, 0, 1)
+            assertTrue(running.get())
+            assertEquals(fresh.requestId, RecordingStopConfirmation.pending()?.requestId)
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.dismissForNavigation(activity)
+            assertNull(RecordingStopConfirmation.pending())
+        } finally {
+            controller.pause().stop().destroy(); RecordingStopConfirmation.retire("dialog-owner")
+            serviceController.destroy(); awaitStop(service)
         }
     }
 

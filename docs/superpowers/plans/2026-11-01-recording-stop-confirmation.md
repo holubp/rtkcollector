@@ -145,6 +145,15 @@ service cases remain unexecuted locally and must pass in host CI. The first
 attempt to run that gate correctly rejected the not-yet-staged new test input;
 it was staged before the successful rerun. No test-input exclusion was added.
 
+Host CI41413869523 at40c8a00 stopped before unit tests: resource linking rejected
+`android:windowGravity`, which is not a public style attribute. Centering already
+uses the public [Window.setGravity API](https://developer.android.com/reference/android/view/Window#setGravity(int)).
+The invalid redundant XML entry is removed; the native actual-window centering
+assertion is unchanged. A new locally executable public-attribute check first
+failed specifically on that entry (1/4 tests), so this error can now be caught
+without native aapt2. Correcting the mistaken XML test expectation does not
+replace the host geometry assertion or weaken recording/timing checks.
+
 ### Published RC12
 
 Status: **Implemented, not field-tested**. Source `d56d5d26905c3543bf1e05c7b2e5b7182861c616`

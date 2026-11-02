@@ -1,5 +1,6 @@
 package org.rtkcollector.app.ui
 
+import android.R as AndroidResources
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.rtkcollector.app.testing.TestFiles
@@ -11,7 +12,19 @@ import kotlin.math.pow
 class StopConfirmationPresentationTest {
     private val android = "http://schemas.android.com/apk/res/android"
 
-    @Test fun `dialog theme centers the window and binds filled action styles`() {
+    @Test fun `dialog styles only reference public framework attributes`() {
+        val items = document("values/styles.xml").getElementsByTagName("item")
+        val attributes = AndroidResources.attr::class.java.fields.map { it.name }.toSet()
+        for (index in 0 until items.length) {
+            val name = (items.item(index) as Element).getAttribute("name")
+            if (name.startsWith("android:")) {
+                assertTrue(name.removePrefix("android:") in attributes,
+                    "Unsupported public Android style attribute: $name")
+            }
+        }
+    }
+
+    @Test fun `dialog theme binds filled action styles`() {
         val styles = document("values/styles.xml").getElementsByTagName("style")
         val theme = (0 until styles.length).map { styles.item(it) as Element }
             .firstOrNull { it.getAttribute("name") == "StopConfirmationDialogTheme" }
@@ -21,7 +34,6 @@ class StopConfirmationPresentationTest {
             val item = items.item(it) as Element
             item.getAttribute("name") to item.textContent.trim()
         }
-        assertEquals("center", values["android:windowGravity"])
         assertEquals("@style/StopConfirmationPositiveButton", values["android:buttonBarPositiveButtonStyle"])
         assertEquals("@style/StopConfirmationCancelButton", values["android:buttonBarNegativeButtonStyle"])
     }

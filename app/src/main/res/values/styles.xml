@@ -7,7 +7,6 @@
         <item name="android:colorAccent">#006C67</item>
     </style>
     <style name="StopConfirmationDialogTheme" parent="android:style/Theme.Material.Light.Dialog.Alert">
-        <item name="android:windowGravity">center</item>
         <item name="android:buttonBarPositiveButtonStyle">@style/StopConfirmationPositiveButton</item>
         <item name="android:buttonBarNegativeButtonStyle">@style/StopConfirmationCancelButton</item>
     </style>

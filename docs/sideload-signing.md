@@ -22,6 +22,12 @@ tag. Record the new checksum, certificate and signing-tooling commit in the
 release notes; the public `.signing.txt` receipt records both source/tooling
 commits and the certificate fingerprint.
 
+The owner explicitly approved one exception on 2026-11-02: replace RC12's
+source tag and APK once, from `d56d5d2` to tested `d1313d1`, to include the Stop
+dialog follow-up. The signing identity and verification gates are unchanged.
+`docs/releases/1.0-RC12.md` records the old and replacement source/checksum/build
+evidence. This is not permission to move other tags or replace RC12 again.
+
 The first installation with this new key requires uninstalling installations
 signed with a Windows debug key or earlier ephemeral CI key. Export settings
 and recordings to a safe location outside app-owned storage first; uninstalling

@@ -19,6 +19,15 @@ remain unchanged. Current reviewed signing tooling MAY re-sign an APK rebuilt
 from an older approved source tag; its workflow commit and final certificate
 and checksum MUST be available for independent artifact verification.
 
+One exception is authorized by owner decision
+`2026-11-02-rc12-owner-approved-replacement`: `v1.0-RC12` MAY be replaced once
+from source `d56d5d26905c3543bf1e05c7b2e5b7182861c616` to verified source
+`d1313d1ce90dabc6c47e4afb14ce8481a40f312c` for the Stop-dialog follow-up.
+The prior and replacement source identities, APK checksums and rebuild/signing
+receipts MUST remain recorded in release history. This exception MUST retain
+the stable signing identity and all artifact-verification gates, and MUST NOT
+authorize replacement of other tags or further RC12 source changes.
+
 Private keystores/passwords MUST NOT enter Git, public release assets, logs or
 command arguments. Temporary decoded keystores MUST be removed on ordinary
 exits and catchable cancellation. Uncatchable termination (SIGKILL or host
@@ -40,6 +49,8 @@ Traceability:
 - Source: user decisions "start stable release key" (2026-09-26) and re-release
   with stable key (2026-09-29).
 - Source: `docs/sideload-signing.md`.
+- Source: owner selected option 2, explicitly replacing the existing RC12 tag
+  and APK as a one-off exception (2026-11-02).
 
 Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
 

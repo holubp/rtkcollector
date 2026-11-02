@@ -555,11 +555,11 @@
     },
     {
       "requirement_id": "RELEASE-SIGN-001",
-      "requirement_digest": "sha256:8d7bc421ab2f5ab00d73490e6d2c4c66bbcf3bb7dfc81e2aa091589f7a2a73b5",
+      "requirement_digest": "sha256:50d125cd9da2f9f325964fb7a9a46170ed4293626b8870852c911c0402963783",
       "state": "approved",
       "approved_by": "human:holubp",
-      "approved_at": "2026-10-30T18:06:55Z",
-      "decision_ref": "2026-10-30-rc10-specification-baseline-approval"
+      "approved_at": "2026-11-02T10:33:17Z",
+      "decision_ref": "2026-11-02-rc12-owner-approved-replacement"
     },
     {
       "requirement_id": "PLAY-DISCLOSURE-001",

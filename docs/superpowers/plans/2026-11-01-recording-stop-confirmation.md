@@ -98,12 +98,44 @@ Every approved design section is assigned above: timing/settings (1), authority/
 
 ## Execution Checkpoint
 
+### 2026-11-02 RC12 Replacement (Owner Approved)
+
+The owner subsequently requested updating RC12 and explicitly selected option 2:
+replace the existing tag and APK as a one-off exception, rather than publish a
+new immutable revision tag. This later decision supersedes only the earlier
+RC12 no-retag/no-release restriction. RELEASE-SIGN-001 records the exact allowed
+source transition; all stable-key and verification gates remain in force.
+
+- [x] Preserve and verify the original three release assets and their source
+  `d56d5d2` / APK checksum `041bd835...` before replacement.
+- [x] Temporarily draft the release, update only RC12 using a force-with-lease
+  against the previously observed tag object, and rebuild verified source
+  `d1313d1ce90dabc6c47e4afb14ce8481a40f312c` through GitHub.
+- [x] Verify the downloaded replacement APK and updated source archive before
+  republishing: stable build41429387555 passed; source/signing receipts match
+  d1313d1, package/version/code13 and v2/v3 signer match, both ARM ABIs and
+  16 KiB alignment pass, and all 738 archive files match the source tree.
+- [x] Republish the same RC12 release with checksum
+  `e3882efac5f06c5827e759e17257e0ac7647aad1eb586a41bb3a4b562e800c16`,
+  unchanged stable certificate and app version/code. Preserve old/new evidence
+  in `docs/releases/1.0-RC12.md`. No other tag or signing identity is changed.
+
+Repository integration of this replacement record still requires exact-scope
+assurance/documentation review, the full normal pre-push gate and final CI.
+The Git commit and its CI status provide that integration evidence; the owner
+exception does not waive any of these checks.
+
+Physical-device appearance, USB permission/reconnect and audible-delivery checks
+remain pending; publication does not turn the stable-signed debug APK into a
+Google Play production build.
+
 ### 2026-11-02 Dialog Follow-Up
 
 Owner explicitly requests centered placement, filled colored confirmation and
 gray Cancel, and unchanged recording/USB/position-alarm handling in either phase.
-Baseline: `c21f422`; branch `codex/stop-dialog-presentation`. RC12 stays immutable;
-this follow-up does not authorize a new release.
+Baseline: `c21f422`; branch `codex/stop-dialog-presentation`. At implementation
+time this follow-up did not authorize a new release. The later explicit RC12
+replacement decision above supersedes that restriction for RC12 only.
 
 Root-cause evidence: the native AlertDialog inherits platform/OEM window gravity
 and borderless action backgrounds; neither is set explicitly by the app. Capture,
@@ -149,8 +181,9 @@ debug assembly and signing smoke passed. Normal local pre-push checks passed
 independent affected-source and test reviews found no remaining blockers.
 No production capture, USB recovery, position/alarm or authorization code needed
 changing. Physical-device portrait/landscape/font-scale appearance, real USB
-permission/reconnect and audible alarm checks remain pending. RC12's published
-tag and APK are unchanged; this follow-up is source for a subsequent build.
+permission/reconnect and audible alarm checks remain pending. At completion of
+the source follow-up, RC12's tag/APK were unchanged; the owner subsequently
+authorized the replacement recorded above.
 
 Local evidence: presentation resource tests first failed 3/3 actual assertions
 for the absent explicit theme/backgrounds, then the normal Android compilation
@@ -180,7 +213,7 @@ palette, native centering, disabled fill, Cancel fill and all recording/timing
 assertions are unchanged. Sideload and later build checks were not reached in
 that failed run; complete host verification subsequently passed as recorded above.
 
-### Published RC12
+### Original RC12 Publication (Superseded)
 
 Status: **Implemented, not field-tested**. Source `d56d5d26905c3543bf1e05c7b2e5b7182861c616`
 was fast-forwarded to remote main and tagged `v1.0-RC12`. Full-host

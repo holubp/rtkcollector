@@ -555,11 +555,11 @@
     },
     {
       "requirement_id": "RELEASE-SIGN-001",
-      "requirement_digest": "sha256:50d125cd9da2f9f325964fb7a9a46170ed4293626b8870852c911c0402963783",
+      "requirement_digest": "sha256:361ede5b256f52c141e3d6e102f0ccf49ecd3fbaad385a0524a7853b9bdd520b",
       "state": "approved",
       "approved_by": "human:holubp",
-      "approved_at": "2026-11-02T10:33:17Z",
-      "decision_ref": "2026-11-02-rc12-owner-approved-replacement"
+      "approved_at": "2026-11-02T19:38:28.554549Z",
+      "decision_ref": "2026-11-02-rc12-button-separation-rerelease"
     },
     {
       "requirement_id": "PLAY-DISCLOSURE-001",
@@ -1427,11 +1427,11 @@
     },
     {
       "requirement_id": "UI-STOP-001",
-      "requirement_digest": "sha256:e5386b6e2fe0490a7dd1c37c273228ae4f3645f9e2ad8bb3e1cbd5b970424cf2",
+      "requirement_digest": "sha256:cf2fef1b2066dbb5f302385ed71c90cefa2a7b7bbf8eec7c503e8920b9d3977b",
       "state": "approved",
       "approved_by": "human:holubp",
-      "approved_at": "2026-11-02T07:47:58Z",
-      "decision_ref": "2026-11-02-stop-dialog-adjustments"
+      "approved_at": "2026-11-02T19:38:28.554599Z",
+      "decision_ref": "2026-11-02-rc12-button-separation-rerelease"
     }
   ]
 }

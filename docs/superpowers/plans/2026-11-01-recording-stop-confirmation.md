@@ -12,6 +12,23 @@
 
 ## Global Constraints
 
+### 2026-11-02 Button Separation Follow-Up
+
+Owner requested visibly separated Stop-dialog buttons and another RC12 rebuild.
+Reuse this approved plan; do not change service, authorization or countdown logic.
+
+- [x] Diagnose missing explicit spacing after filled backgrounds replaced the
+  framework's inset backgrounds; add a failing resource-spacing regression.
+- [ ] Add symmetric 6dp margins to both action styles (12dp between fills),
+  independent of horizontal/stacked placement or layout direction.
+- [ ] Verify actual button bounds after layout in both directions, narrow/wide
+  windows and both countdown phases; retain existing recording/reconnect tests.
+- [ ] Independent review, assurance refresh, full pre-push and clean-host CI.
+- [ ] Record this explicit new owner-authorized RC12 replacement, preserve prior
+  source/checksum history, rebuild with stable key, verify and republish assets.
+
+Checkpoint: implementation in progress; physical-device appearance pending.
+
 - Defaults: disabled delay 2 seconds; enabled window 10 seconds beginning after the delay.
 - Persist whole-second delay 1-60 and timeout 1-120; invalid values cannot be saved.
 - Button countdowns update each second; Cancel is always available. Expiry, dismissal, background and recreation never send Stop.

@@ -1,6 +1,14 @@
 # Superpowers Plan Status
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-02
+
+Current Stop-dialog follow-up: **In progress**. Owner explicitly requested
+visibly separated buttons and another RC12 rerelease. Symmetric 6dp margins and
+resource/native geometry regressions are added; resource RED/GREEN is verified.
+Independent review, full gate/CI and rebuilt-APK verification are pending.
+Service, USB recovery, alarms, authorization and countdown logic are unchanged.
+This current checkpoint supersedes the prior RC12 completion note below only
+for the new spacing follow-up; prior release evidence remains historical.
 
 This tracker summarises implementation status for the larger Superpowers plans.
 It is intentionally separate from the historical step-by-step plan files so

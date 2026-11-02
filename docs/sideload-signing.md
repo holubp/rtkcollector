@@ -28,6 +28,13 @@ dialog follow-up. The signing identity and verification gates are unchanged.
 `docs/releases/1.0-RC12.md` records the old and replacement source/checksum/build
 evidence. This is not permission to move other tags or replace RC12 again.
 
+The owner subsequently requested another RC12 rerelease specifically for visible
+Stop-dialog button separation. Decision
+`2026-11-02-rc12-button-separation-rerelease` permits this one additional
+replacement from `d1313d1`; record the exact verified successor and retain prior
+source/checksum/build history. Stable-key and verification gates remain mandatory.
+It is not a general permission to replace release tags.
+
 The first installation with this new key requires uninstalling installations
 signed with a Windows debug key or earlier ephemeral CI key. Export settings
 and recordings to a safe location outside app-owned storage first; uninstalling

@@ -36,6 +36,45 @@ class RecordingAlarmServiceTest {
             assertEquals(android.view.Gravity.CENTER, requireNotNull(dialog.window).attributes.gravity)
             val confirm = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
             val cancel = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
+            fun assertSeparatedButtons() {
+                val decor = requireNotNull(dialog.window).decorView as android.view.ViewGroup
+                val buttonBar = confirm.parent as android.widget.LinearLayout
+                val density = activity.resources.displayMetrics.density
+                val minimumGap = kotlin.math.round(12 * density).toInt()
+                for (direction in listOf(android.view.View.LAYOUT_DIRECTION_LTR, android.view.View.LAYOUT_DIRECTION_RTL)) {
+                    buttonBar.layoutDirection = direction
+                    val orientations = mutableSetOf<Int>()
+                    for (widthDp in listOf(220, 320, 480)) {
+                        decor.measure(
+                            android.view.View.MeasureSpec.makeMeasureSpec((widthDp * density).toInt(), android.view.View.MeasureSpec.EXACTLY),
+                            android.view.View.MeasureSpec.makeMeasureSpec((800 * density).toInt(), android.view.View.MeasureSpec.AT_MOST),
+                        )
+                        decor.layout(0, 0, decor.measuredWidth, decor.measuredHeight)
+                        assertEquals(direction, buttonBar.layoutDirection)
+                        orientations += buttonBar.orientation
+                        fun bounds(button: android.widget.Button) = android.graphics.Rect(0, 0, button.width, button.height).also {
+                            decor.offsetDescendantRectToMyCoords(button, it)
+                        }
+                        val positive = bounds(confirm)
+                        val negative = bounds(cancel)
+                        assertTrue("Buttons must have nonempty bounds: $positive, $negative", !positive.isEmpty && !negative.isEmpty)
+                        val gap = maxOf(positive.left - negative.right, negative.left - positive.right,
+                            positive.top - negative.bottom, negative.top - positive.bottom)
+                        assertTrue("Filled buttons need a 12dp gap: width=$widthDp direction=$direction positive=$positive negative=$negative gap=$gap", gap >= minimumGap)
+                        for (rect in listOf(positive, negative)) {
+                            assertTrue("Button clipped by dialog: $rect in ${decor.width}x${decor.height}",
+                                rect.left >= 0 && rect.top >= 0 && rect.right <= decor.width && rect.bottom <= decor.height)
+                        }
+                        for (button in listOf(confirm, cancel)) {
+                            val visible = android.graphics.Rect()
+                            assertTrue("Action must remain visible through clipping ancestors", button.getLocalVisibleRect(visible))
+                            assertEquals(android.graphics.Rect(0, 0, button.width, button.height), visible)
+                        }
+                    }
+                    assertEquals("Exercise both side-by-side and stacked button bars", setOf(
+                        android.widget.LinearLayout.HORIZONTAL, android.widget.LinearLayout.VERTICAL), orientations)
+                }
+            }
             fun filledColor(button: android.widget.Button): Int {
                 val background = button.background.current
                 val shape = if (background is android.graphics.drawable.RippleDrawable)
@@ -47,9 +86,11 @@ class RecordingAlarmServiceTest {
             assertEquals(android.graphics.Color.rgb(207, 216, 215), filledColor(confirm))
             assertTrue(cancel.isEnabled)
             assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel))
+            assertSeparatedButtons()
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
             assertTrue(confirm.isEnabled)
             assertEquals(reservedWidth, confirm.minWidth)
+            assertSeparatedButtons()
             val normal = android.graphics.Color.rgb(0, 108, 103)
             val focused = android.graphics.Color.rgb(0, 77, 73)
             assertEquals("focused=${confirm.isFocused} pressed=${confirm.isPressed} " +

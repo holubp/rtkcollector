@@ -23,7 +23,9 @@ MUST NOT affect capture or authorize Stop. Advanced settings replaces the existi
 logging/performance screen title and menu entry without removing its controls.
 The dialog MUST be centered in its application window and both action buttons
 MUST have visible filled backgrounds: the confirmation action in color and
-Cancel in neutral gray. Disabled confirmation MUST remain visibly filled and
+Cancel in neutral gray. The filled action buttons MUST be visually separated by
+a gap in both side-by-side and stacked layouts, including right-to-left layouts.
+Disabled confirmation MUST remain visibly filled and
 distinguishable from enabled confirmation. During either countdown phase,
 receiver RX capture, USB disconnection/reconnection, position-loss detection,
 alarm delivery/recovery and normal session maintenance MUST remain active

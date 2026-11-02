@@ -28,6 +28,15 @@ receipts MUST remain recorded in release history. This exception MUST retain
 the stable signing identity and all artifact-verification gates, and MUST NOT
 authorize replacement of other tags or further RC12 source changes.
 
+A subsequent explicit owner request, decision
+`2026-11-02-rc12-button-separation-rerelease`, authorizes one additional RC12
+replacement from `d1313d1ce90dabc6c47e4afb14ce8481a40f312c` with the verified
+Stop-dialog button-spacing follow-up. The exact successor source commit MUST
+be recorded in release history before publication. The same stable signing,
+history and verification obligations apply. This authorization is limited to
+that spacing fix, its tests and assurance/release records; it grants no further
+tag replacements or unrelated runtime changes.
+
 Private keystores/passwords MUST NOT enter Git, public release assets, logs or
 command arguments. Temporary decoded keystores MUST be removed on ordinary
 exits and catchable cancellation. Uncatchable termination (SIGKILL or host
@@ -51,6 +60,8 @@ Traceability:
 - Source: `docs/sideload-signing.md`.
 - Source: owner selected option 2, explicitly replacing the existing RC12 tag
   and APK as a one-off exception (2026-11-02).
+- Source: owner explicitly requested separated Stop-dialog buttons and another
+  RC12 rerelease (2026-11-02).
 
 Provenance: AGENTS.md; docs/superpowers/plan-status.md; docs/superpowers/plans/2026-10-30-rc10-specification-assurance.md
 

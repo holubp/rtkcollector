@@ -12,6 +12,19 @@ import kotlin.math.pow
 class StopConfirmationPresentationTest {
     private val android = "http://schemas.android.com/apk/res/android"
 
+    @Test fun `filled action buttons reserve a visible gap in horizontal and stacked layouts`() {
+        val styles = document("values/styles.xml").getElementsByTagName("style")
+        for (name in listOf("StopConfirmationPositiveButton", "StopConfirmationCancelButton")) {
+            val style = (0 until styles.length).map { styles.item(it) as Element }
+                .single { it.getAttribute("name") == name }
+            val items = style.getElementsByTagName("item")
+            val margin = (0 until items.length).map { items.item(it) as Element }
+                .firstOrNull { it.getAttribute("name") == "android:layout_margin" }
+            assertNotNull(margin, "$name must not rely on platform spacing between filled backgrounds")
+            assertEquals("6dp", requireNotNull(margin).textContent.trim())
+        }
+    }
+
     @Test fun `dialog styles only reference public framework attributes`() {
         val items = document("values/styles.xml").getElementsByTagName("item")
         val attributes = AndroidResources.attr::class.java.fields.map { it.name }.toSet()

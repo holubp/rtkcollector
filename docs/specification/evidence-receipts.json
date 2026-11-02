@@ -1876,7 +1876,7 @@
     {
       "id": "EV-RELEASE-SIGN-001-AUTO",
       "requirement_id": "RELEASE-SIGN-001",
-      "requirement_digest": "sha256:50d125cd9da2f9f325964fb7a9a46170ed4293626b8870852c911c0402963783",
+      "requirement_digest": "sha256:361ede5b256f52c141e3d6e102f0ccf49ecd3fbaad385a0524a7853b9bdd520b",
       "implementation_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "kind": "test",
       "state": "not-run",
@@ -1887,12 +1887,12 @@
       "artifact_ref": "",
       "artifact_digest": "",
       "reason": "Current scope has no trusted passing receipt enrolled. Local/CI results are recorded separately; device evidence remains pending.",
-      "supporting_digest": "sha256:b5d05ad15278296c268acf39e5684f4af1f09af8e8620b2c8ced696c50183ed0"
+      "supporting_digest": "sha256:c7d92119a3ef7e59d1e312993d13223305fee58bc75d9b02f941be629fd83422"
     },
     {
       "id": "EV-RELEASE-SIGN-001-MANUAL",
       "requirement_id": "RELEASE-SIGN-001",
-      "requirement_digest": "sha256:50d125cd9da2f9f325964fb7a9a46170ed4293626b8870852c911c0402963783",
+      "requirement_digest": "sha256:361ede5b256f52c141e3d6e102f0ccf49ecd3fbaad385a0524a7853b9bdd520b",
       "implementation_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "kind": "manual",
       "state": "not-run",
@@ -1903,12 +1903,12 @@
       "artifact_ref": "",
       "artifact_digest": "",
       "reason": "Current scope has no trusted passing receipt enrolled. Local/CI results are recorded separately; device evidence remains pending.",
-      "supporting_digest": "sha256:b5d05ad15278296c268acf39e5684f4af1f09af8e8620b2c8ced696c50183ed0"
+      "supporting_digest": "sha256:c7d92119a3ef7e59d1e312993d13223305fee58bc75d9b02f941be629fd83422"
     },
     {
       "id": "EV-RELEASE-SIGN-001-OWNER",
       "requirement_id": "RELEASE-SIGN-001",
-      "requirement_digest": "sha256:50d125cd9da2f9f325964fb7a9a46170ed4293626b8870852c911c0402963783",
+      "requirement_digest": "sha256:361ede5b256f52c141e3d6e102f0ccf49ecd3fbaad385a0524a7853b9bdd520b",
       "implementation_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "kind": "manual",
       "state": "not-run",
@@ -1919,7 +1919,7 @@
       "artifact_ref": "",
       "artifact_digest": "",
       "reason": "Current scope has no trusted passing receipt enrolled. Local/CI results are recorded separately; device evidence remains pending.",
-      "supporting_digest": "sha256:b5d05ad15278296c268acf39e5684f4af1f09af8e8620b2c8ced696c50183ed0"
+      "supporting_digest": "sha256:c7d92119a3ef7e59d1e312993d13223305fee58bc75d9b02f941be629fd83422"
     },
     {
       "id": "EV-PLAY-DISCLOSURE-001-REVIEW",
@@ -5159,8 +5159,8 @@
       "kind": "test",
       "target": "app/src/test/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicyTest.kt",
       "state": "not-run",
-      "requirement_digest": "sha256:e5386b6e2fe0490a7dd1c37c273228ae4f3645f9e2ad8bb3e1cbd5b970424cf2",
-      "implementation_digest": "sha256:e5c89cb0c950ebe491e99b06529e96c86f2172d63b9d8055542e7270ed814a45",
+      "requirement_digest": "sha256:cf2fef1b2066dbb5f302385ed71c90cefa2a7b7bbf8eec7c503e8920b9d3977b",
+      "implementation_digest": "sha256:f99c951765be070294f848439bb6119106db4930ed8c0359ecbf086dccbd348d",
       "supporting_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "verified_at": "2026-11-02T08:43:40.567430Z",
       "verified_commit": "",
@@ -5175,8 +5175,8 @@
       "kind": "manual",
       "target": "manual:ui-stop-001",
       "state": "not-run",
-      "requirement_digest": "sha256:e5386b6e2fe0490a7dd1c37c273228ae4f3645f9e2ad8bb3e1cbd5b970424cf2",
-      "implementation_digest": "sha256:e5c89cb0c950ebe491e99b06529e96c86f2172d63b9d8055542e7270ed814a45",
+      "requirement_digest": "sha256:cf2fef1b2066dbb5f302385ed71c90cefa2a7b7bbf8eec7c503e8920b9d3977b",
+      "implementation_digest": "sha256:f99c951765be070294f848439bb6119106db4930ed8c0359ecbf086dccbd348d",
       "supporting_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "verified_at": "2026-11-02T08:43:40.567430Z",
       "verified_commit": "",

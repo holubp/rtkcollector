@@ -50,9 +50,13 @@ class RecordingAlarmServiceTest {
                     // Manual decor layout leaves ViewRootImpl uninitialized and invalidates visibility checks.
                     repeat(8) {
                         shadowOf(Looper.getMainLooper()).idleFor(org.robolectric.shadows.ShadowChoreographer.getFrameDelay())
+                        val decorBounds = android.graphics.Rect(0, 0, decor.width, decor.height)
+                        val visibleBounds = android.graphics.Rect(decorBounds)
+                        val rootContainsDecor = root.getChildVisibleRect(decor, visibleBounds, null) && visibleBounds == decorBounds
                         if (decor.width == width && decor.height > 0 &&
                             ReflectionHelpers.getField<Int>(root, "mWidth") == decor.width &&
-                            ReflectionHelpers.getField<Int>(root, "mHeight") == decor.height && !decor.isLayoutRequested) return
+                            ReflectionHelpers.getField<Int>(root, "mHeight") >= decor.height &&
+                            !decor.isLayoutRequested && rootContainsDecor) return
                     }
                     fail("Dialog window traversal did not settle: width=$width decor=${decor.width}x${decor.height} " +
                         "root=${ReflectionHelpers.getField<Int>(root, "mWidth")}x${ReflectionHelpers.getField<Int>(root, "mHeight")} " +

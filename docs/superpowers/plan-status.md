@@ -9,6 +9,9 @@ Independent source review and local gates passed. Host runs 41513847336 and
 41516342991 isolated an uninitialized test window root (`-1 x -1`) in the new
 visibility oracle; the first-case gap and other 70 service cases passed.
 Fixture correction, full host CI and rebuilt-APK verification are pending.
+CI41519517827 confirmed initialized root dimensions but exposed an overstrict
+height-equality fixture guard; the guard now requires full decor containment,
+while all button visibility assertions remain intact. Host execution is pending.
 Service, USB recovery, alarms, authorization and countdown logic are unchanged.
 This current checkpoint supersedes the prior RC12 completion note below only
 for the new spacing follow-up; prior release evidence remains historical.

@@ -37,6 +37,11 @@ passed. The fixture measured decor without initializing the window root.
 Correct the fixture through actual window layout/traversal, retaining gap,
 direction, stacked/horizontal, phase and visibility assertions. No production
 clipping conclusion or successful whole-host gate is inferred from this evidence.
+CI41519517827 proved initialization (`root=220x1000`, `decor=220x275`) but the
+fixture incorrectly required equal wrap-content/root heights. Source review of
+Robolectric 4.16.1 confirms its default available-frame height behavior. Require
+positive dimensions, exact requested width and full decor containment by the
+root-only visibility probe, not height equality; retain all button assertions.
 
 - Defaults: disabled delay 2 seconds; enabled window 10 seconds beginning after the delay.
 - Persist whole-second delay 1-60 and timeout 1-120; invalid values cannot be saved.

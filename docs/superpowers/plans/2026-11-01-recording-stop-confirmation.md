@@ -21,13 +21,26 @@ Reuse this approved plan; do not change service, authorization or countdown logi
   framework's inset backgrounds; add a failing resource-spacing regression.
 - [x] Add symmetric 6dp margins to both action styles (12dp between fills),
   independent of horizontal/stacked placement or layout direction.
-- [ ] Verify actual button bounds after layout in both directions, narrow/wide
+- [x] Verify actual button bounds after layout in both directions, narrow/wide
   windows and both countdown phases; retain existing recording/reconnect tests.
-- [ ] Independent review, assurance refresh, full pre-push and clean-host CI.
-- [ ] Record this explicit new owner-authorized RC12 replacement, preserve prior
+- [x] Independent review, assurance refresh, full pre-push and clean-host CI.
+- [x] Record this explicit new owner-authorized RC12 replacement, preserve prior
   source/checksum history, rebuild with stable key, verify and republish assets.
 
-Checkpoint: implementation in progress; physical-device appearance pending.
+Checkpoint: **Implemented, not field-tested; RC12 replacement published.**
+Source `fa4c7790158711f5794ab1257c7e0b9cef429364`, stable build41534929128,
+APK SHA-256 `ab8f11ab6a95295b03adca610443f4ba2ae2390c4c054b675f1977c98c0c3571`.
+Full CI41532859489 passed 2,869 JVM tests / 360 suites with no failures/errors/
+skips, all 72 service cases per variant, 30 native tests, both lint checks,
+assembly and signing smoke. Downloaded reports verify the resource-applied
+matrix on SDK33/35 in both distributions (192 full-button observations and gap).
+Downloaded APK actual stable signature/manifest/ABIs/alignment/packed styles and
+both source archives (738 files each) verified. Release source/history/assets
+were checked before public publication and public state rechecked afterward.
+No further tag movement is authorized; closing documentation must not retag.
+Physical-device appearance/font-scale/USB/audio checks remain pending.
+
+Development evidence below is chronological history, not current open work.
 
 Host evidence: CI41513847336 and diagnostic CI41516342991 failed only the new
 presentation visibility assertion on SDK33/35; all other 70 service cases passed.
@@ -64,7 +77,7 @@ native descent adjustment (25-13=12) and minimal `end|center_vertical` correctio
 The resource alignment regression was RED (6 tests/1 missing-gravity failure),
 then GREEN (6/0, task forced). Both style gravity items are now implemented.
 Production delta is four style items; no recording/auth/timing Kotlin changes.
-Fresh resource-applied baseline CI on both SDKs/distributions remains required.
+That remaining resource-applied baseline gate passed in CI41532859489 above.
 
 - Defaults: disabled delay 2 seconds; enabled window 10 seconds beginning after the delay.
 - Persist whole-second delay 1-60 and timeout 1-120; invalid values cannot be saved.

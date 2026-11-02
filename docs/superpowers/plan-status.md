@@ -2,22 +2,22 @@
 
 Last reviewed: 2026-11-02
 
-Current Stop-dialog follow-up: **In progress**. Owner explicitly requested
-visibly separated buttons and another RC12 rerelease. Symmetric 6dp margins and
-explicit `end|center_vertical` action gravity are implemented. Both resource
-regressions have RED/GREEN evidence (six alignment tests now pass). Diagnostic
-CI41529509206 collected all 24 baseline cases on SDK33/35: stable 6px clipping
-in 16 horizontal cases, full visibility in eight stacked cases; both controlled
-gravity comparisons restored full visibility. Independent Sol-high review
-confirmed the native bottom-baseline/margin cause and minimal four-style-item
-correction. All original assertions remain, including first-ready failures;
-the diagnostic stayed RED and the other 70 service cases passed. Earlier window
-fixture/containment failures are recorded in the plan/release history. Fresh
-resource-applied full host CI, rebuilt-APK verification and publication remain
-pending; physical-device appearance remains untested.
-Service, USB recovery, alarms, authorization and countdown logic are unchanged.
-This current checkpoint supersedes the prior RC12 completion note below only
-for the new spacing follow-up; prior release evidence remains historical.
+Current Stop-dialog follow-up: **Implemented, not field-tested; updated RC12
+published.** Owner-approved replacement source `fa4c779`, stable build41534929128,
+APK checksum `ab8f11ab...`. Full CI41532859489 passed 2,869 JVM tests / 360 suites
+with no failures/errors/skips, 30 native tests, both lint checks, assembly and
+signing smoke. Downloaded reports verify all 72 service cases per variant and
+192 fully visible button observations across SDK33/35, phases/directions and
+narrow/wide layouts, retaining the 12dp gap. Actual downloaded stable signature,
+manifest/ABIs/16KiB alignment, packed styles and both source archives (738 files
+each) were verified, then public release state checked. Production changes are
+only four style items; service, USB recovery, alarms, authorization and countdown
+logic are unchanged. Both resource regressions have RED/GREEN evidence; the
+comprehensive diagnostic and focused Sol-high review confirmed/corrected native
+bottom-baseline clipping without dropping assertions or extending phase timing.
+Earlier failed fixture checks and prior source/APK identities remain in the
+plan/release history. Physical-device appearance/font-scale/USB/audio checks
+remain pending, and the old RC11 initiating touch/control remains unproven.
 
 This tracker summarises implementation status for the larger Superpowers plans.
 It is intentionally separate from the historical step-by-step plan files so
@@ -39,7 +39,7 @@ Status meanings:
 
 | Area | Related plan(s) | Status | Notes |
 | --- | --- | --- | --- |
-| Recording Stop confirmation and Advanced settings | `2026-11-01-recording-stop-confirmation.md`; `2026-11-01-recording-stop-confirmation-design.md`; `2026-11-01-stop-confirmation-timer-repair-design.md` | Implemented, not field-tested | Shared session-bound confirmation, configurable 2/10-second countdowns, Advanced settings, bounded provenance, absolute refresh scheduling and synchronous lifecycle/navigation cancellation are implemented. The owner explicitly approved replacing RC12 once with verified source d1313d1 and stable build41429387555, preserving old/new evidence in docs/releases/1.0-RC12.md. This includes centered placement, colored confirmation/gray Cancel and unchanged recording-service code. CI41422558203 at1d4d1b9 passed 2,865 JVM tests, including all 72 service cases per variant and dialog-open capture/USB/position-alarm coverage in both phases, plus 30 native tests, both release lint checks, assembly and signing smoke; main CI41426928704 also passed. Normal local gate passed 1,505 JVM tests. Independent Sol affected reviews found no blockers; earlier RC12 Astra reviews remain recorded. Public Android style attributes are checked locally. No new RC number or test-gate exception was used; the one-off tag replacement is separately owner-approved. Physical-device appearance/font-scale/USB/audio checks and the old RC11 initiating trigger remain unproven. |
+| Recording Stop confirmation and Advanced settings | `2026-11-01-recording-stop-confirmation.md`; `2026-11-01-recording-stop-confirmation-design.md`; `2026-11-01-stop-confirmation-timer-repair-design.md` | Implemented, not field-tested | Shared session-bound confirmation, configurable 2/10-second countdowns, Advanced settings, bounded provenance and lifecycle/navigation cancellation are implemented. Current owner-approved RC12 replacement is source fa4c779, stable build41534929128; old/new history is in docs/releases/1.0-RC12.md. Centered filled actions now have a 12dp gap and explicit alignment preventing native baseline clipping. CI41532859489 passed 2,869 JVM tests, all 72 service cases per variant and resource-applied SDK33/35 layout matrices, 30 native tests, both lint checks, assembly and signing smoke. Local gate passed 1,507 JVM tests. Downloaded APK signature/manifest/ABIs/alignment/packed styles and both source archives were verified before publication. Independent Sol reviews found no blockers; source production delta is four style items with recording/USB/alarm/auth/timing code unchanged. Physical-device appearance/font-scale/USB/audio and the old RC11 initiating trigger remain unproven. |
 | P30 Pro recording startup and finalization safety | `2026-11-01-p30pro-recording-safety.md`; `2026-11-01-p30pro-recording-safety-design.md` | Implemented, not field-tested | RC11 published 2026-11-01 with stable-signed GitHub-built APK; tag/runtime source `54c34fc`. Sol-high and supplementary Astra-high reviews closed all concrete findings. Full local gate passed 1,484 JVM results/196 suites; host CI `41303130604` passed 2,769 tests/354 suites with zero failures/errors/skips, 30 native checks, both variants, lint and assembly. Main CI `41303993708` and stable APK build `41304029992` also passed. Downloaded APK checksum, source binding, exact stable signer/v2/v3, package/version/code, both ARM ABIs and native alignment verified. See `docs/releases/1.0-RC11.md` for links/hash. Physical P30/vendor/SAF validation and precise historical kill/exception identity remain unproven; no device or unenrolled evidence receipt is marked passing. |
 | RC10 specification assurance reconciliation | `2026-10-30-rc10-specification-assurance.md` | Implemented, not field-tested | Model 6 tooling, templates and CI are integrated. Owner approved 49 revised/new digests and the capability inventory, retaining 107 prior approvals: 160 requirements/156 normative, 313 honest receipts and 236 mapped runtime files. Full independent audit reconciled 713 paths/736 pairs with no unresolved source findings; its exact attestation is committed in runtime source `279294b`. Full local pre-push passed for that tree, including strict assurance and 1,444 tests/193 suites. Pending evidence was not promoted to passing receipts. GitHub event/provider checks and other manual obligations retain their recorded maturity. Owner-authored work is exempt from GitHub protection/second-reviewer requirements, not local/audit/CI/signing gates; no remote protection or universal enforced-compliance claim. Exact published-tag CI/signing results belong in GitHub checks and the RC10 release record. |
 | RC10 USB recovery and alarm audibility | `2026-10-30-background-usb-recovery.md`, `2026-10-30-muted-alarm-warning.md`; ANDROID-USB-002, ANDROID-ALARM-009 | Implemented, not field-tested | Runtime source `279294b` includes the RC9 retry-sleep crash repair, service USB permission recovery, dead-handle gating, epoch fences, muted-audio warnings, protocol-clock correction and all independently closed audit repairs. Full local gate: 1,444 tests/193 suites, zero failures/errors/skips in executed tests. Three Robolectric classes compile locally and execute in clean-host CI. Native/build fault suite: 30 tests; final targeted RTKLIB suite: 39 tests. Version RC10/code 11; RC9 unchanged. Publication requires exact-tag host CI, stable signing and independent APK verification, recorded in GitHub. Device/default-USB/vendor/SAF/Compose/alarm field checks remain unexecuted rather than claimed complete. |

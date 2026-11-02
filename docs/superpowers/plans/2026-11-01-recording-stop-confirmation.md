@@ -42,6 +42,17 @@ fixture incorrectly required equal wrap-content/root heights. Source review of
 Robolectric 4.16.1 confirms its default available-frame height behavior. Require
 positive dimensions, exact requested width and full decor containment by the
 root-only visibility probe, not height equality; retain all button assertions.
+CI41522576443 subsequently passed root readiness/containment but reported a 6px
+partial button visible rectangle. Escalated the bounded layout diagnosis to a
+Sol-high reviewer after two fixture iterations. Static AOSP measurement/layout
+predicts a 6px horizontal clip from bottom-baseline alignment and vertical
+margins; confirm with one comprehensive matrix on unchanged production.
+Aggregate, never discard, all original assertion failures; retain first-ready
+and frame-eight evidence across both phases, directions, widths and buttons.
+Record baseline/gravity/margins, ancestry/scroll/clipping, window/root and frame
+evidence without extending Stop timing or making button visibility a readiness
+condition. If confirmed, explicit `end|center_vertical` child gravity is the
+narrow candidate correction, preserving stacked END alignment and RTL.
 
 - Defaults: disabled delay 2 seconds; enabled window 10 seconds beginning after the delay.
 - Persist whole-second delay 1-60 and timeout 1-120; invalid values cannot be saved.

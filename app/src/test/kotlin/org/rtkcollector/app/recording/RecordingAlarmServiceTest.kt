@@ -31,81 +31,241 @@ class RecordingAlarmServiceTest {
     fun `Stop dialog is centered and action backgrounds remain filled in both phases`() {
         val controller = Robolectric.buildActivity(android.app.Activity::class.java).setup()
         val activity = controller.get()
+        val failures = mutableListOf<Throwable>()
+        fun check(assertions: () -> Unit) {
+            try { assertions() } catch (failure: AssertionError) { failures += failure }
+        }
+        val wasChoreographerPaused = org.robolectric.shadows.ShadowChoreographer.isPaused()
         RecordingStopConfirmation.activate("presentation-owner")
         try {
+            org.robolectric.shadows.ShadowChoreographer.setPaused(true)
             org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
             val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
-            assertEquals(android.view.Gravity.CENTER, requireNotNull(dialog.window).attributes.gravity)
+            check { assertEquals(android.view.Gravity.CENTER, requireNotNull(dialog.window).attributes.gravity) }
             val confirm = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
             val cancel = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
             fun assertSeparatedButtons(expectedPhase: StopConfirmationPhase) {
-                val decor = requireNotNull(dialog.window).decorView as android.view.ViewGroup
+                val window = requireNotNull(dialog.window)
+                val decor = window.decorView as android.view.ViewGroup
                 val buttonBar = confirm.parent as android.widget.LinearLayout
                 val density = activity.resources.displayMetrics.density
                 val minimumGap = kotlin.math.round(12 * density).toInt()
-                fun resizeWindow(width: Int) {
-                    requireNotNull(dialog.window).setLayout(width, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
-                    decor.requestLayout()
-                    val root = requireNotNull(decor.parent)
-                    // Manual decor layout leaves ViewRootImpl uninitialized and invalidates visibility checks.
-                    repeat(8) {
-                        shadowOf(Looper.getMainLooper()).idleFor(org.robolectric.shadows.ShadowChoreographer.getFrameDelay())
-                        val decorBounds = android.graphics.Rect(0, 0, decor.width, decor.height)
-                        val visibleBounds = android.graphics.Rect(decorBounds)
-                        val rootContainsDecor = root.getChildVisibleRect(decor, visibleBounds, null) && visibleBounds == decorBounds
-                        if (decor.width == width && decor.height > 0 &&
-                            ReflectionHelpers.getField<Int>(root, "mWidth") == decor.width &&
-                            ReflectionHelpers.getField<Int>(root, "mHeight") >= decor.height &&
-                            !decor.isLayoutRequested && rootContainsDecor) return
+                val frameDelay = org.robolectric.shadows.ShadowChoreographer.getFrameDelay()
+                val request = requireNotNull(RecordingStopConfirmation.pending())
+                val phaseEnd = request.window.openedAtMillis + request.window.timing.delaySeconds * 1000L +
+                    if (expectedPhase == StopConfirmationPhase.ACTIVE) request.window.timing.timeoutSeconds * 1000L else 0L
+                val frameBudget = frameDelay.multipliedBy(48).toMillis() + 48
+                fun requireBudget(caseId: String, budget: Long) {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (RecordingStopConfirmation.pending()?.requestId != request.requestId || request.window.phase(now) != expectedPhase ||
+                        budget >= phaseEnd - now) {
+                        failures += AssertionError("$caseId cannot advance $budget ms inside existing $expectedPhase window; " +
+                            "now=$now deadline=$phaseEnd actual=${request.window.phase(now)}")
+                        throw org.junit.runners.model.MultipleFailureException(failures.toList())
                     }
-                    fail("Dialog window traversal did not settle: width=$width decor=${decor.width}x${decor.height} " +
-                        "root=${ReflectionHelpers.getField<Int>(root, "mWidth")}x${ReflectionHelpers.getField<Int>(root, "mHeight")} " +
-                        "layoutRequested=${decor.isLayoutRequested}")
+                }
+                requireBudget("$expectedPhase matrix", frameBudget)
+                fun rect(value: android.graphics.Rect) = org.json.JSONArray(listOf(value.left, value.top, value.right, value.bottom))
+                fun viewState(view: android.view.View): org.json.JSONObject {
+                    val matrix = FloatArray(9).also { view.matrix.getValues(it) }
+                    val locationWindow = IntArray(2).also { view.getLocationInWindow(it) }
+                    val locationScreen = IntArray(2).also { view.getLocationOnScreen(it) }
+                    val state = org.json.JSONObject()
+                        .put("class", view.javaClass.simpleName).put("id", view.id)
+                        .put("bounds", rect(android.graphics.Rect(view.left, view.top, view.right, view.bottom)))
+                        .put("measured", org.json.JSONArray(listOf(view.measuredWidth, view.measuredHeight)))
+                        .put("padding", org.json.JSONArray(listOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)))
+                        .put("scroll", org.json.JSONArray(listOf(view.scrollX, view.scrollY)))
+                        .put("matrix", org.json.JSONArray(matrix.toList()))
+                        .put("windowLocation", org.json.JSONArray(locationWindow.toList()))
+                        .put("screenLocation", org.json.JSONArray(locationScreen.toList()))
+                        .put("visibility", view.visibility).put("layoutRequested", view.isLayoutRequested)
+                        .put("baseline", view.baseline).put("focused", view.isFocused)
+                    (view.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let { params ->
+                        state.put("margins", org.json.JSONArray(listOf(params.leftMargin, params.topMargin, params.rightMargin, params.bottomMargin)))
+                            .put("layoutGravity", params.gravity)
+                    }
+                    if (view is android.view.ViewGroup) state.put("clipChildren", view.clipChildren)
+                        .put("clipToPadding", view.clipToPadding)
+                    state.put("clipBounds", view.clipBounds?.let(::rect) ?: org.json.JSONObject.NULL)
+                    return state
+                }
+                fun snapshot(caseId: String, stage: String, frame: Int) {
+                    val root = requireNotNull(decor.parent)
+                    val rootRect = android.graphics.Rect(0, 0, decor.width, decor.height)
+                    val rootVisible = root.getChildVisibleRect(decor, rootRect, null)
+                    val buttons = org.json.JSONArray()
+                    for (button in listOf(confirm, cancel)) {
+                        val buttonToGlobal = android.graphics.Matrix().also { button.transformMatrixToGlobal(it) }
+                        val visible = android.graphics.Rect()
+                        val visibleResult = button.getLocalVisibleRect(visible)
+                        val ancestors = org.json.JSONArray()
+                        var firstClip: String? = null
+                        var ancestor = button.parent as? android.view.ViewGroup
+                        while (ancestor != null) {
+                            val state = viewState(ancestor)
+                            val ancestorToGlobal = android.graphics.Matrix()
+                            ancestor.transformMatrixToGlobal(ancestorToGlobal)
+                            val globalToAncestor = android.graphics.Matrix()
+                            val invertible = ancestorToGlobal.invert(globalToAncestor)
+                            val transform = android.graphics.Matrix().apply { setConcat(globalToAncestor, buttonToGlobal) }
+                            val buttonBounds = android.graphics.RectF(0f, 0f, button.width.toFloat(), button.height.toFloat())
+                            if (invertible) transform.mapRect(buttonBounds)
+                            val outer = android.graphics.RectF(0f, 0f, ancestor.width.toFloat(), ancestor.height.toFloat())
+                            val padded = android.graphics.RectF(ancestor.paddingLeft.toFloat(), ancestor.paddingTop.toFloat(),
+                                (ancestor.width - ancestor.paddingRight).toFloat(), (ancestor.height - ancestor.paddingBottom).toFloat())
+                            val paddingActive = ancestor.clipToPadding &&
+                                (ancestor.paddingLeft != 0 || ancestor.paddingTop != 0 || ancestor.paddingRight != 0 || ancestor.paddingBottom != 0)
+                            val explicit = ancestor.clipBounds?.let { android.graphics.RectF(it) }
+                            val outerClip = ancestor.clipChildren && !outer.contains(buttonBounds)
+                            val paddingClip = paddingActive && !padded.contains(buttonBounds)
+                            val explicitClip = explicit != null && !explicit.contains(buttonBounds)
+                            val candidate = invertible && (outerClip || paddingClip || explicitClip)
+                            state.put("buttonBounds", org.json.JSONArray(listOf(buttonBounds.left, buttonBounds.top, buttonBounds.right, buttonBounds.bottom)))
+                                .put("transformInvertible", invertible).put("clipsButtonCandidate", candidate)
+                                .put("outerClip", outerClip).put("paddingClip", paddingClip).put("explicitClip", explicitClip)
+                            if (candidate && firstClip == null) firstClip = ancestor.javaClass.simpleName
+                            ancestors.put(state)
+                            ancestor = ancestor.parent as? android.view.ViewGroup
+                        }
+                        buttons.put(viewState(button).put("text", button.text).put("visibleResult", visibleResult)
+                            .put("visibleRect", rect(visible)).put("firstClippingCandidate", firstClip ?: org.json.JSONObject.NULL)
+                            .put("ancestors", ancestors))
+                    }
+                    val children = org.json.JSONArray()
+                    for (index in 0 until buttonBar.childCount) {
+                        val child = buttonBar.getChildAt(index)
+                        if (child.visibility == android.view.View.VISIBLE) children.put(viewState(child))
+                    }
+                    val attrs = window.attributes
+                    println("STOP_DIALOG_MATRIX " + org.json.JSONObject().put("case", caseId).put("stage", stage).put("frame", frame)
+                        .put("sdk", android.os.Build.VERSION.SDK_INT).put("elapsed", android.os.SystemClock.elapsedRealtime())
+                        .put("uptime", android.os.SystemClock.uptimeMillis()).put("frameDelayNanos", frameDelay.toNanos())
+                        .put("actualPhase", RecordingStopConfirmation.pending()?.window?.phase(android.os.SystemClock.elapsedRealtime())?.name)
+                        .put("rootWidth", ReflectionHelpers.getField<Int>(root, "mWidth"))
+                        .put("rootHeight", ReflectionHelpers.getField<Int>(root, "mHeight"))
+                        .put("rootVisible", rootVisible).put("rootRect", rect(rootRect)).put("decor", viewState(decor))
+                        .put("window", org.json.JSONObject().put("width", attrs.width).put("height", attrs.height)
+                            .put("gravity", attrs.gravity).put("x", attrs.x).put("y", attrs.y).put("focused", decor.hasWindowFocus())
+                            .put("focusedView", window.currentFocus?.let(::viewState) ?: org.json.JSONObject.NULL))
+                        .put("bar", viewState(buttonBar).put("orientation", buttonBar.orientation).put("gravity", buttonBar.gravity)
+                            .put("baselineAligned", buttonBar.isBaselineAligned).put("children", children))
+                        .put("buttons", buttons))
+                }
+                fun ready(width: Int): Boolean {
+                    val root = requireNotNull(decor.parent)
+                    val bounds = android.graphics.Rect(0, 0, decor.width, decor.height)
+                    val visible = android.graphics.Rect(bounds)
+                    return decor.width == width && decor.height > 0 &&
+                        ReflectionHelpers.getField<Int>(root, "mWidth") == decor.width &&
+                        ReflectionHelpers.getField<Int>(root, "mHeight") >= decor.height && !decor.isLayoutRequested &&
+                        root.getChildVisibleRect(decor, visible, null) && visible == bounds
                 }
                 for (direction in listOf(android.view.View.LAYOUT_DIRECTION_LTR, android.view.View.LAYOUT_DIRECTION_RTL)) {
                     buttonBar.layoutDirection = direction
                     val orientations = mutableSetOf<Int>()
                     for (widthDp in listOf(220, 320, 480)) {
-                        resizeWindow((widthDp * density).toInt())
-                        assertEquals(expectedPhase, requireNotNull(RecordingStopConfirmation.pending()).window
-                            .phase(android.os.SystemClock.elapsedRealtime()))
-                        assertEquals(expectedPhase == StopConfirmationPhase.ACTIVE, confirm.isEnabled)
-                        assertEquals(direction, buttonBar.layoutDirection)
-                        orientations += buttonBar.orientation
+                        val width = (widthDp * density).toInt()
+                        val caseId = "$expectedPhase/dir=$direction/width=$widthDp"
+                        var frame = 0
+                        var preDraws = 0
+                        val observer = decor.viewTreeObserver
+                        val preDraw = android.view.ViewTreeObserver.OnPreDrawListener {
+                            if (preDraws++ < 8) snapshot(caseId, "pre-draw", frame)
+                            true
+                        }
                         fun bounds(button: android.widget.Button) = android.graphics.Rect(0, 0, button.width, button.height).also {
                             decor.offsetDescendantRectToMyCoords(button, it)
                         }
-                        val positive = bounds(confirm)
-                        val negative = bounds(cancel)
-                        assertTrue("Buttons must have nonempty bounds: $positive, $negative", !positive.isEmpty && !negative.isEmpty)
-                        val gap = maxOf(positive.left - negative.right, negative.left - positive.right,
-                            positive.top - negative.bottom, negative.top - positive.bottom)
-                        assertTrue("Filled buttons need a 12dp gap: width=$widthDp direction=$direction positive=$positive negative=$negative gap=$gap", gap >= minimumGap)
-                        for (rect in listOf(positive, negative)) {
-                            assertTrue("Button clipped by dialog: $rect in ${decor.width}x${decor.height}",
-                                rect.left >= 0 && rect.top >= 0 && rect.right <= decor.width && rect.bottom <= decor.height)
+                        fun validate(stage: String) {
+                            val label = "$caseId/$stage/frame=$frame"
+                            check { assertEquals(label, expectedPhase, requireNotNull(RecordingStopConfirmation.pending()).window
+                                .phase(android.os.SystemClock.elapsedRealtime())) }
+                            check { assertEquals(label, expectedPhase == StopConfirmationPhase.ACTIVE, confirm.isEnabled) }
+                            check { assertEquals(label, direction, buttonBar.layoutDirection) }
+                            check { assertTrue("$label root readiness", ready(width)) }
+                            orientations += buttonBar.orientation
+                            val positive = bounds(confirm)
+                            val negative = bounds(cancel)
+                            check { assertTrue("$label buttons must have nonempty bounds: $positive, $negative", !positive.isEmpty && !negative.isEmpty) }
+                            val gap = maxOf(positive.left - negative.right, negative.left - positive.right,
+                                positive.top - negative.bottom, negative.top - positive.bottom)
+                            check { assertTrue("$label filled buttons need a 12dp gap: positive=$positive negative=$negative gap=$gap", gap >= minimumGap) }
+                            for (rect in listOf(positive, negative)) {
+                                check { assertTrue("$label button clipped by dialog: $rect in ${decor.width}x${decor.height}",
+                                    rect.left >= 0 && rect.top >= 0 && rect.right <= decor.width && rect.bottom <= decor.height) }
+                            }
+                            for (button in listOf(confirm, cancel)) {
+                                val visible = android.graphics.Rect()
+                                val rootRect = android.graphics.Rect(0, 0, decor.width, decor.height)
+                                val root = requireNotNull(decor.parent)
+                                val rootVisible = root.getChildVisibleRect(decor, rootRect, null)
+                                val rootWidth = runCatching { ReflectionHelpers.getField<Int>(root, "mWidth") }.getOrNull()
+                                val rootHeight = runCatching { ReflectionHelpers.getField<Int>(root, "mHeight") }.getOrNull()
+                                val ancestors = generateSequence(button as android.view.View) { it.parent as? android.view.View }
+                                    .joinToString(" -> ") { view ->
+                                        "${view.javaClass.simpleName}[${view.left},${view.top},${view.right},${view.bottom};" +
+                                            "scroll=${view.scrollX},${view.scrollY};visibility=${view.visibility};" +
+                                            "clip=${(view as? android.view.ViewGroup)?.clipChildren},${(view as? android.view.ViewGroup)?.clipToPadding}]"
+                                    }
+                                val message = "$label action must remain visible through clipping ancestors: " +
+                                    "button=${button.text} rootVisible=$rootVisible rootRect=$rootRect rootSize=${rootWidth}x$rootHeight " +
+                                    "decor=${decor.width}x${decor.height} ancestors=$ancestors"
+                                check { assertTrue(message, button.getLocalVisibleRect(visible)) }
+                                check { assertEquals(message, android.graphics.Rect(0, 0, button.width, button.height), visible) }
+                            }
                         }
-                        for (button in listOf(confirm, cancel)) {
-                            val visible = android.graphics.Rect()
-                            val rootRect = android.graphics.Rect(0, 0, decor.width, decor.height)
-                            val root = requireNotNull(decor.parent)
-                            val rootVisible = root.getChildVisibleRect(decor, rootRect, null)
-                            val rootWidth = runCatching { ReflectionHelpers.getField<Int>(root, "mWidth") }.getOrNull()
-                            val rootHeight = runCatching { ReflectionHelpers.getField<Int>(root, "mHeight") }.getOrNull()
-                            val ancestors = generateSequence(button as android.view.View) { it.parent as? android.view.View }
-                                .joinToString(" -> ") { view ->
-                                    "${view.javaClass.simpleName}[${view.left},${view.top},${view.right},${view.bottom};" +
-                                        "scroll=${view.scrollX},${view.scrollY};visibility=${view.visibility};" +
-                                        "clip=${(view as? android.view.ViewGroup)?.clipChildren},${(view as? android.view.ViewGroup)?.clipToPadding}]"
+                        snapshot(caseId, "before-request", frame)
+                        observer.addOnPreDrawListener(preDraw)
+                        try {
+                            window.setLayout(width, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+                            decor.requestLayout()
+                            snapshot(caseId, "requested", frame)
+                            var firstReady = false
+                            repeat(8) {
+                                frame = it + 1
+                                requireBudget("$caseId/frame=$frame", frameDelay.toMillis() + 1)
+                                shadowOf(Looper.getMainLooper()).idleFor(frameDelay)
+                                if (!firstReady && ready(width)) {
+                                    firstReady = true
+                                    snapshot(caseId, "first-ready", frame)
+                                    validate("first-ready")
                                 }
-                            assertTrue("Action must remain visible through clipping ancestors: width=$widthDp direction=$direction " +
-                                "button=${button.text} rootVisible=$rootVisible rootRect=$rootRect rootSize=${rootWidth}x$rootHeight " +
-                                "decor=${decor.width}x${decor.height} ancestors=$ancestors", button.getLocalVisibleRect(visible))
-                            assertEquals(android.graphics.Rect(0, 0, button.width, button.height), visible)
+                            }
+                            check { assertTrue("$caseId root did not settle in eight frames", firstReady) }
+                            snapshot(caseId, "frame-eight", frame)
+                            validate("frame-eight")
+                        } finally { if (observer.isAlive) observer.removeOnPreDrawListener(preDraw) }
+                        if (expectedPhase == StopConfirmationPhase.ACTIVE && direction == android.view.View.LAYOUT_DIRECTION_RTL &&
+                            widthDp == 480 && buttonBar.orientation == android.widget.LinearLayout.HORIZONTAL) {
+                            val originalConfirm = confirm.layoutParams as android.widget.LinearLayout.LayoutParams
+                            val originalCancel = cancel.layoutParams as android.widget.LinearLayout.LayoutParams
+                            snapshot(caseId, "gravity-probe-before", frame)
+                            try {
+                                for (button in listOf(confirm, cancel)) {
+                                    button.layoutParams = android.widget.LinearLayout.LayoutParams(
+                                        button.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
+                                        gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
+                                    }
+                                }
+                                decor.requestLayout()
+                                repeat(8) {
+                                    frame = it + 1
+                                    requireBudget("$caseId/gravity-probe/frame=$frame", frameDelay.toMillis() + 1)
+                                    shadowOf(Looper.getMainLooper()).idleFor(frameDelay)
+                                }
+                                snapshot(caseId, "gravity-probe-after", frame)
+                                validate("gravity-probe-after")
+                            } finally {
+                                confirm.layoutParams = originalConfirm
+                                cancel.layoutParams = originalCancel
+                                decor.requestLayout()
+                                snapshot(caseId, "gravity-probe-restored-requested", frame)
+                            }
                         }
                     }
-                    assertEquals("Exercise both side-by-side and stacked button bars", setOf(
-                        android.widget.LinearLayout.HORIZONTAL, android.widget.LinearLayout.VERTICAL), orientations)
+                    check { assertEquals("$expectedPhase/dir=$direction exercise both side-by-side and stacked button bars", setOf(
+                        android.widget.LinearLayout.HORIZONTAL, android.widget.LinearLayout.VERTICAL), orientations) }
                 }
             }
             fun filledColor(button: android.widget.Button): Int {
@@ -114,32 +274,39 @@ class RecordingAlarmServiceTest {
                     background.getDrawable(0) else background
                 return requireNotNull((shape as android.graphics.drawable.GradientDrawable).color).defaultColor
             }
-            assertFalse(confirm.isEnabled)
+            check { assertFalse(confirm.isEnabled) }
             val reservedWidth = confirm.minWidth
-            assertEquals(android.graphics.Color.rgb(207, 216, 215), filledColor(confirm))
-            assertTrue(cancel.isEnabled)
-            assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel))
+            check { assertEquals(android.graphics.Color.rgb(207, 216, 215), filledColor(confirm)) }
+            check { assertTrue(cancel.isEnabled) }
+            check { assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel)) }
             assertSeparatedButtons(StopConfirmationPhase.WAITING)
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
-            assertTrue(confirm.isEnabled)
-            assertEquals(reservedWidth, confirm.minWidth)
+            check { assertTrue(confirm.isEnabled) }
+            check { assertEquals(reservedWidth, confirm.minWidth) }
             assertSeparatedButtons(StopConfirmationPhase.ACTIVE)
             val normal = android.graphics.Color.rgb(0, 108, 103)
             val focused = android.graphics.Color.rgb(0, 77, 73)
-            assertEquals("focused=${confirm.isFocused} pressed=${confirm.isPressed} " +
+            check { assertEquals("focused=${confirm.isFocused} pressed=${confirm.isPressed} " +
                 "drawableStates=${confirm.drawableState.joinToString()}",
-                if (confirm.isFocused || confirm.isPressed) focused else normal, filledColor(confirm))
+                if (confirm.isFocused || confirm.isPressed) focused else normal, filledColor(confirm)) }
             val originalState = confirm.background.state.clone()
             try {
                 confirm.background.state = intArrayOf(android.R.attr.state_enabled)
-                assertEquals(normal, filledColor(confirm))
+                check { assertEquals(normal, filledColor(confirm)) }
                 confirm.background.state = intArrayOf(android.R.attr.state_enabled, android.R.attr.state_focused)
-                assertEquals(focused, filledColor(confirm))
+                check { assertEquals(focused, filledColor(confirm)) }
                 confirm.background.state = intArrayOf(android.R.attr.state_enabled, android.R.attr.state_pressed)
-                assertEquals(focused, filledColor(confirm))
+                check { assertEquals(focused, filledColor(confirm)) }
             } finally { confirm.background.state = originalState }
-            assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel))
-        } finally { controller.pause().stop().destroy(); RecordingStopConfirmation.retire("presentation-owner") }
+            check { assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel)) }
+            org.junit.runners.model.MultipleFailureException.assertEmpty(failures)
+        } finally {
+            try { controller.pause().stop().destroy() } finally {
+                try { RecordingStopConfirmation.retire("presentation-owner") } finally {
+                    org.robolectric.shadows.ShadowChoreographer.setPaused(wasChoreographerPaused)
+                }
+            }
+        }
     }
 
     @Test

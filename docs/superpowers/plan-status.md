@@ -12,6 +12,10 @@ Fixture correction, full host CI and rebuilt-APK verification are pending.
 CI41519517827 confirmed initialized root dimensions but exposed an overstrict
 height-equality fixture guard; the guard now requires full decor containment,
 while all button visibility assertions remain intact. Host execution is pending.
+CI41522576443 then isolated a 6px partial button rectangle after root checks
+passed. A focused Sol-high review identified a matching native bottom-baseline
+alignment mechanism; a complete unchanged-production diagnostic matrix is
+pending before any further production change or release.
 Service, USB recovery, alarms, authorization and countdown logic are unchanged.
 This current checkpoint supersedes the prior RC12 completion note below only
 for the new spacing follow-up; prior release evidence remains historical.

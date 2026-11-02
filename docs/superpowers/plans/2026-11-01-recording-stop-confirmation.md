@@ -98,6 +98,53 @@ Every approved design section is assigned above: timing/settings (1), authority/
 
 ## Execution Checkpoint
 
+### 2026-11-02 Dialog Follow-Up
+
+Owner explicitly requests centered placement, filled colored confirmation and
+gray Cancel, and unchanged recording/USB/position-alarm handling in either phase.
+Baseline: `c21f422`; branch `codex/stop-dialog-presentation`. RC12 stays immutable;
+this follow-up does not authorize a new release.
+
+Root-cause evidence: the native AlertDialog inherits platform/OEM window gravity
+and borderless action backgrounds; neither is set explicitly by the app. Capture,
+USB recovery and alarm ownership remain in the foreground service, with no dialog
+state dependency found. No recording regression is inferred without evidence.
+
+Design: keep the existing shared native dialog, deadlines and authorization.
+Explicitly center its window and provide stateful filled action drawables with
+readable text, touch feedback and a visibly disabled confirmation. Prefer this
+scoped presentation repair over replacing the dialog with a second Compose host
+or changing service ownership. Runtime health paths are changed only if a
+combined regression demonstrates an actual defect.
+
+Files: `ui/common/StopRecordingConfirmation.kt` for window/button presentation;
+`res/values/styles.xml`, `res/drawable/stop_confirmation_*.xml` and
+`res/color/stop_confirmation_text.xml` for native stateful fills and text;
+`recording/RecordingAlarmServiceTest.kt` for host assertions and simulated USB
+input; `ui/StopConfirmationPresentationTest.kt` for locally executable structured
+resource/contrast assertions; existing `UI-STOP-001`, assurance records and user documentation for the
+requested contract/evidence. No new runtime abstraction is planned.
+
+- [x] Add presentation regression and observe an actual failing assertion where
+  feasible. Termux cannot run native Robolectric; use host CI for those cases
+  without claiming a local RED from compilation alone.
+- [x] Implement explicit centering and filled enabled/disabled button styling;
+  preserve existing guarded click dispatch and countdown assertions.
+- [ ] Test actual service capture with the dialog open in WAITING and ACTIVE:
+  receiver bytes are recorded, USB loss raises/recovery clears its alarm and
+  reconnect resumes byte-exact capture; position loss/recovery remains armed.
+  Use condition-based waits and keep raw artifacts authoritative.
+- [ ] Independently review the affected safety boundary, run the normal full
+  pre-push gate, push, and observe both-variant host CI. Update actual evidence;
+  retain physical-device visual/USB/audio checks as pending until performed.
+
+Local evidence: presentation resource tests first failed 3/3 actual assertions
+for the absent explicit theme/backgrounds, then the normal Android compilation
+gate passed with the implementation and all app test sources. Native combined
+service cases remain unexecuted locally and must pass in host CI. The first
+attempt to run that gate correctly rejected the not-yet-staged new test input;
+it was staged before the successful rerun. No test-input exclusion was added.
+
 ### Published RC12
 
 Status: **Implemented, not field-tested**. Source `d56d5d26905c3543bf1e05c7b2e5b7182861c616`

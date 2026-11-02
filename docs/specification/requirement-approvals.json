@@ -1427,11 +1427,11 @@
     },
     {
       "requirement_id": "UI-STOP-001",
-      "requirement_digest": "sha256:ef8847943ec458439d495734ccafebfc4490f62c7a6207fc2aa0d6b80990a1db",
+      "requirement_digest": "sha256:e5386b6e2fe0490a7dd1c37c273228ae4f3645f9e2ad8bb3e1cbd5b970424cf2",
       "state": "approved",
       "approved_by": "human:holubp",
-      "approved_at": "2026-11-01T20:07:48.023613Z",
-      "decision_ref": "2026-11-01-stop-confirmation-approved-plan-release"
+      "approved_at": "2026-11-02T07:47:58Z",
+      "decision_ref": "2026-11-02-stop-dialog-adjustments"
     }
   ]
 }

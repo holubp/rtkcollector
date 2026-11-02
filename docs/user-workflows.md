@@ -917,6 +917,9 @@ button first counts down a short disabled delay (initially **2 seconds**), then
 becomes available for a separate **10-second** countdown. Press Confirm during
 that second countdown to stop. Cancel, Back, timeout or moving the app into the
 background leaves recording running. Returning requires a fresh confirmation.
+The centered dialog has a filled confirmation button and a gray Cancel button.
+Recording, USB disconnect/reconnect recovery and position-loss alarms continue
+normally during both countdowns; opening the dialog does not silence alarms.
 
 In **Advanced settings**, adjust **Stop confirmation delay** (1-60 seconds) and
 **Stop confirmation timeout** (1-120 seconds), then press Save. Both values

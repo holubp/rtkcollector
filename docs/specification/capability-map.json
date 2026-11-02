@@ -252,9 +252,44 @@
       "reason": "Debug-only manifest configuration."
     },
     {
-      "pattern": "app/src/main/res/**",
+      "pattern": "app/src/main/res/mipmap-*/**",
       "category": "asset",
-      "reason": "Android resources and branding assets."
+      "reason": "Android launcher branding assets."
+    },
+    {
+      "pattern": "app/src/main/res/drawable-nodpi/**",
+      "category": "asset",
+      "reason": "Android branding bitmap assets."
+    },
+    {
+      "pattern": "app/src/main/res/raw/**",
+      "category": "asset",
+      "reason": "Bundled alarm sounds."
+    },
+    {
+      "pattern": "app/src/main/res/xml/**",
+      "category": "asset",
+      "reason": "Existing Android USB and sharing resource declarations."
+    },
+    {
+      "pattern": "app/src/main/res/values/colors.xml",
+      "category": "asset",
+      "reason": "Existing application palette."
+    },
+    {
+      "pattern": "app/src/main/res/values/styles.xml",
+      "category": "implementation",
+      "reason": "Native Stop dialog theme and action-style wiring; existing AppTheme is preserved."
+    },
+    {
+      "pattern": "app/src/main/res/drawable/stop_confirmation_*.xml",
+      "category": "implementation",
+      "reason": "Required visible Stop confirmation and Cancel action backgrounds."
+    },
+    {
+      "pattern": "app/src/main/res/color/stop_confirmation_text.xml",
+      "category": "implementation",
+      "reason": "Readable enabled and disabled Stop confirmation text states."
     },
     {
       "pattern": "logos/**",
@@ -3671,6 +3706,18 @@
       ],
       "implementation_mappings": [
         {
+          "pattern": "app/src/main/res/values/styles.xml",
+          "requirement_ids": ["UI-STOP-001"]
+        },
+        {
+          "pattern": "app/src/main/res/drawable/stop_confirmation_*.xml",
+          "requirement_ids": ["UI-STOP-001"]
+        },
+        {
+          "pattern": "app/src/main/res/color/stop_confirmation_text.xml",
+          "requirement_ids": ["UI-STOP-001"]
+        },
+        {
           "pattern": "app/src/main/kotlin/org/rtkcollector/app/recording/StopConfirmationPolicy.kt",
           "requirement_ids": [
             "UI-STOP-001"
@@ -3729,17 +3776,17 @@
     }
   ],
   "approval": {
+    "inventory_digest": "sha256:99ed6305f7c69e99930571f178a7c170094f93310967ea4da97efd57cff057b9",
+    "state": "approved",
+    "approved_by": "human:holubp",
+    "approved_at": "2026-11-02T07:47:58Z",
+    "decision_ref": "2026-11-02-stop-dialog-adjustments"
+  },
+  "previous_approval": {
     "inventory_digest": "sha256:ea1924afaaf559224dbe3c8fcaea645934b953f8262cd6e25dbaaea03ee4fece",
     "state": "approved",
     "approved_by": "human:holubp",
     "approved_at": "2026-11-01T22:04:05.342668Z",
     "decision_ref": "2026-11-01-astra-stop-timer-repair-normal-gates"
-  },
-  "previous_approval": {
-    "inventory_digest": "sha256:af0f7d777e4b7bb15294da5230154ee8116b6271d1da8088ef0aa7c561d99fb2",
-    "state": "approved",
-    "approved_by": "human:holubp",
-    "approved_at": "2026-11-01T20:07:48.023613Z",
-    "decision_ref": "2026-11-01-stop-confirmation-approved-plan-release"
   }
 }

@@ -26,6 +26,131 @@ import org.rtkcollector.app.alarms.*
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33, 35])
 class RecordingAlarmServiceTest {
+    @Test fun `Stop dialog is centered and action backgrounds remain filled in both phases`() {
+        val controller = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+        val activity = controller.get()
+        RecordingStopConfirmation.activate("presentation-owner")
+        try {
+            org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+            val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+            assertEquals(android.view.Gravity.CENTER, requireNotNull(dialog.window).attributes.gravity)
+            val confirm = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+            val cancel = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
+            fun filledColor(button: android.widget.Button): Int {
+                val background = button.background.current
+                val shape = if (background is android.graphics.drawable.RippleDrawable)
+                    background.getDrawable(0) else background
+                return requireNotNull((shape as android.graphics.drawable.GradientDrawable).color).defaultColor
+            }
+            assertFalse(confirm.isEnabled)
+            val reservedWidth = confirm.minWidth
+            assertEquals(android.graphics.Color.rgb(207, 216, 215), filledColor(confirm))
+            assertTrue(cancel.isEnabled)
+            assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel))
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+            assertTrue(confirm.isEnabled)
+            assertEquals(reservedWidth, confirm.minWidth)
+            assertEquals(android.graphics.Color.rgb(0, 108, 103), filledColor(confirm))
+            assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel))
+        } finally { controller.pause().stop().destroy(); RecordingStopConfirmation.retire("presentation-owner") }
+    }
+
+    @Test
+    @Config(shadows = [StartupUsbManagerShadow::class, StartupUsbConnectionShadow::class])
+    fun `dialog in either phase leaves raw capture USB recovery and position alarms intact`() {
+        for (waiting in listOf(true, false)) {
+            val io = StartupIo("live-recording"); startupIo = io
+            val serviceController = Robolectric.buildService(RecordingForegroundService::class.java).create()
+            val service = serviceController.get()
+            val activityController = Robolectric.buildActivity(android.app.Activity::class.java).setup()
+            val activity = activityController.get()
+            org.rtkcollector.app.settings.StopConfirmationSettings(activity).timing =
+                StopConfirmationTiming(if (waiting) 60 else 1, 120)
+            val base = RecordingSetupBridgeTest.snapshot(ntripEnabled = false)
+            val snapshot = base.copy(sessionId = java.util.UUID.randomUUID().toString(),
+                config = base.config.copy(initCommands = emptyList(), baudSwitchCommands = emptyList(),
+                    modeCommands = emptyList(), shutdownCommands = emptyList(), profileBaud = 230400, serialBaud = 230400))
+            val expected = java.io.ByteArrayOutputStream()
+            fun await(label: String, condition: () -> Boolean) {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                while (!condition() && System.nanoTime() < deadline) {
+                    shadowOf(Looper.getMainLooper()).idle()
+                    Thread.sleep(10)
+                }
+                assertTrue("$label (waiting=$waiting, state=${field("state").get(service)})", condition())
+            }
+            fun alarms() = (field("alarmController").get(service) as RecordingAlarmController).snapshot()
+            fun hasAlarm(category: AlarmCategory) = alarms().activeEpisodes.any { it.id.cause.category == category }
+            fun send(bytes: ByteArray) {
+                expected.write(bytes)
+                io.incoming.add(bytes)
+                await("receiver bytes not recorded") {
+                    (field("state").get(service) as RecordingServiceState).receiverRxBytes == expected.size().toLong()
+                }
+            }
+            val gga = "\$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n".toByteArray(Charsets.US_ASCII)
+            try {
+                startWithUsb(service, snapshot)
+                await("capture worker not started") { (field("captureThread").get(service) as? Thread)?.isAlive == true }
+                await("alarm policy not ready") { alarms().generation == field("alarmGeneration").getLong(service) }
+                val raw = java.io.File((field("state").get(service) as RecordingServiceState).sessionPath!!, "receiver-rx.raw")
+                org.rtkcollector.app.ui.common.StopRecordingConfirmation.show(activity, "home")
+                val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+                val request = requireNotNull(RecordingStopConfirmation.pending())
+                if (!waiting) shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
+                val phase = if (waiting) StopConfirmationPhase.WAITING else StopConfirmationPhase.ACTIVE
+                assertEquals(phase, request.window.phase(android.os.SystemClock.elapsedRealtime()))
+
+                send(gga)
+                await("decoded position not accepted by alarm policy") {
+                    val policy = ReflectionHelpers.getField<RecordingAlarmPolicy>(field("alarmController").get(service), "policy")
+                    ReflectionHelpers.getField<Long?>(policy, "lastValid") != null
+                }
+                // Keep receiver bytes flowing, but withhold a fresh position past its normal loss deadline.
+                send(byteArrayOf(1, 2, 3))
+                val lossDelay = (field("alarmSettingsSnapshot").get(service) as AlarmSettingsSnapshot).positionLossDelayMillis
+                shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(lossDelay + 1_000))
+                await("position-loss alarm not raised") { hasAlarm(AlarmCategory.POSITION_LOST) }
+                assertNotNull("dialog must not acknowledge/suppress sound selection", alarms().audio)
+                send(gga)
+                await("position-loss alarm not recovered") { !hasAlarm(AlarmCategory.POSITION_LOST) }
+
+                val device = (service.getSystemService(Context.USB_SERVICE) as UsbManager).deviceList.values.single()
+                val opens = io.successfulOpens.get()
+                io.disconnected = true
+                await("USB read failure not exercised") { io.readFailures.get() > 0 }
+                service.sendBroadcast(Intent(UsbManager.ACTION_USB_DEVICE_DETACHED).putExtra(UsbManager.EXTRA_DEVICE, device))
+                await("failed USB reopen not exercised") { io.openFailures.get() > 0 }
+                await("connection-loss alarm not raised") { hasAlarm(AlarmCategory.CONNECTION_LOST) }
+                assertNotNull("disconnect sound selection must remain active", alarms().audio)
+                assertTrue(dialog.isShowing)
+                assertTrue((field("running").get(service) as java.util.concurrent.atomic.AtomicBoolean).get())
+                assertFalse((field("stopping").get(service) as java.util.concurrent.atomic.AtomicBoolean).get())
+                assertSame(request, RecordingStopConfirmation.pending())
+
+                io.disconnected = false
+                shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
+                send(gga)
+                await("USB capture did not reopen") { io.successfulOpens.get() > opens }
+                await("connection-loss alarm not recovered") { !hasAlarm(AlarmCategory.CONNECTION_LOST) }
+                await("position alarm remained after receiver recovery") { !hasAlarm(AlarmCategory.POSITION_LOST) }
+                assertTrue(dialog.isShowing)
+                assertEquals(phase, request.window.phase(android.os.SystemClock.elapsedRealtime()))
+                assertNull("dialog must not dispatch Stop", shadowOf(activity).nextStartedService)
+
+                // Explicit test cleanup only, after all dialog-open recording assertions.
+                service.onStartCommand(RecordingForegroundService.fixedBaseStopIntent(service, snapshot.sessionId), 0, 2)
+                awaitStop(service)
+                assertArrayEquals(expected.toByteArray(), raw.readBytes())
+            } finally {
+                io.disconnected = false; io.release.countDown()
+                activityController.pause().stop().destroy()
+                serviceController.destroy(); awaitStop(service)
+                RecordingSetupBridge.stop(snapshot.sessionId); startupIo = null
+            }
+        }
+    }
+
     @Test fun `startup rejected before USB preparation does not retain confirmation authority`() {
         val controller = Robolectric.buildService(RecordingForegroundService::class.java).create()
         val service = controller.get()
@@ -904,7 +1029,12 @@ class RecordingAlarmServiceTest {
     class StartupIo(val phase: String) {
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val opens = java.util.concurrent.atomic.AtomicInteger()
+        val successfulOpens = java.util.concurrent.atomic.AtomicInteger()
+        val readFailures = java.util.concurrent.atomic.AtomicInteger()
+        val openFailures = java.util.concurrent.atomic.AtomicInteger()
         val closes = java.util.concurrent.atomic.AtomicInteger()
+        val incoming = java.util.concurrent.ConcurrentLinkedQueue<ByteArray>()
+        @Volatile var disconnected = false
         val closeFailures = java.util.concurrent.atomic.AtomicInteger()
         @Volatile var failClaim = false
         val streams = java.util.concurrent.ConcurrentHashMap<String, java.io.ByteArrayOutputStream>()
@@ -926,7 +1056,8 @@ class RecordingAlarmServiceTest {
     class StartupUsbManagerShadow : org.robolectric.shadows.ShadowUsbManager() {
         @Implementation override fun openDevice(device: UsbDevice): UsbDeviceConnection? {
             startupIo?.let { it.opens.incrementAndGet(); if (it.phase == "usb-open") it.block() }
-            return super.openDevice(device)
+            startupIo?.let { if (it.disconnected) { it.openFailures.incrementAndGet(); return null } }
+            return super.openDevice(device).also { if (it != null) startupIo?.successfulOpens?.incrementAndGet() }
         }
     }
 
@@ -947,6 +1078,15 @@ class RecordingAlarmServiceTest {
             if (endpoint.direction == UsbConstants.USB_DIR_OUT) {
                 if (String(bytes, 0, length, Charsets.US_ASCII).startsWith(io.phase)) io.block()
                 return length
+            }
+            if (io.disconnected) {
+                io.readFailures.incrementAndGet()
+                throw java.io.IOException("Receiver disconnected for test")
+            }
+            io.incoming.poll()?.let { chunk ->
+                require(chunk.size <= length)
+                chunk.copyInto(bytes)
+                return chunk.size
             }
             if (io.phase == "rx-drain" && io.entered.count != 0L) {
                 io.block()

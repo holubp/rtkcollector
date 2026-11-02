@@ -9,7 +9,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.Gravity
 import android.widget.Toast
+import org.rtkcollector.app.R
 import org.rtkcollector.app.recording.RecordingForegroundService
 import org.rtkcollector.app.recording.RecordingStopConfirmation
 import org.rtkcollector.app.recording.StopConfirmationPhase
@@ -44,7 +46,7 @@ object StopRecordingConfirmation {
         val handler = Handler(Looper.getMainLooper())
         var outcome = "cancelled"
         var submitted = false
-        val dialog = AlertDialog.Builder(activity).setTitle("Stop recording?")
+        val dialog = AlertDialog.Builder(activity, R.style.StopConfirmationDialogTheme).setTitle("Stop recording?")
             .setMessage("Recording continues until you confirm.")
             .setPositiveButton("Confirm", null).setNegativeButton("Cancel", null).create()
         dialog.setOwnerActivity(activity)
@@ -94,7 +96,16 @@ object StopRecordingConfirmation {
             if (active?.dialog === dialog) active = null
         }
         fun initializeButtons() {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            positive.isEnabled = false
+            val maxSeconds = maxOf(request.window.timing.delaySeconds, request.window.timing.timeoutSeconds)
+            val labelWidth = (1..maxSeconds).maxOf { seconds ->
+                val label = "Confirm (${seconds}s)"
+                positive.paint.measureText(positive.transformationMethod?.getTransformation(label, positive)?.toString() ?: label)
+            }
+            positive.minWidth = maxOf(positive.minWidth,
+                kotlin.math.ceil(labelWidth).toInt() + positive.paddingLeft + positive.paddingRight)
+            positive.setOnClickListener {
                 if (!submitted && dialog.isShowing && dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled &&
                     RecordingStopConfirmation.pending()?.requestId == request.requestId &&
                     request.window.phase(SystemClock.elapsedRealtime()) == StopConfirmationPhase.ACTIVE) {
@@ -122,6 +133,7 @@ object StopRecordingConfirmation {
         activity.application.registerActivityLifecycleCallbacks(callbacks)
         try {
             dialog.show()
+            dialog.window?.setGravity(Gravity.CENTER)
             initializeButtons()
         } catch (error: RuntimeException) {
             refresh.cancel()

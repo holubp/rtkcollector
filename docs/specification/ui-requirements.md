@@ -21,13 +21,22 @@ Essential diagnostics MUST distinguish confirmed controls, fixed-base transition
 and terminal alarm actions without credentials or coordinates; diagnostic failure
 MUST NOT affect capture or authorize Stop. Advanced settings replaces the existing
 logging/performance screen title and menu entry without removing its controls.
+The dialog MUST be centered in its application window and both action buttons
+MUST have visible filled backgrounds: the confirmation action in color and
+Cancel in neutral gray. Disabled confirmation MUST remain visibly filled and
+distinguishable from enabled confirmation. During either countdown phase,
+receiver RX capture, USB disconnection/reconnection, position-loss detection,
+alarm delivery/recovery and normal session maintenance MUST remain active
+exactly as during ordinary recording; opening the dialog MUST NOT pause,
+suspend, acknowledge or otherwise change those service-owned operations.
 
 Verification:
 - Automated: policy boundaries, replay/stale owner, lifecycle dismissal, settings
-  persistence and service authorization tests.
+  persistence, centered/filled action presentation, service authorization and
+  dialog-open capture/USB recovery/position-alarm regression tests.
 - Manual: countdown/button accessibility and background behaviour on Android.
 
-Provenance: docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md; human:holubp approval in conversation
+Provenance: docs/superpowers/specs/2026-11-01-recording-stop-confirmation-design.md; human:holubp approval in conversation; explicit centered/filled/non-interfering dialog adjustments requested 2026-11-02
 
 Evidence obligations: EV-UI-STOP-001-AUTO, EV-UI-STOP-001-MANUAL
 

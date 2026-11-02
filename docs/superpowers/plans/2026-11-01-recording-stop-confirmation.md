@@ -130,18 +130,33 @@ requested contract/evidence. No new runtime abstraction is planned.
   without claiming a local RED from compilation alone.
 - [x] Implement explicit centering and filled enabled/disabled button styling;
   preserve existing guarded click dispatch and countdown assertions.
-- [ ] Test actual service capture with the dialog open in WAITING and ACTIVE:
+- [x] Test actual service capture with the dialog open in WAITING and ACTIVE:
   receiver bytes are recorded, USB loss raises/recovery clears its alarm and
   reconnect resumes byte-exact capture; position loss/recovery remains armed.
   Use condition-based waits and keep raw artifacts authoritative.
-- [ ] Independently review the affected safety boundary, run the normal full
+- [x] Independently review the affected safety boundary, run the normal full
   pre-push gate, push, and observe both-variant host CI. Update actual evidence;
   retain physical-device visual/USB/audio checks as pending until performed.
+
+Final follow-up evidence: source `1d4d1b9bca41b40ca506f43cd9a604be88760530`
+passed [CI41422558203](https://github.com/holubp/rtkcollector/actions/runs/41422558203)
+with 2,865 JVM tests / 360 suites, zero failures/errors/skips. Each distribution
+passed all 72 recording-service cases, including presentation and actual service
+capture/USB recovery/position-alarm tests on SDK33/35 in both countdown phases.
+Native boundary/startup checks passed 30 tests; both release lint checks,
+debug assembly and signing smoke passed. Normal local pre-push checks passed
+1,505 JVM tests / 199 suites and compiled all app JVM test sources. Sol's
+independent affected-source and test reviews found no remaining blockers.
+No production capture, USB recovery, position/alarm or authorization code needed
+changing. Physical-device portrait/landscape/font-scale appearance, real USB
+permission/reconnect and audible alarm checks remain pending. RC12's published
+tag and APK are unchanged; this follow-up is source for a subsequent build.
 
 Local evidence: presentation resource tests first failed 3/3 actual assertions
 for the absent explicit theme/backgrounds, then the normal Android compilation
 gate passed with the implementation and all app test sources. Native combined
-service cases remain unexecuted locally and must pass in host CI. The first
+service cases remain unexecuted locally; successful host execution is recorded
+above. The first
 attempt to run that gate correctly rejected the not-yet-staged new test input;
 it was staged before the successful rerun. No test-input exclusion was added.
 
@@ -163,7 +178,7 @@ The oracle now checks the actual focused/pressed state and
 explicitly exercises enabled normal, focused and pressed drawable states. The
 palette, native centering, disabled fill, Cancel fill and all recording/timing
 assertions are unchanged. Sideload and later build checks were not reached in
-that failed run; current complete host verification is still required.
+that failed run; complete host verification subsequently passed as recorded above.
 
 ### Published RC12
 

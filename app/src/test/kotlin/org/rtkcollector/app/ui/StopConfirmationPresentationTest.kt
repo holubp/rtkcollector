@@ -12,6 +12,20 @@ import kotlin.math.pow
 class StopConfirmationPresentationTest {
     private val android = "http://schemas.android.com/apk/res/android"
 
+    @Test fun `filled actions avoid bottom baseline clipping and retain stacked end alignment`() {
+        val styles = document("values/styles.xml").getElementsByTagName("style")
+        for (name in listOf("StopConfirmationPositiveButton", "StopConfirmationCancelButton")) {
+            val style = (0 until styles.length).map { styles.item(it) as Element }
+                .single { it.getAttribute("name") == name }
+            val items = style.getElementsByTagName("item")
+            val gravity = (0 until items.length).map { items.item(it) as Element }
+                .singleOrNull { it.getAttribute("name") == "android:layout_gravity" }
+                ?.textContent.orEmpty().split('|').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            assertEquals(setOf("end", "center_vertical"), gravity,
+                "$name must avoid the native bottom-baseline margin adjustment without losing stacked END alignment")
+        }
+    }
+
     @Test fun `filled action buttons reserve a visible gap in horizontal and stacked layouts`() {
         val styles = document("values/styles.xml").getElementsByTagName("style")
         for (name in listOf("StopConfirmationPositiveButton", "StopConfirmationCancelButton")) {

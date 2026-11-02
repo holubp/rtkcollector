@@ -54,6 +54,18 @@ evidence without extending Stop timing or making button visibility a readiness
 condition. If confirmed, explicit `end|center_vertical` child gravity is the
 narrow candidate correction, preserving stacked END alignment and RTL.
 
+Confirmed by comprehensive diagnostic CI41529509206 at c8cf753: 164 JSON records,
+all 24 baseline cases at first-ready/frame eight; all 16 horizontal cases clip
+both buttons 6px, all eight stacked cases fully visible. Zero scrolling and
+identity matrices exclude those alternative causes. Both SDK gravity controls
+move button top -2 to 10 and restore full rectangles with unchanged margins,
+baselines, parent geometry and focus. Independent Sol-high review confirmed the
+native descent adjustment (25-13=12) and minimal `end|center_vertical` correction.
+The resource alignment regression was RED (6 tests/1 missing-gravity failure),
+then GREEN (6/0, task forced). Both style gravity items are now implemented.
+Production delta is four style items; no recording/auth/timing Kotlin changes.
+Fresh resource-applied baseline CI on both SDKs/distributions remains required.
+
 - Defaults: disabled delay 2 seconds; enabled window 10 seconds beginning after the delay.
 - Persist whole-second delay 1-60 and timeout 1-120; invalid values cannot be saved.
 - Button countdowns update each second; Cancel is always available. Expiry, dismissal, background and recreation never send Stop.

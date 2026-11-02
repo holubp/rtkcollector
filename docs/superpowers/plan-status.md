@@ -4,18 +4,17 @@ Last reviewed: 2026-11-02
 
 Current Stop-dialog follow-up: **In progress**. Owner explicitly requested
 visibly separated buttons and another RC12 rerelease. Symmetric 6dp margins and
-resource/native geometry regressions are added; resource RED/GREEN is verified.
-Independent source review and local gates passed. Host runs 41513847336 and
-41516342991 isolated an uninitialized test window root (`-1 x -1`) in the new
-visibility oracle; the first-case gap and other 70 service cases passed.
-Fixture correction, full host CI and rebuilt-APK verification are pending.
-CI41519517827 confirmed initialized root dimensions but exposed an overstrict
-height-equality fixture guard; the guard now requires full decor containment,
-while all button visibility assertions remain intact. Host execution is pending.
-CI41522576443 then isolated a 6px partial button rectangle after root checks
-passed. A focused Sol-high review identified a matching native bottom-baseline
-alignment mechanism; a complete unchanged-production diagnostic matrix is
-pending before any further production change or release.
+explicit `end|center_vertical` action gravity are implemented. Both resource
+regressions have RED/GREEN evidence (six alignment tests now pass). Diagnostic
+CI41529509206 collected all 24 baseline cases on SDK33/35: stable 6px clipping
+in 16 horizontal cases, full visibility in eight stacked cases; both controlled
+gravity comparisons restored full visibility. Independent Sol-high review
+confirmed the native bottom-baseline/margin cause and minimal four-style-item
+correction. All original assertions remain, including first-ready failures;
+the diagnostic stayed RED and the other 70 service cases passed. Earlier window
+fixture/containment failures are recorded in the plan/release history. Fresh
+resource-applied full host CI, rebuilt-APK verification and publication remain
+pending; physical-device appearance remains untested.
 Service, USB recovery, alarms, authorization and countdown logic are unchanged.
 This current checkpoint supersedes the prior RC12 completion note below only
 for the new spacing follow-up; prior release evidence remains historical.

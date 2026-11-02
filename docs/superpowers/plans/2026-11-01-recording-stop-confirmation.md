@@ -154,6 +154,17 @@ failed specifically on that entry (1/4 tests), so this error can now be caught
 without native aapt2. Correcting the mistaken XML test expectation does not
 replace the host geometry assertion or weaken recording/timing checks.
 
+Host CI41417347368 atfb7531b linked resources and passed the combined actual
+service capture/USB/position test on SDK33 and SDK35, including both phases in
+each case. Its two failures were the presentation oracle expecting normal teal
+but receiving the exact declared darker focused/pressed fill. The old log did
+not capture the focus/pressed flags, so that state is inferred, not recorded.
+The oracle now checks the actual focused/pressed state and
+explicitly exercises enabled normal, focused and pressed drawable states. The
+palette, native centering, disabled fill, Cancel fill and all recording/timing
+assertions are unchanged. Sideload and later build checks were not reached in
+that failed run; current complete host verification is still required.
+
 ### Published RC12
 
 Status: **Implemented, not field-tested**. Source `d56d5d26905c3543bf1e05c7b2e5b7182861c616`

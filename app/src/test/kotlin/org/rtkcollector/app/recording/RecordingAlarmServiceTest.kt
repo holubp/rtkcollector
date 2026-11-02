@@ -50,7 +50,20 @@ class RecordingAlarmServiceTest {
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
             assertTrue(confirm.isEnabled)
             assertEquals(reservedWidth, confirm.minWidth)
-            assertEquals(android.graphics.Color.rgb(0, 108, 103), filledColor(confirm))
+            val normal = android.graphics.Color.rgb(0, 108, 103)
+            val focused = android.graphics.Color.rgb(0, 77, 73)
+            assertEquals("focused=${confirm.isFocused} pressed=${confirm.isPressed} " +
+                "drawableStates=${confirm.drawableState.joinToString()}",
+                if (confirm.isFocused || confirm.isPressed) focused else normal, filledColor(confirm))
+            val originalState = confirm.background.state.clone()
+            try {
+                confirm.background.state = intArrayOf(android.R.attr.state_enabled)
+                assertEquals(normal, filledColor(confirm))
+                confirm.background.state = intArrayOf(android.R.attr.state_enabled, android.R.attr.state_focused)
+                assertEquals(focused, filledColor(confirm))
+                confirm.background.state = intArrayOf(android.R.attr.state_enabled, android.R.attr.state_pressed)
+                assertEquals(focused, filledColor(confirm))
+            } finally { confirm.background.state = originalState }
             assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel))
         } finally { controller.pause().stop().destroy(); RecordingStopConfirmation.retire("presentation-owner") }
     }

@@ -67,7 +67,20 @@ class RecordingAlarmServiceTest {
                         }
                         for (button in listOf(confirm, cancel)) {
                             val visible = android.graphics.Rect()
-                            assertTrue("Action must remain visible through clipping ancestors", button.getLocalVisibleRect(visible))
+                            val rootRect = android.graphics.Rect(0, 0, decor.width, decor.height)
+                            val root = requireNotNull(decor.parent)
+                            val rootVisible = root.getChildVisibleRect(decor, rootRect, null)
+                            val rootWidth = runCatching { ReflectionHelpers.getField<Int>(root, "mWidth") }.getOrNull()
+                            val rootHeight = runCatching { ReflectionHelpers.getField<Int>(root, "mHeight") }.getOrNull()
+                            val ancestors = generateSequence(button as android.view.View) { it.parent as? android.view.View }
+                                .joinToString(" -> ") { view ->
+                                    "${view.javaClass.simpleName}[${view.left},${view.top},${view.right},${view.bottom};" +
+                                        "scroll=${view.scrollX},${view.scrollY};visibility=${view.visibility};" +
+                                        "clip=${(view as? android.view.ViewGroup)?.clipChildren},${(view as? android.view.ViewGroup)?.clipToPadding}]"
+                                }
+                            assertTrue("Action must remain visible through clipping ancestors: width=$widthDp direction=$direction " +
+                                "button=${button.text} rootVisible=$rootVisible rootRect=$rootRect rootSize=${rootWidth}x$rootHeight " +
+                                "decor=${decor.width}x${decor.height} ancestors=$ancestors", button.getLocalVisibleRect(visible))
                             assertEquals(android.graphics.Rect(0, 0, button.width, button.height), visible)
                         }
                     }

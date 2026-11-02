@@ -26,7 +26,9 @@ import org.rtkcollector.app.alarms.*
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33, 35])
 class RecordingAlarmServiceTest {
-    @Test fun `Stop dialog is centered and action backgrounds remain filled in both phases`() {
+    @Test
+    @Config(qualifiers = "w600dp-h1000dp-mdpi")
+    fun `Stop dialog is centered and action backgrounds remain filled in both phases`() {
         val controller = Robolectric.buildActivity(android.app.Activity::class.java).setup()
         val activity = controller.get()
         RecordingStopConfirmation.activate("presentation-owner")
@@ -36,20 +38,34 @@ class RecordingAlarmServiceTest {
             assertEquals(android.view.Gravity.CENTER, requireNotNull(dialog.window).attributes.gravity)
             val confirm = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
             val cancel = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
-            fun assertSeparatedButtons() {
+            fun assertSeparatedButtons(expectedPhase: StopConfirmationPhase) {
                 val decor = requireNotNull(dialog.window).decorView as android.view.ViewGroup
                 val buttonBar = confirm.parent as android.widget.LinearLayout
                 val density = activity.resources.displayMetrics.density
                 val minimumGap = kotlin.math.round(12 * density).toInt()
+                fun resizeWindow(width: Int) {
+                    requireNotNull(dialog.window).setLayout(width, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+                    decor.requestLayout()
+                    val root = requireNotNull(decor.parent)
+                    // Manual decor layout leaves ViewRootImpl uninitialized and invalidates visibility checks.
+                    repeat(8) {
+                        shadowOf(Looper.getMainLooper()).idleFor(org.robolectric.shadows.ShadowChoreographer.getFrameDelay())
+                        if (decor.width == width && decor.height > 0 &&
+                            ReflectionHelpers.getField<Int>(root, "mWidth") == decor.width &&
+                            ReflectionHelpers.getField<Int>(root, "mHeight") == decor.height && !decor.isLayoutRequested) return
+                    }
+                    fail("Dialog window traversal did not settle: width=$width decor=${decor.width}x${decor.height} " +
+                        "root=${ReflectionHelpers.getField<Int>(root, "mWidth")}x${ReflectionHelpers.getField<Int>(root, "mHeight")} " +
+                        "layoutRequested=${decor.isLayoutRequested}")
+                }
                 for (direction in listOf(android.view.View.LAYOUT_DIRECTION_LTR, android.view.View.LAYOUT_DIRECTION_RTL)) {
                     buttonBar.layoutDirection = direction
                     val orientations = mutableSetOf<Int>()
                     for (widthDp in listOf(220, 320, 480)) {
-                        decor.measure(
-                            android.view.View.MeasureSpec.makeMeasureSpec((widthDp * density).toInt(), android.view.View.MeasureSpec.EXACTLY),
-                            android.view.View.MeasureSpec.makeMeasureSpec((800 * density).toInt(), android.view.View.MeasureSpec.AT_MOST),
-                        )
-                        decor.layout(0, 0, decor.measuredWidth, decor.measuredHeight)
+                        resizeWindow((widthDp * density).toInt())
+                        assertEquals(expectedPhase, requireNotNull(RecordingStopConfirmation.pending()).window
+                            .phase(android.os.SystemClock.elapsedRealtime()))
+                        assertEquals(expectedPhase == StopConfirmationPhase.ACTIVE, confirm.isEnabled)
                         assertEquals(direction, buttonBar.layoutDirection)
                         orientations += buttonBar.orientation
                         fun bounds(button: android.widget.Button) = android.graphics.Rect(0, 0, button.width, button.height).also {
@@ -99,11 +115,11 @@ class RecordingAlarmServiceTest {
             assertEquals(android.graphics.Color.rgb(207, 216, 215), filledColor(confirm))
             assertTrue(cancel.isEnabled)
             assertEquals(android.graphics.Color.rgb(227, 227, 227), filledColor(cancel))
-            assertSeparatedButtons()
+            assertSeparatedButtons(StopConfirmationPhase.WAITING)
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2))
             assertTrue(confirm.isEnabled)
             assertEquals(reservedWidth, confirm.minWidth)
-            assertSeparatedButtons()
+            assertSeparatedButtons(StopConfirmationPhase.ACTIVE)
             val normal = android.graphics.Color.rgb(0, 108, 103)
             val focused = android.graphics.Color.rgb(0, 77, 73)
             assertEquals("focused=${confirm.isFocused} pressed=${confirm.isPressed} " +

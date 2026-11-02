@@ -19,7 +19,7 @@ Reuse this approved plan; do not change service, authorization or countdown logi
 
 - [x] Diagnose missing explicit spacing after filled backgrounds replaced the
   framework's inset backgrounds; add a failing resource-spacing regression.
-- [ ] Add symmetric 6dp margins to both action styles (12dp between fills),
+- [x] Add symmetric 6dp margins to both action styles (12dp between fills),
   independent of horizontal/stacked placement or layout direction.
 - [ ] Verify actual button bounds after layout in both directions, narrow/wide
   windows and both countdown phases; retain existing recording/reconnect tests.
@@ -28,6 +28,15 @@ Reuse this approved plan; do not change service, authorization or countdown logi
   source/checksum history, rebuild with stable key, verify and republish assets.
 
 Checkpoint: implementation in progress; physical-device appearance pending.
+
+Host evidence: CI41513847336 and diagnostic CI41516342991 failed only the new
+presentation visibility assertion on SDK33/35; all other 70 service cases passed.
+The diagnostic root-only probe found `rootVisible=false`, root size `-1 x -1`,
+and measured decor `220 x 275`; the first-case gap and ancestor layout bounds
+passed. The fixture measured decor without initializing the window root.
+Correct the fixture through actual window layout/traversal, retaining gap,
+direction, stacked/horizontal, phase and visibility assertions. No production
+clipping conclusion or successful whole-host gate is inferred from this evidence.
 
 - Defaults: disabled delay 2 seconds; enabled window 10 seconds beginning after the delay.
 - Persist whole-second delay 1-60 and timeout 1-120; invalid values cannot be saved.

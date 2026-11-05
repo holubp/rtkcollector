@@ -378,8 +378,13 @@ keep the same telemetry setting only when their commands still enable the
 documented receiver messages.
 
 The current satellite-frequency monitor shows visible and used counts from the
-available receiver, RTCM and RTKLIB telemetry. Investigation of why some
-reported GLONASS L3, Galileo L6 and BeiDou L5/L7 signals remain visible but
+available receiver, RTCM and RTKLIB telemetry. Its compact blue rover and yellow
+base bars keep gaps between the satellite boxes. On narrow cards, the individual
+box outlines disappear so they do not cover the colors. Wider bars retain their
+outlines; frequency groups wrap into fewer columns if needed, including with
+larger text. These layout adjustments do not change the visible/used counts.
+Investigation of why some reported GLONASS L3, Galileo L6 and BeiDou L5/L7
+signals remain visible but
 not used is postponed until matching base and rover recordings are available.
 
 While a real session is active, the foreground service owns capture. The

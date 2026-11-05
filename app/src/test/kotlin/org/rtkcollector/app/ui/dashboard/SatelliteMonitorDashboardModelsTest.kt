@@ -4,8 +4,73 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 class SatelliteMonitorDashboardModelsTest {
+    @Test
+    fun `narrow boxes lose borders without losing their colored interior`() {
+        assertEquals(2, satelliteMonitorBoxWidthPx(barWidthPx = 39, gapPx = 2))
+        assertFalse(satelliteMonitorShowsBoxBorders(39, 2, borderWidthPx = 1, minimumFillPx = 2))
+        assertFalse(satelliteMonitorShowsBoxBorders(57, 2, borderWidthPx = 1, minimumFillPx = 2))
+        assertTrue(satelliteMonitorShowsBoxBorders(58, 2, borderWidthPx = 1, minimumFillPx = 2))
+    }
+
+    @Test
+    fun `pixel rounding must not retain a border on the smaller weighted boxes`() {
+        assertEquals(3, satelliteMonitorBoxWidthPx(barWidthPx = 57, gapPx = 2))
+        assertEquals(4, satelliteMonitorBoxWidthPx(barWidthPx = 58, gapPx = 2))
+        assertFalse(satelliteMonitorShowsBoxBorders(114, 5, borderWidthPx = 3, minimumFillPx = 5))
+        assertTrue(satelliteMonitorShowsBoxBorders(155, 5, borderWidthPx = 3, minimumFillPx = 5))
+    }
+
+    @Test
+    fun `frequency columns keep compact borderless boxes and reflow only when necessary`() {
+        assertEquals(3, satelliteMonitorFrequencyColumns(324, 5, 66, 2, 2))
+        assertEquals(2, satelliteMonitorFrequencyColumns(284, 5, 66, 2, 2))
+        assertEquals(1, satelliteMonitorFrequencyColumns(144, 5, 66, 2, 2))
+        assertEquals(2, satelliteMonitorFrequencyColumns(321, 5, 66, 2, 2))
+        assertEquals(3, satelliteMonitorFrequencyColumns(322, 5, 66, 2, 2))
+        assertEquals(2, satelliteMonitorFrequencyColumns(324, 5, 100, 2, 2))
+    }
+
+    @Test
+    fun `density and large label budgets preserve fill and prefer the largest fitting column count`() {
+        for (density in listOf(1f, 1.5f, 2f, 2.75f, 3.5f)) {
+            for (fontScale in listOf(1f, 1.3f, 2f)) {
+                for (availableDp in listOf(140, 160, 284, 324, 600)) {
+                    val width = (availableDp * density).roundToInt()
+                    val frequencyGap = (5 * density).roundToInt()
+                    val boxGap = (2 * density).roundToInt()
+                    val minimumFill = ceil(2 * density).toInt()
+                    val border = ceil(density).toInt()
+                    val reserved = 2 * (5 * density).roundToInt() +
+                        (8 * fontScale * density).roundToInt() +
+                        maxOf((40 * density).roundToInt(), (32 * fontScale * density).roundToInt()) +
+                        2 * (4 * density).roundToInt()
+                    fun boxWidth(columns: Int): Int =
+                        (((width - (columns - 1) * frequencyGap) / columns - reserved -
+                            9 * boxGap).coerceAtLeast(0)) / 10
+                    val columns = satelliteMonitorFrequencyColumns(width, frequencyGap, reserved, boxGap, minimumFill)
+                    assertTrue(columns in 1..3)
+                    assertTrue(boxWidth(columns) >= minimumFill,
+                        "width=$availableDp density=$density fontScale=$fontScale columns=$columns")
+                    if (columns < 3) assertTrue(boxWidth(columns + 1) < minimumFill)
+                    val barWidth = (width - (columns - 1) * frequencyGap) / columns - reserved
+                    val bordered = satelliteMonitorShowsBoxBorders(barWidth, boxGap, border, minimumFill)
+                    assertEquals(boxWidth(columns) >= minimumFill + 2 * border, bordered)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `zero available width cannot create a colored border or zero-column row`() {
+        assertEquals(0, satelliteMonitorBoxWidthPx(0, 2))
+        assertFalse(satelliteMonitorShowsBoxBorders(0, 2, 1, 2))
+        assertEquals(1, satelliteMonitorFrequencyColumns(0, 5, 66, 2, 2))
+    }
+
     @Test
     fun `used visible counts format as used over visible`() {
         val count = SatelliteMonitorSignalCount(used = 8, visible = 11)

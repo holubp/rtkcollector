@@ -52,12 +52,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -70,6 +73,7 @@ import org.rtkcollector.app.ui.common.TidyColors
 import org.rtkcollector.app.ui.common.TidyMetricRow
 import org.rtkcollector.core.correction.NtripTransportMode
 import kotlinx.coroutines.delay
+import kotlin.math.ceil
 
 private val CompactSetupTileHeight = 46.dp
 private val RailSetupItemHeight = 50.dp
@@ -82,7 +86,12 @@ private val PositionDashboardCardHeight = 180.dp
 private val FixDashboardCardHeight = 282.dp
 private val RtklibDashboardCardHeight = 206.dp
 private val SatelliteDashboardCardHeight = 150.dp
-private const val SatelliteMonitorCompactFrequencyColumns = 3
+private val SatelliteMonitorFrequencyGap = 5.dp
+private val SatelliteMonitorCellPadding = 5.dp
+private val SatelliteMonitorCountGap = 4.dp
+private val SatelliteMonitorBoxGap = 2.dp
+private val SatelliteMonitorBoxBorder = 1.dp
+private val SatelliteMonitorMinimumFill = 2.dp
 private val CorrectionsDashboardCardHeight = 292.dp
 private val CasterUploadDashboardCardHeight = 208.dp
 private val RecordingDashboardCardHeight = 162.dp
@@ -1554,20 +1563,49 @@ private fun SatelliteConstellationGroupRow(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
         )
-        group.frequencyRows(SatelliteMonitorCompactFrequencyColumns).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                row.forEach { frequency ->
-                    SatelliteFrequencyBox(
-                        frequency = frequency,
-                        colors = colors,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                repeat(SatelliteMonitorCompactFrequencyColumns - row.size) {
-                    Spacer(modifier = Modifier.weight(1f))
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val density = LocalDensity.current
+            val textMeasurer = rememberTextMeasurer()
+            val labelStyle = MaterialTheme.typography.labelSmall
+            val sourceWidthPx = listOf("R", "B").maxOf {
+                textMeasurer.measure(AnnotatedString(it), labelStyle.copy(fontWeight = FontWeight.Bold)).size.width
+            }
+            val countWidthPx = maxOf(with(density) { 40.dp.roundToPx() },
+                group.frequencies.maxOfOrNull { frequency ->
+                    listOf(frequency.rover, frequency.base).maxOf {
+                        textMeasurer.measure(AnnotatedString(it.displayValue),
+                            labelStyle.copy(fontWeight = FontWeight.SemiBold)).size.width
+                    }
+                } ?: 0)
+            val columns = with(density) {
+                satelliteMonitorFrequencyColumns(
+                    availableWidthPx = constraints.maxWidth,
+                    frequencyGapPx = SatelliteMonitorFrequencyGap.roundToPx(),
+                    reservedWidthPx = 2 * SatelliteMonitorCellPadding.roundToPx() + sourceWidthPx +
+                        countWidthPx + 2 * SatelliteMonitorCountGap.roundToPx(),
+                    boxGapPx = SatelliteMonitorBoxGap.roundToPx(),
+                    minimumFillPx = ceil(SatelliteMonitorMinimumFill.toPx()).toInt(),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                group.frequencyRows(columns).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(SatelliteMonitorFrequencyGap),
+                    ) {
+                        row.forEach { frequency ->
+                            SatelliteFrequencyBox(
+                                frequency = frequency,
+                                colors = colors,
+                                sourceLabelWidth = with(density) { sourceWidthPx.toDp() },
+                                countLabelWidth = with(density) { countWidthPx.toDp() },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        repeat(columns - row.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
@@ -1578,6 +1616,8 @@ private fun SatelliteConstellationGroupRow(
 private fun SatelliteFrequencyBox(
     frequency: SatelliteMonitorFrequencyRow,
     colors: SatelliteMonitorCardColors,
+    sourceLabelWidth: Dp,
+    countLabelWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1587,7 +1627,7 @@ private fun SatelliteFrequencyBox(
         border = BorderStroke(1.dp, colors.border),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = SatelliteMonitorCellPadding, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
@@ -1604,6 +1644,8 @@ private fun SatelliteFrequencyBox(
                 visibleColor = colors.roverVisible,
                 usedColor = colors.roverUsed,
                 colors = colors,
+                sourceLabelWidth = sourceLabelWidth,
+                countLabelWidth = countLabelWidth,
             )
             SatelliteSignalCountRow(
                 sourceLabel = "B",
@@ -1611,6 +1653,8 @@ private fun SatelliteFrequencyBox(
                 visibleColor = colors.baseVisible,
                 usedColor = colors.baseUsed,
                 colors = colors,
+                sourceLabelWidth = sourceLabelWidth,
+                countLabelWidth = countLabelWidth,
             )
         }
     }
@@ -1623,14 +1667,17 @@ private fun SatelliteSignalCountRow(
     visibleColor: Color,
     usedColor: Color,
     colors: SatelliteMonitorCardColors,
+    sourceLabelWidth: Dp,
+    countLabelWidth: Dp,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(SatelliteMonitorCountGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = sourceLabel,
+            modifier = Modifier.width(sourceLabelWidth),
             style = MaterialTheme.typography.labelSmall,
             color = colors.mutedText,
             fontWeight = FontWeight.Bold,
@@ -1646,7 +1693,7 @@ private fun SatelliteSignalCountRow(
         )
         Text(
             text = count.displayValue,
-            modifier = Modifier.width(40.dp),
+            modifier = Modifier.width(countLabelWidth),
             style = MaterialTheme.typography.labelSmall,
             color = colors.bodyText,
             fontWeight = FontWeight.SemiBold,
@@ -1665,22 +1712,32 @@ private fun SatelliteBoxedBar(
     borderColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.height(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        count.boxedSegments(totalSegments = SatelliteMonitorBoxedBarSegments).forEach { segment ->
-            Surface(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                shape = MaterialTheme.shapes.extraSmall,
-                color = when (segment) {
-                    SatelliteMonitorBarSegment.USED -> usedColor
-                    SatelliteMonitorBarSegment.VISIBLE -> visibleColor
-                    SatelliteMonitorBarSegment.EMPTY -> emptyColor
-                },
-                border = BorderStroke(1.dp, borderColor),
-                content = {},
+    BoxWithConstraints(modifier = modifier.height(8.dp)) {
+        val showBorders = with(LocalDensity.current) {
+            satelliteMonitorShowsBoxBorders(
+                barWidthPx = constraints.maxWidth,
+                gapPx = SatelliteMonitorBoxGap.roundToPx(),
+                borderWidthPx = ceil(SatelliteMonitorBoxBorder.toPx()).toInt(),
+                minimumFillPx = ceil(SatelliteMonitorMinimumFill.toPx()).toInt(),
             )
+        }
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(SatelliteMonitorBoxGap),
+        ) {
+            count.boxedSegments(totalSegments = SatelliteMonitorBoxedBarSegments).forEach { segment ->
+                Surface(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = when (segment) {
+                        SatelliteMonitorBarSegment.USED -> usedColor
+                        SatelliteMonitorBarSegment.VISIBLE -> visibleColor
+                        SatelliteMonitorBarSegment.EMPTY -> emptyColor
+                    },
+                    border = if (showBorders) BorderStroke(SatelliteMonitorBoxBorder, borderColor) else null,
+                    content = {},
+                )
+            }
         }
     }
 }
@@ -1862,8 +1919,6 @@ fun CasterUploadMonitorScreen(
         }
     }
 }
-
-private const val SatelliteMonitorBoxedBarSegments = 10
 
 private data class SatelliteMonitorCardColors(
     val background: Color,

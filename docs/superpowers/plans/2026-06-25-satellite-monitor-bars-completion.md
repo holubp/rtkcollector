@@ -736,6 +736,40 @@ M8P/F9P compatibility mode:
 
 ## Done Criteria
 
+### 2026-11-05 Compact-Bar Visibility Repair
+
+Approved behavior: omit individual box borders when the measured bar is too
+narrow to leave a visible colored interior; retain gaps and the frequency-cell
+outline. Reduce frequency columns only when even borderless boxes would be too
+narrow. No receiver, NTRIP, capture, usage-count or detailed-screen changes.
+
+Requirements: UI-SATMON-002/003/005/006. This restores the already approved
+boxed-bar visibility contract; no normative requirement or approval changes.
+Base: `66ae089632ce10a2f30a6e45673af5535e88dd7c`.
+
+- [x] RED: reproduce narrow-bar width failure and add pixel-budget policy tests
+  in `SatelliteMonitorDashboardModelsTest.kt`.
+- [x] GREEN: share pixel-budget functions in `SatelliteMonitorDashboardModels.kt`;
+  measure labels and available width in `HomeDashboard.kt`, omit borders below
+  the interior threshold, and adapt the existing three-column maximum.
+- [x] Verify density rounding, threshold boundaries, zero width, large fonts,
+  narrow/wide cards, and unchanged used/visible segment semantics.
+- [x] Update operator guidance and perform independent scoped code review.
+  Production Kotlin compilation and 17 focused model tests pass; the tests cover
+  75 density/font/width combinations. No rendered or device evidence is claimed.
+
+Publication requirements: refresh exact-scope assurance without promoting
+unexecuted evidence, run the mandatory pre-push gate and clean-host CI, and
+commit/push scoped changes only. Git/CI results are the publication record, not
+a forecast test pass in this checkpoint. Preserve the original dirty checkout.
+
+Policy budget: ten segments, 2dp gaps and at least 2dp colored box width. A 1dp
+border is retained only when its two sides also fit outside that minimum
+interior. Widths/gaps are rounded conservatively in pixels; font sizes are not
+reduced. The existing count labels keep at least 40dp and expand for actual
+measured text when needed. Final phone appearance remains a manual check unless
+actual rendered evidence is collected.
+
 - Built-in UM980 and M8T monitor profiles are visible, read-only, scrollable and explicit.
 - Main compact card renders real grouped bars from service data, not preview constants.
 - Detailed monitor screen switches between frequency-primary and constellation-primary grouping.

@@ -1,5 +1,38 @@
 package org.rtkcollector.app.ui.dashboard
 
+internal const val SatelliteMonitorBoxedBarSegments = 10
+
+internal fun satelliteMonitorBoxWidthPx(barWidthPx: Int, gapPx: Int): Int {
+    require(gapPx >= 0)
+    // Weighted boxes may differ by one pixel; protect the smallest interior.
+    return (barWidthPx - (SatelliteMonitorBoxedBarSegments - 1) * gapPx)
+        .coerceAtLeast(0) / SatelliteMonitorBoxedBarSegments
+}
+
+internal fun satelliteMonitorShowsBoxBorders(
+    barWidthPx: Int,
+    gapPx: Int,
+    borderWidthPx: Int,
+    minimumFillPx: Int,
+): Boolean {
+    require(borderWidthPx >= 0 && minimumFillPx > 0)
+    return satelliteMonitorBoxWidthPx(barWidthPx, gapPx) >= 2 * borderWidthPx + minimumFillPx
+}
+
+internal fun satelliteMonitorFrequencyColumns(
+    availableWidthPx: Int,
+    frequencyGapPx: Int,
+    reservedWidthPx: Int,
+    boxGapPx: Int,
+    minimumFillPx: Int,
+): Int {
+    require(frequencyGapPx >= 0 && reservedWidthPx >= 0 && minimumFillPx > 0)
+    return (3 downTo 1).firstOrNull { columns ->
+        val cellWidth = (availableWidthPx - (columns - 1) * frequencyGapPx).coerceAtLeast(0) / columns
+        satelliteMonitorBoxWidthPx((cellWidth - reservedWidthPx).coerceAtLeast(0), boxGapPx) >= minimumFillPx
+    } ?: 1
+}
+
 enum class SatelliteMonitorSourceFreshness(
     val displayName: String,
 ) {

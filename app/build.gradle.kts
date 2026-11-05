@@ -58,8 +58,8 @@ android {
         applicationId = "org.rtkcollector.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.0-RC12"
+        versionCode = 14
+        versionName = "1.0-RC13"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")

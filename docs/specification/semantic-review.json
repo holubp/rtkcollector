@@ -1837,7 +1837,7 @@
     },
     {
       "path": "docs/contributor-onboarding.md",
-      "digest": "sha256:347570b362a839a2b0ec0d796c589156d8c2ab6eaad94ab40157735a08982c46"
+      "digest": "sha256:6e385cca802a6b945b135e6e47e086d5d29a8d27aff65f3a78ad1365591e2e88"
     },
     {
       "path": "docs/ntrip-and-corrections.md",
@@ -5225,8 +5225,8 @@
       ]
     }
   ],
-  "observed_head_commit": "fa4c7790158711f5794ab1257c7e0b9cef429364",
-  "scope_digest": "sha256:0985a7cc898e7ecb892ac0d7978697dbf1e0b03796bf97bc69e6e7b9917dc38f",
+  "observed_head_commit": "a3d20e51569a79e295957c6ab522d26e4a606f13",
+  "scope_digest": "sha256:3f2d8bdbb26dfcc567683fa0cbcb0b312579c2804299d07afbd1bbfa0ac8ac60",
   "reviewed_paths": [
     ".github/CODEOWNERS",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -6614,8 +6614,8 @@
     "WF-TEMPBASE-HEIGHT-001": "implementation_required",
     "WF-UPLOAD-UI-001": "implementation_required"
   },
-  "reviewer": "model:codex-rc12-button-gap-independent-sol-medium",
-  "reviewed_at": "2026-11-02T22:25:56.800956Z",
+  "reviewer": "model:codex-worktree-retirement-independent-focused",
+  "reviewed_at": "2026-11-05T04:53:52+00:00",
   "result": "pass",
   "findings": [],
   "limitations": [],
@@ -11320,26 +11320,59 @@
     }
   ],
   "review_basis": {
-    "baseline": "fa4c7790158711f5794ab1257c7e0b9cef429364",
-    "prior_scope_digest": "sha256:de2d02ca110c47e5b3b68e27ebc66bb109c358130f958d3cc61e2db44941ebb2",
+    "baseline": "a3d20e51569a79e295957c6ab522d26e4a606f13",
+    "prior_attestation": {
+      "path": "docs/specification/semantic-review.json",
+      "file_digest": "sha256:b53984cddcc1ce444b7638eda95c86e247764f4be7203c86a629d71a18561e30",
+      "scope_digest": "sha256:0985a7cc898e7ecb892ac0d7978697dbf1e0b03796bf97bc69e6e7b9917dc38f",
+      "reviewer": "model:codex-rc12-button-gap-independent-sol-medium",
+      "reviewed_at": "2026-11-02T22:25:56.800956Z",
+      "review_basis": {
+        "baseline": "fa4c7790158711f5794ab1257c7e0b9cef429364",
+        "prior_scope_digest": "sha256:de2d02ca110c47e5b3b68e27ebc66bb109c358130f958d3cc61e2db44941ebb2",
+        "qualified_unchanged_pairs": 783,
+        "fresh_pairs": 0,
+        "fresh_untraced_paths": [
+          "docs/releases/1.0-RC12.md",
+          "docs/superpowers/plan-status.md",
+          "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md"
+        ],
+        "fresh_test_review": "No test/source changes or duplicate layout/code audit. All traced pairs retain exact path, requirement, implementation, supporting, coverage and mapping identities. Historical pending-host language in reused conclusions describes the earlier review time; the current closing-doc evidence below separately records resource-applied production-source CI and publication, without modifying enrolled evidence receipts.",
+        "fresh_docs_review": "Fresh closing-document consistency review of release history, plan status and Stop plan only. Verified local HEAD and annotated tag4070ef8a1f15e84fe721a056f462f3c4f17982b4 resolve to fa4c7790158711f5794ab1257c7e0b9cef429364; closing docs explicitly do not authorize retagging. Parsed downloaded CI41532859489 XML independently:360suites2869tests0failures/errors/skips; both service suites72/0/0/0 with hashes matching fixed-ci-verification. Receipt records96fully-visible observations per variant (192total). Raw CI log confirms30native tests, both release lint tasks, assembly and signing smoke. APK/packed-style/source ZIP/TAR receipts bind exact fa4 source; both archives738files, packed6dp+0x800015, ABIs/alignment and stable certificate match docs. Independently hashed all3downloaded asset files against public-after asset digests/sizes and read signing receipt source/toolingfa4 plus stable certificate. Draft history includes d131/e388 and d56/041 prior identities; public-after records non-draft prerelease published2026-11-02T22:18:24Z targetfa4 with unchanged assets. Physical appearance/font-scale/USB/audio and old RC11 trigger remain explicitly unverified.",
+        "boundary": "Closing documentation source review only. Prior passing source audit and exact traced-pair bindings are retained, not promoted into physical validation or enrolled passing receipts. The released source/tag stay fa4; later closing-doc commit must not retag. Controller still runs mandatory closing-doc pre-push/full checker and final CI. No canonical edits, account/release mutations or duplicate full checker performed.",
+        "publication": {
+          "source_commit": "fa4c7790158711f5794ab1257c7e0b9cef429364",
+          "tag_object": "4070ef8a1f15e84fe721a056f462f3c4f17982b4",
+          "full_ci_run": 41532859489,
+          "stable_build_run": 41534929128,
+          "apk_sha256": "ab8f11ab6a95295b03adca610443f4ba2ae2390c4c054b675f1977c98c0c3571",
+          "published_at": "2026-11-02T22:18:24Z",
+          "basis": "Local immutable report/artifact verification receipts and recorded draft/public release snapshots; no redundant remote/code/layout audit."
+        }
+      }
+    },
+    "context_file_digest": "sha256:c3e4ac26595af9a5bf42cfffa8d9da04db2adf04599eef9c02833aa8dbef4fa8",
     "qualified_unchanged_pairs": 783,
     "fresh_pairs": 0,
-    "fresh_untraced_paths": [
-      "docs/releases/1.0-RC12.md",
-      "docs/superpowers/plan-status.md",
-      "docs/superpowers/plans/2026-11-01-recording-stop-confirmation.md"
+    "identical_binding_fields": [
+      "reviewed_paths",
+      "requirement_ids",
+      "capability_inventory_digest",
+      "approval_policy_digest",
+      "requirement_digests",
+      "implementation_digests",
+      "supporting_digests",
+      "coverage_kinds",
+      "implementation_traceability",
+      "supporting_traceability",
+      "requirement_traceability"
     ],
-    "fresh_test_review": "No test/source changes or duplicate layout/code audit. All traced pairs retain exact path, requirement, implementation, supporting, coverage and mapping identities. Historical pending-host language in reused conclusions describes the earlier review time; the current closing-doc evidence below separately records resource-applied production-source CI and publication, without modifying enrolled evidence receipts.",
-    "fresh_docs_review": "Fresh closing-document consistency review of release history, plan status and Stop plan only. Verified local HEAD and annotated tag4070ef8a1f15e84fe721a056f462f3c4f17982b4 resolve to fa4c7790158711f5794ab1257c7e0b9cef429364; closing docs explicitly do not authorize retagging. Parsed downloaded CI41532859489 XML independently:360suites2869tests0failures/errors/skips; both service suites72/0/0/0 with hashes matching fixed-ci-verification. Receipt records96fully-visible observations per variant (192total). Raw CI log confirms30native tests, both release lint tasks, assembly and signing smoke. APK/packed-style/source ZIP/TAR receipts bind exact fa4 source; both archives738files, packed6dp+0x800015, ABIs/alignment and stable certificate match docs. Independently hashed all3downloaded asset files against public-after asset digests/sizes and read signing receipt source/toolingfa4 plus stable certificate. Draft history includes d131/e388 and d56/041 prior identities; public-after records non-draft prerelease published2026-11-02T22:18:24Z targetfa4 with unchanged assets. Physical appearance/font-scale/USB/audio and old RC11 trigger remain explicitly unverified.",
-    "boundary": "Closing documentation source review only. Prior passing source audit and exact traced-pair bindings are retained, not promoted into physical validation or enrolled passing receipts. The released source/tag stay fa4; later closing-doc commit must not retag. Controller still runs mandatory closing-doc pre-push/full checker and final CI. No canonical edits, account/release mutations or duplicate full checker performed.",
-    "publication": {
-      "source_commit": "fa4c7790158711f5794ab1257c7e0b9cef429364",
-      "tag_object": "4070ef8a1f15e84fe721a056f462f3c4f17982b4",
-      "full_ci_run": 41532859489,
-      "stable_build_run": 41534929128,
-      "apk_sha256": "ab8f11ab6a95295b03adca610443f4ba2ae2390c4c054b675f1977c98c0c3571",
-      "published_at": "2026-11-02T22:18:24Z",
-      "basis": "Local immutable report/artifact verification receipts and recorded draft/public release snapshots; no redundant remote/code/layout audit."
-    }
+    "fresh_untraced_paths": [
+      "docs/contributor-onboarding.md"
+    ],
+    "fresh_docs_review": "Independent focused review of the 98-line Retired Worktree Knowledge appendix only. Worktree identities match local metadata. Current source/tests and canonical NTRIP docs support system-trusted hostname-verified TLS or explicit plaintext in both distributions, blocked unsafe legacy TLS, upload framing and sidecar candidate semantics. Checked uploader stale-interrupt/minimum-delay regressions, fixed-base overridable coordinate retention, SAF read/write authority, setup snapshot/revision guards, older capability-map requirement subset and RC12 runtime source versus documentation closure. No secrets, obsolete policy restoration, contract changes or blocking factual/scope findings identified.",
+    "reuse_qualification": "Compared all 737 scoped path records: only contributor-onboarding.md content changed, with no added/deleted scoped paths. Checked current bytes against every fresh path digest and recomputed scope digest. Requirement, implementation, supporting, coverage, capability, policy and all three traceability bindings exactly match the prior passing record. All 783 conclusions are preserved verbatim, with their historical verification boundaries. Qualified unchanged-pair reuse is not a fresh full runtime audit.",
+    "prior_audit_basis": "Controller read-only retirement audit and independent TLS reviewer findings supplied in this assignment establish equivalent integration of relevant old work, including task6 via 824deba and identical rc11 AdvisoryFanout. Accepted as supplied prior evidence; no duplicate full TLS/worktree audit claimed.",
+    "boundary": "No runtime tests rerun and no new execution evidence, approvals or receipts. No promotion of physical/device/release validation. Git diff --check passed. Candidate only: controller owns installation, full assurance/pre-push gate, commit/push, hash-verified local backup and worktree removal. Backup/removal are future prerequisites, not claimed completed."
   }
 }

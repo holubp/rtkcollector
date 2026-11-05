@@ -387,3 +387,101 @@ plans are design history and implementation history. For non-trivial changes:
 - Do not run two Gradle compiles in parallel on shared storage (Android shared
   workspace) — Kotlin incremental caches collide and you will chase phantom
   unresolved references.
+
+## Retired Worktree Knowledge (2026-11-05)
+
+This is a historical maintenance record, not a new specification or a request to
+restore old implementations. The retained worktrees were reviewed against GitHub
+`main` at `a3d20e51569a79e295957c6ab522d26e4a606f13`. No still-relevant fix or
+regression test requiring a recovery merge was identified. Commit identities and
+uncommitted files alone were not evidence of missing production functionality:
+the changes were already integrated, integrated differently, or superseded.
+
+### NTRIP Transport And Protocol Lessons
+
+- `ntrip-tls-task2` (`d03c616`): close failed TCP/TLS sockets, complete the TLS
+  handshake before sending NTRIP bytes, verify DNS/IP certificate identities,
+  and preserve the selected transport through protocol negotiation. Keep the
+  no-plaintext-fallback and handshake-failure regression tests.
+- `ntrip-tls-task3` (`0d33e1f`): preserve explicit TLS/plaintext selections during
+  profile storage, copying and import. Historical unsafe-TLS or custom-CA
+  selections must require an explicit supported choice, not silently weaken
+  validation or change transport.
+- `ntrip-tls-task4` (`f2af073`): validate typed service inputs before constructing
+  requests. Test the actual correction/upload request factories, not a synthetic
+  callback that only resembles them. V1 source upload uses `SOURCE password
+  /mountpoint` without HTTP syntax; V2 source upload uses chunked HTTP `POST`.
+  Invalid RTCM frames must not enter the upload stream. The upload sidecar
+  records valid extracted candidates, including queue drops, not proof of bytes
+  successfully delivered to the caster.
+- `ntrip-tls-task5` (`38c254c`): retain credentials when changing protocol or
+  transport controls; distinguish source upload from correction download.
+  Preserve exact-header and payload-framing tests over the selected socket.
+- `ntrip-tls-task6` (`3d2b1ee`): redact passwords, authentication headers and
+  sensitive transport diagnostics. Sourcetable refresh must use current editor
+  policy and must not overwrite unrelated profile configuration.
+
+All relevant TLS branch changes have production equivalents; the task6 audit
+fixes were integrated differently, including through `824deba`. Historical
+unsafe-TLS consent and Google-Play-only plaintext bans are obsolete. The current
+contract supports normal system-trusted, hostname-verified TLS and explicitly
+selected plaintext in both distributions, with no automatic TLS downgrade.
+Plaintext tags are configuration metadata, not connection errors. Consult the
+current [NTRIP documentation](ntrip-and-corrections.md) and canonical
+specifications before reusing any historical TLS plan.
+
+### Settings Ownership And Recording Safety Lessons
+
+- `settings-owner-models` (`6fb4986`), `settings-owner-docs` (`11e1fd3`) and the
+  nested `settings-owner-service` worktree (`11e1fd3`) contained earlier versions
+  of the integrated settings-ownership work, not three unfinished features.
+  References must respect their owning profiles; do not silently override a
+  caster through a mountpoint or display unlocked choices that Start replaces.
+- Persist profile-graph changes transactionally and preserve private migration
+  evidence. Restore credential bindings conservatively: a failed or uncertain
+  password write must not activate partially restored credentials. SAF authority
+  requires both persisted read and write permission.
+- The foreground service accepts authoritative, validated setup snapshots.
+  Session provenance, bounded one-use setup tokens and revision-checked live
+  updates prevent stale Activity choices from becoming recording configuration.
+  ASK-every-time answers need session-owned cleanup and generation tracking so
+  a late Stop cannot erase a newly supplied answer.
+- Fixed-base handoff must publish the selected command, settings set and accepted
+  coordinate consistently. The current implementation also retains coordinate
+  defaults for overridable policies; the earlier locked-only implementation
+  would regress this behavior.
+- `rc11-sidecar-cancellation` (`e6221f2`) contained shutdown changes now integrated
+  in production. Wake advisory/retry waits without interrupting active storage
+  callbacks. Close/cancel the owned network session to release blocked I/O.
+  Current upload code additionally prevents a stale injected-delay interrupt
+  from reaching a later event writer and preserves minimum reconnect delays
+  despite unexpected interrupts or spurious wakeups. Keep both regression tests
+  in `NtripCasterUploadControllerTest`; do not restore the older single-wait
+  implementation.
+
+### Assurance, UI Verification And Release Lessons
+
+- `rc10-assurance-mapping` (`e8c1c7e`, detached) held an older capability map.
+  Every requirement ID in it is represented in the current map. Later capability
+  splits and narrower file classifications are intentional, not omissions.
+- `ntrip-tls-integration` (`a3d20e5`, branch
+  `codex/stop-dialog-presentation`) became the general integration workspace
+  through RC12, despite its original TLS name. Its local checkpoints are
+  historical evidence, not instructions to resume already completed releases.
+- For the RC12 Stop dialog, preserve the full window/decor-containment and
+  button-separation assertions across SDK, orientation, density and font-scale
+  cases. The fix used 6dp margins on each action and `end|center_vertical`
+  layout gravity; weakening the test bounds would hide the layout defect.
+- Host/CI evidence does not establish physical-device USB recovery, audible
+  alarms or vendor-specific behavior. Keep those manual-validation boundaries
+  explicit. The RC12 tested runtime/source tag was `fa4c779`; `a3d20e5` was the
+  later documentation closure. Do not retag a release to a documentation commit
+  or rebuild an old RC merely because a historical checkpoint mentions it.
+
+The retirement audit was read-only: source/test comparisons, Git patch-equivalence
+checks for TLS work, and inspection of the older review findings. It did not
+rerun Android/device tests or introduce runtime changes. Before removing the
+worktrees, preserve their heads, binary-capable working-tree patches and unique
+untracked/ignored evidence in a hash-verified local archive under
+`.spec-assurance/worktree-retirement-20261105/`. That archive is local recovery
+material, excluded from Git; Git branches and committed history are retained.
